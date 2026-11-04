@@ -1,0 +1,279 @@
+// Package ext is an extension program's side of the process protocol (docs/extensions.md「进程扩展协议」): it answers
+// initialize, ping and manifest, hands each namespaced call (connector.status, ui.render, …) to its handler, and
+// lets the program call the hub and send it events. It has no dependencies beyond the standard library and the
+// generated wire types, so an extension's repository can carry a copy (scripts/gen/sync-sdk.sh).
+//
+// A program:
+//
+//	func main() {
+//		ext.Main(ext.Program{
+//			ID: "example", Version: "1.0.0", Manifest: manifest,
+//			UI: map[string]ext.Page{"home": {Render: home}},
+//		})
+//	}
+package ext
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
+
+	"github.com/nwverse/persona/sdk/go/wire"
+)
+
+// Protocol is the version of the process protocol this SDK speaks.
+const Protocol = 1
+
+// Handler answers the calls of one namespace: method is without the namespace ("status" for connector.status),
+// params as sent (with "contribution").
+type Handler func(ctx context.Context, method string, params json.RawMessage) (any, error)
+
+// Program is an extension program.
+type Program struct {
+	ID, Version string
+	// Manifest is its persona-extension.json, answered to manifest (an extension running elsewhere must have it; one
+	// the hub starts from its package may leave it out).
+	Manifest json.RawMessage
+	// Init is called once, with what the hub sent; it says what the program contributes this run (a subset of its
+	// manifest's; nil is all of them), and may start the program's own work with ctx (which ends with the program).
+	Init func(ctx context.Context, init *Init, hub *Hub) (contributes map[string]any, err error)
+	// Namespaces are the handlers by namespace ("connector", "quota", …). "ui" is UI's unless given here.
+	Namespaces map[string]Handler
+	// UI are the pages by ui contribution id: ui.render and ui.action go to them.
+	UI map[string]Page
+	// HTTP, if set, is served on the socket the hub gives (runtime.http in the manifest) by Main.
+	HTTP http.Handler
+}
+
+// Init is what the hub sent with initialize.
+type Init struct {
+	wire.InitializeParams
+	// Raw is initialize's params as sent, for fields this SDK does not know yet.
+	Raw json.RawMessage
+}
+
+// Info is the extension's own (id, version, directories), under whichever key the hub sent it.
+func (i *Init) Info() wire.ExtensionInfo {
+	if i.Extension != nil {
+		return *i.Extension
+	}
+	if i.Plugin != nil {
+		return *i.Plugin
+	}
+	return wire.ExtensionInfo{}
+}
+
+// Config decodes the configuration (the schema's defaults filled in) into v.
+func (i *Init) Config(v any) error {
+	if len(i.InitializeParams.Config) == 0 {
+		return nil
+	}
+	return json.Unmarshal(i.InitializeParams.Config, v)
+}
+
+// Hub is the hub, for a program's calls and events.
+type Hub struct{ p *peer }
+
+// Call calls a method of the hub's (connector.secrets.load, quota.http, …) and decodes its result into out.
+func (h *Hub) Call(ctx context.Context, method string, params, out any) error {
+	return h.p.call(ctx, method, params, out)
+}
+
+// Notify sends the hub an event (connector.changed, …).
+func (h *Hub) Notify(event string, params any) error { return h.p.notify(event, params) }
+
+// Badge sets the badge on a nav_page's entry; empty text clears it.
+func (h *Hub) Badge(contribution, text, tone string) error {
+	return h.Notify("ui.badge", wire.BadgeEvent{Contribution: contribution, Text: text, Tone: tone})
+}
+
+// Invalidate tells the apps that a ui contribution's data changed ("" is all of this extension's), so the pages on
+// screen draw again. Hubs before UI version 3 ignore it; pages there redraw on their refresh_after.
+func (h *Hub) Invalidate(contribution string) error {
+	params := map[string]string{}
+	if contribution != "" {
+		params["contribution"] = contribution
+	}
+	return h.Notify("ui.invalidate", params)
+}
+
+// Serve serves prog on in / out until the hub closes them (the program should then exit) or ctx ends.
+func Serve(ctx context.Context, in io.Reader, out io.Writer, prog Program) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	p := newPeer(out)
+	s := &server{prog: prog, hub: &Hub{p: p}, ctx: ctx}
+	p.onRequest = s.handle
+	p.onEvent = s.event
+	return p.serve(ctx, in)
+}
+
+// Main runs prog as the hub starts it: the protocol on stdin / stdout (unless the manifest says rpc: none, when
+// the hub sends nothing there), HTTP on the hub's socket when prog has HTTP. It returns only to exit: when the hub
+// closes stdin or stops the program.
+func Main(prog Program) {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if len(os.Args) > 1 && os.Args[1] == "manifest" && len(prog.Manifest) > 0 {
+		_, _ = os.Stdout.Write(append(prog.Manifest, '\n'))
+		return
+	}
+	errs := make(chan error, 2)
+	if prog.HTTP != nil {
+		sock := Env().Socket
+		if sock == "" {
+			fmt.Fprintln(os.Stderr, "no PERSONA_EXTENSION_SOCKET: runtime.http is not set in the manifest")
+			os.Exit(2)
+		}
+		go func() { errs <- ServeHTTP(ctx, sock, prog.HTTP) }()
+	}
+	in := &counting{r: os.Stdin}
+	go func() { errs <- Serve(ctx, in, os.Stdout, prog) }()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-errs:
+			// rpc: none (only HTTP): the hub sends nothing on stdin; serve until it stops the program.
+			if err == io.EOF && prog.HTTP != nil && in.n == 0 {
+				continue
+			}
+			if err != nil && err != io.EOF && ctx.Err() == nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			return
+		}
+	}
+}
+
+// counting counts what was read, to tell a hub that speaks the protocol from one that sends nothing.
+type counting struct {
+	r io.Reader
+	n int64
+}
+
+func (c *counting) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
+}
+
+type server struct {
+	prog Program
+	hub  *Hub
+	ctx  context.Context
+
+	pushes pushes
+
+	mu          sync.Mutex
+	initialized bool
+	init        *Init
+	contributes map[string]any
+}
+
+func (s *server) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	switch method {
+	case wire.MethodInitialize:
+		return s.initialize(params)
+	case wire.MethodManifest:
+		if len(s.prog.Manifest) == 0 {
+			return nil, &Error{Code: wire.ErrorCodeUnknownMethod, Message: "no manifest here: it is in the package"}
+		}
+		return s.prog.Manifest, nil
+	}
+	s.mu.Lock()
+	ok := s.initialized
+	s.mu.Unlock()
+	if !ok {
+		return nil, &Error{Code: wire.ErrorCodeNotInitialized, Message: "not initialized"}
+	}
+	if method == wire.MethodPing {
+		return struct{}{}, nil
+	}
+	ns, rest, found := strings.Cut(method, ".")
+	if !found {
+		return nil, UnknownMethod(method)
+	}
+	if h := s.prog.Namespaces[ns]; h != nil {
+		return h(ctx, rest, params)
+	}
+	if ns == "ui" && s.prog.UI != nil {
+		return s.ui(ctx, rest, params)
+	}
+	return nil, UnknownMethod(method)
+}
+
+// event hands an event the hub tells (event.<topic>) to its namespace's handler; nothing is answered.
+func (s *server) event(method string, params json.RawMessage) {
+	s.mu.Lock()
+	ok := s.initialized
+	s.mu.Unlock()
+	ns, rest, found := strings.Cut(method, ".")
+	if h := s.prog.Namespaces[ns]; ok && found && h != nil {
+		go func() { _, _ = h(s.ctx, rest, params) }()
+	}
+}
+
+func (s *server) initialize(raw json.RawMessage) (any, error) {
+	in := &Init{Raw: raw}
+	if err := json.Unmarshal(raw, &in.InitializeParams); err != nil {
+		return nil, err
+	}
+	if in.Protocol != Protocol {
+		return nil, &Error{Code: wire.ErrorCodeWrongProtocol, Message: fmt.Sprintf("protocol %d, not %d", in.Protocol, Protocol)}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.initialized {
+		var contributes map[string]any
+		if s.prog.Init != nil {
+			var err error
+			if contributes, err = s.prog.Init(s.ctx, in, s.hub); err != nil {
+				return nil, err
+			}
+		}
+		s.initialized, s.init, s.contributes = true, in, contributes
+	}
+	res := wire.InitializeResult{Protocol: Protocol, ID: s.prog.ID, Version: s.prog.Version}
+	if len(s.contributes) > 0 {
+		res.Contributes = map[string]json.RawMessage{}
+		for k, v := range s.contributes {
+			b, err := json.Marshal(v)
+			if err != nil {
+				return nil, err
+			}
+			res.Contributes[k] = b
+		}
+	}
+	return res, nil
+}
+
+// NoContribution is the error for a call to a contribution the program does not have.
+func NoContribution(id string) error {
+	return &Error{Code: wire.ErrorCodeNoContribution, Message: "no contribution " + id}
+}
+
+// UnknownMethod is the error for a method the namespace does not have.
+func UnknownMethod(method string) error {
+	return &Error{Code: wire.ErrorCodeUnknownMethod, Message: "unknown method " + method}
+}
+
+// Unsupported is the error for what the program does not do here (not its gateway, …).
+func Unsupported(why string) error { return &Error{Code: wire.ErrorCodeUnsupported, Message: why} }
+
+// Contribution reads the contribution a call is for ("" when the call did not say).
+func Contribution(params json.RawMessage) string {
+	var t struct {
+		Contribution string `json:"contribution"`
+	}
+	_ = json.Unmarshal(params, &t)
+	return t.Contribution
+}

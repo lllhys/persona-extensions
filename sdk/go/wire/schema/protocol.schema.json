@@ -1,0 +1,340 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "protocol.schema.json",
+  "title": "Extension process protocol",
+  "description": "The process protocol (version 1) between the hub and an extension's program: one JSON object a line on stdin / stdout (or a unix socket), keys in snake_case. Also what the apps send the hub to draw a slot.",
+  "$defs": {
+    "Frame": {
+      "description": "One line: a request {id, method, params}, an answer {id, result} or {id, error}, or an event {event, params}.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "method": {"type": "string"},
+        "event": {"type": "string"},
+        "params": {},
+        "result": {},
+        "error": {"$ref": "#/$defs/RPCError"}
+      }
+    },
+    "RPCError": {
+      "type": "object",
+      "properties": {
+        "message": {"type": "string", "description": "For people; never a secret or a message's body."},
+        "code": {"type": "string", "description": "One of ErrorCode, or an extension point's own (not_found, invalid, conflict…)."},
+        "data": {}
+      },
+      "required": ["message"]
+    },
+    "ErrorCode": {
+      "type": "string",
+      "enum": ["not_initialized", "unknown_method", "wrong_protocol", "no_capability", "no_contribution", "permission_denied", "timeout", "unsupported"]
+    },
+    "Method": {
+      "description": "Methods of the base; every other method is <namespace>.<method>, the namespace an extension point's.",
+      "type": "string",
+      "enum": ["initialize", "ping", "manifest"]
+    },
+    "HubRole": {"type": "string", "enum": ["center", "member"]},
+    "HubCapability": {"type": "string", "enum": ["inbox_group"]},
+    "InitializeParams": {
+      "description": "What the hub sends first. The extension is under extension; hubs before the rename (#1844) send it as plugin, newer hubs send both.",
+      "type": "object",
+      "properties": {
+        "protocol": {"type": "integer", "const": 1},
+        "hub": {"$ref": "#/$defs/HubInfo"},
+        "extension": {"$ref": "#/$defs/ExtensionInfo"},
+        "plugin": {"$ref": "#/$defs/ExtensionInfo"},
+        "config": {"description": "The configuration with the schema's defaults filled in."},
+        "secrets": {"type": "object", "additionalProperties": {"type": "string"}},
+        "granted": {"$ref": "manifest.schema.json#/$defs/Permissions"},
+        "active": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}},
+          "description": "The contributions this run is for, by extension point."}
+      },
+      "required": ["protocol", "hub", "granted"]
+    },
+    "HubInfo": {
+      "type": "object",
+      "properties": {
+        "build": {"type": "integer", "x-go-type": "int64"},
+        "extension_points": {"type": "object", "additionalProperties": {"type": "integer"}},
+        "role": {"$ref": "#/$defs/HubRole"},
+        "timezone": {"type": "string"},
+        "capabilities": {"type": "array", "items": {"type": "string"}},
+        "url": {"type": "string", "description": "The hub's API on this machine, for the token below."},
+        "token": {"type": "string", "description": "A token of the scopes it was granted (permissions.hub): new each start."},
+        "scopes": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": ["build", "extension_points"]
+    },
+    "ExtensionInfo": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "version": {"type": "string"},
+        "dir": {"type": "string"},
+        "data_dir": {"type": "string"}
+      },
+      "required": ["id", "version"]
+    },
+    "InitializeResult": {
+      "type": "object",
+      "properties": {
+        "protocol": {"type": "integer", "const": 1},
+        "id": {"type": "string"},
+        "version": {"type": "string"},
+        "contributes": {"type": "object", "additionalProperties": {}, "description": "A subset of the manifest's."}
+      },
+      "required": ["protocol", "id", "version"]
+    },
+    "UIParams": {
+      "description": "ui.render's and ui.action's parameters: what to draw, where, for whom.",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "state": {"type": "string"},
+        "action": {"type": "string"},
+        "values": {"type": "object", "additionalProperties": {"type": "string"}},
+        "placement": {"$ref": "view.schema.json#/$defs/Placement"},
+        "size": {"$ref": "view.schema.json#/$defs/Size"},
+        "ui_version": {"type": "integer"},
+        "tz": {"type": "string"},
+        "locale": {"type": "string"},
+        "platform": {"$ref": "view.schema.json#/$defs/Platform"},
+        "machine": {"$ref": "#/$defs/UIMachine"},
+        "launcher": {"$ref": "#/$defs/UILauncher"},
+        "item": {"$ref": "#/$defs/UIInboxItem"}
+      },
+      "required": ["contribution", "state", "placement", "size", "ui_version"]
+    },
+    "UIMachine": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "os": {"type": "string"},
+        "online": {"type": "boolean"}
+      },
+      "required": ["id", "name", "online"]
+    },
+    "UILauncher": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "base_url": {"type": "string"},
+        "query_id": {"type": "string"}
+      },
+      "required": ["name", "base_url", "query_id"]
+    },
+    "UIInboxItem": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "summary": {"type": "string"},
+        "tier": {"type": "string"},
+        "reason": {"type": "string"},
+        "done": {"type": "boolean"},
+        "meta": {"description": "The connector's own record of what the item gathers, as stored; null when it has none."},
+        "extra": {"type": "object", "additionalProperties": {}},
+        "count": {"type": "integer"},
+        "started_at": {"type": "string", "format": "date-time"}
+      },
+      "required": ["id", "title", "done", "meta"]
+    },
+    "BadgeEvent": {
+      "description": "ui.badge, sent by an extension: the badge on its nav_page's entry (no text clears it).",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "text": {"type": "string", "maxLength": 8},
+        "tone": {"$ref": "view.schema.json#/$defs/Tone"}
+      },
+      "required": ["contribution"]
+    },
+    "InvalidateEvent": {
+      "description": "ui.invalidate, sent by an extension (UI version 3): what it draws changed; the apps on screen draw it again (contribution: one ui; empty: all of the extension's).",
+      "type": "object",
+      "properties": {"contribution": {"type": "string"}}
+    },
+    "UIContext": {
+      "description": "What an app says when it draws a slot: for whom and where (the hub checks it and hands the extension UIParams).",
+      "type": "object",
+      "properties": {
+        "launcher": {"type": "string"},
+        "machine": {"type": "string"},
+        "item": {"type": "string"},
+        "size": {"$ref": "view.schema.json#/$defs/Size"},
+        "tz": {"type": "string"},
+        "locale": {"type": "string"},
+        "platform": {"$ref": "view.schema.json#/$defs/Platform"},
+        "ui_version": {"type": "integer"}
+      }
+    },
+    "UIRequest": {
+      "description": "An app's POST …/-/ui/{ui}: without action it draws, with one a control was used.",
+      "type": "object",
+      "properties": {
+        "context": {"$ref": "#/$defs/UIContext"},
+        "state": {"type": "string"},
+        "action": {"type": "string"},
+        "values": {"type": "object", "additionalProperties": {"type": "string"}}
+      }
+    },
+    "UIPlace": {
+      "description": "Where an extension draws something, as the hub lists it (GET …/-/ui). The new API names the extension extension / extension_name; the old one plugin / plugin_name.",
+      "type": "object",
+      "properties": {
+        "extension": {"type": "string"},
+        "extension_name": {"type": "string"},
+        "plugin": {"type": "string"},
+        "plugin_name": {"type": "string"},
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "placement": {"$ref": "view.schema.json#/$defs/Placement"},
+        "size": {"$ref": "view.schema.json#/$defs/Size"},
+        "icon": {"$ref": "view.schema.json#/$defs/NavIcon"},
+        "opens": {"type": "string"},
+        "badge": {"$ref": "view.schema.json#/$defs/Badge"},
+        "connector": {"type": "string"}
+      },
+      "required": ["id", "title", "placement"]
+    },
+    "UIPlaces": {
+      "type": "object",
+      "properties": {"ui": {"type": "array", "items": {"$ref": "#/$defs/UIPlace"}}},
+      "required": ["ui"]
+    },
+    "WidgetPlace": {
+      "description": "A widget an extension draws outside the app (GET …/extensions/-/widgets; docs「系统级位置」).",
+      "type": "object",
+      "properties": {
+        "extension": {"type": "string"},
+        "extension_name": {"type": "string"},
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "families": {"type": "array", "items": {"$ref": "view.schema.json#/$defs/WidgetFamily"}},
+        "refresh_minutes": {"type": "integer"},
+        "opens": {"type": "string"}
+      },
+      "required": ["extension", "id", "title", "families", "refresh_minutes"]
+    },
+    "WidgetPlaces": {
+      "type": "object",
+      "properties": {"widgets": {"type": "array", "items": {"$ref": "#/$defs/WidgetPlace"}}},
+      "required": ["widgets"]
+    },
+    "WidgetRequest": {
+      "description": "An app's POST …/extensions/{id}/-/widget/{ui}: context.size is the family it draws (WidgetFamily).",
+      "type": "object",
+      "properties": {"context": {"$ref": "#/$defs/UIContext"}}
+    },
+    "WidgetAnswer": {
+      "description": "A widget's view, held to what the family draws, and until when the hub keeps it (the app's timeline's next entry).",
+      "type": "object",
+      "properties": {
+        "view": {"$ref": "view.schema.json#/$defs/View"},
+        "expires_at": {"type": "string", "format": "date-time"}
+      },
+      "required": ["view", "expires_at"]
+    },
+    "DeviceWidget": {
+      "description": "A widget a device has on a screen (PUT /api/v1/devices/{id}/widgets): the hub wakes that device when it changes.",
+      "type": "object",
+      "properties": {
+        "extension": {"type": "string"},
+        "id": {"type": "string"},
+        "family": {"$ref": "view.schema.json#/$defs/WidgetFamily"}
+      },
+      "required": ["extension", "id", "family"]
+    },
+    "DeviceWidgets": {
+      "type": "object",
+      "properties": {"widgets": {"type": "array", "items": {"$ref": "#/$defs/DeviceWidget"}}},
+      "required": ["widgets"]
+    },
+    "WidgetPush": {
+      "description": "extension_widget in a background push (content-available): a widget the device has changed; the app reloads its timelines.",
+      "type": "object",
+      "properties": {
+        "extension": {"type": "string"},
+        "id": {"type": "string"}
+      },
+      "required": ["extension", "id"]
+    },
+    "ShortcutPlace": {
+      "description": "An extension's action the system runs (GET …/extensions/-/shortcuts).",
+      "type": "object",
+      "properties": {
+        "extension": {"type": "string"},
+        "extension_name": {"type": "string"},
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "params": {"type": "array", "items": {"$ref": "manifest.schema.json#/$defs/ShortcutParam"}},
+        "ui": {"type": "string"}
+      },
+      "required": ["extension", "id", "title"]
+    },
+    "ShortcutPlaces": {
+      "type": "object",
+      "properties": {"shortcuts": {"type": "array", "items": {"$ref": "#/$defs/ShortcutPlace"}}},
+      "required": ["shortcuts"]
+    },
+    "ShortcutRequest": {
+      "description": "An app's POST …/extensions/{id}/-/shortcut/{sid}: the params' values (strings) and the context (tz, locale, platform, ui_version).",
+      "type": "object",
+      "properties": {
+        "values": {"type": "object", "additionalProperties": {"type": "string"}},
+        "context": {"$ref": "#/$defs/UIContext"}
+      }
+    },
+    "ShortcutRunParams": {
+      "description": "shortcut.run's parameters: which shortcut, its values, for whom.",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "values": {"type": "object", "additionalProperties": {"type": "string"}},
+        "ui_version": {"type": "integer"},
+        "tz": {"type": "string"},
+        "locale": {"type": "string"},
+        "platform": {"$ref": "view.schema.json#/$defs/Platform"}
+      },
+      "required": ["contribution", "values", "ui_version"]
+    },
+    "ShortcutResult": {
+      "description": "What shortcut.run answers (and the app gets): a sentence Siri says or shows, and a view held to the large widget's subset (the result card).",
+      "type": "object",
+      "properties": {
+        "text": {"type": "string", "maxLength": 2000},
+        "view": {"$ref": "view.schema.json#/$defs/View"}
+      }
+    },
+    "NotifyAction": {
+      "description": "A button on an extension's notification (POST /api/v1/notify actions, at most 3). A tap runs ui.action on the notification's ui with this id; input asks for a line of text first (values.text).",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "title": {"type": "string", "minLength": 1, "maxLength": 40},
+        "role": {"$ref": "view.schema.json#/$defs/ButtonRole"},
+        "foreground": {"type": "boolean", "description": "Open the app to run it; otherwise it runs in the background and its toast is shown as a notification."},
+        "input": {"$ref": "#/$defs/NotifyActionInput"}
+      },
+      "required": ["id", "title"]
+    },
+    "NotifyActionInput": {
+      "type": "object",
+      "properties": {"placeholder": {"type": "string", "maxLength": 80}}
+    },
+    "ExtensionNotification": {
+      "description": "extension_notification in an extension's alert push: whose it is, the page a tap opens (ui with state) and its buttons (category ext.<extension>.<hash of the action ids>, registered by the app as it meets it).",
+      "type": "object",
+      "properties": {
+        "extension": {"type": "string"},
+        "ui": {"type": "string"},
+        "state": {"type": "string"},
+        "actions": {"type": "array", "maxItems": 3, "items": {"$ref": "#/$defs/NotifyAction"}}
+      },
+      "required": ["extension"]
+    }
+  }
+}

@@ -1,0 +1,437 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "view.schema.json",
+  "title": "Extension views",
+  "description": "What an extension draws (ui.render, ui.action): a View of sections of components, drawn by every app with its own design system. Also the assistant's persona-card, which joins the components in #1850.",
+  "$defs": {
+    "Tone": {
+      "description": "A role color the app picks, never one of the extension's own. An unknown tone draws as neutral.",
+      "type": "string",
+      "enum": ["neutral", "positive", "caution", "danger"]
+    },
+    "TextStyle": {"type": "string", "enum": ["body", "secondary", "caption", "code"]},
+    "FieldKind": {"type": "string", "enum": ["text", "secret", "number", "toggle", "choice"]},
+    "ChartKind": {"type": "string", "enum": ["bar", "line"]},
+    "ButtonRole": {"type": "string", "enum": ["normal", "destructive"]},
+    "Placement": {
+      "description": "A slot in the apps an extension draws at (docs「UI 插槽」). extension_page is plugin_page's new name (UI version 3): the hub takes both and answers the new API with extension_page, the old one with plugin_page.",
+      "type": "string",
+      "enum": ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget"]
+    },
+    "Size": {
+      "description": "How much room a view has: compact (a card), full (a page, a section), or for a widget the family it is drawn for (WidgetFamily).",
+      "type": "string",
+      "enum": ["compact", "full", "small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"]
+    },
+    "WidgetFamily": {
+      "description": "A widget's size outside the app (docs「系统级位置」): a home screen widget's small / medium / large, a Lock Screen or watch face complication's accessory_*.",
+      "type": "string",
+      "enum": ["small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"]
+    },
+    "Platform": {"type": "string", "enum": ["ios", "mac", "android", "web"]},
+    "NavIcon": {
+      "description": "The fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the icons after money). Each app draws its own icon for the meaning; an unknown one draws as the default (extension; plugin is its old name).",
+      "type": "string",
+      "enum": ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings"]
+    },
+    "View": {
+      "type": "object",
+      "properties": {
+        "title": {"type": "string", "maxLength": 2000},
+        "sections": {"type": "array", "items": {"$ref": "#/$defs/Section"}},
+        "state": {"type": "string", "description": "The extension's own, sent back with the next render or action; at most 16 KB."},
+        "refresh_after": {"type": "integer", "minimum": 0, "maximum": 86400, "x-since": 2,
+          "description": "Draw again after this many seconds while on screen (30 at least; 0 never)."},
+        "search": {"$ref": "#/$defs/Search", "x-since": 3},
+        "filter": {"$ref": "#/$defs/Filter", "x-since": 3}
+      },
+      "required": ["sections"]
+    },
+    "Section": {
+      "type": "object",
+      "properties": {
+        "title": {"type": "string", "maxLength": 2000},
+        "footer": {"type": "string", "maxLength": 2000},
+        "items": {"type": "array", "items": {"$ref": "#/$defs/Component"}},
+        "more": {"$ref": "#/$defs/More", "x-since": 3}
+      },
+      "required": ["items"]
+    },
+    "Component": {
+      "description": "One component of a view, told apart by type. A type an app does not know is skipped and the rest drawn.",
+      "x-discriminator": "type",
+      "oneOf": [
+        {"$ref": "#/$defs/TextComponent"},
+        {"$ref": "#/$defs/MetricComponent"},
+        {"$ref": "#/$defs/ProgressComponent"},
+        {"$ref": "#/$defs/RowComponent"},
+        {"$ref": "#/$defs/ButtonComponent"},
+        {"$ref": "#/$defs/LinkComponent"},
+        {"$ref": "#/$defs/FieldComponent"},
+        {"$ref": "#/$defs/DividerComponent"},
+        {"$ref": "#/$defs/ChartComponent"},
+        {"$ref": "#/$defs/StatGridComponent"},
+        {"$ref": "#/$defs/SegmentedComponent"},
+        {"$ref": "#/$defs/MarkdownComponent"},
+        {"$ref": "#/$defs/TableComponent"},
+        {"$ref": "#/$defs/EmptyComponent"},
+        {"$ref": "#/$defs/LoadingComponent"}
+      ]
+    },
+    "TextComponent": {
+      "description": "A paragraph.",
+      "type": "object", "x-since": 1,
+      "properties": {
+        "type": {"const": "text"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3},
+        "text": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "style": {"$ref": "#/$defs/TextStyle"}
+      },
+      "required": ["type", "text"]
+    },
+    "MetricComponent": {
+      "description": "A number with its label.",
+      "type": "object", "x-since": 1,
+      "properties": {
+        "type": {"const": "metric"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3},
+        "label": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "value": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "detail": {"type": "string", "maxLength": 2000},
+        "tone": {"$ref": "#/$defs/Tone"}
+      },
+      "required": ["type", "label", "value"]
+    },
+    "ProgressComponent": {
+      "description": "A bar filled to ratio (0 to 1).",
+      "type": "object", "x-since": 1,
+      "properties": {
+        "type": {"const": "progress"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3},
+        "label": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "ratio": {"type": "number", "minimum": 0, "maximum": 1, "x-go-pointer": true},
+        "detail": {"type": "string", "maxLength": 2000},
+        "tone": {"$ref": "#/$defs/Tone"}
+      },
+      "required": ["type", "label", "ratio"]
+    },
+    "RowComponent": {
+      "description": "A row of a list; with an action it can be tapped.",
+      "type": "object", "x-since": 1,
+      "properties": {
+        "type": {"const": "row"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3},
+        "title": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "subtitle": {"type": "string", "maxLength": 2000},
+        "value": {"type": "string", "maxLength": 2000},
+        "badge": {"$ref": "#/$defs/Badge"},
+        "action": {"$ref": "#/$defs/Action"},
+        "icon": {"$ref": "#/$defs/NavIcon", "x-since": 3, "description": "At most one of icon, avatar and thumbnail."},
+        "avatar": {"$ref": "#/$defs/Avatar", "x-since": 3},
+        "thumbnail": {"$ref": "#/$defs/Thumbnail", "x-since": 3}
+      },
+      "required": ["type", "title"]
+    },
+    "ButtonComponent": {
+      "description": "A button; its title never wraps.",
+      "type": "object", "x-since": 1,
+      "properties": {
+        "type": {"const": "button"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3},
+        "title": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "action": {"$ref": "#/$defs/Action"},
+        "role": {"$ref": "#/$defs/ButtonRole"}
+      },
+      "required": ["type", "title", "action"]
+    },
+    "LinkComponent": {
+      "description": "A link the app opens inside itself: https only.",
+      "type": "object", "x-since": 1,
+      "properties": {
+        "type": {"const": "link"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3},
+        "title": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "url": {"type": "string", "pattern": "^https://[^/?#]+"}
+      },
+      "required": ["type", "title", "url"]
+    },
+    "FieldComponent": {
+      "description": "An input; its value goes back under name when an action submits. A secret is never filled in.",
+      "type": "object", "x-since": 1,
+      "properties": {
+        "type": {"const": "field"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3},
+        "name": {"type": "string", "minLength": 1},
+        "label": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "kind": {"$ref": "#/$defs/FieldKind"},
+        "value": {"type": "string", "maxLength": 2000},
+        "choices": {"type": "array", "items": {"$ref": "#/$defs/Choice"}},
+        "placeholder": {"type": "string", "maxLength": 2000}
+      },
+      "required": ["type", "name", "label", "kind"]
+    },
+    "DividerComponent": {
+      "description": "A line between two groups of a section.",
+      "type": "object", "x-since": 1,
+      "properties": {"type": {"const": "divider"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3}},
+      "required": ["type"]
+    },
+    "ChartComponent": {
+      "description": "A bar or line chart. Every series has the same labels in the same order; with more than one series each is named.",
+      "type": "object", "x-since": 2,
+      "properties": {
+        "type": {"const": "chart"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3},
+        "kind": {"$ref": "#/$defs/ChartKind"},
+        "series": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"$ref": "#/$defs/ChartSeries"}},
+        "title": {"type": "string", "maxLength": 2000},
+        "unit": {"type": "string", "maxLength": 2000},
+        "stacked": {"type": "boolean"},
+        "detail": {"type": "string", "maxLength": 2000}
+      },
+      "required": ["type", "kind", "series"]
+    },
+    "StatGridComponent": {
+      "description": "A few numbers side by side.",
+      "type": "object", "x-since": 2,
+      "properties": {
+        "type": {"const": "stat_grid"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3},
+        "stats": {"type": "array", "minItems": 1, "maxItems": 6, "items": {"$ref": "#/$defs/Stat"}}
+      },
+      "required": ["type", "stats"]
+    },
+    "SegmentedComponent": {
+      "description": "One of a few, chosen at once: its action goes with values {name: the chosen value}.",
+      "type": "object", "x-since": 2,
+      "properties": {
+        "type": {"const": "segmented"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3},
+        "name": {"type": "string", "minLength": 1},
+        "choices": {"type": "array", "minItems": 2, "maxItems": 5, "items": {"$ref": "#/$defs/Choice"}},
+        "value": {"type": "string"},
+        "action": {"$ref": "#/$defs/Action"}
+      },
+      "required": ["type", "name", "choices", "value", "action"]
+    },
+    "MarkdownComponent": {
+      "description": "Text in a safe subset of Markdown: headings (1 to 3), paragraphs, lists, bold, italics, inline code, code blocks, quotes, https links (opened in the app). No HTML, no images, no tables (a table is a table component). An older app gets it as plain text.",
+      "type": "object", "x-since": 3,
+      "properties": {
+        "type": {"const": "markdown"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3},
+        "text": {"type": "string", "minLength": 1, "maxLength": 20000}
+      },
+      "required": ["type", "text"]
+    },
+    "TableComponent": {
+      "description": "A table: 1 to 8 columns, at most 100 rows, each with as many cells as there are columns. Narrow screens scroll it sideways; cells never squeeze. An older app gets a row per line.",
+      "type": "object", "x-since": 3,
+      "properties": {
+        "type": {"const": "table"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3},
+        "columns": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/$defs/TableColumn"}},
+        "rows": {"type": "array", "maxItems": 100, "items": {"type": "array", "maxItems": 8, "items": {"type": "string", "maxLength": 2000}}},
+        "caption": {"type": "string", "maxLength": 2000}
+      },
+      "required": ["type", "columns", "rows"]
+    },
+    "EmptyComponent": {
+      "description": "An empty state: nothing here yet, and maybe one thing to do about it. An older app gets a text and a button.",
+      "type": "object", "x-since": 3,
+      "properties": {
+        "type": {"const": "empty"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3},
+        "title": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "detail": {"type": "string", "maxLength": 2000},
+        "icon": {"$ref": "#/$defs/NavIcon"},
+        "button": {"$ref": "#/$defs/EmptyButton"}
+      },
+      "required": ["type", "title"]
+    },
+    "LoadingComponent": {
+      "description": "Loading: the extension answers it while its data comes, then sends ui.invalidate to be drawn again. An older app gets a quiet text.",
+      "type": "object", "x-since": 3,
+      "properties": {
+        "type": {"const": "loading"},
+        "key": {"type": "string", "maxLength": 128, "x-since": 3},
+        "title": {"type": "string", "maxLength": 2000}
+      },
+      "required": ["type"]
+    },
+    "Action": {
+      "description": "What a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push or pop a page) are fields added here.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "confirm": {"type": "string", "description": "Ask the user first, in these words."},
+        "submit": {"type": "boolean", "description": "Send the page's fields as values."},
+        "push": {"$ref": "#/$defs/Push", "x-since": 3,
+          "description": "Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls ui.action with id)."}
+      },
+      "required": ["id"]
+    },
+    "Push": {
+      "description": "A page pushed on the navigation stack: ui.render of the extension's ui (this one when empty; a full page: extension_page, plugin_page or nav_page) with state. title is shown until the view comes.",
+      "type": "object",
+      "properties": {
+        "ui": {"type": "string", "maxLength": 64},
+        "state": {"type": "string"},
+        "title": {"type": "string", "maxLength": 2000}
+      }
+    },
+    "Search": {
+      "description": "A search box on top of the page (UI version 3): the app calls ui.action with action and values {\"q\": the text}, 0.3 s after the user stops typing.",
+      "type": "object",
+      "properties": {
+        "placeholder": {"type": "string", "maxLength": 2000},
+        "value": {"type": "string", "maxLength": 2000},
+        "action": {"$ref": "#/$defs/Action"}
+      },
+      "required": ["action"]
+    },
+    "Filter": {
+      "description": "A drop-down beside the search box (UI version 3): choosing calls ui.action with action and values {name: the value} (and the search's q).",
+      "type": "object",
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "maxLength": 2000},
+        "choices": {"type": "array", "minItems": 2, "maxItems": 20, "items": {"$ref": "#/$defs/Choice"}},
+        "value": {"type": "string", "maxLength": 2000},
+        "action": {"$ref": "#/$defs/Action"}
+      },
+      "required": ["name", "choices", "value", "action"]
+    },
+    "More": {
+      "description": "A section's last row, 加载更多 (UI version 3): reaching it (or tapping it) calls ui.action with action once; the extension answers the whole view, longer.",
+      "type": "object",
+      "properties": {
+        "title": {"type": "string", "maxLength": 2000},
+        "action": {"$ref": "#/$defs/Action"}
+      },
+      "required": ["action"]
+    },
+    "Avatar": {
+      "description": "A person's or a chat's picture: an https image, else up to two characters drawn as the app's initials avatar.",
+      "type": "object",
+      "properties": {
+        "url": {"type": "string", "pattern": "^https://[^/?#]+"},
+        "text": {"type": "string", "maxLength": 2}
+      }
+    },
+    "Thumbnail": {
+      "description": "A small picture at the row's start: an https image the app loads without any credentials.",
+      "type": "object",
+      "properties": {
+        "url": {"type": "string", "pattern": "^https://[^/?#]+"},
+        "aspect": {"$ref": "#/$defs/ThumbnailAspect"}
+      },
+      "required": ["url"]
+    },
+    "ThumbnailAspect": {"type": "string", "enum": ["square", "wide"]},
+    "TableAlign": {"type": "string", "enum": ["start", "end"]},
+    "TableColumn": {
+      "type": "object",
+      "properties": {
+        "title": {"type": "string", "maxLength": 200},
+        "align": {"$ref": "#/$defs/TableAlign"}
+      },
+      "required": ["title"]
+    },
+    "EmptyButton": {
+      "description": "An empty state's one button.",
+      "type": "object",
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "action": {"$ref": "#/$defs/Action"}
+      },
+      "required": ["title", "action"]
+    },
+    "Badge": {
+      "type": "object",
+      "properties": {
+        "text": {"type": "string", "maxLength": 2000},
+        "tone": {"$ref": "#/$defs/Tone"}
+      },
+      "required": ["text"]
+    },
+    "Choice": {
+      "type": "object",
+      "properties": {
+        "value": {"type": "string"},
+        "title": {"type": "string"}
+      },
+      "required": ["value"]
+    },
+    "ChartSeries": {
+      "description": "One line, or one color of bars. No tone: the app's own colors, in order.",
+      "type": "object",
+      "properties": {
+        "name": {"type": "string", "maxLength": 40},
+        "tone": {"$ref": "#/$defs/Tone"},
+        "points": {"type": "array", "minItems": 1, "maxItems": 120, "items": {"$ref": "#/$defs/ChartPoint"}}
+      },
+      "required": ["points"]
+    },
+    "ChartPoint": {
+      "description": "A value at a label (a day, a model); display is how to write it (\"¥1.20\"), else the app writes value with the unit.",
+      "type": "object",
+      "properties": {
+        "label": {"type": "string", "maxLength": 40},
+        "value": {"type": "number"},
+        "display": {"type": "string", "maxLength": 40}
+      },
+      "required": ["label", "value"]
+    },
+    "Stat": {
+      "type": "object",
+      "properties": {
+        "label": {"type": "string", "minLength": 1},
+        "value": {"type": "string", "minLength": 1},
+        "detail": {"type": "string"},
+        "tone": {"$ref": "#/$defs/Tone"}
+      },
+      "required": ["label", "value"]
+    },
+    "ActionResult": {
+      "description": "What ui.action answers: a new view, a short message, an https link to open, a page to push or to pop (UI version 3), or nothing (draw again).",
+      "type": "object",
+      "properties": {
+        "view": {"$ref": "#/$defs/View"},
+        "toast": {"type": "string"},
+        "open_url": {"type": "string"},
+        "push": {"$ref": "#/$defs/Push", "x-since": 3, "description": "Then open this page on top (after a submit: list, detail, edit)."},
+        "pop": {"type": "boolean", "x-since": 3, "description": "Then go back a page; the page below is drawn again."}
+      }
+    },
+    "PersonaCardKind": {"type": "string", "enum": ["stat", "stacked_bar", "line", "bar"]},
+    "PersonaCard": {
+      "description": "The assistant's ```persona-card block (#886): one JSON object. Joins the components in #1850; this form keeps drawing.",
+      "type": "object",
+      "properties": {
+        "type": {"$ref": "#/$defs/PersonaCardKind"},
+        "title": {"type": "string"},
+        "subtitle": {"type": "string"},
+        "value": {"type": "number", "x-go-pointer": true},
+        "unit": {"type": "string"},
+        "note": {"type": "string"},
+        "total": {"$ref": "#/$defs/CardAmount"},
+        "segments": {"type": "array", "items": {"$ref": "#/$defs/CardPart"}},
+        "rest": {"$ref": "#/$defs/CardPart"},
+        "points": {"type": "array", "items": {"$ref": "#/$defs/CardPart"}}
+      },
+      "required": ["type"]
+    },
+    "CardAmount": {
+      "type": "object",
+      "properties": {"value": {"type": "number"}, "unit": {"type": "string"}},
+      "required": ["value"]
+    },
+    "CardPart": {
+      "type": "object",
+      "properties": {"label": {"type": "string"}, "value": {"type": "number"}, "note": {"type": "string"}},
+      "required": ["label", "value"]
+    }
+  }
+}

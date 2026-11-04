@@ -1,23 +1,23 @@
-// Package pluginkit is a Persona plugin's side of the plugin protocol (Persona's docs/plugins.md「进程插件协议」),
-// standing alone: JSON lines on stdin / stdout, initialize, ping, and namespaced methods. It depends on nothing of
-// Persona's, so a plugin builds on its own.
+// Package pluginkit is a Persona extension's side of the process protocol (Persona's docs/extensions.md「进程扩展协议」)
+// as this repository's extensions use it. The protocol itself is the official SDK's (sdk/go/ext, a copy kept by
+// Persona's scripts/gen/sync-sdk.sh): this package keeps the shape the extensions were written against (handlers by
+// full method name, InitParams) and adds the helpers they share (inbox, quota, ui).
 package pluginkit
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 	"sync"
-	"sync/atomic"
+
+	"github.com/nwverse/persona/sdk/go/ext"
 )
 
-// Protocol is the plugin protocol's version.
-const Protocol = 1
+// Protocol is the process protocol's version.
+const Protocol = ext.Protocol
 
 // Error codes.
 const (
@@ -36,12 +36,15 @@ type Error struct {
 
 func (e *Error) Error() string { return e.Message }
 
+// WireError is its code, for the SDK to send as it is.
+func (e *Error) WireError() (string, json.RawMessage) { return e.Code, nil }
+
 // Errorf is an error with a code.
 func Errorf(code, format string, args ...any) error {
 	return &Error{Code: code, Message: fmt.Sprintf(format, args...)}
 }
 
-// InitParams is what initialize carries (the parts a plugin uses).
+// InitParams is what initialize carries (the parts an extension uses).
 type InitParams struct {
 	Protocol int `json:"protocol"`
 	Hub      struct {
@@ -49,9 +52,10 @@ type InitParams struct {
 		ExtensionPoints map[string]int `json:"extension_points"`
 		// Role is the hub's place in its group: "center" or "member" ("" from a hub before roles: a center).
 		Role string `json:"role"`
-		// Capabilities are what the hub does that a plugin may go by (HubInboxGroup); none from a hub before them.
+		// Capabilities are what the hub does that an extension may go by (HubInboxGroup); none from a hub before them.
 		Capabilities []string `json:"capabilities"`
 	} `json:"hub"`
+	// Plugin is the extension's own, under whichever key the hub sent it (extension; plugin before Persona's #1844).
 	Plugin struct {
 		ID      string `json:"id"`
 		Version string `json:"version"`
@@ -84,83 +88,58 @@ func (p InitParams) HubCan(c string) bool {
 // Handler answers one method ("quota.query").
 type Handler func(ctx context.Context, hub *Hub, params json.RawMessage) (any, error)
 
-// Plugin is a plugin program.
+// Plugin is an extension program.
 type Plugin struct {
 	ID, Version string
-	// Manifest is its persona-plugin.json, answered to manifest (needed when it runs elsewhere).
+	// Manifest is its persona-extension.json, answered to manifest (needed when it runs elsewhere).
 	Manifest json.RawMessage
 	// Contributes is what initialize says it contributes (a subset of the manifest's).
 	Contributes map[string]any
-	// Init runs once with initialize's parameters; hub is for the plugin's own calls and events from then on.
+	// Init runs once with initialize's parameters; hub is for the extension's own calls and events from then on.
 	Init     func(p InitParams, hub *Hub) error
 	Handlers map[string]Handler
 }
 
-type message struct {
-	ID     string          `json:"id,omitempty"`
-	Method string          `json:"method,omitempty"`
-	Event  string          `json:"event,omitempty"`
-	Params json.RawMessage `json:"params,omitempty"`
-	Result json.RawMessage `json:"result,omitempty"`
-	Error  *Error          `json:"error,omitempty"`
-}
-
-// Hub is the hub, for the plugin's calls.
+// Hub is the hub, for the extension's calls and events: the SDK's, or (in tests) lines written to w.
 type Hub struct {
-	w       io.Writer
-	wmu     sync.Mutex
-	next    atomic.Int64
-	mu      sync.Mutex
-	pending map[string]chan message
-}
+	ext *ext.Hub
 
-func (h *Hub) write(m message) error {
-	b, err := json.Marshal(m)
-	if err != nil {
-		return err
-	}
-	h.wmu.Lock()
-	defer h.wmu.Unlock()
-	_, err = h.w.Write(append(b, '\n'))
-	return err
+	w  io.Writer
+	mu sync.Mutex
 }
 
 // Notify sends the hub a one-way event ({"event", "params"}): connector.changed, api.broadcast.
 func (h *Hub) Notify(event string, params any) error {
+	if h.ext != nil {
+		return h.ext.Notify(event, params)
+	}
 	raw, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
-	return h.write(message{Event: event, Params: raw})
+	b, err := json.Marshal(struct {
+		Event  string          `json:"event"`
+		Params json.RawMessage `json:"params"`
+	}{event, raw})
+	if err != nil {
+		return err
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	_, err = h.w.Write(append(b, '\n'))
+	return err
 }
 
-// Call calls a hub method and decodes its result into out.
+// Call calls a hub method and decodes its result into out. A coded error of the hub's is an *Error.
 func (h *Hub) Call(ctx context.Context, method string, params, out any) error {
-	raw, err := json.Marshal(params)
-	if err != nil {
-		return err
+	if h.ext == nil {
+		return Errorf(CodeUnknownMethod, "no hub to call %s", method)
 	}
-	id := fmt.Sprintf("p%d", h.next.Add(1))
-	ch := make(chan message, 1)
-	h.mu.Lock()
-	h.pending[id] = ch
-	h.mu.Unlock()
-	defer func() { h.mu.Lock(); delete(h.pending, id); h.mu.Unlock() }()
-	if err := h.write(message{ID: id, Method: method, Params: raw}); err != nil {
-		return err
+	err := h.ext.Call(ctx, method, params, out)
+	if e, ok := err.(*ext.Error); ok {
+		return &Error{Message: e.Message, Code: e.Code}
 	}
-	select {
-	case m := <-ch:
-		if m.Error != nil {
-			return m.Error
-		}
-		if out != nil && len(m.Result) > 0 {
-			return json.Unmarshal(m.Result, out)
-		}
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return err
 }
 
 // Run serves p on stdin / stdout until the hub closes stdin.
@@ -168,97 +147,45 @@ func Run(p Plugin) error { return Serve(context.Background(), os.Stdin, os.Stdou
 
 // Serve serves p on in / out.
 func Serve(ctx context.Context, in io.Reader, out io.Writer, p Plugin) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	hub := &Hub{w: out, pending: map[string]chan message{}}
-	var initialized atomic.Bool
-	var initOnce sync.Once
-	var initErr error
-	sc := bufio.NewScanner(in)
-	sc.Buffer(make([]byte, 64<<10), 64<<20)
-	for sc.Scan() {
-		var m message
-		if json.Unmarshal(sc.Bytes(), &m) != nil {
-			continue
+	var hub *Hub
+	prog := ext.Program{ID: p.ID, Version: p.Version, Manifest: p.Manifest, Namespaces: map[string]ext.Handler{}}
+	prog.Init = func(_ context.Context, in *ext.Init, h *ext.Hub) (map[string]any, error) {
+		hub = &Hub{ext: h}
+		var ip InitParams
+		if err := json.Unmarshal(in.Raw, &ip); err != nil {
+			return nil, err
 		}
-		switch {
-		case m.Method != "":
-			go func(m message) {
-				res, err := func() (any, error) {
-					switch m.Method {
-					case "initialize":
-						var ip InitParams
-						if err := json.Unmarshal(m.Params, &ip); err != nil {
-							return nil, err
-						}
-						if ip.Protocol != Protocol {
-							return nil, Errorf(CodeWrongProtocol, "protocol %d, not %d", ip.Protocol, Protocol)
-						}
-						initOnce.Do(func() {
-							if p.Init != nil {
-								initErr = p.Init(ip, hub)
-							}
-							if initErr == nil {
-								initialized.Store(true)
-							}
-						})
-						if initErr != nil {
-							return nil, initErr
-						}
-						return map[string]any{"protocol": Protocol, "id": p.ID, "version": p.Version, "contributes": p.Contributes}, nil
-					case "manifest":
-						if len(p.Manifest) == 0 {
-							return nil, Errorf(CodeUnknownMethod, "no manifest here: it is in the package")
-						}
-						return p.Manifest, nil
-					}
-					if !initialized.Load() {
-						return nil, Errorf(CodeNotInitialized, "not initialized")
-					}
-					if m.Method == "ping" {
-						return struct{}{}, nil
-					}
-					h := p.Handlers[m.Method]
-					if h == nil {
-						return nil, Errorf(CodeUnknownMethod, "unknown method %s", m.Method)
-					}
-					return h(ctx, hub, m.Params)
-				}()
-				reply := message{ID: m.ID}
-				var coded *Error
-				switch {
-				case errors.As(err, &coded):
-					reply.Error = coded
-				case err != nil:
-					reply.Error = &Error{Message: err.Error()}
-				default:
-					b, merr := json.Marshal(res)
-					if merr != nil {
-						reply.Error = &Error{Message: merr.Error()}
-					} else {
-						reply.Result = b
-					}
-				}
-				_ = hub.write(reply)
-			}(m)
-		case m.Event != "":
-		case m.ID != "":
-			hub.mu.Lock()
-			ch := hub.pending[m.ID]
-			hub.mu.Unlock()
-			if ch != nil {
-				ch <- m
+		if ip.Plugin.ID == "" { // a hub that sends it as extension only
+			info := in.Info()
+			ip.Plugin.ID, ip.Plugin.Version, ip.Plugin.Dir, ip.Plugin.DataDir = info.ID, info.Version, info.Dir, info.DataDir
+		}
+		if p.Init != nil {
+			if err := p.Init(ip, hub); err != nil {
+				return nil, err
 			}
 		}
+		return p.Contributes, nil
 	}
-	return sc.Err()
+	// The handlers are by full method name; the SDK hands calls over by namespace.
+	for method := range p.Handlers {
+		ns, _, ok := strings.Cut(method, ".")
+		if !ok || prog.Namespaces[ns] != nil {
+			continue
+		}
+		prog.Namespaces[ns] = func(ctx context.Context, rest string, params json.RawMessage) (any, error) {
+			h := p.Handlers[ns+"."+rest]
+			if h == nil {
+				return nil, Errorf(CodeUnknownMethod, "unknown method %s.%s", ns, rest)
+			}
+			return h(ctx, hub, params)
+		}
+	}
+	err := ext.Serve(ctx, in, out, prog)
+	if err == io.EOF {
+		return nil
+	}
+	return err
 }
 
 // Contribution is the contribution a call names.
-func Contribution(params json.RawMessage) string {
-	var t struct {
-		Contribution string `json:"contribution"`
-	}
-	_ = json.Unmarshal(params, &t)
-	return strings.TrimSpace(t.Contribution)
-}
+func Contribution(params json.RawMessage) string { return strings.TrimSpace(ext.Contribution(params)) }

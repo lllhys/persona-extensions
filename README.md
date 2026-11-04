@@ -19,7 +19,8 @@ Persona 的扩展里，**以后可以公开**的那些：不依赖任何公司�
 extensions/<id>/            一个扩展：清单、源码、测试，market.json（市场里的标签）
   persona-extension.json    清单
   persona-plugin.json       同一份清单的老名字：改名前的 hub 只认它，和新的保持一样（CI 查），hub 都升级后删掉
-pluginkit/                  扩展协议、HTTP、额度、声明式 UI、收件箱规则的辅助（阶段 4 换成 Persona 的官方 SDK）
+pluginkit/                  额度、声明式 UI、收件箱规则的辅助；协议本身走官方 SDK（sdk/go/ext），这里只保留扩展原来的写法
+sdk/go/                     Persona 官方 Go SDK 的拷贝（Persona 仓库的 scripts/gen/sync-sdk.sh 拷来，sdk/VERSION 记着来源 commit，别手改）
 scripts/                    package.sh、release.sh、index.py、manifest.py、ci.sh、sign-index.py（和 internal 的一样）
 persona-extensions.json     市场索引（键 extensions），新 hub 读
 persona-plugins.json        同样的条目（键 plugins、老清单），改名前的 hub 读

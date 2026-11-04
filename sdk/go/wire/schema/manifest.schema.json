@@ -1,0 +1,297 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "manifest.schema.json",
+  "title": "Extension manifest",
+  "description": "persona-extension.json (read as persona-plugin.json before the rename, #1844) at the root of an extension's package. The hub reads it strictly: a field it does not know anywhere fails the install. Rules a schema cannot say (a gate file inside the package, ids unique across extensions, version ranges) stay the hub's.",
+  "$ref": "#/$defs/Manifest",
+  "$defs": {
+    "ID": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"},
+    "Host": {
+      "description": "A host name, lowercase, no scheme, port or path; *. may start it.",
+      "type": "string", "maxLength": 253,
+      "pattern": "^(\\*\\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
+    },
+    "ActivationEvent": {"type": "string", "enum": ["on_startup", "on_call", "on_http"]},
+    "Manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "manifest_version": {"type": "integer", "const": 1},
+        "id": {"$ref": "#/$defs/ID"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 40},
+        "version": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$"},
+        "description": {"type": "string"},
+        "publisher": {"type": "string"},
+        "homepage": {"type": "string", "pattern": "^https://[^/?#]+"},
+        "engines": {"$ref": "#/$defs/Engines"},
+        "runtime": {"$ref": "#/$defs/Runtime"},
+        "activation_events": {"type": "array", "items": {"$ref": "#/$defs/ActivationEvent"}},
+        "contributes": {"$ref": "#/$defs/Contributes"},
+        "configuration": {"description": "The configuration's JSON Schema, in the subset every app draws as a form (docs「配置：表单的子集」)."},
+        "secrets": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/SecretSpec"}},
+        "permissions": {"$ref": "#/$defs/Permissions"}
+      },
+      "required": ["manifest_version", "id", "name", "version", "contributes"]
+    },
+    "Engines": {
+      "description": "What the extension runs on. extension_protocol is plugin_protocol's new name; a hub reads either.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "persona": {"type": "string", "description": "A range of hub build numbers (\">=202611050000 <202701010000\")."},
+        "extension_protocol": {"type": "integer", "const": 1},
+        "plugin_protocol": {"type": "integer", "const": 1}
+      }
+    },
+    "Runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "command": {"$ref": "#/$defs/Command"},
+        "args": {"type": "array", "items": {"type": "string"}},
+        "env": {"type": "object", "additionalProperties": {"type": "string"}},
+        "rpc": {"type": "string", "enum": ["stdio", "none"]},
+        "http": {"type": "boolean"},
+        "resources": {"$ref": "#/$defs/Resources"}
+      },
+      "required": ["command"]
+    },
+    "Resources": {
+      "description": "The most a program may use when the hub runs it in a sandbox (docs/extensions.md「沙箱」): memory in MB, CPU in percent of one core. Unset: 1024 MB, 100%.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "memory_mb": {"type": "integer", "minimum": 64, "maximum": 8192},
+        "cpu_percent": {"type": "integer", "minimum": 10, "maximum": 800}
+      }
+    },
+    "Command": {
+      "description": "A path in the package, or one per platform ({\"linux-amd64\": \"bin/x\"}).",
+      "x-untagged": true,
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "object", "additionalProperties": {"type": "string"}}
+      ]
+    },
+    "SecretSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"},
+        "title": {"type": "string", "minLength": 1},
+        "description": {"type": "string"},
+        "required": {"type": "boolean"}
+      },
+      "required": ["name", "title"]
+    },
+    "Permissions": {
+      "description": "A closed vocabulary: a permission the hub does not know fails the install.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "network": {"type": "array", "items": {"$ref": "#/$defs/Host"}},
+        "hub_api": {"type": "boolean", "description": "The old way: the hub's full token. With hub scopes, the scopes win."},
+        "hub": {"type": "array", "description": "The scopes of the hub's API it calls: its token opens their routes only.",
+          "items": {"type": "string", "pattern": "^(kb\\.read|kb\\.write|inbox\\.read|inbox\\.write|agents\\.read|agents\\.control|machines\\.read|notify|assistant\\.ask|extensions\\.call:[a-z0-9][a-z0-9_-]{0,31})$"}},
+        "launcher_keys": {"type": "boolean"}
+      }
+    },
+    "Contributes": {
+      "description": "Contributions by extension point. A point this hub does not know installs with a warning, not taking effect.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": true,
+      "properties": {
+        "connectors": {"type": "array", "items": {"$ref": "#/$defs/ConnectorItem"}},
+        "voice": {"type": "array", "items": {"$ref": "#/$defs/NamedItem"}},
+        "computer": {"type": "array", "items": {"$ref": "#/$defs/NamedItem"}},
+        "browser": {"type": "array", "items": {"$ref": "#/$defs/NamedItem"}},
+        "quota": {"type": "array", "items": {"$ref": "#/$defs/QuotaItem"}},
+        "providers": {"type": "array", "items": {"$ref": "#/$defs/ProviderItem"}},
+        "api": {"type": "array", "items": {"$ref": "#/$defs/APIItem"}},
+        "assistant": {"type": "array", "items": {"$ref": "#/$defs/AssistantItem"}},
+        "ui": {"type": "array", "items": {"$ref": "#/$defs/UIItem"}},
+        "agent_sources": {"type": "array", "items": {"$ref": "#/$defs/AgentSourceItem"}},
+        "channel": {"type": "array", "items": {"$ref": "#/$defs/ChannelItem"}},
+        "events": {"type": "array", "items": {"$ref": "#/$defs/EventsItem"}},
+        "shortcuts": {"type": "array", "items": {"$ref": "#/$defs/ShortcutItem"}}
+      }
+    },
+    "ConnectorItem": {
+      "description": "The connector protocol's manifest (docs/connector-protocol.md).",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9]*$"},
+        "name": {"type": "string", "minLength": 1},
+        "capabilities": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "hosts": {"type": "array", "items": {"type": "string"}},
+        "agent_tools": {"type": "array", "items": {"type": "string"}},
+        "unlisted": {"type": "array", "items": {"type": "string"}},
+        "confirm_always": {"type": "array", "items": {"type": "string"}},
+        "poll_seconds": {"type": "integer", "minimum": 0},
+        "kinds": {"type": "array", "items": {"type": "string"}},
+        "kind_descriptions": {"type": "object", "additionalProperties": {"type": "string"}},
+        "archive_sources": {"type": "array", "maxItems": 4, "items": {"type": "string", "pattern": "^[a-z][a-z0-9]*$"}},
+        "meta_description": {"type": "string", "maxLength": 4000},
+        "cli": {"type": "string"}
+      },
+      "required": ["id", "name", "capabilities"]
+    },
+    "NamedItem": {
+      "description": "A contribution with only an id and a name: voice, computer, browser.",
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "name": {"type": "string"}
+      },
+      "required": ["id"]
+    },
+    "QuotaItem": {
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "name": {"type": "string", "minLength": 1},
+        "hosts": {"type": "array", "items": {"$ref": "#/$defs/Host"}}
+      },
+      "required": ["id", "name"]
+    },
+    "ProviderItem": {
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string"},
+        "kind": {"type": "string", "enum": ["launcher", "api"]},
+        "api": {"type": "string", "enum": ["messages", "responses"]},
+        "base_url": {"type": "string", "pattern": "^https?://"},
+        "model": {"type": "string"},
+        "small_model": {"type": "string"},
+        "models": {"type": "array", "items": {"$ref": "#/$defs/ProviderModel"}},
+        "dynamic_models": {"type": "boolean"},
+        "key_hint": {"type": "string"}
+      },
+      "required": ["id", "name", "base_url"]
+    },
+    "ProviderModel": {
+      "type": "object",
+      "properties": {"id": {"type": "string", "minLength": 1}, "name": {"type": "string"}},
+      "required": ["id"]
+    },
+    "APIItem": {
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "prefix": {"$ref": "#/$defs/ID"},
+        "features": {"type": "array", "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,47}$"}},
+        "events": {"type": "array", "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,47}$"}},
+        "receipts": {"type": "array", "items": {"$ref": "#/$defs/APIReceipt"}}
+      },
+      "required": ["id", "prefix"]
+    },
+    "APIReceipt": {
+      "type": "object",
+      "properties": {
+        "method": {"type": "string", "enum": ["POST", "PUT", "PATCH", "DELETE"]},
+        "path": {"type": "string", "pattern": "^/"},
+        "kind": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,47}$"}
+      },
+      "required": ["method", "path", "kind"]
+    },
+    "AssistantItem": {
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "skills": {"type": "array", "items": {"type": "string"}},
+        "instructions": {"type": "string"},
+        "gate": {"type": "string"}
+      },
+      "required": ["id"]
+    },
+    "UIItem": {
+      "description": "A place in the apps the extension draws (docs「UI 插槽」).",
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 40},
+        "placement": {"$ref": "view.schema.json#/$defs/Placement"},
+        "hosts": {"type": "array", "items": {"$ref": "#/$defs/Host"}, "description": "launcher_section only."},
+        "icon": {"$ref": "view.schema.json#/$defs/NavIcon", "description": "nav_page only."},
+        "opens": {"type": "string", "description": "overview_card and widget only: a nav_page or extension_page of the same extension."},
+        "connector": {"type": "string", "description": "inbox_item only: one of the extension's own connectors."},
+        "families": {"type": "array", "minItems": 1, "items": {"$ref": "view.schema.json#/$defs/WidgetFamily"}, "description": "widget only (and needed there): the sizes it can be drawn at."},
+        "refresh_minutes": {"type": "integer", "minimum": 15, "maximum": 1440, "description": "widget only: how often the widget is drawn again on its own (30 when not said)."}
+      },
+      "required": ["id", "title", "placement"]
+    },
+    "AgentSourceItem": {
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "name": {"type": "string", "minLength": 1},
+        "providers": {"type": "array", "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"}}
+      },
+      "required": ["id", "name"]
+    },
+    "ChannelItem": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 40},
+        "kind": {"type": "string", "enum": ["im"]},
+        "connector": {"type": "string"},
+        "bind": {"type": "string", "enum": ["qr", "code", "fields"]},
+        "description": {"type": "string"},
+        "capabilities": {"$ref": "#/$defs/ChannelCapabilities"}
+      },
+      "required": ["id", "name", "kind", "capabilities"]
+    },
+    "ChannelCapabilities": {
+      "type": "object",
+      "properties": {
+        "images_in": {"type": "boolean"},
+        "files_in": {"type": "boolean"},
+        "voice_in": {"type": "boolean"},
+        "format": {"type": "string", "enum": ["markdown", "plain"]},
+        "max_text": {"type": "integer", "minimum": 0},
+        "asks": {"type": "string", "enum": ["none", "text", "buttons"]},
+        "push": {"type": "boolean"},
+        "typing": {"type": "boolean"},
+        "progress": {"type": "boolean"},
+        "threads": {"type": "boolean"}
+      }
+    },
+    "EventsItem": {
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "subscribe": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["inbox.changed", "agent.needs_you", "agent.finished"]}}
+      },
+      "required": ["id", "subscribe"]
+    },
+    "ShortcutItem": {
+      "description": "An action of the extension the system runs (docs「系统级位置」): Shortcuts and Siri on iPhone, Mac and Apple Watch. The hub asks the extension shortcut.run with the values.",
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 40},
+        "description": {"type": "string", "maxLength": 200},
+        "params": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/ShortcutParam"}},
+        "ui": {"type": "string", "description": "A whole page of the same extension (nav_page or extension_page) the app opens to show more of the result."}
+      },
+      "required": ["id", "title"]
+    },
+    "ShortcutParam": {
+      "description": "A value the shortcut asks for; it reaches the extension as a string (a toggle's \"true\" / \"false\").",
+      "type": "object",
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 40},
+        "kind": {"$ref": "#/$defs/ShortcutParamKind"},
+        "choices": {"type": "array", "minItems": 1, "maxItems": 50, "items": {"$ref": "view.schema.json#/$defs/Choice"}, "description": "choice only."},
+        "required": {"type": "boolean"}
+      },
+      "required": ["name", "title", "kind"]
+    },
+    "ShortcutParamKind": {"type": "string", "enum": ["text", "number", "toggle", "choice"]}
+  }
+}

@@ -170,7 +170,7 @@ func TestCheckThings(t *testing.T) {
 
 func TestInboxChanged(t *testing.T) {
 	var out bytes.Buffer
-	h := &Hub{w: &out, pending: map[string]chan message{}}
+	h := &Hub{w: &out}
 	if err := h.InboxChanged("src"); err != nil {
 		t.Fatal(err)
 	}
