@@ -17,3 +17,5 @@ fi
 ./scripts/package.sh "$id"
 gh release create "$tag" "dist/$id-$version.tar.gz" --title "$id $version" --notes "$id $version"
 scripts/index.py add "$id" "$tag"
+# Signs both indexes when $EXTENSION_MARKET_SIGNING_KEY has the market's key; prints "unsigned" otherwise.
+scripts/sign-index.py

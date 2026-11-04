@@ -20,9 +20,10 @@ extensions/<id>/            一个扩展：清单、源码、测试，market.jso
   persona-extension.json    清单
   persona-plugin.json       同一份清单的老名字：改名前的 hub 只认它，和新的保持一样（CI 查），hub 都升级后删掉
 pluginkit/                  扩展协议、HTTP、额度、声明式 UI、收件箱规则的辅助（阶段 4 换成 Persona 的官方 SDK）
-scripts/                    package.sh、release.sh、index.py、manifest.py、ci.sh（和 internal 的一样）
+scripts/                    package.sh、release.sh、index.py、manifest.py、ci.sh、sign-index.py（和 internal 的一样）
 persona-extensions.json     市场索引（键 extensions），新 hub 读
 persona-plugins.json        同样的条目（键 plugins、老清单），改名前的 hub 读
+*.json.sig                  两份索引的签名；market.pub 是这个市场的公钥（见「签名的格式」）
 ```
 
 一个 Go module（`github.com/nwverse/persona-extensions`），每个扩展是 `extensions/<id>` 下的一个 main 包。
@@ -35,7 +36,7 @@ persona-plugins.json        同样的条目（键 plugins、老清单），改�
 
 ## 开发
 
-- 测试：`go test ./...`；CI 跑的全部检查：`scripts/ci.sh`（清单、gofmt、vet、测试、每个平台都能编、两份索引一致）。
+- 测试：`go test ./...`；CI 跑的全部检查：`scripts/ci.sh`（清单、gofmt、vet、测试、每个平台都能编、两份索引一致、签名对得上）。
 - 打包：`scripts/package.sh <id>` → `dist/<id>-<版本>.tar.gz` 和它的 sha256。
 - 在 hub 机器上装包：`personad extension install file:/path/to/<id>-<版本>.tar.gz`（改名前的 hub：`personad plugin install …`）。
 
@@ -47,4 +48,36 @@ persona-plugins.json        同样的条目（键 plugins、老清单），改�
   命令行：`personad extension market add github:nwverse/persona-extensions --token`（token 从标准输入读）。
 - **发布**：改扩展清单里的版本（两个名字的清单一起改），提 PR，合并到 main 后 CI 给**这次推送里版本变了的**扩展打包、建 Release、更新两份索引并提交；
   要发一个之前合并的版本，在 Actions 里手动跑 ci（填扩展 id）。CI 跑不了时在本地：`scripts/release.sh <id>`，再提交两份索引。
-- **签名**：索引的签名见 nwverse/persona#1848；仓库的 secret 里有 `EXTENSION_MARKET_SIGNING_KEY` 时 CI 才签。
+- **签名**（nwverse/persona#1848）：两份索引都用这个市场的 ed25519 私钥签名，hub 登记市场时记下公钥，以后验签不过、签名没了或换了 key 就不装、不升级。
+  CI 发布后自动签（私钥只在仓库的 Actions secret `EXTENSION_MARKET_SIGNING_KEY` 里，只交给签名那一步）；在本地发布时把私钥放进同名环境变量，
+  或 `scripts/sign-index.py --key-file <pem>`。没有私钥时 `release.sh` 打印 `unsigned`，`scripts/ci.sh` 会因为签名和索引对不上而失败：发布后一定要签。
+
+### 签名的格式
+
+| 文件 | 内容 |
+| --- | --- |
+| `market.pub` | 一行 `ed25519:<32 字节公钥的 base64>` |
+| 索引顶层的 `signing_key` | 和 `market.pub` 同一行（老 hub 读索引时忽略不认识的字段） |
+| `persona-extensions.json.sig`、`persona-plugins.json.sig` | `{"alg": "ed25519", "key_id": "<32 字节公钥的 sha256 的前 16 位 hex>", "sig": "<对索引文件原始字节的 ed25519 签名，base64>"}` |
+
+签的是索引文件的原始字节（不做 JSON 规范化），所以签完不能再改索引的任何一个字节。
+
+验证：`scripts/sign-index.py verify`（CI 跑的就是它），或者只用 openssl：
+
+```sh
+python3 - <<'PY'
+import base64, json
+raw = base64.b64decode(open("market.pub").read().strip().removeprefix("ed25519:"))
+der = bytes.fromhex("302a300506032b6570032100") + raw
+open("/tmp/market.pem", "w").write("-----BEGIN PUBLIC KEY-----\n" + base64.b64encode(der).decode() + "\n-----END PUBLIC KEY-----\n")
+open("/tmp/index.sig", "wb").write(base64.b64decode(json.load(open("persona-extensions.json.sig"))["sig"]))
+PY
+openssl pkeyutl -verify -pubin -inkey /tmp/market.pem -rawin -in persona-extensions.json -sigfile /tmp/index.sig
+```
+
+### 私钥
+
+- 生成：`openssl genpkey -algorithm ed25519 -out market.pem`；公钥 `ed25519:$(openssl pkey -in market.pem -pubout -outform DER | tail -c 32 | base64)` 写进 `market.pub`。
+- 存放：只放仓库的 Actions secret（`gh secret set EXTENSION_MARKET_SIGNING_KEY < market.pem`），另有一份离线备份在仓库主人的密码管理器里；不进仓库、不打日志。
+- 轮换（泄漏或丢了）：生成新 key，换 secret 和 `market.pub`，重新签索引并提交；已登记这个市场的 hub 会因为换了 key 拒绝刷新，
+  由 hub 的主人确认后重新信任（见 Persona 的 `docs/extensions.md`「扩展市场」）。

@@ -32,7 +32,6 @@ jobs:
     runs-on: ${{ github.repository_owner == 'nwverse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     env:
       GH_TOKEN: ${{ github.token }}
-      SIGNING_KEY: ${{ secrets.EXTENSION_MARKET_SIGNING_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,16 +52,19 @@ jobs:
             scripts/ci.sh release "$BEFORE"
           fi
       # The index's signature (nwverse/persona#1848): only with the market's key in the repository's secrets.
+      # The key is given to this step only, not to the steps that run the extensions' code and tests.
       - name: Sign the index
-        if: env.SIGNING_KEY != ''
+        env:
+          EXTENSION_MARKET_SIGNING_KEY: ${{ secrets.EXTENSION_MARKET_SIGNING_KEY }}
         run: |
-          if [ -x scripts/sign-index.sh ]; then scripts/sign-index.sh; else echo "::warning::scripts/sign-index.sh comes with nwverse/persona#1848; index not signed"; fi
+          if [ -z "$EXTENSION_MARKET_SIGNING_KEY" ]; then echo "::warning::no EXTENSION_MARKET_SIGNING_KEY; index not signed"; exit 0; fi
+          scripts/sign-index.py && scripts/sign-index.py verify
       - name: Commit the index
         run: |
-          if git diff --quiet -- persona-extensions.json persona-plugins.json; then exit 0; fi
+          if git diff --quiet -- persona-extensions.json persona-plugins.json persona-extensions.json.sig persona-plugins.json.sig; then exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add persona-extensions.json persona-plugins.json
-          git add persona-extensions.json.minisig 2>/dev/null || true
+          git add persona-extensions.json.sig persona-plugins.json.sig
           git commit -m "market: index after ${GITHUB_SHA::7}"
           git push

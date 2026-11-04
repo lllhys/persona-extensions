@@ -7,6 +7,8 @@
   scripts/index.py add <id> <tag>   put dist/<id>-<version>.tar.gz in as the release asset of <tag>
                                     (release:<tag>/<file>, pinned by its sha256); its entry is replaced, the others stay
   scripts/index.py check            both files list the same extensions, versions and packages (what CI runs)
+
+The signature of both files is scripts/sign-index.py (nwverse/persona#1848).
 """
 import hashlib, json, os, sys
 
@@ -33,7 +35,7 @@ def write(p, d):
 
 
 def meta(d):
-    return {k: d[k] for k in ("market_version", "name", "description", "homepage") if k in d}
+    return {k: d[k] for k in ("market_version", "name", "description", "homepage", "signing_key") if k in d}
 
 
 def add(id, tag):

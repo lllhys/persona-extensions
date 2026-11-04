@@ -1,6 +1,7 @@
 #!/bin/bash
 # What CI runs, runnable on any machine with Go, Python 3 and (for release) gh:
-#   scripts/ci.sh            the checks a pull request needs: manifests, gofmt, vet, tests, every platform builds, indexes
+#   scripts/ci.sh            the checks a pull request needs: manifests, gofmt, vet, tests, every platform builds, indexes,
+#                            and the indexes' signatures against market.pub (nwverse/persona#1848)
 #   scripts/ci.sh release <base>    then release the extensions whose version changed since the git ref <base>
 #                                   (a push to main: its "before"); a version merged but meant to wait is not released
 #   scripts/ci.sh release <id>…     then release these (CI's manual run)
@@ -30,6 +31,9 @@ done
 
 step index
 scripts/index.py check
+
+step signature
+scripts/sign-index.py verify
 
 if [ "${1:-}" = release ]; then
   shift
