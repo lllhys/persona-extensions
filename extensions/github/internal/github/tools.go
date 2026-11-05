@@ -484,6 +484,11 @@ func tail(s string, n int) string {
 	s = s[len(s)-n:]
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		s = s[i+1:]
+	} else {
+		// No line start in the window: the byte cut may have split a multibyte rune.
+		for len(s) > 0 && !utf8.RuneStart(s[0]) {
+			s = s[1:]
+		}
 	}
 	return "[…]\n" + s
 }

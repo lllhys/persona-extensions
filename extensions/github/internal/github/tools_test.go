@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // fakeAPI is GitHub's REST API on made-up data: example-org/example-repo, alice and bob. Paths not listed are 404s.
@@ -153,6 +154,29 @@ func TestChecksWithTheEndOfAFailedLog(t *testing.T) {
 		"--- FAIL: TestExample\nexit status 1")
 	if len(out) > logTail+1000 {
 		t.Errorf("%d bytes: the log was not cut to its end", len(out))
+	}
+}
+
+func TestTailKeepsValidUTF8OnAnUnbrokenLine(t *testing.T) {
+	// Over logTail bytes with no newline; 6301 is not a multiple of the 3-byte rune,
+	// so the byte cut at len-logTail lands in the middle of a rune.
+	line := strings.Repeat("中", 2100) + "z"
+	if len(line) <= logTail || len(line)%3 == 0 {
+		t.Fatalf("test setup: len=%d must be > %d and not a multiple of 3", len(line), logTail)
+	}
+	got := tail(line, logTail)
+	if !utf8.ValidString(got) {
+		t.Fatalf("tail is not valid UTF-8: %q", got[:40])
+	}
+	body, ok := strings.CutPrefix(got, "[…]\n")
+	if !ok {
+		t.Fatalf("tail is missing the marker prefix: %q", got[:20])
+	}
+	if !strings.HasSuffix(body, "中z") {
+		t.Errorf("tail does not keep the final runes: %q", body[len(body)-20:])
+	}
+	if !strings.HasSuffix(line, body) {
+		t.Errorf("tail is not a suffix of the line")
 	}
 }
 
