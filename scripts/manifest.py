@@ -34,9 +34,20 @@ def path(id):
     return p
 
 
+def _no_duplicate_keys(pairs):
+    # A repeated key is an error, not last-one-wins: a bad merge once shipped two "version" lines that parsers
+    # (Python's json, Go's encoding/json, the hub) all accepted silently.
+    seen = set()
+    for k, _ in pairs:
+        if k in seen:
+            raise ValueError("manifest has a duplicate key %r" % k)
+        seen.add(k)
+    return dict(pairs)
+
+
 def load(id):
     with open(path(id)) as f:
-        return json.load(f)
+        return json.load(f, object_pairs_hook=_no_duplicate_keys)
 
 
 def tags(id):
@@ -155,7 +166,11 @@ def check_pack(id, m):
 def check():
     bad = []
     for id in ids():
-        m = load(id)
+        try:
+            m = load(id)
+        except ValueError as e:
+            bad.append("extensions/%s: %s" % (id, e))
+            continue
         if m.get("id") != id:
             bad.append("extensions/%s: the manifest's id is %r, not the directory's name" % (id, m.get("id")))
         if not SEMVER.match(str(m.get("version", ""))):

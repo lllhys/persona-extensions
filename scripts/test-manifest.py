@@ -4,6 +4,7 @@ import importlib.util
 import pathlib
 import subprocess
 import sys
+import tempfile
 import unittest
 
 spec = importlib.util.spec_from_file_location('manifest', pathlib.Path(__file__).with_name('manifest.py'))
@@ -33,6 +34,20 @@ class SelectedTests(unittest.TestCase):
         r = subprocess.run([sys.executable, '-I', manifest.__file__, 'changed', 'no-such-ref'], capture_output=True, text=True)
         self.assertNotEqual(r.returncode, 0, r.stdout)
         self.assertEqual(r.stdout, '')
+
+    def test_a_duplicate_key_is_rejected(self):
+        # Two "version" lines once shipped silently (json last-wins); load must refuse instead.
+        d = pathlib.Path(tempfile.mkdtemp())
+        ext = d / 'extensions' / 'dup'
+        ext.mkdir(parents=True)
+        (ext / manifest.NEW).write_text('{"id": "dup", "version": "0.1.0", "version": "0.1.1"}\n')
+        old_root = manifest.ROOT
+        manifest.ROOT = str(d)
+        try:
+            with self.assertRaises(ValueError):
+                manifest.load('dup')
+        finally:
+            manifest.ROOT = old_root
 
 
 if __name__ == '__main__':
