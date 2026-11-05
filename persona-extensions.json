@@ -8,8 +8,8 @@
         "manifest_version": 1,
         "id": "claude-bypass-allow",
         "name": "Bypass 自动允许",
-        "version": "0.1.1",
-        "description": "Claude Code 开着 bypassPermissions（--dangerously-skip-permissions）时，有些 Bash 命令（如 cd 之后 rm 一个 glob、rm 的目标是变量）仍会弹确认框，无人值守的 Agent 就卡在「在等你」。在你选的电脑上给 Claude Code 装一个 PermissionRequest hook：只在会话是 bypass 模式、工具是 Bash 时自动允许，不覆盖你自己配的 ask / deny 规则，每次自动允许都记一条（命令截断、去掉密钥）。别的模式照常问你。",
+        "version": "0.2.0",
+        "description": "Claude Code 开着 bypassPermissions（--dangerously-skip-permissions）时，有些调用仍会弹确认框（如读工作目录外的文件、开子 Agent、某些 Bash），无人值守的 Agent 就卡在「在等你」。在你选的电脑上给 Claude Code 装一个 PermissionRequest hook：只在会话是 bypass 模式时，自动允许 Bash、只读工具（Read、Glob、Grep、LS、NotebookRead）和子 Agent。删除、覆盖数据、force push、改权限的 Bash 命令，写文件、Workflow 和 MCP 工具，以及你自己配的 ask / deny 规则，仍然问你。每次自动允许都记一条（命令截断、去掉密钥）。别的模式照常问你。",
         "publisher": "nwverse",
         "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/claude-bypass-allow",
         "engines": {
@@ -66,7 +66,7 @@
                   "linux"
                 ]
               },
-              "x-confirm": "这台电脑上 bypass 模式的 Claude Code 会话，Bash 的安全确认（如危险的 rm）将不再问你、直接执行。每次都会记录。"
+              "x-confirm": "这台电脑上 bypass 模式的 Claude Code 会话，Bash、读文件（包括工作目录外的）和开子 Agent 的确认将不再问你、直接执行。删除、覆盖数据、force push、改权限仍然问你。每次都会记录。"
             },
             "config_dirs": {
               "type": "array",
@@ -92,9 +92,9 @@
       ],
       "packages": [
         {
-          "url": "release:claude-bypass-allow-v0.1.1/claude-bypass-allow-0.1.1.tar.gz",
-          "sha256": "c4e8d5d056111cfd1a1046942513a795aaea7b7c112932334d9b3d11890d9e9c",
-          "size": 11607747
+          "url": "release:claude-bypass-allow-v0.2.0/claude-bypass-allow-0.2.0.tar.gz",
+          "sha256": "8505d20595cb1146fb926646068bd44fdf2b66d11ee2e48ba129047b864ec01b",
+          "size": 11980515
         }
       ]
     },
