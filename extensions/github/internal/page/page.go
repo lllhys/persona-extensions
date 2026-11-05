@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,10 +35,28 @@ type Page struct {
 	mu    sync.Mutex
 	badge string // the nav entry's badge as last sent
 	hub   *ext.Hub
+	// building: the pages being drawn, by what they show; a page still being drawn when the hub's time is up goes
+	// on in the background and is kept here a while once drawn (budget).
+	building map[string]*build
+	budget   time.Duration
+}
+
+type build struct {
+	done chan struct{}
+	view *wire.View
+	at   time.Time // when it was drawn
 }
 
 // New is the page of c.
-func New(c *github.Connector) *Page { return &Page{c: c, now: time.Now} }
+func New(c *github.Connector) *Page { return &Page{c: c, now: time.Now, budget: renderBudget} }
+
+// renderBudget is how long a page is waited for before the app is answered with a loading page: the hub gives an
+// extension 20 s to answer, and a big PR's first read (its comments, reviews, events, checks, commits) can take more.
+// What was read stays in the connector's cache, so the page drawn when it is done comes at once.
+const renderBudget = 12 * time.Second
+
+// kept is how long a page drawn in the background is answered as it is (the app draws it again right after).
+const kept = 30 * time.Second
 
 // state is the page's: which page it is (v), and what it shows. A state without v is the list, or (n set) a PR or
 // issue: the state the pages before the repository side wrote.
@@ -109,8 +128,77 @@ func (p *Page) Render(ctx context.Context, r *ext.UIRequest) (*wire.View, error)
 	return fit(p.view(ctx, r, s, false)), nil
 }
 
-// view is the page s says.
+// view is the page s says, within the page's budget: a page that takes longer is a loading page now, and the app is
+// asked to draw it again once it is done.
 func (p *Page) view(ctx context.Context, r *ext.UIRequest, s state, fresh bool) *wire.View {
+	key := fmt.Sprintf("%d\x00%t\x00%s", r.UIVersion, fresh, ext.EncodeState(s))
+	p.mu.Lock()
+	if p.building == nil {
+		p.building = map[string]*build{}
+	}
+	for k, b := range p.building { // drop what was drawn a while ago
+		if !b.at.IsZero() && time.Since(b.at) > kept {
+			delete(p.building, k)
+		}
+	}
+	b, ok := p.building[key]
+	if !ok {
+		b = &build{done: make(chan struct{})}
+		p.building[key] = b
+		req := *r
+		go func() {
+			// Not the call's context: what is read goes on after the hub stops waiting, so the next draw has it.
+			bctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Minute)
+			defer cancel()
+			v := p.draw(bctx, &req, s, fresh)
+			p.mu.Lock()
+			b.view, b.at = v, time.Now()
+			p.mu.Unlock()
+			close(b.done)
+		}()
+	}
+	p.mu.Unlock()
+	timer := time.NewTimer(p.budget)
+	defer timer.Stop()
+	select {
+	case <-b.done:
+		p.mu.Lock()
+		v := b.view
+		delete(p.building, key) // answered: the next draw reads again (through the cache)
+		p.mu.Unlock()
+		return v
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+	go func() { // tell the app once it is done
+		<-b.done
+		p.invalidate()
+	}()
+	return loadingView(r, s)
+}
+
+// loadingView is the page while what it shows is still being read from GitHub.
+func loadingView(r *ext.UIRequest, s state) *wire.View {
+	title := "GitHub"
+	switch {
+	case s.Number > 0:
+		title = fmt.Sprintf("%s#%d", s.Repo, s.Number)
+	case s.Path != "":
+		title = path.Base(s.Path)
+	case s.Repo != "":
+		title = s.Repo
+	}
+	item := wire.Component{Type: wire.ComponentLoading, Key: "loading", Title: "正在从 GitHub 读取，读完会自动显示"}
+	if r.UIVersion < 3 {
+		item = wire.Component{Type: wire.ComponentText, Key: "loading", Text: "正在从 GitHub 读取，过一会儿刷新一下", Style: wire.TextStyleSecondary}
+	}
+	// refresh_after: apps and hubs without ui.invalidate draw it again by themselves.
+	return &wire.View{Title: title, State: ext.EncodeState(s), RefreshAfter: 30, Sections: []wire.Section{{Items: []wire.Component{item,
+		{Type: wire.ComponentButton, Key: "refresh", Title: "刷新", Action: &wire.Action{ID: "refresh"}}}}}}
+}
+
+// draw is the page s says.
+func (p *Page) draw(ctx context.Context, r *ext.UIRequest, s state, fresh bool) *wire.View {
 	if empty, ok := p.unavailable(ctx); ok && s.V != "" {
 		return &wire.View{Title: "GitHub", State: ext.EncodeState(s), Sections: []wire.Section{{Items: []wire.Component{empty}}}}
 	}

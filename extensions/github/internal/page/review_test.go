@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/nwverse/persona-extensions/extensions/github/internal/github"
 	"github.com/nwverse/persona/sdk/go/wire"
@@ -29,7 +31,13 @@ func b64(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) 
 
 // fakeMore answers the repository side and a PR's files, conversations, commits and checks (fakeGitHub's other
 // paths).
+// slowGate, when set, holds the PR's events until it is closed (a slow first read).
+var slowGate atomic.Pointer[chan struct{}]
+
 func fakeMore(w http.ResponseWriter, r *http.Request, at string) bool {
+	if g := slowGate.Load(); g != nil && r.URL.Path == repoAPI+"/issues/12/events" {
+		<-*g
+	}
 	repo := `{"full_name":"example-org/example-repo","description":"An example","language":"Go","stargazers_count":1200,"forks_count":3,
 "default_branch":"main","pushed_at":"` + at + `","html_url":"https://github.com/example-org/example-repo",
 "owner":{"login":"example-org","avatar_url":"https://avatars.githubusercontent.com/u/9?v=4"}}`
@@ -382,4 +390,30 @@ func TestParsePatch(t *testing.T) {
 	if !hasLine(patch, 3, "RIGHT") || !hasLine(patch, 2, "LEFT") || hasLine(patch, 4, "LEFT") || hasLine(patch, 9, "RIGHT") {
 		t.Fatal("hasLine")
 	}
+}
+
+// A page that takes longer than the budget is a loading page now and the page itself once read.
+func TestSlowPageLoadsInTheBackground(t *testing.T) {
+	p, _ := signedIn(t)
+	ctx := context.Background()
+	release := make(chan struct{})
+	slowGate.Store(&release)
+	defer slowGate.Store(nil)
+	p.budget = 50 * time.Millisecond
+	s := state{Repo: "example-org/example-repo", Number: 12}
+	v, _ := p.Render(ctx, req(3, s, "", nil))
+	got := checked(t, v)
+	has(t, "loading", got, `"type":"loading"`, "正在从 GitHub 读取", `"refresh_after":30`, "example-org/example-repo#12")
+	again, _ := p.Render(ctx, req(3, s, "", nil)) // still reading: the same read, not another
+	has(t, "again", checked(t, again), `"type":"loading"`)
+	close(release)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		v, _ = p.Render(ctx, req(3, s, "", nil))
+		if !strings.Contains(checked(t, v), `"type":"loading","key":"loading"`) || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	has(t, "read", checked(t, v), "Caches **answers**.", "概览")
 }
