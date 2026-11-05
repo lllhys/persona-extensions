@@ -347,6 +347,10 @@ func TestPostText(t *testing.T) {
 	if sg[2].Text != "[链接] https://example.com/post" {
 		t.Errorf("onebox: %q", sg[2].Text)
 	}
+	// A cooked table's cells stay apart: closing td/th are line breaks too.
+	if table := postText(`<table><tr><th>甲</th><td>一</td><td>二</td></tr></table>`); len(table) != 1 || table[0].Text != "甲\n一\n二" {
+		t.Fatalf("table cells ran together: %+v", table)
+	}
 	if got := plainText(td.PostStream.Posts[2].Cooked); got != "op:\n> 快了 30%\n\n真的吗" && !strings.Contains(got, "> 快了 30%") {
 		t.Errorf("quote: %q", got)
 	}

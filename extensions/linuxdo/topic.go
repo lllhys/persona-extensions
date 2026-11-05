@@ -132,7 +132,7 @@ var (
 	emojiRE   = regexp.MustCompile(`(?is)<img[^>]*\bclass="[^"]*\b(?:emoji|avatar)\b[^"]*"[^>]*>`)
 	imgRE     = regexp.MustCompile(`(?is)<img\b[^>]*>`)
 	preRE     = regexp.MustCompile(`(?is)<pre\b[^>]*>(.*?)</pre>`)
-	breakRE   = regexp.MustCompile(`(?i)<br\s*/?>|</(p|div|h[1-6]|blockquote|tr|details|summary|aside|ul|ol)>`)
+	breakRE   = regexp.MustCompile(`(?i)<br\s*/?>|</(p|div|h[1-6]|blockquote|tr|td|th|details|summary|aside|ul|ol)>`)
 	itemRE    = regexp.MustCompile(`(?i)<li\b[^>]*>`)
 	quoteInRE = regexp.MustCompile(`(?i)<blockquote\b[^>]*>`)
 	blankRE   = regexp.MustCompile(`\n[ \t]*\n(?:[ \t]*\n)+`)
