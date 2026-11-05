@@ -24,7 +24,8 @@ import (
 const (
 	inboxDays      = 8 * 24 * time.Hour // conversations quieter than this say nothing
 	contextLines   = 10
-	contextsPerRun = 10 // context reads per refresh: the rest the next one
+	contextsPerRun = 10   // context reads per refresh: the rest the next one
+	inboxMost      = 4000 // groups' marks and moves' contexts kept in memory (like the page caches, thread.go)
 )
 
 type inboxState struct {
@@ -117,6 +118,23 @@ func (c *Conn) noteDialogs(ds []dialog) {
 	if c.box.marks == nil {
 		c.box.marks, c.box.contexts = map[string]markState{}, map[string]threadContext{}
 	}
+	// A mark outlives the conversation that earned it (a group left, a one-off supergroup), so marks would add
+	// entries forever in a process that lists conversations by the minute. Past inboxMost drop the marks the
+	// listing in hand no longer contains: Collect only walks the conversations listed now, so a dropped group
+	// says nothing anyway, while the groups still listed keep their move and a mention read this round closes.
+	// An empty listing is never pruned: callers only get here after a successful Dialogs, and thousands of
+	// marks plus zero conversations means the answer is abnormal, not that every group left.
+	if len(ds) > 0 && len(c.box.marks) > inboxMost {
+		listed := make(map[string]struct{}, len(ds))
+		for _, d := range ds {
+			listed[d.Peer.key()] = struct{}{}
+		}
+		for key := range c.box.marks {
+			if _, ok := listed[key]; !ok {
+				delete(c.box.marks, key)
+			}
+		}
+	}
 	for _, d := range ds {
 		if d.Kind != "group" {
 			continue
@@ -150,6 +168,14 @@ func (c *Conn) refreshInbox(ctx context.Context) {
 
 // readContexts reads a few messages for each thing whose move has no context yet.
 func (c *Conn) readContexts(ctx context.Context, cl client) {
+	// Every new move adds a context entry (the key is the move's message id), so contexts would grow for the
+	// process's lifetime. It is only a read cache: past inboxMost reset it, and the moves in hand are re-read
+	// below (at most contextsPerRun this round, the rest the next one).
+	c.box.mu.Lock()
+	if len(c.box.contexts) > inboxMost {
+		c.box.contexts = map[string]threadContext{}
+	}
+	c.box.mu.Unlock()
 	things, _ := c.Collect(ctx)
 	read := 0
 	for _, t := range things {

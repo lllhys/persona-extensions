@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -123,6 +124,90 @@ func TestInbox(t *testing.T) {
 
 	if err := c.Reply(context.Background(), connector.InboxReply{Thread: "u1", Text: "示例回复"}); err == nil {
 		t.Fatal("replied: the connector only reads")
+	}
+}
+
+// A long-lived process lists its conversations by the minute: groups that rotate through the listing must not leave
+// marks forever, while a group still listed keeps its mention's move across the resets (a mention read this round
+// closes, the same Last).
+func TestInboxMarksAreCapped(t *testing.T) {
+	c := &Conn{}
+	now := time.Now()
+	const persistent = "c100000"
+	persistentDialog := func(mentions, top int) dialog {
+		return dialog{Peer: peer{Kind: 'c', ID: 100000, Hash: 1}, Name: "一直在的示例群", Kind: "group",
+			Top: top, TopAt: now, Mentions: mentions}
+	}
+	id := int64(1)
+	round := func(top int, extra ...dialog) {
+		ds := make([]dialog, 0, inboxDialogs)
+		for range inboxDialogs - len(extra) {
+			ds = append(ds, dialog{Peer: peer{Kind: 'c', ID: id}, Name: "示例群", Kind: "group", Top: top, TopAt: now})
+			id++
+		}
+		ds = append(ds, extra...)
+		c.noteDialogs(ds)
+	}
+	round(1, persistentDialog(1, 10)) // the persistent group's @ move
+	for range inboxMost/inboxDialogs + 2 {
+		round(2, persistentDialog(0, 11)) // read on the phone; its move must stay 10 while fresh groups rotate in
+	}
+	if got := len(c.box.marks); got > inboxMost+inboxDialogs { // past the cap dead marks are dropped, at most one page above it
+		t.Fatalf("the marks map grew to %d entries, want it capped at about %d", got, inboxMost)
+	}
+	full := len(c.box.marks)
+	c.noteDialogs(nil) // an abnormal empty answer prunes nothing, so a read mention's move is not lost
+	if len(c.box.marks) != full || c.box.marks[persistent].top != 10 {
+		t.Fatalf("an empty listing dropped the marks: %d -> %d, persistent move %d", full, len(c.box.marks), c.box.marks[persistent].top)
+	}
+	fresh := dialog{Peer: peer{Kind: 'c', ID: 200000, Hash: 2}, Name: "刚 @ 我的示例群", Kind: "group",
+		Top: 77, TopAt: now, Unread: 1, Mentions: 1}
+	round(3, persistentDialog(0, 11), fresh)
+	things, _ := c.Collect(context.Background())
+	if g := thingOf(things, persistent); g == nil || !g.Read || g.Last != "10" {
+		t.Fatalf("the persistent group's read mention lost its move across the resets: %+v", g)
+	}
+	if g := thingOf(things, "c200000"); g == nil || g.Read || g.Last != "77" {
+		t.Fatalf("a group the listing in hand just moved lost its mark: %+v", g)
+	}
+}
+
+// Every new mention or unread DM adds a context entry keyed by its move, so the contexts must reset past the cap;
+// what a round just moved still has its context read, and at most contextsPerRun moves wait for the next round.
+func TestInboxContextsAreCapped(t *testing.T) {
+	c, f, ctx := archiveAccount(t)
+	c.gate.pace = func() time.Duration { return 0 }
+	now := time.Now()
+	uid := int64(1000)
+	round := func() {
+		ds := make([]dialog, contextsPerRun)
+		for i := range ds {
+			ds[i] = dialog{Peer: peer{Kind: 'u', ID: uid}, Name: "示例用户", Kind: "dm", Top: 1, TopAt: now, Unread: 1}
+			uid++
+		}
+		f.mu.Lock()
+		f.dialogs = ds
+		f.mu.Unlock()
+		c.refreshInbox(ctx)
+	}
+	for range inboxMost/contextsPerRun + 2 { // more than inboxMost distinct moved conversations
+		round()
+	}
+	if got := len(c.box.contexts); got > inboxMost+contextsPerRun {
+		t.Fatalf("the contexts map grew to %d entries, want it capped at about %d", got, inboxMost)
+	}
+	last := uid
+	f.mu.Lock()
+	f.dialogs = []dialog{{Peer: peer{Kind: 'u', ID: last}, Name: "最新的示例用户", Kind: "dm",
+		Top: 1, TopAt: now, Unread: 1, TopFrom: "最新的示例用户"}}
+	f.history[fmt.Sprintf("u%d", last)] = []message{
+		{ID: 1, At: now, FromKey: fmt.Sprintf("u%d", last), From: "最新的示例用户", Type: "TEXT", Text: "最新的上下文消息"},
+	}
+	f.mu.Unlock()
+	c.refreshInbox(ctx)
+	things, _ := c.Collect(ctx)
+	if t0 := thingOf(things, fmt.Sprintf("u%d", last)); t0 == nil || !strings.Contains(t0.Context, "最新的上下文消息") {
+		t.Fatalf("the conversation a round just moved has no context: %+v", t0)
 	}
 }
 
