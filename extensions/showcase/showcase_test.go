@@ -193,6 +193,35 @@ func TestEditFlow(t *testing.T) {
 	}
 }
 
+// TestEditBack: apps before UI version 3 draw pages in place and have no native stack back,
+// so the edit page renders its own back button, exactly like detail(); v3 apps render neither.
+func TestEditBack(t *testing.T) {
+	a := newApp()
+	ctx := context.Background()
+	find := func(v *wire.View) *wire.Component {
+		for _, sec := range v.Sections {
+			for i := range sec.Items {
+				if c := &sec.Items[i]; c.Action != nil && c.Action.ID == "back" {
+					return c
+				}
+			}
+		}
+		return nil
+	}
+	v2, _ := a.render(ctx, req(pageUI, wire.SizeFull, 2, &state{P: "edit", ID: "3"}))
+	back := find(v2)
+	if back == nil {
+		t.Fatal("the edit page on a pre-v3 app renders a back button")
+	}
+	if back.Type != wire.ComponentButton || back.Title != "回到列表" {
+		t.Fatalf("the pre-v3 back button is %+v, want the same button detail() renders", back)
+	}
+	v3, _ := a.render(ctx, req(pageUI, wire.SizeFull, 3, &state{P: "edit", ID: "3"}))
+	if find(v3) != nil {
+		t.Fatal("the edit page on v3 renders no back button (the client provides native stack back)")
+	}
+}
+
 // TestListMore: load more shows 20 more, until all 60; search and filter start over.
 func TestListMore(t *testing.T) {
 	a := newApp()

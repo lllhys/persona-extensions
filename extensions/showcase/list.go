@@ -142,6 +142,10 @@ func (a *app) edit(r *ext.UIRequest, s state) *wire.View {
 		return gone()
 	}
 	choices := kinds[1:]
+	actions := items(wire.Component{Type: wire.ComponentButton, Title: "保存", Action: &wire.Action{ID: "save", Submit: true}})
+	if r.UIVersion < 3 {
+		actions = append(actions, wire.Component{Type: wire.ComponentButton, Title: "回到列表", Action: &wire.Action{ID: "back"}})
+	}
 	return &wire.View{Title: "编辑 " + it.Title, State: ext.EncodeState(s), Sections: []wire.Section{
 		{Items: items(
 			wire.Component{Type: wire.ComponentField, Name: "title", Label: "标题", Kind: wire.FieldKindText, Value: it.Title},
@@ -149,7 +153,7 @@ func (a *app) edit(r *ext.UIRequest, s state) *wire.View {
 			wire.Component{Type: wire.ComponentField, Name: "note", Label: "备注", Kind: wire.FieldKindText, Value: it.Note},
 			wire.Component{Type: wire.ComponentField, Name: "done", Label: "完成", Kind: wire.FieldKindToggle, Value: fmt.Sprint(it.Done)},
 		)},
-		{Items: items(wire.Component{Type: wire.ComponentButton, Title: "保存", Action: &wire.Action{ID: "save", Submit: true}})},
+		{Items: actions},
 	}}
 }
 
