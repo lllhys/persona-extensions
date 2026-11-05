@@ -13,7 +13,7 @@ Files (the hub reads them the same way):
   <index>.sig                 {"alg": "ed25519", "key_id": "<sha256 of the 32-byte key, first 16 hex>",
                                "sig": "<ed25519 signature of the index file's raw bytes, base64>"}
 """
-import base64, hashlib, json, os, subprocess, sys, tempfile
+import base64, binascii, hashlib, json, os, subprocess, sys, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import index  # noqa: E402
@@ -61,8 +61,12 @@ def verify_one(path, raw, tmp):
     with open(pem, "wb") as f:
         f.write(b"-----BEGIN PUBLIC KEY-----\n" + base64.encodebytes(SPKI_PREFIX + raw) + b"-----END PUBLIC KEY-----\n")
     sig = os.path.join(tmp, "sig.raw")
+    try:
+        sig_bytes = base64.b64decode(s.get("sig", ""), validate=True)
+    except (binascii.Error, TypeError, ValueError) as e:
+        return "%s: malformed signature (%s)" % (os.path.basename(sig_path), e)
     with open(sig, "wb") as f:
-        f.write(base64.b64decode(s.get("sig", ""), validate=True))
+        f.write(sig_bytes)
     r = subprocess.run(["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", pem, "-rawin", "-in", path, "-sigfile", sig],
                        capture_output=True)
     return None if r.returncode == 0 else "%s: the signature does not match the index" % os.path.basename(sig_path)
@@ -75,8 +79,13 @@ def verify():
         for path, key in INDEXES:
             if not os.path.exists(path + ".sig"):
                 continue
-            if json.load(open(path)).get("signing_key") != line:
-                bad.append("%s: signing_key is not market.pub" % os.path.basename(path))
+            try:
+                signing_key = json.load(open(path)).get("signing_key")
+            except ValueError as e:
+                bad.append("%s: malformed index (%s)" % (os.path.basename(path), e))
+            else:
+                if signing_key != line:
+                    bad.append("%s: signing_key is not market.pub" % os.path.basename(path))
             why = verify_one(path, raw, tmp)
             if why:
                 bad.append(why)
