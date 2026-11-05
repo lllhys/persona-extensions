@@ -48,6 +48,12 @@ func TestPersonOnly(t *testing.T) {
 		"n=$((1<<shift))\nrm -rf \"$t\"", "(( m = 1<<k ))\nrm -rf \"$t\"", "cat <<<'x <<EOF'\nrm -rf \"$t\"",
 		// two heredocs on a line: both bodies are skipped, then the commands after them count
 		"cat <<A <<B\nx\nA\ny\nB\nrm -rf \"$t\"",
+		// ssh runs its unquoted arguments, joined with a space, through the remote shell
+		"ssh host rm -rf /srv/x", "ssh -p 2222 user@host rm -rf /srv/x", "ssh host truncate -s 0 /data/db",
+		"ssh host chmod 777 /etc/passwd", "ssh host git push --force", "ssh host docker rm -f c1",
+		"/usr/bin/ssh host rm -rf /x", "sudo ssh host rm -rf /x", "ssh host ssh host2 rm -rf /y",
+		// after ssh every word is a possible program: a path whose name is a floor program errs toward asking
+		"ssh host ls /tmp/rm",
 	}
 	for _, c := range stays {
 		if personOnly(c) == "" {
@@ -71,6 +77,10 @@ func TestPersonOnly(t *testing.T) {
 		"cat <<'EOF' | python3 -\nimport os; print('rm -rf would be bad')\nEOF", "cat <<A <<'B'\nrm a\nA\nrm b\nB",
 		"diff <(cat <<EOF\nrm x\nEOF\n) f", "cat > /tmp/x <<-EOF\n\trm x\n\tEOF", "echo \"$((1<<3))\" && cat <<EOF\nrm x\nEOF", "git log --format='%h > %s'", "echo ok 2>/dev/null",
 		"command -v rm", "sed -n 1,20p f", "sed 's/a/b/' f", "ln -s a b", "npx prettier --check .",
+		// a read-only remote command, or a plain login, still goes: the ssh fix only asks toward destruction
+		"ssh host ls -la", "ssh host git status", "ssh host kubectl get pods", "ssh -p 2222 user@host docker ps",
+		"ssh user@host", "ssh host git push origin feat/x", "ssh host kubectl apply -f app.yaml",
+		"ssh -L 8080:localhost:80 -N host", "ssh host 'echo chmod 755 in text'",
 	}
 	for _, c := range goes {
 		if why := personOnly(c); why != "" {
@@ -116,7 +126,7 @@ func TestHookOtherTools(t *testing.T) {
 
 func TestHookLeavesDestructiveBash(t *testing.T) {
 	e := newEnv(t)
-	for _, cmd := range []string{"cd view && rm -f sub/*", "git push --force", "chmod -R 777 .", "git reset --hard"} {
+	for _, cmd := range []string{"cd view && rm -f sub/*", "git push --force", "chmod -R 777 .", "git reset --hard", "ssh host rm -rf /srv/x"} {
 		if got := e.hook(t, request(e, "bypassPermissions", "Bash", cmd), time.Now()); got != "" {
 			t.Errorf("%q: answered %q, should stay with a person", cmd, got)
 		}

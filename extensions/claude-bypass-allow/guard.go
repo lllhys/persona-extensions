@@ -346,12 +346,13 @@ func isDigits(s string) bool {
 	return s != ""
 }
 
-// wrappers run the next program word as a command (sudo rm, xargs rm, find -exec rm, for …; do rm …), so after one
-// every word counts as a possible program; shell keywords are here too.
+// wrappers run the next program word as a command (sudo rm, xargs rm, find -exec rm, ssh host rm, for …; do rm …),
+// so after one every word counts as a possible program; shell keywords are here too. ssh runs its unquoted arguments
+// ("ssh host rm -rf x") joined with a space through the remote shell, the way it runs one quoted argument.
 var wrappers = map[string]bool{
 	"sudo": true, "doas": true, "xargs": true, "parallel": true, "env": true, "nice": true, "ionice": true, "nohup": true,
 	"time": true, "timeout": true, "exec": true, "command": true, "builtin": true, "stdbuf": true, "setsid": true,
-	"flock": true, "chroot": true, "runuser": true, "strace": true, "unbuffer": true, "watch": true,
+	"flock": true, "chroot": true, "runuser": true, "strace": true, "unbuffer": true, "watch": true, "ssh": true,
 	"npx": true, "pnpx": true, "bunx": true, "dlx": true, "uvx": true, "pipx": true,
 	"-exec": true, "-execdir": true, "-ok": true, "-okdir": true,
 	"do": true, "then": true, "else": true, "elif": true, "if": true, "while": true, "until": true, "!": true,
