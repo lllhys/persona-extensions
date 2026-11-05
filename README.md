@@ -24,14 +24,7 @@ See [installation](docs/installation.md) for local packages, older hubs and exte
 
 ## Extensions
 
-| Extension | Capabilities |
-| --- | --- |
-| [LINUX DO](docs/extensions/linuxdo.md) | Read public hot, daily, weekly and latest topics; filter by interests; read topics and popular replies in the app or through assistant tools. No account required. |
-| [Telegram](docs/extensions/telegram.md) | Connect your own account: conversations, inbox, knowledge-base archives, assistant tools and the `tg` CLI. Writes require confirmation by default; credentials stay encrypted on the hub. |
-| [Feishu / LarkAgentX adapter](docs/extensions/larkagentx.md) | Experimental Feishu text reception and always-confirmed sending with exact allowlists, QR/import login and local logout. Coexists with larkintegration; upstream is separately user-installed on a Python companion, not redistributed or installed on the hub. Real-account validation remains pending; use a local package until a market release is available. |
-| [Showcase](docs/extensions/showcase.md) | Local-only examples of every view component and state, widgets, shortcuts and shared screenshot inputs. |
-| [Starter kit](docs/extensions/starter-kit.md) | A runtime-free example: a weekly-review skill, assistant instructions, quick prompts, inbox triage templates and a theme. |
-| [Starter pack](docs/extensions/starter-kit.md#starter-pack) | An extension pack that installs starter-kit and LINUX DO together. |
+See the [`extensions/`](extensions/) directory for the available extensions. Each extension documents itself in its own directory, with longer guides under [`docs/extensions/`](docs/extensions/).
 
 ## Documentation and contributing
 
