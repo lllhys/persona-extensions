@@ -43,8 +43,10 @@ First review the licensing and service-policy boundary above. Use an explicitly 
 
    ```sh
    scripts/package.sh larkagentx
-   personad extension install file:/absolute/path/to/larkagentx-0.1.0.tar.gz
+   personad extension install file:/absolute/path/to/larkagentx-<version>.tar.gz
    ```
+
+   Replace `<version>` with the version in [the manifest](../../extensions/larkagentx/persona-extension.json).
 
    This delivery uses local verification and does not include manual market publication. A merged version can trigger release automation if its jobs start and pass. Until a signed Release/index entry is available, install the local package; a manual market release uses the normal release/index-signing workflow.
 
@@ -81,7 +83,7 @@ First review the licensing and service-policy boundary above. Use an explicitly 
 
    This is headless on the companion: it needs no browser/display, and the QR appears through Persona's existing login UI. The implementation is covered with synthetic QR/auth objects only; actual Feishu QR acceptance remains unverified.
 
-6. After signing in, send a synthetic test message from an allowed sender in an allowed conversation, verify it appears once in the inbox, then request `larkagentx_send_text`. Verify the confirmation shows the full text and destination before approving. Verify a denied sender/conversation produces no inbox item. **These real-account steps have not been performed for this PR.**
+6. After signing in, send a synthetic test message from an allowed sender in an allowed conversation, verify it appears once in the inbox, then request `larkagentx_send_text`. Verify the confirmation shows the full text and destination before approving. Verify a denied sender/conversation produces no inbox item. **These real-account steps have not yet been performed.**
 
 ## Credential and delivery lifecycle
 
