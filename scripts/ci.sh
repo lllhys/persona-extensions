@@ -1,7 +1,7 @@
 #!/bin/bash
 # What CI runs, runnable on any machine with Go, Python 3 and (for release) gh:
-#   scripts/ci.sh            the checks a pull request needs: documentation links, manifests, gofmt, vet, tests,
-#                            every platform builds, indexes,
+#   scripts/ci.sh            the checks a pull request needs: documentation links, manifests, gofmt,
+#                            the copied SDK's vet and tests, vet, tests, every platform builds, indexes,
 #                            and the indexes' signatures against market.pub (nwverse/persona#1848)
 #   scripts/ci.sh release <base>    then release the extensions whose version changed since the git ref <base>
 #                                   (a push to main: its "before"); a version merged but meant to wait is not released
@@ -22,6 +22,7 @@ step gofmt
 bad=$(gofmt -l . | grep -v '^dist/' || true)
 [ -z "$bad" ] || { echo "not gofmt'ed:"; echo "$bad"; exit 1; }
 
+# sdk/go is a nested module, so the root vet and tests below do not reach it.
 step sdk
 go -C sdk/go vet ./...
 go -C sdk/go test -count=1 -timeout=90s ./...

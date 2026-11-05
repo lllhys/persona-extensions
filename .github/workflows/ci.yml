@@ -1,4 +1,5 @@
-# Pull requests: scripts/ci.sh (manifests, gofmt, vet, tests, every platform builds, both indexes agree).
+# Pull requests: scripts/ci.sh (manifests, gofmt, the copied SDK's vet and tests, vet, tests, every platform builds,
+# both indexes agree).
 # main: the same, then release the extensions whose version changed in the push, update both indexes and commit them.
 # A manual run releases the extensions named (a version merged earlier and held back until now).
 # Both jobs run on GitHub-hosted ubuntu-latest (a public repository: no self-hosted runner, no runner variable).
