@@ -48,7 +48,7 @@ func TestExamplesRoundTrip(t *testing.T) {
 // The component types and the UI version that brought each.
 func TestComponentTypes(t *testing.T) {
 	want := map[string]int{"text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1,
-		"divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3}
+		"divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3, "html": 4}
 	if !reflect.DeepEqual(ComponentSince, want) {
 		t.Errorf("ComponentSince = %v", ComponentSince)
 	}

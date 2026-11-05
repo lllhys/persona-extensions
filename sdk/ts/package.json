@@ -1,0 +1,14 @@
+{
+  "name": "@persona/extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Persona extension SDK for Bun: the process protocol, the UI router, and the protocol's and views' types (generated from schema/extension).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./wire": "./src/wire.ts"
+  },
+  "scripts": {
+    "test": "bun test"
+  }
+}

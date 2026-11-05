@@ -10,8 +10,8 @@ The repository itself is a market. Released packages live in GitHub Releases nam
 
 | File | Contents |
 | --- | --- |
-| `persona-extensions.json` | Current entries under `extensions`. |
-| `persona-plugins.json` | Equivalent entries under `plugins`, with legacy manifests. |
+| `persona-extensions.json` | Current entries under `extensions`. Each entry's `manifest` is the packaged manifest (without `tags`); its tags are in the entry's `tags`. |
+| `persona-plugins.json` | The same entries under `plugins`, for hubs from before the rename. |
 | `market.pub` | One line: `ed25519:<base64 of the 32-byte public key>`. |
 | Index-level `signing_key` | The same public-key line; older hubs ignore unknown fields. |
 | `persona-extensions.json.sig`, `persona-plugins.json.sig` | `{"alg": "ed25519", "key_id": "<first 16 hex characters of SHA-256 of the 32-byte public key>", "sig": "<base64 Ed25519 signature of the index's raw bytes>"}`. |
@@ -20,7 +20,7 @@ Package locations use `release:<tag>/<file>` in the index. [scripts/index.py](..
 
 ## Automated releases
 
-[CI](../.github/workflows/ci.yml) runs [scripts/ci.sh](../scripts/ci.sh) for pull requests. On a push to `main`, it releases only extensions whose manifest version changed in that push, including new extensions. Update both manifest names together.
+[CI](../.github/workflows/ci.yml) runs [scripts/ci.sh](../scripts/ci.sh) for pull requests. On a push to `main`, it releases only extensions whose manifest version changed in that push, including new extensions.
 
 A version is released once: CI skips an existing release; `scripts/release.sh` refuses to overwrite it. Do not rewrite published tags or historical commits to change documentation language.
 

@@ -42,7 +42,7 @@ Hubs from before the Plugin → Extension rename use `personad plugin …` inste
 personad plugin install file:/path/to/linuxdo-<version>.tar.gz
 ```
 
-Both `persona-extension.json` and the compatible `persona-plugin.json` are shipped. New hubs prefer the former; old hubs read the latter. Keep both manifests equivalent until the compatibility file is retired. Some extensions also declare a minimum hub version in `engines.persona`; renaming the command does not bypass that requirement.
+Both `persona-extension.json` and the compatible `persona-plugin.json` are shipped, generated from the one source manifest with the same contents. New hubs prefer the former; old hubs read the latter. Some extensions also declare a minimum hub version in `engines.persona`; renaming the command does not bypass that requirement.
 
 Legacy protocol names and UI placements, such as `plugin_protocol` and `plugin_page`, are intentional compatibility identifiers. See [reference](reference.md#compatibility).
 

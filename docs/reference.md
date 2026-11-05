@@ -4,7 +4,7 @@
 
 ## Manifests and configuration
 
-Each extension is rooted at `extensions/<id>/`. The current manifest is `persona-extension.json`; the legacy `persona-plugin.json` must describe the same extension. [scripts/manifest.py](../scripts/manifest.py) prefers the new name and checks directory/id agreement, versions and equivalence of the two manifests.
+Each extension is rooted at `extensions/<id>/` and has one manifest, `persona-extension.json`. [scripts/manifest.py](../scripts/manifest.py) checks directory/id agreement, versions and tags, and rejects a committed `persona-plugin.json` or `market.json`.
 
 | Field or file | Purpose |
 | --- | --- |
@@ -14,7 +14,7 @@ Each extension is rooted at `extensions/<id>/`. The current manifest is `persona
 | `contributes` | Connectors, app views, assistant skills and other contributions supported by the host. |
 | `configuration` | JSON Schema for the app's settings form, in the subset supported by Persona. These titles and descriptions are runtime UI text. |
 | `permissions` | Requested access, such as network hosts; the hub presents permissions during installation. |
-| `market.json` | Tags for the market entry, separate from the manifest. |
+| `tags` | Tags shown and searched in the market: at most 16, each 1–24 characters. They live only in the source manifest; see [Compatibility](#compatibility). |
 
 Examples: [LINUX DO manifest](../extensions/linuxdo/persona-extension.json), [Telegram manifest](../extensions/telegram/persona-extension.json). Settings and defaults for each are explained in their [LINUX DO](extensions/linuxdo.md#configuration) and [Telegram](extensions/telegram.md#inbox-triage) guides. Credentials are not configuration examples: use the hub's encrypted connector-secret flow, not manifests or repository files.
 
@@ -39,9 +39,12 @@ The repository was created during the Plugin → Extension migration's public-re
 
 - New hubs read `persona-extension.json` and `persona-extensions.json` (`extensions` entries).
 - Pre-rename hubs read `persona-plugin.json` and `persona-plugins.json` (`plugins` entries), and use `personad plugin …`.
-- Packages include both manifest names. CI compares their parsed contents.
+- Packages include both manifest names. [scripts/package.sh](../scripts/package.sh) writes both from `persona-extension.json`; the legacy file is never committed.
+- Hubs from before `tags` read manifests strictly and refuse unknown fields. Packages and index entries therefore carry the manifest without `tags` (`scripts/manifest.py packaged`); the index entry carries the tags in its own `tags` field, and the SDK drops them when a program answers `manifest`. `scripts/index.py check` rejects an index manifest that still has them.
 - Both indexes list equivalent extension ids, versions and packages; their metadata also agrees. Each is signed separately over its exact bytes.
 - Protocol names and placements such as `plugin_protocol` and LINUX DO's `plugin_page` remain intentional. The host may expose a newer UI name without making the older manifest identifier invalid.
+
+The legacy copies follow the compatibility period of nwverse/persona#1843: packaging keeps generating `persona-plugin.json`, and the index keeps `persona-plugins.json`, until at least 2027-05-05 and until the hub logs no calls to the old interfaces for 30 consecutive days. Stop generating them in a separate change after that. Stripping `tags` from packaged manifests lasts until the market no longer serves hubs from before `tags`.
 
 Do not remove old files or rename protocol identifiers as part of documentation cleanup. See [releases](releases.md) for index and signing details.
 

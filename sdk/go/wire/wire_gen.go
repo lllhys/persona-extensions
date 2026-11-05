@@ -19,21 +19,59 @@ const (
 var ActivationEvents = []string{"on_startup", "on_call", "on_http"}
 
 type Manifest struct {
-	ManifestVersion  int         `json:"manifest_version"`
-	ID               string      `json:"id"`
-	Name             string      `json:"name"`
-	Version          string      `json:"version"`
-	Description      string      `json:"description,omitempty"`
-	Publisher        string      `json:"publisher,omitempty"`
-	Homepage         string      `json:"homepage,omitempty"`
-	Engines          *Engines    `json:"engines,omitempty"`
-	Runtime          *Runtime    `json:"runtime,omitempty"`
-	ActivationEvents []string    `json:"activation_events,omitempty"`
-	Contributes      Contributes `json:"contributes"`
+	ManifestVersion int    `json:"manifest_version"`
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Version         string `json:"version"`
+	Description     string `json:"description,omitempty"`
+	Publisher       string `json:"publisher,omitempty"`
+	Homepage        string `json:"homepage,omitempty"`
+	// What the market shows and searches (docs「扩展市场」): at most 16, each 1 to 24 characters. Packages and indexes carry
+	// the manifest without them (hubs before tags refuse an unknown field); the index entry carries them instead.
+	Tags             []string     `json:"tags,omitempty"`
+	Engines          *Engines     `json:"engines,omitempty"`
+	Runtime          *Runtime     `json:"runtime,omitempty"`
+	Node             *NodeRuntime `json:"node,omitempty"`
+	ActivationEvents []string     `json:"activation_events,omitempty"`
+	Contributes      *Contributes `json:"contributes,omitempty"`
+	// Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.
+	Depends []Dependency `json:"depends,omitempty"`
+	Exports *Exports     `json:"exports,omitempty"`
+	// An extension pack (docs「扩展合集」): installing it installs these. A pack has no runtime and no contributes of its own.
+	ExtensionPack []PackMember `json:"extension_pack,omitempty"`
 	// The configuration's JSON Schema, in the subset every app draws as a form (docs「配置：表单的子集」).
 	Configuration json.RawMessage `json:"configuration,omitempty"`
 	Secrets       []SecretSpec    `json:"secrets,omitempty"`
 	Permissions   *Permissions    `json:"permissions,omitempty"`
+}
+
+type Dependency struct {
+	ID string `json:"id"`
+	// A range of its versions: >=1.2.0, <2.0.0, or both with a space between.
+	Version string `json:"version,omitempty"`
+}
+
+// Exports: extension points it opens to other extensions: they contribute under contributes["<this id>.<point id>"]
+// and depend on it.
+type Exports struct {
+	ExtensionPoints []ExportedPoint `json:"extension_points"`
+}
+
+type ExportedPoint struct {
+	ID          string `json:"id"`
+	Version     int    `json:"version"`
+	Description string `json:"description,omitempty"`
+	// Each contribution's JSON Schema, in the configuration's subset (docs「配置：表单的子集」); id is always there and required.
+	Schema json.RawMessage `json:"schema,omitempty"`
+}
+
+type PackMember struct {
+	ID string `json:"id"`
+	// The address of the market it comes from (github:owner/repo, https://…), as the hub registered it; empty: the
+	// pack's own market, else the first registered market that has it.
+	Market string `json:"market,omitempty"`
+	// A range of its versions, as in depends.
+	Version string `json:"version,omitempty"`
 }
 
 // Engines: what the extension runs on. extension_protocol is plugin_protocol's new name; a hub reads either.
@@ -63,6 +101,29 @@ type Resources struct {
 // A path in the package, or one per platform ({"linux-amd64": "bin/x"}).
 type Command = json.RawMessage
 
+// NodeRuntime: the extension's program on computers (docs/extensions.md「在电脑上运行的程序」): one per platform (darwin-* /
+// linux-*), on the machines picked in the configuration field `machines` (an array of format machine, x-os the
+// programs' systems).
+type NodeRuntime struct {
+	Command     json.RawMessage   `json:"command"`
+	Args        []string          `json:"args,omitempty"`
+	Env         map[string]string `json:"env,omitempty"`
+	Machines    string            `json:"machines"`
+	RPC         string            `json:"rpc,omitempty"`
+	HTTP        bool              `json:"http,omitempty"`
+	KeepRunning string            `json:"keep_running,omitempty"`
+	Secrets     []string          `json:"secrets,omitempty"`
+	Permissions *NodePermissions  `json:"permissions,omitempty"`
+}
+
+// NodePermissions: what the program on computers asks for there: hosts it reaches, files outside its data directory,
+// macOS's privacy permissions.
+type NodePermissions struct {
+	Network      []string `json:"network,omitempty"`
+	Files        bool     `json:"files,omitempty"`
+	MacosPrivacy bool     `json:"macos_privacy,omitempty"`
+}
+
 type SecretSpec struct {
 	Name        string `json:"name"`
 	Title       string `json:"title"`
@@ -83,19 +144,77 @@ type Permissions struct {
 // Contributes: contributions by extension point. A point this hub does not know installs with a warning, not taking
 // effect.
 type Contributes struct {
-	Connectors   []ConnectorItem   `json:"connectors,omitempty"`
-	Voice        []NamedItem       `json:"voice,omitempty"`
-	Computer     []NamedItem       `json:"computer,omitempty"`
-	Browser      []NamedItem       `json:"browser,omitempty"`
-	Quota        []QuotaItem       `json:"quota,omitempty"`
-	Providers    []ProviderItem    `json:"providers,omitempty"`
-	API          []APIItem         `json:"api,omitempty"`
-	Assistant    []AssistantItem   `json:"assistant,omitempty"`
-	UI           []UIItem          `json:"ui,omitempty"`
-	AgentSources []AgentSourceItem `json:"agent_sources,omitempty"`
-	Channel      []ChannelItem     `json:"channel,omitempty"`
-	Events       []EventsItem      `json:"events,omitempty"`
-	Shortcuts    []ShortcutItem    `json:"shortcuts,omitempty"`
+	Connectors      []ConnectorItem      `json:"connectors,omitempty"`
+	Voice           []NamedItem          `json:"voice,omitempty"`
+	Computer        []NamedItem          `json:"computer,omitempty"`
+	Browser         []NamedItem          `json:"browser,omitempty"`
+	Quota           []QuotaItem          `json:"quota,omitempty"`
+	Providers       []ProviderItem       `json:"providers,omitempty"`
+	API             []APIItem            `json:"api,omitempty"`
+	Assistant       []AssistantItem      `json:"assistant,omitempty"`
+	UI              []UIItem             `json:"ui,omitempty"`
+	AgentSources    []AgentSourceItem    `json:"agent_sources,omitempty"`
+	Channel         []ChannelItem        `json:"channel,omitempty"`
+	Events          []EventsItem         `json:"events,omitempty"`
+	Shortcuts       []ShortcutItem       `json:"shortcuts,omitempty"`
+	Skills          []SkillItem          `json:"skills,omitempty"`
+	Prompts         []PromptItem         `json:"prompts,omitempty"`
+	Themes          []ThemeItem          `json:"themes,omitempty"`
+	TriageTemplates []TriageTemplateItem `json:"triage_templates,omitempty"`
+}
+
+// SkillItem: A skill (docs「纯声明贡献」): a directory of the package with SKILL.md, put in with the assistant's skills.
+type SkillItem struct {
+	ID string `json:"id"`
+	// The directory, relative to the package.
+	Dir string `json:"dir"`
+}
+
+// Values of PromptKind.
+const (
+	PromptKindInstructions = "instructions"
+	PromptKindQuick        = "quick"
+)
+
+// PromptKinds are the values of PromptKind, in order.
+var PromptKinds = []string{"instructions", "quick"}
+
+// PromptItem: A prompt: instructions (a .md of the package added to the assistant's CLAUDE.md) or quick (a template
+// the apps offer in the message box).
+type PromptItem struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
+	// instructions: the .md file.
+	File string `json:"file,omitempty"`
+	// quick: what the apps show.
+	Title string `json:"title,omitempty"`
+	// quick: what goes into the message box.
+	Text string `json:"text,omitempty"`
+}
+
+// ThemeColors: A scheme's role colors, #RRGGBB: accent (required), positive, caution, danger, ai.
+type ThemeColors struct {
+	Accent   string `json:"accent"`
+	Positive string `json:"positive,omitempty"`
+	Caution  string `json:"caution,omitempty"`
+	Danger   string `json:"danger,omitempty"`
+	Ai       string `json:"ai,omitempty"`
+}
+
+// ThemeItem: A theme (主题色): the design system's role colors for light and dark; the apps check the contrast and do
+// not offer one that fails.
+type ThemeItem struct {
+	ID    string      `json:"id"`
+	Name  string      `json:"name"`
+	Light ThemeColors `json:"light"`
+	Dark  ThemeColors `json:"dark"`
+}
+
+// TriageTemplateItem: A template of an inbox source's triage rules (triage_rules): settings offer it.
+type TriageTemplateItem struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Text  string `json:"text"`
 }
 
 // ConnectorItem: the connector protocol's manifest (docs/connector-protocol.md).
@@ -176,7 +295,7 @@ type UIItem struct {
 	Hosts []string `json:"hosts,omitempty"`
 	// nav_page only.
 	Icon string `json:"icon,omitempty"`
-	// overview_card and widget only: a nav_page or extension_page of the same extension.
+	// overview_card, capsule_card and widget only: a nav_page or extension_page of the same extension.
 	Opens string `json:"opens,omitempty"`
 	// inbox_item only: one of the extension's own connectors.
 	Connector string `json:"connector,omitempty"`
@@ -326,6 +445,16 @@ type InitializeParams struct {
 	Granted Permissions       `json:"granted"`
 	// The contributions this run is for, by extension point.
 	Active map[string][]string `json:"active,omitempty"`
+	// The contributions of the other extensions that are on to the points it exports, by its point id (event
+	// extension.contributions_changed says them again when they change).
+	ContributionsToMe map[string][]ExportedContribution `json:"contributions_to_me,omitempty"`
+}
+
+type ExportedContribution struct {
+	// The extension it comes from.
+	Extension string `json:"extension"`
+	// The contribution, as that extension's manifest wrote it.
+	Item json.RawMessage `json:"item"`
 }
 
 type HubInfo struct {
@@ -628,10 +757,11 @@ const (
 	PlacementInboxItem       = "inbox_item"
 	PlacementExtensionPage   = "extension_page"
 	PlacementWidget          = "widget"
+	PlacementCapsuleCard     = "capsule_card"
 )
 
 // Placements are the values of Placement, in order.
-var Placements = []string{"plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget"}
+var Placements = []string{"plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget", "capsule_card"}
 
 // Size: how much room a view has: compact (a card), full (a page, a section), or for a widget the family it is drawn
 // for (WidgetFamily).
@@ -713,6 +843,11 @@ type View struct {
 	RefreshAfter int     `json:"refresh_after,omitempty"`
 	Search       *Search `json:"search,omitempty"`
 	Filter       *Filter `json:"filter,omitempty"`
+	// Plain text for an assistant card: required by CheckAssistantView; not required for extension views.
+	Fallback string `json:"fallback,omitempty"`
+	// Assistant card details keyed by page name; at most 8. A detail page cannot contain pages itself. Push.page refers
+	// to this root map.
+	Pages map[string]View `json:"pages,omitempty"`
 }
 
 type Section struct {
@@ -756,6 +891,8 @@ type Component struct {
 	Rows        [][]string    `json:"rows,omitempty"`
 	Caption     string        `json:"caption,omitempty"`
 	Button      *EmptyButton  `json:"button,omitempty"`
+	Html        string        `json:"html,omitempty"`
+	Height      int           `json:"height,omitempty"`
 }
 
 // Component types.
@@ -775,13 +912,46 @@ const (
 	ComponentTable     = "table"
 	ComponentEmpty     = "empty"
 	ComponentLoading   = "loading"
+	ComponentHtml      = "html"
 )
 
 // ComponentTypes are the types of Component, in order.
-var ComponentTypes = []string{"text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading"}
+var ComponentTypes = []string{"text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html"}
 
 // ComponentSince is the UI version that brought each type.
-var ComponentSince = map[string]int{"text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3}
+var ComponentSince = map[string]int{"text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3, "html": 4}
+
+type AssistantView struct {
+	ID           string    `json:"id"`
+	Conversation string    `json:"conversation"`
+	Version      int64     `json:"version"`
+	View         View      `json:"view"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type ViewAction struct {
+	Key         string            `json:"key"`
+	Action      string            `json:"action"`
+	Page        string            `json:"page,omitempty"`
+	Values      map[string]string `json:"values,omitempty"`
+	ClientMsgID string            `json:"client_msg_id"`
+	Status      string            `json:"status"`
+	Revision    int64             `json:"revision,omitempty"`
+	Error       string            `json:"error,omitempty"`
+	UpdatedAt   time.Time         `json:"updated_at,omitzero"`
+	At          time.Time         `json:"at"`
+}
+
+// Values of ViewActionStatus.
+const (
+	ViewActionStatusPending = "pending"
+	ViewActionStatusSent    = "sent"
+	ViewActionStatusFailed  = "failed"
+)
+
+// ViewActionStatuses are the values of ViewActionStatus, in order.
+var ViewActionStatuses = []string{"pending", "sent", "failed"}
 
 // Action: what a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push
 // or pop a page) are fields added here.
@@ -791,6 +961,14 @@ type Action struct {
 	Confirm string `json:"confirm,omitempty"`
 	// Send the page's fields as values.
 	Submit bool `json:"submit,omitempty"`
+	// Assistant only: send this text back to the same conversation. The hub reads it from the saved view, not from the
+	// client.
+	Reply string `json:"reply,omitempty"`
+	// Assistant only: an https URL or a validated persona/jarvis session, task, kb or file target, opened inside the
+	// app.
+	Open string `json:"open,omitempty"`
+	// Assistant only: return one page within the card.
+	Pop bool `json:"pop,omitempty"`
 	// Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls ui.action
 	// with id).
 	Push *Push `json:"push,omitempty"`
@@ -799,7 +977,9 @@ type Action struct {
 // Push: A page pushed on the navigation stack: ui.render of the extension's ui (this one when empty; a full page:
 // extension_page, plugin_page or nav_page) with state. title is shown until the view comes.
 type Push struct {
-	UI    string `json:"ui,omitempty"`
+	UI string `json:"ui,omitempty"`
+	// Assistant only: a page in the root View.pages. Never combined with ui or state.
+	Page  string `json:"page,omitempty"`
 	State string `json:"state,omitempty"`
 	Title string `json:"title,omitempty"`
 }
@@ -955,12 +1135,23 @@ type CardPart struct {
 // newDef makes a value of each definition, for tests that read examples by definition name.
 var newDef = map[string]func() any{
 	"Manifest":              func() any { return new(Manifest) },
+	"Dependency":            func() any { return new(Dependency) },
+	"Exports":               func() any { return new(Exports) },
+	"ExportedPoint":         func() any { return new(ExportedPoint) },
+	"PackMember":            func() any { return new(PackMember) },
 	"Engines":               func() any { return new(Engines) },
 	"Runtime":               func() any { return new(Runtime) },
 	"Resources":             func() any { return new(Resources) },
+	"NodeRuntime":           func() any { return new(NodeRuntime) },
+	"NodePermissions":       func() any { return new(NodePermissions) },
 	"SecretSpec":            func() any { return new(SecretSpec) },
 	"Permissions":           func() any { return new(Permissions) },
 	"Contributes":           func() any { return new(Contributes) },
+	"SkillItem":             func() any { return new(SkillItem) },
+	"PromptItem":            func() any { return new(PromptItem) },
+	"ThemeColors":           func() any { return new(ThemeColors) },
+	"ThemeItem":             func() any { return new(ThemeItem) },
+	"TriageTemplateItem":    func() any { return new(TriageTemplateItem) },
 	"ConnectorItem":         func() any { return new(ConnectorItem) },
 	"NamedItem":             func() any { return new(NamedItem) },
 	"QuotaItem":             func() any { return new(QuotaItem) },
@@ -979,6 +1170,7 @@ var newDef = map[string]func() any{
 	"Frame":                 func() any { return new(Frame) },
 	"RPCError":              func() any { return new(RPCError) },
 	"InitializeParams":      func() any { return new(InitializeParams) },
+	"ExportedContribution":  func() any { return new(ExportedContribution) },
 	"HubInfo":               func() any { return new(HubInfo) },
 	"ExtensionInfo":         func() any { return new(ExtensionInfo) },
 	"InitializeResult":      func() any { return new(InitializeResult) },
@@ -1010,6 +1202,8 @@ var newDef = map[string]func() any{
 	"View":                  func() any { return new(View) },
 	"Section":               func() any { return new(Section) },
 	"Component":             func() any { return new(Component) },
+	"AssistantView":         func() any { return new(AssistantView) },
+	"ViewAction":            func() any { return new(ViewAction) },
 	"Action":                func() any { return new(Action) },
 	"Push":                  func() any { return new(Push) },
 	"Search":                func() any { return new(Search) },

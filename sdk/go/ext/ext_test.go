@@ -151,3 +151,32 @@ func TestPushForOlderApps(t *testing.T) {
 		t.Fatalf("a newer app gets the pop: %s", f.Result)
 	}
 }
+
+func TestShortcuts(t *testing.T) {
+	c := start(t, Program{ID: "example", Version: "1.0.0", Shortcuts: map[string]Shortcut{
+		"count": func(ctx context.Context, r *ShortcutRequest) (*wire.ShortcutResult, error) {
+			return &wire.ShortcutResult{Text: r.Values["what"] + "：3 个"}, nil
+		}}})
+	c.call("initialize", map[string]any{"protocol": 1, "hub": map[string]any{"build": 1}, "granted": map[string]any{}})
+	var res wire.ShortcutResult
+	f := c.call("shortcut.run", wire.ShortcutRunParams{Contribution: "count", Values: map[string]string{"what": "苹果"}})
+	if json.Unmarshal(f.Result, &res); res.Text != "苹果：3 个" {
+		t.Fatalf("shortcut.run: %s %+v", f.Result, f.Error)
+	}
+	if f := c.call("shortcut.run", wire.ShortcutRunParams{Contribution: "nope"}); f.Error == nil || f.Error.Code != wire.ErrorCodeNoContribution {
+		t.Fatalf("another shortcut: %+v", f.Error)
+	}
+	if f := c.call("shortcut.list", nil); f.Error == nil || f.Error.Code != wire.ErrorCodeUnknownMethod {
+		t.Fatalf("another method: %+v", f.Error)
+	}
+}
+
+// manifest answers the manifest without its tags: hubs from before them refuse the field.
+func TestManifestWithoutTags(t *testing.T) {
+	c := start(t, Program{ID: "example", Version: "1.0.0", Manifest: json.RawMessage(`{"id": "example", "tags": ["示例"], "version": "1.0.0"}`)})
+	f := c.call("manifest", nil)
+	var got map[string]any
+	if err := json.Unmarshal(f.Result, &got); err != nil || got["tags"] != nil || got["id"] != "example" || got["version"] != "1.0.0" {
+		t.Fatalf("manifest: %s %v", f.Result, err)
+	}
+}

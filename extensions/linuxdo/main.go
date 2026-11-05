@@ -22,7 +22,7 @@ import (
 	"github.com/nwverse/persona-extensions/pluginkit"
 )
 
-//go:embed persona-plugin.json
+//go:embed persona-extension.json
 var manifest []byte
 
 // version is the manifest's.

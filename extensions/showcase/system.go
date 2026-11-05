@@ -13,12 +13,28 @@ import (
 
 // The overview card, the widget (every family) and the shortcuts: the places outside the extension's own page.
 
+// extensionUIVersion is the UI version extensions draw in; components from a later one (html, the assistant's cards'
+// since 4) are not theirs.
+const extensionUIVersion = 3
+
+// extensionComponents are the component types an extension can draw: those of wire.ComponentTypes up to
+// extensionUIVersion.
+func extensionComponents() []string {
+	var out []string
+	for _, t := range wire.ComponentTypes {
+		if wire.ComponentSince[t] <= extensionUIVersion {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 // card is the overview's compact card: a stat grid and a small chart (at most 2 sections, 12 components, no fields).
 func (a *app) card(ctx context.Context, r *ext.UIRequest) (*wire.View, error) {
 	ch := series("用量", "", 3, 5, 2, 8, 6, 4, 7)
 	return &wire.View{Sections: []wire.Section{{Items: items(
 		wire.Component{Type: wire.ComponentStatGrid, Stats: []wire.Stat{
-			{Label: "组件", Value: strconv.Itoa(len(wire.ComponentTypes))},
+			{Label: "组件", Value: strconv.Itoa(len(extensionComponents()))},
 			{Label: "页面", Value: strconv.Itoa(len(pages))},
 			{Label: "状态", Value: "正常", Tone: wire.TonePositive},
 		}},
@@ -46,7 +62,7 @@ func (a *app) widget(ctx context.Context, r *ext.UIRequest) (*wire.View, error) 
 	}
 	// medium, large
 	stats := []wire.Stat{
-		{Label: "组件", Value: strconv.Itoa(len(wire.ComponentTypes))},
+		{Label: "组件", Value: strconv.Itoa(len(extensionComponents()))},
 		{Label: "页面", Value: strconv.Itoa(len(pages))},
 		{Label: "状态", Value: "正常", Tone: wire.TonePositive},
 	}

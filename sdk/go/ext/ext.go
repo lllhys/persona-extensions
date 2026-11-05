@@ -46,8 +46,11 @@ type Program struct {
 	Init func(ctx context.Context, init *Init, hub *Hub) (contributes map[string]any, err error)
 	// Namespaces are the handlers by namespace ("connector", "quota", …). "ui" is UI's unless given here.
 	Namespaces map[string]Handler
-	// UI are the pages by ui contribution id: ui.render and ui.action go to them.
+	// UI are the pages by ui contribution id: ui.render and ui.action go to them (widgets too: placement widget).
 	UI map[string]Page
+	// Shortcuts are the shortcuts by contribution id: shortcut.run goes to them. "shortcut" is Shortcuts' unless
+	// given in Namespaces.
+	Shortcuts map[string]Shortcut
 	// HTTP, if set, is served on the socket the hub gives (runtime.http in the manifest) by Main.
 	HTTP http.Handler
 }
@@ -122,7 +125,7 @@ func Main(prog Program) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if len(os.Args) > 1 && os.Args[1] == "manifest" && len(prog.Manifest) > 0 {
-		_, _ = os.Stdout.Write(append(prog.Manifest, '\n'))
+		_, _ = os.Stdout.Write(append(answeredManifest(prog.Manifest), '\n'))
 		return
 	}
 	errs := make(chan error, 2)
@@ -187,7 +190,7 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		if len(s.prog.Manifest) == 0 {
 			return nil, &Error{Code: wire.ErrorCodeUnknownMethod, Message: "no manifest here: it is in the package"}
 		}
-		return s.prog.Manifest, nil
+		return answeredManifest(s.prog.Manifest), nil
 	}
 	s.mu.Lock()
 	ok := s.initialized
@@ -207,6 +210,9 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 	}
 	if ns == "ui" && s.prog.UI != nil {
 		return s.ui(ctx, rest, params)
+	}
+	if ns == "shortcut" && s.prog.Shortcuts != nil {
+		return s.shortcut(ctx, rest, params)
 	}
 	return nil, UnknownMethod(method)
 }
@@ -276,4 +282,19 @@ func Contribution(params json.RawMessage) string {
 	}
 	_ = json.Unmarshal(params, &t)
 	return t.Contribution
+}
+
+// answeredManifest is the manifest as the program answers it to a hub: without "tags", the market's (nwverse/persona
+// #2424), which hubs from before them refuse as an unknown field. A manifest that is not an object goes out as it is.
+func answeredManifest(m json.RawMessage) json.RawMessage {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(m, &fields) != nil || fields["tags"] == nil {
+		return m
+	}
+	delete(fields, "tags")
+	out, err := json.Marshal(fields)
+	if err != nil {
+		return m
+	}
+	return out
 }

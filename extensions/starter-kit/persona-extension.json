@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "description": "只有声明、不跑程序：一个周回顾技能、一段回答风格的说明、几条快捷提示、两份收件箱分拣规则模板和一个主题色。",
   "publisher": "nwverse",
+  "tags": ["入门", "助手", "收件箱", "主题"],
   "engines": {"persona": ">=202611042338"},
   "contributes": {
     "skills": [

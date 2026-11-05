@@ -32,6 +32,6 @@ scripts/package.sh starter-kit
 scripts/package.sh starter-pack
 ```
 
-The packaging script copies manifests and any `skills/` or `assistant/` directories, skips compilation without `runtime.command`, and does not leave an empty `bin/` directory. Both examples keep the legacy `persona-plugin.json` identical to `persona-extension.json`; that compatibility filename does not make their new contribution types work on older hubs.
+The packaging script writes the manifest under both names (`persona-extension.json` and the legacy `persona-plugin.json`, without `tags`), copies any `skills/` or `assistant/` directories, skips compilation without `runtime.command`, and does not leave an empty `bin/` directory. The legacy filename does not make the examples' new contribution types work on older hubs.
 
 Install through the [public market](../installation.md). Review contributions in the hub's install preview and ensure the hub meets the declared engine requirement. These declarative examples are already in `main`; no source merge from an open PR is needed.

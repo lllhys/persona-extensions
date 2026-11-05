@@ -11,11 +11,12 @@ manifest=$(scripts/manifest.py path "$id")
 version=$(scripts/manifest.py version "$id")
 out="dist/$id"
 rm -rf "$out" && mkdir -p "$out/bin"
-# Both names of the manifest go in: hubs from before the rename to extensions (nwverse/persona#1844) read only
-# persona-plugin.json; newer ones prefer persona-extension.json.
-for m in persona-extension.json persona-plugin.json; do
-  [ -f "$src/$m" ] && cp "$src/$m" "$out/"
-done
+# The manifest goes in under both names, without its tags (scripts/manifest.py packaged): hubs from before the rename
+# to extensions (nwverse/persona#1844) read only persona-plugin.json, newer ones prefer persona-extension.json, and
+# hubs from before tags (nwverse/persona#2424) refuse a manifest with them. Only persona-extension.json is committed;
+# stop writing persona-plugin.json once the compatibility period ends (docs/reference.md, "Compatibility").
+scripts/manifest.py packaged "$id" >"$out/persona-extension.json"
+cp "$out/persona-extension.json" "$out/persona-plugin.json"
 # What the manifest points at besides the program: the assistant's skills and instructions.
 for extra in skills assistant; do
   [ -d "$src/$extra" ] && cp -R "$src/$extra" "$out/"

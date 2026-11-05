@@ -3,6 +3,7 @@ package exttest_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -17,8 +18,10 @@ var manifest = []byte(`{
   "runtime": {"command": "bin/example"},
   "contributes": {"ui": [
     {"id": "home", "title": "示例", "placement": "nav_page"},
-    {"id": "today", "title": "今天", "placement": "overview_card", "opens": "home"}
-  ]}
+    {"id": "today", "title": "今天", "placement": "overview_card", "opens": "home"},
+    {"id": "glance", "title": "一眼", "placement": "widget", "families": ["small", "accessory_inline"], "opens": "home"}
+  ],
+  "shortcuts": [{"id": "count", "title": "数一数", "params": [{"name": "what", "title": "数什么", "kind": "text"}]}]}
 }`)
 
 type state struct {
@@ -56,12 +59,24 @@ func program(t *testing.T) ext.Program {
 					return &wire.ActionResult{Toast: "翻页了"}, nil
 				},
 			},
+			"glance": {Render: func(ctx context.Context, r *ext.UIRequest) (*wire.View, error) {
+				if !r.Widget() || r.Family() == "" {
+					t.Errorf("a widget drawn as %q %q", r.Placement, r.Size)
+				}
+				return &wire.View{Sections: []wire.Section{{Items: []wire.Component{{Type: wire.ComponentMetric, Label: r.Family(), Value: "3"}}}}}, nil
+			}},
 			"today": {Render: func(ctx context.Context, r *ext.UIRequest) (*wire.View, error) {
 				return &wire.View{Sections: []wire.Section{{Items: []wire.Component{
 					{Type: wire.ComponentStatGrid, Stats: []wire.Stat{{Label: "今天", Value: "3"}}},
 				}}}}, nil
 			}},
 		},
+		Shortcuts: map[string]ext.Shortcut{"count": func(ctx context.Context, r *ext.ShortcutRequest) (*wire.ShortcutResult, error) {
+			if r.Values["what"] == "" {
+				return nil, errors.New("说一下数什么")
+			}
+			return &wire.ShortcutResult{Text: "3 个"}, nil
+		}},
 	}
 }
 

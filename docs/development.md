@@ -11,10 +11,8 @@ Use the Go version declared in [go.mod](../go.mod), Python 3 and OpenSSL. Packag
 This is one Go module, `github.com/nwverse/persona-extensions`; each program extension is a `main` package under `extensions/<id>/`.
 
 ```text
-extensions/<id>/           Manifest, source, tests and market tags for one extension
-  persona-extension.json   Current manifest
-  persona-plugin.json      Equivalent manifest for pre-rename hubs
-  market.json              Tags shown in the market
+extensions/<id>/           Manifest, source and tests for one extension
+  persona-extension.json   The only manifest, including the market tags
 pluginkit/                 Quota, UI and inbox helpers for the existing extension APIs
 sdk/go/                    Synced copy of the official Persona Go SDK; do not hand-edit
 sdk/VERSION                Upstream source revision and sync ownership
@@ -31,7 +29,7 @@ The SDK implements the process protocol; `pluginkit` preserves the helpers used 
 ## Add a program extension
 
 1. Create `extensions/<id>/`. The directory name must match the manifest `id`, which matches `^[a-z0-9][a-z0-9_-]{0,31}$`.
-2. Write `persona-extension.json`, then copy it to `persona-plugin.json` for older hubs. Add `main.go`, tests and `market.json` with the market tags. Use synthetic fixtures and public endpoints only.
+2. Write `persona-extension.json`, with the market tags in its `tags` field. Do not add `persona-plugin.json` or `market.json`: packaging generates the legacy manifest, and `scripts/manifest.py check` rejects both files. Add `main.go` and tests. Use synthetic fixtures and public endpoints only.
 3. In `runtime.command`, list the program path for each supported platform: `linux-amd64`, `linux-arm64`, `darwin-arm64` and `darwin-amd64`. Use `bin/<id>-<platform>` paths. The package ships compiled programs; the hub installs no runtime.
 4. Test the manifest against the program's advertised contributions and exercise the process protocol with the official SDK's `exttest` helpers. Follow the existing [LINUX DO tests](../extensions/linuxdo/plugin_test.go) or [Telegram tests](../extensions/telegram/plugin_test.go).
 5. Run the checks below before preparing a pull request. A version bump merged to `main` triggers [release automation](releases.md#automated-releases).

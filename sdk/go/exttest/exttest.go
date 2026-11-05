@@ -142,28 +142,59 @@ func Check(t testing.TB, manifest []byte, run Run, config ...json.RawMessage) wi
 		if u.Placement == wire.PlacementOverviewCard {
 			size = wire.SizeCompact
 		}
-		params := wire.UIParams{Contribution: u.ID, Placement: u.Placement, Size: size, UIVersion: uiVersion,
-			TZ: "Asia/Shanghai", Locale: "zh-Hans-CN", Platform: wire.PlatformWeb}
-		switch u.Placement {
-		case wire.PlacementMachineSection:
-			params.Machine = &wire.UIMachine{ID: "example-machine", Name: "Example", OS: "darwin", Online: true}
-		case wire.PlacementLauncherSection:
-			params.Launcher = &wire.UILauncher{Name: "example", BaseURL: "https://gateway.example.com", QueryID: "exttest"}
-		case wire.PlacementInboxItem:
-			params.Item = &wire.UIInboxItem{ID: u.Connector + ":exttest", Title: "示例", Summary: "一件示例的事", Tier: "fyi",
-				Meta: json.RawMessage("null")}
+		sizes := []string{size}
+		if u.Placement == wire.PlacementWidget { // drawn once per family it says it has
+			sizes = u.Families
 		}
+		for _, size := range sizes {
+			params := wire.UIParams{Contribution: u.ID, Placement: u.Placement, Size: size, UIVersion: uiVersion,
+				TZ: "Asia/Shanghai", Locale: "zh-Hans-CN", Platform: wire.PlatformWeb}
+			switch u.Placement {
+			case wire.PlacementMachineSection:
+				params.Machine = &wire.UIMachine{ID: "example-machine", Name: "Example", OS: "darwin", Online: true}
+			case wire.PlacementLauncherSection:
+				params.Launcher = &wire.UILauncher{Name: "example", BaseURL: "https://gateway.example.com", QueryID: "exttest"}
+			case wire.PlacementInboxItem:
+				params.Item = &wire.UIInboxItem{ID: u.Connector + ":exttest", Title: "示例", Summary: "一件示例的事", Tier: "fyi",
+					Meta: json.RawMessage("null")}
+			}
+			var raw json.RawMessage
+			err := h.call(ctx, "ui.render", params, &raw)
+			switch c := code(err); {
+			case c == wire.ErrorCodeUnknownMethod || c == wire.ErrorCodeNoContribution:
+				t.Fatalf("ui %s (%s): ui.render answered %v", u.ID, size, err)
+			case err != nil:
+				continue // in words: its service is not reachable from a test
+			}
+			snakeKeys(t, "ui "+u.ID, raw, 0)
+			if err := CheckView(raw, size != wire.SizeFull); err != nil {
+				t.Fatalf("ui %s (%s): %v", u.ID, size, err)
+			}
+		}
+	}
+
+	// Each shortcut runs: it may refuse the empty values in words, never not know the method or the shortcut; a view
+	// it answers is drawn as a card.
+	for _, sc := range m.Contributes.Shortcuts {
 		var raw json.RawMessage
-		err := h.call(ctx, "ui.render", params, &raw)
+		err := h.call(ctx, "shortcut.run", wire.ShortcutRunParams{Contribution: sc.ID, Values: map[string]string{}, UIVersion: uiVersion,
+			TZ: "Asia/Shanghai", Locale: "zh-Hans-CN", Platform: wire.PlatformIos}, &raw)
 		switch c := code(err); {
 		case c == wire.ErrorCodeUnknownMethod || c == wire.ErrorCodeNoContribution:
-			t.Fatalf("ui %s: ui.render answered %v", u.ID, err)
+			t.Fatalf("shortcut %s: shortcut.run answered %v", sc.ID, err)
 		case err != nil:
-			continue // in words: its service is not reachable from a test
+			continue
 		}
-		snakeKeys(t, "ui "+u.ID, raw, 0)
-		if err := CheckView(raw, size == wire.SizeCompact); err != nil {
-			t.Fatalf("ui %s: %v", u.ID, err)
+		snakeKeys(t, "shortcut "+sc.ID, raw, 0)
+		var res wire.ShortcutResult
+		if err := json.Unmarshal(raw, &res); err != nil {
+			t.Fatalf("shortcut %s: %v", sc.ID, err)
+		}
+		if res.View != nil {
+			b, _ := json.Marshal(res.View)
+			if err := CheckView(b, true); err != nil {
+				t.Fatalf("shortcut %s: its view: %v", sc.ID, err)
+			}
 		}
 	}
 
@@ -189,7 +220,8 @@ var uiVersion = func() int {
 
 // CheckView checks a View the way the apps will read it: against the schema (wire.ValidateJSON: only known fields
 // and components, the tones, the limits of each), https links, at most 300 components and 16 KB of state, and for
-// a card (compact) at most 2 sections and 12 components and no fields.
+// a card (compact: an overview card, a widget, a shortcut's result) at most 2 sections and 12 components and no
+// fields. The hub holds a widget to less still (FitWidget): `personad extension test` checks that.
 func CheckView(raw json.RawMessage, compact bool) error {
 	if err := wire.ValidateJSON("View", raw); err != nil {
 		return err

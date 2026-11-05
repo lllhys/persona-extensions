@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -132,10 +131,6 @@ func sendParams(req, text string) map[string]any {
 func TestManifestAndConformance(t *testing.T) {
 	if err := wire.Validate("Manifest", manifest); err != nil {
 		t.Fatal(err)
-	}
-	old, err := os.ReadFile("persona-plugin.json")
-	if err != nil || string(old) != string(manifest) {
-		t.Fatal("legacy manifest differs", err)
 	}
 	if _, err := pluginkit.CheckManifest(manifest); err != nil {
 		t.Fatal(err)

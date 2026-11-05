@@ -48,9 +48,19 @@
         "secrets": {"type": "object", "additionalProperties": {"type": "string"}},
         "granted": {"$ref": "manifest.schema.json#/$defs/Permissions"},
         "active": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}},
-          "description": "The contributions this run is for, by extension point."}
+          "description": "The contributions this run is for, by extension point."},
+        "contributions_to_me": {"type": "object", "additionalProperties": {"type": "array", "items": {"$ref": "#/$defs/ExportedContribution"}},
+          "description": "The contributions of the other extensions that are on to the points it exports, by its point id (event extension.contributions_changed says them again when they change)."}
       },
       "required": ["protocol", "hub", "granted"]
+    },
+    "ExportedContribution": {
+      "type": "object",
+      "properties": {
+        "extension": {"type": "string", "description": "The extension it comes from."},
+        "item": {"description": "The contribution, as that extension's manifest wrote it."}
+      },
+      "required": ["extension", "item"]
     },
     "HubInfo": {
       "type": "object",

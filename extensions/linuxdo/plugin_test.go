@@ -158,8 +158,12 @@ func TestProtocol(t *testing.T) {
 	if m := h.call(t, "connector.inbox.collect", map[string]any{}); m.Error == nil || m.Error.Code != pluginkit.CodeUnknownMethod {
 		t.Fatalf("a capability it has not: %+v", m)
 	}
-	if m := h.call(t, "manifest", nil); !jsonEqual(m.Result, manifest) {
-		t.Fatal("manifest is not persona-plugin.json")
+	var answered map[string]any
+	_ = json.Unmarshal(manifest, &answered)
+	delete(answered, "tags") // the market's: hubs from before them refuse the field (nwverse/persona#2424)
+	answeredRaw, _ := json.Marshal(answered)
+	if m := h.call(t, "manifest", nil); !jsonEqual(m.Result, answeredRaw) {
+		t.Fatal("manifest is not persona-extension.json without its tags")
 	}
 }
 
@@ -171,7 +175,7 @@ func jsonEqual(a, b []byte) bool {
 	return reflect.DeepEqual(x, y)
 }
 
-// TestManifest holds persona-plugin.json to the code: what it contributes is what it answers, its settings are Config.
+// TestManifest holds persona-extension.json to the code: what it contributes is what it answers, its settings are Config.
 func TestManifest(t *testing.T) {
 	var m struct {
 		ID          string `json:"id"`

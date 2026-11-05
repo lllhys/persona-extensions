@@ -6,7 +6,11 @@
 
   scripts/index.py add <id> <tag>   put dist/<id>-<version>.tar.gz in as the release asset of <tag>
                                     (release:<tag>/<file>, pinned by its sha256); its entry is replaced, the others stay
-  scripts/index.py check            both files list the same extensions, versions and packages (what CI runs)
+  scripts/index.py check            both files list the same extensions, versions and packages, and no entry's
+                                    manifest has tags (what CI runs)
+
+An entry's manifest is scripts/manifest.py packaged (the manifest without tags, as the package carries it); its tags
+are the manifest's.
 
 The signature of both files is scripts/sign-index.py (nwverse/persona#1848).
 """
@@ -48,10 +52,10 @@ def add(id, tag):
     head = meta(new or old)
     new = new or dict(head, extensions=[])
     old = old or dict(head, plugins=[])
-    tags_file = os.path.join(ROOT, "extensions", id, "market.json")
-    tags = json.load(open(tags_file)).get("tags", []) if os.path.exists(tags_file) else []
+    # The tags come out of the manifest into the entry: hubs from before tags refuse a manifest with them.
+    man, tags = manifest.packaged(id), manifest.tags(id)
     packages = [{"url": "release:%s/%s" % (tag, pkg), "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}]
-    for d, key, man in ((new, "extensions", m), (old, "plugins", manifest.legacy(id))):
+    for d, key in ((new, "extensions"), (old, "plugins")):
         d[key] = [e for e in d[key] if e["manifest"]["id"] != id] + [{"manifest": man, "tags": tags, "packages": packages}]
         d[key].sort(key=lambda e: e["manifest"]["id"])
     write(NEW, new)
@@ -70,6 +74,10 @@ def check():
 
     if key(new, "extensions") != key(old, "plugins"):
         print("persona-extensions.json and persona-plugins.json list different extensions or packages", file=sys.stderr)
+        return False
+    tagged = [e["manifest"]["id"] for d, k in ((new, "extensions"), (old, "plugins")) for e in d[k] if "tags" in e["manifest"]]
+    if tagged:
+        print("index entries whose manifest has tags (hubs from before tags refuse it): %s" % ", ".join(tagged), file=sys.stderr)
         return False
     if meta(new) != meta(old):
         print("persona-extensions.json and persona-plugins.json have a different name or description", file=sys.stderr)

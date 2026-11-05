@@ -1,4 +1,4 @@
-// Package spec is what the Telegram connector declares: the program answers it in initialize, and persona-plugin.json,
+// Package spec is what the Telegram connector declares: the program answers it in initialize, and persona-extension.json,
 // which the hub reads before the program ever runs (a switched-off connector can still be signed in to), says the same
 // (plugin_test.go holds the two together).
 package spec

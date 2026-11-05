@@ -29,7 +29,7 @@ func (m InboxManifest) Fallback(id string) bool {
 	return slices.ContainsFunc(m.Connectors, func(c InboxConnector) bool { return c.ID == id && c.Fallback })
 }
 
-// CheckManifest holds a manifest (persona-plugin.json) to the inbox rules as the hub's install check does
+// CheckManifest holds a manifest (persona-extension.json) to the inbox rules as the hub's install check does
 // (nwverse/persona#1730): a plugin with a connector that declares "inbox" has the setting triage_rules, a string at
 // the top of its configuration; "fallback" goes with an inbox. It answers which connectors have an inbox and which a
 // fallback. CheckStandardSettings holds the setting to the standard look on top.

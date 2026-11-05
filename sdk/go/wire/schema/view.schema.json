@@ -16,7 +16,7 @@
     "Placement": {
       "description": "A slot in the apps an extension draws at (docs「UI 插槽」). extension_page is plugin_page's new name (UI version 3): the hub takes both and answers the new API with extension_page, the old one with plugin_page.",
       "type": "string",
-      "enum": ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget"]
+      "enum": ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget", "capsule_card"]
     },
     "Size": {
       "description": "How much room a view has: compact (a card), full (a page, a section), or for a widget the family it is drawn for (WidgetFamily).",
@@ -43,7 +43,9 @@
         "refresh_after": {"type": "integer", "minimum": 0, "maximum": 86400, "x-since": 2,
           "description": "Draw again after this many seconds while on screen (30 at least; 0 never)."},
         "search": {"$ref": "#/$defs/Search", "x-since": 3},
-        "filter": {"$ref": "#/$defs/Filter", "x-since": 3}
+        "filter": {"$ref": "#/$defs/Filter", "x-since": 3},
+        "fallback": {"type": "string", "minLength": 1, "maxLength": 2000, "description": "Plain text for an assistant card: required by CheckAssistantView; not required for extension views."},
+        "pages": {"type": "object", "additionalProperties": {"$ref": "#/$defs/View"}, "description": "Assistant card details keyed by page name; at most 8. A detail page cannot contain pages itself. Push.page refers to this root map."}
       },
       "required": ["sections"]
     },
@@ -75,7 +77,8 @@
         {"$ref": "#/$defs/MarkdownComponent"},
         {"$ref": "#/$defs/TableComponent"},
         {"$ref": "#/$defs/EmptyComponent"},
-        {"$ref": "#/$defs/LoadingComponent"}
+        {"$ref": "#/$defs/LoadingComponent"},
+        {"$ref": "#/$defs/HtmlComponent"}
       ]
     },
     "TextComponent": {
@@ -260,6 +263,135 @@
       },
       "required": ["type"]
     },
+    "HtmlComponent": {
+      "type": "object",
+      "x-since": 4,
+      "x-assistant-only": true,
+      "description": "Assistant only: self-contained HTML. Execution requires an isolated, network-denying renderer; unsupported clients show the root fallback. Extensions never execute it.",
+      "properties": {
+        "type": {
+          "const": "html"
+        },
+        "key": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "html": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 160,
+          "maximum": 640
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "type",
+        "html"
+      ]
+    },
+    "AssistantView": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "conversation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "x-go-type": "int64"
+        },
+        "view": {
+          "$ref": "#/$defs/View"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "conversation",
+        "version",
+        "view",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    "ViewAction": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "page": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "client_msg_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "status": {
+          "$ref": "#/$defs/ViewActionStatus"
+        },
+        "revision": {"type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-go-type": "int64"},
+        "error": {"type": "string", "maxLength": 2000},
+        "updated_at": {"type": "string", "format": "date-time"},
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "key",
+        "action",
+        "client_msg_id",
+        "status",
+        "at"
+      ]
+    },
+    "ViewActionStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "sent",
+        "failed"
+      ]
+    },
     "Action": {
       "description": "What a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push or pop a page) are fields added here.",
       "type": "object",
@@ -267,6 +399,9 @@
         "id": {"type": "string", "minLength": 1, "maxLength": 128},
         "confirm": {"type": "string", "description": "Ask the user first, in these words."},
         "submit": {"type": "boolean", "description": "Send the page's fields as values."},
+        "reply": {"type": "string", "minLength": 1, "maxLength": 2000, "description": "Assistant only: send this text back to the same conversation. The hub reads it from the saved view, not from the client."},
+        "open": {"type": "string", "minLength": 1, "maxLength": 4096, "description": "Assistant only: an https URL or a validated persona/jarvis session, task, kb or file target, opened inside the app."},
+        "pop": {"type": "boolean", "description": "Assistant only: return one page within the card."},
         "push": {"$ref": "#/$defs/Push", "x-since": 3,
           "description": "Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls ui.action with id)."}
       },
@@ -277,6 +412,7 @@
       "type": "object",
       "properties": {
         "ui": {"type": "string", "maxLength": 64},
+        "page": {"type": "string", "minLength": 1, "maxLength": 64, "description": "Assistant only: a page in the root View.pages. Never combined with ui or state."},
         "state": {"type": "string"},
         "title": {"type": "string", "maxLength": 2000}
       }

@@ -23,15 +23,68 @@
         "description": {"type": "string"},
         "publisher": {"type": "string"},
         "homepage": {"type": "string", "pattern": "^https://[^/?#]+"},
+        "tags": {
+          "description": "What the market shows and searches (docs「扩展市场」): at most 16, each 1 to 24 characters. Packages and indexes carry the manifest without them (hubs before tags refuse an unknown field); the index entry carries them instead.",
+          "type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 24}
+        },
         "engines": {"$ref": "#/$defs/Engines"},
         "runtime": {"$ref": "#/$defs/Runtime"},
+        "node": {"$ref": "#/$defs/NodeRuntime"},
         "activation_events": {"type": "array", "items": {"$ref": "#/$defs/ActivationEvent"}},
         "contributes": {"$ref": "#/$defs/Contributes"},
+        "depends": {
+          "description": "Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.",
+          "type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/Dependency"}
+        },
+        "exports": {"$ref": "#/$defs/Exports"},
+        "extension_pack": {
+          "description": "An extension pack (docs「扩展合集」): installing it installs these. A pack has no runtime and no contributes of its own.",
+          "type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/PackMember"}
+        },
         "configuration": {"description": "The configuration's JSON Schema, in the subset every app draws as a form (docs「配置：表单的子集」)."},
         "secrets": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/SecretSpec"}},
         "permissions": {"$ref": "#/$defs/Permissions"}
       },
-      "required": ["manifest_version", "id", "name", "version", "contributes"]
+      "required": ["manifest_version", "id", "name", "version"]
+    },
+    "Dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "version": {"type": "string", "description": "A range of its versions: >=1.2.0, <2.0.0, or both with a space between."}
+      },
+      "required": ["id"]
+    },
+    "Exports": {
+      "description": "Extension points it opens to other extensions: they contribute under contributes[\"<this id>.<point id>\"] and depend on it.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "extension_points": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"$ref": "#/$defs/ExportedPoint"}}
+      },
+      "required": ["extension_points"]
+    },
+    "ExportedPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"},
+        "version": {"type": "integer", "minimum": 1},
+        "description": {"type": "string"},
+        "schema": {"description": "Each contribution's JSON Schema, in the configuration's subset (docs「配置：表单的子集」); id is always there and required."}
+      },
+      "required": ["id", "version"]
+    },
+    "PackMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "market": {"type": "string", "description": "The address of the market it comes from (github:owner/repo, https://…), as the hub registered it; empty: the pack's own market, else the first registered market that has it."},
+        "version": {"type": "string", "description": "A range of its versions, as in depends."}
+      },
+      "required": ["id"]
     },
     "Engines": {
       "description": "What the extension runs on. extension_protocol is plugin_protocol's new name; a hub reads either.",
@@ -72,6 +125,33 @@
         {"type": "string", "minLength": 1},
         {"type": "object", "additionalProperties": {"type": "string"}}
       ]
+    },
+    "NodeRuntime": {
+      "description": "The extension's program on computers (docs/extensions.md「在电脑上运行的程序」): one per platform (darwin-* / linux-*), on the machines picked in the configuration field `machines` (an array of format machine, x-os the programs' systems).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "command": {"$ref": "#/$defs/Command"},
+        "args": {"type": "array", "items": {"type": "string"}},
+        "env": {"type": "object", "additionalProperties": {"type": "string"}},
+        "machines": {"type": "string", "minLength": 1},
+        "rpc": {"type": "string", "enum": ["stdio", "none"]},
+        "http": {"type": "boolean"},
+        "keep_running": {"type": "string", "enum": ["lease", "always"]},
+        "secrets": {"type": "array", "items": {"type": "string"}},
+        "permissions": {"$ref": "#/$defs/NodePermissions"}
+      },
+      "required": ["command", "machines"]
+    },
+    "NodePermissions": {
+      "description": "What the program on computers asks for there: hosts it reaches, files outside its data directory, macOS's privacy permissions.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "network": {"type": "array", "items": {"$ref": "#/$defs/Host"}},
+        "files": {"type": "boolean"},
+        "macos_privacy": {"type": "boolean"}
+      }
     },
     "SecretSpec": {
       "type": "object",
@@ -114,8 +194,73 @@
         "agent_sources": {"type": "array", "items": {"$ref": "#/$defs/AgentSourceItem"}},
         "channel": {"type": "array", "items": {"$ref": "#/$defs/ChannelItem"}},
         "events": {"type": "array", "items": {"$ref": "#/$defs/EventsItem"}},
-        "shortcuts": {"type": "array", "items": {"$ref": "#/$defs/ShortcutItem"}}
+        "shortcuts": {"type": "array", "items": {"$ref": "#/$defs/ShortcutItem"}},
+        "skills": {"type": "array", "items": {"$ref": "#/$defs/SkillItem"}},
+        "prompts": {"type": "array", "items": {"$ref": "#/$defs/PromptItem"}},
+        "themes": {"type": "array", "items": {"$ref": "#/$defs/ThemeItem"}},
+        "triage_templates": {"type": "array", "items": {"$ref": "#/$defs/TriageTemplateItem"}}
       }
+    },
+    "SkillItem": {
+      "description": "A skill (docs「纯声明贡献」): a directory of the package with SKILL.md, put in with the assistant's skills.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "dir": {"type": "string", "description": "The directory, relative to the package."}
+      },
+      "required": ["id", "dir"]
+    },
+    "PromptKind": {"type": "string", "enum": ["instructions", "quick"]},
+    "PromptItem": {
+      "description": "A prompt: instructions (a .md of the package added to the assistant's CLAUDE.md) or quick (a template the apps offer in the message box).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "kind": {"$ref": "#/$defs/PromptKind"},
+        "file": {"type": "string", "description": "instructions: the .md file."},
+        "title": {"type": "string", "maxLength": 40, "description": "quick: what the apps show."},
+        "text": {"type": "string", "maxLength": 4000, "description": "quick: what goes into the message box."}
+      },
+      "required": ["id", "kind"]
+    },
+    "ThemeColors": {
+      "description": "A scheme's role colors, #RRGGBB: accent (required), positive, caution, danger, ai.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accent": {"$ref": "#/$defs/HexColor"},
+        "positive": {"$ref": "#/$defs/HexColor"},
+        "caution": {"$ref": "#/$defs/HexColor"},
+        "danger": {"$ref": "#/$defs/HexColor"},
+        "ai": {"$ref": "#/$defs/HexColor"}
+      },
+      "required": ["accent"]
+    },
+    "HexColor": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+    "ThemeItem": {
+      "description": "A theme (主题色): the design system's role colors for light and dark; the apps check the contrast and do not offer one that fails.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 20},
+        "light": {"$ref": "#/$defs/ThemeColors"},
+        "dark": {"$ref": "#/$defs/ThemeColors"}
+      },
+      "required": ["id", "name", "light", "dark"]
+    },
+    "TriageTemplateItem": {
+      "description": "A template of an inbox source's triage rules (triage_rules): settings offer it.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 40},
+        "text": {"type": "string", "minLength": 1, "maxLength": 4000}
+      },
+      "required": ["id", "title", "text"]
     },
     "ConnectorItem": {
       "description": "The connector protocol's manifest (docs/connector-protocol.md).",
@@ -216,7 +361,7 @@
         "placement": {"$ref": "view.schema.json#/$defs/Placement"},
         "hosts": {"type": "array", "items": {"$ref": "#/$defs/Host"}, "description": "launcher_section only."},
         "icon": {"$ref": "view.schema.json#/$defs/NavIcon", "description": "nav_page only."},
-        "opens": {"type": "string", "description": "overview_card and widget only: a nav_page or extension_page of the same extension."},
+        "opens": {"type": "string", "description": "overview_card, capsule_card and widget only: a nav_page or extension_page of the same extension."},
         "connector": {"type": "string", "description": "inbox_item only: one of the extension's own connectors."},
         "families": {"type": "array", "minItems": 1, "items": {"$ref": "view.schema.json#/$defs/WidgetFamily"}, "description": "widget only (and needed there): the sizes it can be drawn at."},
         "refresh_minutes": {"type": "integer", "minimum": 15, "maximum": 1440, "description": "widget only: how often the widget is drawn again on its own (30 when not said)."}

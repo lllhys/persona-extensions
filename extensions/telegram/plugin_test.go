@@ -18,7 +18,7 @@ import (
 	"github.com/nwverse/persona/sdk/go/wire"
 )
 
-// The hub reads the connector from persona-extension.json (persona-plugin.json before Persona #1844, the same) before the program runs (a switched-off connector can still
+// The hub reads the connector from persona-extension.json (the package carries it as persona-plugin.json too, for hubs before Persona #1844) before the program runs (a switched-off connector can still
 // be signed in to) and uses it over what the program says: the two must be the same, with the inbox kinds described
 // and tg declared, and the telegram skill packed with it.
 func TestManifestIsWhatTheProgramDeclares(t *testing.T) {

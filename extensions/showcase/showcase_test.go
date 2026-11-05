@@ -138,7 +138,7 @@ func TestSnapshots(t *testing.T) {
 	}
 }
 
-// TestEveryComponent: the pages show every component type there is.
+// TestEveryComponent: the pages show every component type an extension can draw.
 func TestEveryComponent(t *testing.T) {
 	seen := map[string]bool{}
 	for _, s := range snapshots() {
@@ -148,7 +148,7 @@ func TestEveryComponent(t *testing.T) {
 			}
 		}
 	}
-	for _, typ := range wire.ComponentTypes {
+	for _, typ := range extensionComponents() {
 		if !seen[typ] {
 			t.Errorf("no page shows %s", typ)
 		}
