@@ -114,7 +114,7 @@ func (c *Conn) Changes(ctx context.Context, cursor string, limit int) ([]connect
 		}
 	}
 	c.mu.Lock()
-	c.status.LastSync = time.Now()
+	c.lastSync = time.Now()
 	c.mu.Unlock()
 	return batches, encodeCursor(cur), more, nil
 }

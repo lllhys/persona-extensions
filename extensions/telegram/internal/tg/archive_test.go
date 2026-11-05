@@ -50,6 +50,30 @@ func archiveAccount(t *testing.T) (*Conn, *fakeTelegram, context.Context) {
 	return c, f, ctx
 }
 
+// The status's last sync is when the archive last read: connecting again (the status set anew) keeps it, so the app
+// does not say "never synced" after every reconnect; signing out clears it.
+func TestLastSyncOutlivesAReconnect(t *testing.T) {
+	c, _, ctx := archiveAccount(t)
+	if _, _, _, err := c.Changes(ctx, "", 20); err != nil {
+		t.Fatal(err)
+	}
+	synced := c.Status(ctx).LastSync
+	if synced.IsZero() {
+		t.Fatal("no last sync after an archive read")
+	}
+	c.setStatus(connector.Status{State: connector.StateError, Error: "连不上 Telegram：example"}) // the connection dropped
+	c.checkSignedIn(ctx)                                                                      // and came back
+	if st := c.Status(ctx); st.State != connector.StateOK || !st.LastSync.Equal(synced) {
+		t.Fatalf("after a reconnect: %+v, want the last sync %s", st, synced)
+	}
+	if err := c.Logout(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if st := c.Status(ctx); !st.LastSync.IsZero() {
+		t.Fatalf("signed out, still a last sync: %+v", st)
+	}
+}
+
 // The first read: private chats and groups only, 30 days back; a reply says what it answers.
 func TestArchiveFirstRead(t *testing.T) {
 	c, f, ctx := archiveAccount(t)

@@ -125,6 +125,9 @@ type Conn struct {
 	cl     client             // nil while not connected
 	stop   context.CancelFunc // ends cl
 	status connector.Status
+	// lastSync is when the archive last read (Changes): the archive's, not the connection's, so a reconnect or an
+	// error in between does not take it out of the status.
+	lastSync time.Time
 	// pending is the sign-in under way: the phone it asked a code for and the hash that goes with the code.
 	pending struct{ phone, hash string }
 	// wake makes Run connect again (the credentials changed, or the user signed out).
@@ -173,6 +176,7 @@ func (*Conn) Manifest() connector.Manifest { return spec.Manifest() }
 func (c *Conn) Status(context.Context) connector.Status {
 	c.mu.Lock()
 	st := c.status
+	st.LastSync = c.lastSync
 	c.mu.Unlock()
 	if st.State != connector.StateOK {
 		return st
