@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -51,10 +52,31 @@ type cliArgs struct {
 	UpTo       int    `json:"up_to"`
 }
 
+// argNames are cliArgs' fields as the arguments name them.
+var argNames = func() map[string]bool {
+	t := reflect.TypeFor[cliArgs]()
+	out := make(map[string]bool, t.NumField())
+	for i := range t.NumField() {
+		out[t.Field(i).Tag.Get("json")] = true
+	}
+	return out
+}()
+
 func parseArgs(args json.RawMessage) (cliArgs, error) {
 	var a cliArgs
 	if len(args) == 0 {
 		return a, nil
+	}
+	// encoding/json fills a field from a key in any case ("Chat", "CHAT"), but connector_gate's rules look a
+	// field up by its exact name, so a key that is not one of cliArgs' names as written is refused.
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(args, &keys); err != nil {
+		return a, fmt.Errorf("arguments: %w", err)
+	}
+	for k := range keys {
+		if !argNames[k] {
+			return a, fmt.Errorf("arguments: unknown field %q", k)
+		}
 	}
 	dec := json.NewDecoder(strings.NewReader(string(args)))
 	dec.DisallowUnknownFields()
@@ -343,11 +365,15 @@ var keyForm = regexp.MustCompile(`^[ugc][0-9]+$`)
 
 // target is the conversation a write names: its id from the CLI's reads (u…, g…, c…) or its @username, found in
 // what was last listed (the inbox's list, the CLI's reads). It asks Telegram nothing, so the card and the write go
-// to the same conversation; a name is refused (two chats may share one).
+// to the same conversation; a name is refused (two chats may share one). It takes the value only as written, with
+// no spaces around it and the @username in the case Telegram keeps it, so connector_gate's rules, which match
+// the written value, see the conversation the write goes to.
 func (c *Conn) target(chat string) (dialog, error) {
-	chat = strings.TrimSpace(chat)
-	if chat == "" {
+	if strings.TrimSpace(chat) == "" {
 		return dialog{}, errors.New("chat is required")
+	}
+	if chat != strings.TrimSpace(chat) {
+		return dialog{}, fmt.Errorf("会话 %q 前后不能有空白", chat)
 	}
 	c.box.mu.Lock()
 	defer c.box.mu.Unlock()
@@ -359,7 +385,7 @@ func (c *Conn) target(chat string) (dialog, error) {
 		if !d.kept() {
 			continue
 		}
-		if byUser && d.Username != "" && strings.EqualFold(d.Username, user) || !byUser && d.Peer.key() == chat {
+		if byUser && d.Username != "" && d.Username == user || !byUser && d.Peer.key() == chat {
 			return d, nil
 		}
 	}

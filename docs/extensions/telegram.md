@@ -64,7 +64,7 @@ The CLI goes through the hub connector, not directly to Telegram. If `tg` is mis
 | `tg react <chat> <message-id> <emoji>` | Add a reaction. |
 | `tg read <chat> [--up-to message-id]` | Mark read, visible to the other participant. |
 
-Conversation ids returned by `chats` and `search` start with `u` (direct), `g` (basic group) or `c` (supergroup). Read commands also accept full conversation names. Write commands accept only ids or `@username`, and the target must have appeared in a recent `chats`/`search` result.
+Conversation ids returned by `chats` and `search` start with `u` (direct), `g` (basic group) or `c` (supergroup). Read commands also accept full conversation names. Write commands accept only ids or `@username`, and the target must have appeared in a recent `chats`/`search` result. A write takes the value exactly as written: no surrounding spaces, and `@username` in the case `chats`/`search` print it. Since one conversation can be named by its id or its `@username`, a `connector_gate` rule for one chat has to match both.
 
 Time values accept RFC 3339, dates at midnight in the user's time zone, Unix seconds, or relative intervals such as `30m`, `2h`, `3d`. Output is one JSON line on stdout by default; `--format text` produces concise human-readable output. Per-page limits are 100 conversations, 50 messages, 30 search results and 100 members.
 

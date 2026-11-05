@@ -220,6 +220,57 @@ func TestCLIWrites(t *testing.T) {
 	}
 }
 
+// A write names its conversation exactly as connector_gate sees it: rules that deny a chat by its id and its
+// @username (the two names a write takes) are not stepped around by spacing or by the @username's case.
+func TestCLIWriteNamesTheChatTheGateSees(t *testing.T) {
+	c, f, ctx := archiveAccount(t)
+	f.mu.Lock()
+	f.dialogs[0].Username = "example_group"
+	f.mu.Unlock()
+	r := connector.NewRegistry([]connector.Rule{
+		{Connector: "telegram", Action: "telegram_react", Match: map[string]any{"chat": "c2"}, Decision: connector.Deny},
+		{Connector: "telegram", Action: "telegram_react", Match: map[string]any{"chat": "@example_group"}, Decision: connector.Deny},
+		{Connector: "telegram", Action: "telegram_forward", Match: map[string]any{"to": "c2"}, Decision: connector.Deny},
+		{Connector: "telegram", Action: "telegram_forward", Match: map[string]any{"to": "@example_group"}, Decision: connector.Deny},
+		{Connector: "telegram", Action: "telegram_react", Decision: connector.Allow},
+		{Connector: "telegram", Action: "telegram_forward", Decision: connector.Allow},
+	})
+	if err := r.Add(c); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Call(ctx, "telegram_list_chats", nil); err != nil {
+		t.Fatal(err)
+	}
+	yes := func(context.Context, string, json.RawMessage) bool { return true }
+	for _, chat := range []string{"c2", "@example_group", " c2", "c2\n", "@Example_Group", " @example_group"} {
+		args, _ := json.Marshal(map[string]any{"chat": chat, "id": 12, "emoji": "👍"})
+		if res := r.Call(ctx, "telegram_react", args, yes); !res.IsError {
+			t.Errorf("react in %q went through a rule that denies c2: %+v", chat, res)
+		}
+		args, _ = json.Marshal(map[string]any{"chat": "u1", "ids": []int{11}, "to": chat})
+		if res := r.Call(ctx, "telegram_forward", args, yes); !res.IsError {
+			t.Errorf("forward to %q went through a rule that denies c2: %+v", chat, res)
+		}
+	}
+	// The gate looks a field up by its exact name; encoding/json would fill it from "Chat" or "TO" too.
+	for _, args := range []string{
+		`{"Chat":"c2","id":12,"emoji":"👍"}`,
+		`{"chat":"u1","CHAT":"c2","id":12,"emoji":"👍"}`,
+		`{"chat":"u1","ids":[11],"To":"c2"}`,
+	} {
+		name := "telegram_react"
+		if strings.Contains(args, "ids") {
+			name = "telegram_forward"
+		}
+		if res := r.Call(ctx, name, json.RawMessage(args), yes); !res.IsError {
+			t.Errorf("%s %s went through a rule that denies c2: %+v", name, args, res)
+		}
+	}
+	if got := f.written(); len(got) != 0 {
+		t.Fatalf("a denied write reached Telegram: %q", got)
+	}
+}
+
 // During a flood wait a write the user allowed sends nothing either, and says how long to wait.
 func TestCLIWriteDuringAFloodWait(t *testing.T) {
 	c, f, ctx := archiveAccount(t)
