@@ -1,6 +1,7 @@
 # Pull requests: scripts/ci.sh (manifests, gofmt, vet, tests, every platform builds, both indexes agree).
 # main: the same, then release the extensions whose version changed in the push, update both indexes and commit them.
 # A manual run releases the extensions named (a version merged earlier and held back until now).
+# Both jobs run on GitHub-hosted ubuntu-latest (a public repository: no self-hosted runner, no runner variable).
 # When Actions can't run here, run scripts/ci.sh on your machine and say so in the pull request.
 name: ci
 on:
@@ -20,7 +21,7 @@ concurrency:
 jobs:
   check:
     if: github.event_name == 'pull_request'
-    runs-on: ${{ github.repository_owner == 'nwverse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -29,7 +30,7 @@ jobs:
       - run: scripts/ci.sh
   release:
     if: github.event_name != 'pull_request'
-    runs-on: ${{ github.repository_owner == 'nwverse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -39,7 +40,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      # scripts/release.sh uses gh, which a self-hosted runner may not have: then a fixed release of GitHub's own,
+      # scripts/release.sh uses gh; ubuntu-latest has it. Should a runner not: a fixed release of GitHub's own,
       # checked against the sha256 written here, unpacked in the job's temporary directory (no sudo, nothing kept).
       - name: gh
         run: |
