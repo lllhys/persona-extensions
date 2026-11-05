@@ -54,6 +54,9 @@ func TestPersonOnly(t *testing.T) {
 		"/usr/bin/ssh host rm -rf /x", "sudo ssh host rm -rf /x", "ssh host ssh host2 rm -rf /y",
 		// after ssh every word is a possible program: a path whose name is a floor program errs toward asking
 		"ssh host ls /tmp/rm",
+		// other command wrappers: eval runs its words in this shell, autossh execs ssh, busybox runs its applet
+		"eval rm -rf /x", "eval git push --force", "autossh -M 0 host rm -rf /x",
+		"busybox rm -rf /x", "busybox sh -c 'rm -rf /x'",
 		// a /tmp/ or /dev/ path that .. takes out of it is a kept file
 		"echo x > /tmp/../etc/hosts", "go test > /tmp/a/../../home/u/.bashrc 2>&1", "tee /tmp/../home/u/.profile",
 		"ls &> /dev/../etc/motd", "echo x > /tmp/\\.\\./etc/hosts", "echo x > /tmp/\\\n../etc/hosts",
@@ -98,6 +101,8 @@ func TestPersonOnly(t *testing.T) {
 		"ssh host ls -la", "ssh host git status", "ssh host kubectl get pods", "ssh -p 2222 user@host docker ps",
 		"ssh user@host", "ssh host git push origin feat/x", "ssh host kubectl apply -f app.yaml",
 		"ssh -L 8080:localhost:80 -N host", "ssh host 'echo chmod 755 in text'",
+		// benign words after the other wrappers still go through (eval "$(ssh-agent)" is a common shell init line)
+		"eval echo hi", "busybox ls -la", "busybox true", "autossh -M 0 host", `eval "$(ssh-agent -s)"`,
 	}
 	for _, c := range goes {
 		if why := personOnly(c); why != "" {
