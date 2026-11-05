@@ -24,6 +24,7 @@ type pageState struct {
 
 const (
 	openingMost = 12000 // characters of a first post in the page
+	openingRoom = 200   // its text items: every <pre> is one more, and a view takes 300 in all
 	chunkMost   = 1800  // characters of one text item (the apps take 2000)
 	repliesShow = 10
 	replyMost   = 1200
@@ -184,7 +185,7 @@ func (p *plugin) topicPage(ctx context.Context, d draw, st pageState) pluginkit.
 	head := []pluginkit.Item{{Type: "text", Text: topicMeta(t, d.loc), Style: "caption"}}
 	if op, ok := t.opening(); ok {
 		more := pluginkit.Item{Type: "text", Text: "正文太长，后面的在网页里看", Style: "caption"}
-		left := openingMost
+		left, room := openingMost, openingRoom
 		for _, sg := range postText(op.Cooked) {
 			if left <= 0 {
 				head = append(head, more)
@@ -195,7 +196,13 @@ func (p *plugin) topicPage(ctx context.Context, d draw, st pageState) pluginkit.
 			if sg.Code {
 				style = "code"
 			}
-			for _, c := range chunks(clip(sg.Text, left), chunkMost) {
+			cs := chunks(clip(sg.Text, left), chunkMost)
+			if len(cs) > room {
+				head = append(head, more)
+				break
+			}
+			room -= len(cs)
+			for _, c := range cs {
 				head = append(head, pluginkit.Item{Type: "text", Text: c, Style: style})
 			}
 			if n > left {
