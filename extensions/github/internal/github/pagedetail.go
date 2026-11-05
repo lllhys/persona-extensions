@@ -24,8 +24,22 @@ type Detail struct {
 	Assignees []string
 	Created   time.Time
 	Updated   time.Time
+	Milestone string
+	Locked    bool
 	// PRs only.
 	Head, Base string
+	HeadSHA    string
+	HeadRepo   string // the fork the head is in, when not this repository
+	Adds, Dels int
+	Commits    int
+	Files      int
+	// Mergeable: "" unknown yet (GitHub is still working it out), "yes", "conflict"; MergeState is GitHub's
+	// mergeable_state (clean, blocked, behind, dirty, unstable, draft, has_hooks, unknown).
+	Mergeable  string
+	MergeState string
+	MergedBy   string
+	MergedAt   time.Time
+	Teams      []string // teams asked to review
 	Checks     CheckSummary
 	Reviews    []Review // the latest review of each reviewer, and those asked who have not answered
 	// Comments are the newest few, oldest first; CommentCount is all of them.
@@ -70,13 +84,20 @@ func (c *Connector) Detail(ctx context.Context, repo string, number int) (Detail
 		Comments  int       `json:"comments"`
 		UpdatedAt time.Time `json:"updated_at"`
 		Assignees []person  `json:"assignees"`
+		Milestone *struct {
+			Title string `json:"title"`
+		} `json:"milestone"`
 	}
 	base := fmt.Sprintf("/repos/%s/issues/%d", repo, number)
 	if err := c.cachedGet(ctx, base, &it); err != nil {
 		return Detail{}, err
 	}
 	d := Detail{Repo: repo, Number: number, PR: it.PullRequest != nil, Title: it.Title, State: it.State, Author: it.User.Login,
-		Avatar: it.User.AvatarURL, Body: it.Body, URL: it.HTMLURL, Created: it.CreatedAt, Updated: it.UpdatedAt, CommentCount: it.Comments}
+		Avatar: it.User.AvatarURL, Body: it.Body, URL: it.HTMLURL, Created: it.CreatedAt, Updated: it.UpdatedAt, CommentCount: it.Comments,
+		Locked: it.Locked}
+	if it.Milestone != nil {
+		d.Milestone = it.Milestone.Title
+	}
 	for _, l := range it.Labels {
 		d.Labels = append(d.Labels, l.Name)
 	}
@@ -110,11 +131,38 @@ func (c *Connector) pullDetail(ctx context.Context, d *Detail) error {
 	var pr struct {
 		threadPull
 		RequestedReviewers []person `json:"requested_reviewers"`
+		RequestedTeams     []struct {
+			Name string `json:"name"`
+		} `json:"requested_teams"`
+		Additions      int        `json:"additions"`
+		Deletions      int        `json:"deletions"`
+		CommitCount    int        `json:"commits"`
+		ChangedFiles   int        `json:"changed_files"`
+		Mergeable      *bool      `json:"mergeable"`
+		MergeableState string     `json:"mergeable_state"`
+		MergedBy       *person    `json:"merged_by"`
+		MergedAt       *time.Time `json:"merged_at"`
 	}
 	if err := c.cachedGet(ctx, fmt.Sprintf("/repos/%s/pulls/%d", d.Repo, d.Number), &pr); err != nil {
 		return err
 	}
-	d.Head, d.Base = pr.Head.Ref, pr.Base.Ref
+	d.Head, d.Base, d.HeadSHA = pr.Head.Ref, pr.Base.Ref, pr.Head.SHA
+	d.Adds, d.Dels, d.Commits, d.Files, d.MergeState = pr.Additions, pr.Deletions, pr.CommitCount, pr.ChangedFiles, pr.MergeableState
+	if pr.Head.Repo != nil && pr.Head.Repo.FullName != d.Repo {
+		d.HeadRepo = pr.Head.Repo.FullName
+	}
+	if pr.Mergeable != nil {
+		d.Mergeable = map[bool]string{true: "yes", false: "conflict"}[*pr.Mergeable]
+	}
+	if pr.MergedBy != nil {
+		d.MergedBy = pr.MergedBy.Login
+	}
+	if pr.MergedAt != nil {
+		d.MergedAt = *pr.MergedAt
+	}
+	for _, t := range pr.RequestedTeams {
+		d.Teams = append(d.Teams, t.Name)
+	}
 	switch {
 	case pr.Merged:
 		d.State = "merged"

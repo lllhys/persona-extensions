@@ -55,6 +55,10 @@ func fakeGitHub(t *testing.T) (*httptest.Server, map[string]int) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		if r.Method != http.MethodGet && r.URL.Path != "/graphql" {
+			fakeWrite(w, r)
+			return
+		}
 		at := now.Add(-2 * time.Hour).Format(time.RFC3339)
 		switch r.URL.Path {
 		case "/user":
@@ -65,6 +69,10 @@ func fakeGitHub(t *testing.T) (*httptest.Server, map[string]int) {
 				Variables struct{ Q string } `json:"variables"`
 			}
 			_ = json.Unmarshal(body, &q)
+			if strings.Contains(string(body), "reviewThreads") {
+				_, _ = w.Write([]byte(`{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolved":true,"isOutdated":false,"comments":{"nodes":[{"databaseId":100}]}}]}}}}}`))
+				return
+			}
 			if strings.Contains(q.Variables.Q, "review-requested") {
 				_, _ = w.Write([]byte(`{"data":{"search":{"nodes":[
 {"number":12,"title":"Add the cache","url":"https://github.com/example-org/example-repo/pull/12","updatedAt":"` + at + `","isDraft":false,"reviewDecision":"REVIEW_REQUIRED",
@@ -97,14 +105,18 @@ func fakeGitHub(t *testing.T) (*httptest.Server, map[string]int) {
 "body":"Caches **answers**.","html_url":"https://github.com/example-org/example-repo/pull/12","created_at":"` + at + `","updated_at":"` + at + `",
 "labels":[{"name":"perf"}],"comments":2,"pull_request":{}}`))
 		case "/repos/example-org/example-repo/pulls/12":
-			_, _ = w.Write([]byte(`{"draft":false,"merged":false,"head":{"ref":"cache","sha":"abc123"},"base":{"ref":"main"},"requested_reviewers":[{"login":"octo"}]}`))
+			_, _ = w.Write([]byte(`{"draft":false,"merged":false,"head":{"ref":"cache","sha":"abc123"},"base":{"ref":"main"},"requested_reviewers":[{"login":"octo"}],
+"additions":2,"deletions":1,"commits":1,"changed_files":2,"mergeable":true,"mergeable_state":"clean"}`))
 		case "/repos/example-org/example-repo/pulls/12/reviews":
 			_, _ = w.Write([]byte(`[{"user":{"login":"dave"},"state":"APPROVED","submitted_at":"` + at + `"},{"user":{"login":"dave"},"state":"COMMENTED","submitted_at":"` + at + `"}]`))
 		case "/repos/example-org/example-repo/commits/abc123/check-runs":
-			_, _ = w.Write([]byte(`{"check_runs":[{"name":"test","status":"completed","conclusion":"success"},{"name":"lint","status":"completed","conclusion":"failure"},{"name":"e2e","status":"in_progress"}]}`))
+			_, _ = w.Write([]byte(`{"check_runs":[{"name":"test","status":"completed","conclusion":"success"},{"id":31,"name":"lint","status":"completed","conclusion":"failure","app":{"slug":"github-actions"}},{"name":"e2e","status":"in_progress"}]}`))
 		case "/repos/example-org/example-repo/issues/12/comments":
 			_, _ = w.Write([]byte(`[{"user":{"login":"dave"},"body":"Looks good.","created_at":"` + at + `"},{"user":{"login":"alice"},"body":"Thanks!","created_at":"` + at + `"}]`))
 		default:
+			if fakeMore(w, r, at) {
+				return
+			}
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"message":"Not Found"}`))
 		}
@@ -160,12 +172,16 @@ func TestEveryTabDraws(t *testing.T) {
 		want []string
 	}{
 		{github.TabReview, []string{"Add the cache", "CI 通过", "CI 失败", "example-org/example-repo#12", `"avatar"`, "等你 review 的 PR · 2"}},
-		{github.TabMine, []string{"Crash on start", "example-org/example-repo#7"}},          // GraphQL refused: REST's search
-		{github.TabInvolved, []string{"Crash on start", "指派给你"}},                            // the same one assigned and mentioning: once
-		{github.TabNotify, []string{"Add the cache", "请你 review", "v1.2.0", "关注的仓库", "未读"}}, // a release opens on GitHub
-		{github.TabActivity, []string{"alice 推送了 3 个提交到 main", "bob 合并了 PR：Tidy up"}},
+		{github.TabMine, []string{"Crash on start", "example-org/example-repo#7"}},                      // GraphQL refused: REST's search
+		{github.TabInvolved, []string{"Crash on start", "指派给你"}},                                        // the same one assigned and mentioning: once
+		{github.TabNotify, []string{"Add the cache", "请你 review", "v1.2.0", "关注的仓库", "未读", `"filter"`}}, // a release opens on GitHub; a state of before
+		{github.TabActivity, []string{"alice 推送了 3 个提交到 main", "bob 合并了 PR：Tidy up", "关注的动态"}},
 	} {
-		v, err := p.Render(ctx, req(3, state{Tab: tc.tab}, "", nil))
+		s := state{Tab: tc.tab}
+		if tc.tab == github.TabActivity { // a choice of the notifications'
+			s = state{Tab: github.TabInvolved, F: github.TabActivity}
+		}
+		v, err := p.Render(ctx, req(3, s, "", nil))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -179,7 +195,7 @@ func TestEveryTabDraws(t *testing.T) {
 	if v, _ := p.Render(ctx, req(3, state{Tab: github.TabInvolved}, "", nil)); strings.Count(checked(t, v), `"title":"Crash on start"`) != 1 {
 		t.Error("an issue both assigned and mentioning is listed twice")
 	}
-	if v, _ := p.Render(ctx, req(3, state{Tab: github.TabActivity}, "", nil)); strings.Contains(checked(t, v), "Gollum") {
+	if v, _ := p.Render(ctx, req(3, state{Tab: github.TabInvolved, F: github.TabActivity}, "", nil)); strings.Contains(checked(t, v), "Gollum") {
 		t.Error("an event kind without a line is listed")
 	}
 }
@@ -195,10 +211,10 @@ func TestSearchAndTabsAndCache(t *testing.T) {
 	if !strings.Contains(got, "Fix the build") || strings.Contains(got, "Add the cache") || !strings.Contains(got, "「build」1 / 2") {
 		t.Fatalf("search: %s", got)
 	}
-	res, _ = p.Action(ctx, req(3, state{Q: "build"}, "tab", map[string]string{"tab": github.TabNotify}))
+	res, _ = p.Action(ctx, req(3, state{Q: "build"}, "tab", map[string]string{"tab": github.TabMine}))
 	var s state
 	_ = json.Unmarshal([]byte(res.View.State), &s)
-	if s.Tab != github.TabNotify || s.Q != "" {
+	if s.Tab != github.TabMine || s.Q != "" {
 		t.Fatalf("a tab starts without the search: %+v", s)
 	}
 	before := seen["/graphql"]
@@ -229,7 +245,7 @@ func TestDetail(t *testing.T) {
 	d, _ := p.Render(ctx, req(3, s, "", nil))
 	got := checked(t, d)
 	for _, w := range []string{"Add the cache", "开着", "cache → main", "perf", `"label":"通过","value":"1"`, `"label":"失败","value":"1"`,
-		"lint", "dave", "批准了", "等 TA review", "Caches **answers**.", "Looks good.", "共 2 条", "https://github.com/example-org/example-repo/pull/12",
+		"lint", "dave", "批准了", "等 TA review", "Caches **answers**.", "Looks good.", "讨论 · ", "改动 2", "提交 1", "CI ✕1", "CI 失败 · 1 项", "重跑失败的", "可以合并", "https://github.com/example-org/example-repo/pull/12",
 		"github-example-org-example-repo-12"} {
 		if !strings.Contains(got, w) {
 			t.Errorf("no %q in\n%s", w, got)

@@ -38,6 +38,9 @@ const (
 var repoName = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 
 // validRepo is "owner/name" and nothing that changes the API path ("..").
+// ValidRepo says whether r is owner/name.
+func ValidRepo(r string) bool { return validRepo(r) }
+
 func validRepo(r string) bool {
 	owner, name, _ := strings.Cut(r, "/")
 	return repoName.MatchString(r) && owner != "." && owner != ".." && name != "." && name != ".."

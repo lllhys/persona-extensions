@@ -30,6 +30,8 @@ const (
 	etagKeep        = 400              // answers kept for If-None-Match
 	hunkLines       = 6                // lines of the diff shown above a comment on a line
 	checkLogTail    = 8 << 10          // the end of a failed check's log
+	pageLogTail     = 64 << 10         // the end of a failed check's log kept (the page shows what is around its error)
+	logRead         = 3 * time.Minute  // how long a log is read for
 )
 
 // etagCache keeps GitHub's answers by path with their ETag, the least recently used going first.
@@ -37,6 +39,8 @@ type etagCache struct {
 	mu   sync.Mutex
 	m    map[string]*etagEntry
 	logs map[int64]string // failed checks' log tails, by job id (a finished job's log does not change)
+	// reading: the logs being read for the page, by job id; closed once read.
+	reading map[int64]chan struct{}
 	// avatars: a login's avatar URL, as the lists gave it, for Media.
 	avatars map[string]string
 }
@@ -161,8 +165,11 @@ type threadPull struct {
 	Draft  bool `json:"draft"`
 	Merged bool `json:"merged"`
 	Head   struct {
-		Ref string `json:"ref"`
-		SHA string `json:"sha"`
+		Ref  string `json:"ref"`
+		SHA  string `json:"sha"`
+		Repo *struct {
+			FullName string `json:"full_name"`
+		} `json:"repo"`
 	} `json:"head"`
 	Base struct {
 		Ref string `json:"ref"`
@@ -390,27 +397,75 @@ func (c *Connector) checkMessages(ctx context.Context, repo, sha string, opened 
 	return out, nil
 }
 
-// checkLog is the end of a failed job's log, read once per job; "" when it cannot be read.
+// checkLog is the end of a failed job's log (checkLogTail of it), read once per job; "" when it cannot be read.
 func (c *Connector) checkLog(ctx context.Context, repo string, job int64) string {
+	log, _ := c.jobLog(ctx, repo, job)
+	return tail(log, checkLogTail)
+}
+
+// jobLog is the end of a finished job's log (pageLogTail of it), read once per job.
+func (c *Connector) jobLog(ctx context.Context, repo string, job int64) (string, bool) {
 	e := &c.etags
 	e.mu.Lock()
 	log, ok := e.logs[job]
 	e.mu.Unlock()
 	if ok {
-		return log
+		return log, true
 	}
 	raw, err := c.raw(ctx, fmt.Sprintf("/repos/%s/actions/jobs/%d/logs", repo, job))
 	if err != nil {
-		return ""
+		return "", false
 	}
-	log = tail(raw, checkLogTail)
+	log = tail(raw, pageLogTail)
 	e.mu.Lock()
 	if e.logs == nil || len(e.logs) > etagKeep {
 		e.logs = map[int64]string{}
 	}
 	e.logs[job] = log
 	e.mu.Unlock()
-	return log
+	return log, true
+}
+
+// JobLog is a finished job's log end for the page, waiting for it at most wait: a log comes from GitHub's blob
+// storage, which can take a minute. pending says it is still being read; done is called once it has been (the page
+// then draws again).
+func (c *Connector) JobLog(repo string, job int64, wait time.Duration, done func()) (log string, pending bool) {
+	e := &c.etags
+	e.mu.Lock()
+	if log, ok := e.logs[job]; ok {
+		e.mu.Unlock()
+		return log, false
+	}
+	ch, reading := e.reading[job]
+	if !reading {
+		if e.reading == nil {
+			e.reading = map[int64]chan struct{}{}
+		}
+		ch = make(chan struct{})
+		e.reading[job] = ch
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), logRead)
+			defer cancel()
+			_, ok := c.jobLog(ctx, repo, job)
+			e.mu.Lock()
+			delete(e.reading, job)
+			e.mu.Unlock()
+			close(ch)
+			if ok && done != nil {
+				done()
+			}
+		}()
+	}
+	e.mu.Unlock()
+	select {
+	case <-ch:
+	case <-time.After(wait):
+		return "", true
+	}
+	e.mu.Lock()
+	log = e.logs[job]
+	e.mu.Unlock()
+	return log, false
 }
 
 func checkState(r threadCheckRun) string {

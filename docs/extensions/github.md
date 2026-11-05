@@ -2,14 +2,14 @@
 
 [Documentation](../README.md) · [Source](../../extensions/github/)
 
-This extension brings GitHub into Persona. It is the GitHub connector that Persona's hub used to have built in, moved out of the hub, plus a page of what needs you on GitHub. The connector id is still `github`. A hub that had its own connector therefore keeps its sign-in, inbox items, knowledge-base conversations, connector switches and inbox options when the extension takes over. While the extension is on, its connector stands in for the hub's own. When the extension is switched off or removed, the hub's own connector comes back.
+This extension brings GitHub into Persona. It is the GitHub connector that Persona's hub used to have built in, moved out of the hub, plus a GitHub page: what needs you, your repositories with their code, and full PR and issue review. The connector id is still `github`. A hub that had its own connector therefore keeps its sign-in, inbox items, knowledge-base conversations, connector switches and inbox options when the extension takes over. While the extension is on, its connector stands in for the hub's own. When the extension is switched off or removed, the hub's own connector comes back.
 
 | Extension point | Contribution | Default | Behavior |
 | --- | --- | --- | --- |
 | `connectors` | `github` | on | Inbox, knowledge-base archive, assistant tools, gated writes, thread pages and sign-in; see [the connector](#the-connector). |
-| `ui` | `github` (`nav_page`) | off | The GitHub page in the apps' navigation; see [the page](#the-page). Switch it on under Settings → Extensions → GitHub. |
+| `ui` | `github` (`nav_page`) | on | The GitHub page in the apps' navigation; see [the page](#the-page). It can be switched off under Settings → Extensions → GitHub. |
 
-Switching the extension on turns on what the hub already did before (the connector). The page is new, so it starts off.
+Switching the extension on turns on what the hub already did before (the connector) and the page. Version 0.1.0 installed the page switched off; a hub that installed 0.1.0 keeps that choice after upgrading, so switch it on there by hand.
 
 ## The connector
 
@@ -30,34 +30,40 @@ Switching the extension on turns on what the hub already did before (the connect
 
 ## The page
 
-The page reads with the connector's own sign-in, so it shows only what the connector may read. It never writes. It has five tabs:
+The page reads with the connector's own sign-in, so it shows only what the connector may read. Its layout is the one both code-hosting extensions share (nwverse/persona#2951). The list has four tabs; it opens on 待我 review when something waits for you, else on 我提的:
 
 | Tab | What it lists |
 | --- | --- |
-| 待 review | Open PRs requesting your review (`is:open is:pr review-requested:@me archived:false`), with CI rollup and review decision. |
-| 我的 PR | Your open PRs, with CI rollup (passed, failed, running), review decision (approved, changes requested) and draft state. |
-| 和我有关 | Open issues and PRs assigned to you or mentioning you, listed once each. |
-| 通知 | Unread notifications with their reason. When nothing is unread, the latest notifications are shown. |
-| 动态 | Recent activity from repositories and people you follow (`received_events`): pushes, PRs opened or merged, issues, comments, releases, new branches and tags, stars and forks. |
+| 待我 review | Open PRs requesting your review (`is:open is:pr review-requested:@me archived:false`), with CI rollup and review decision. |
+| 我提的 | Your open PRs, with CI rollup (passed, failed, running), review decision (approved, changes requested) and draft state. |
+| 我参与的 | Open issues and PRs assigned to you or mentioning you, listed once each. Its filter also has 通知 (unread notifications with their reason; the latest ones when nothing is unread) and 关注的动态 (recent activity from repositories and people you follow, `received_events`). |
+| 仓库 | Repositories: recently pushed, your own, starred, or one of your organizations' (the filter); the search box searches all of GitHub. |
 
-PR lists use one GraphQL search for CI and reviews. If GraphQL fails, the page uses REST search without those badges. Each list is cached for a minute; the refresh button reads it again. When the hour's rate limit is nearly used up, the page shows what it read before and keeps the remaining requests for the inbox. A search box filters the current tab by title, repository and author.
+Every row opens something: a PR or issue opens its page, a repository opens the repository, anything else opens on GitHub. A GitHub link pasted into the search box opens what it names.
 
-A PR or issue opens on top of the list with:
+**A repository** has its description, stars, forks, language and default branch, then five tabs: 代码 (the branch filter with up to 20 branches, the directory with folders first, moved through in place so the navigation stack stays shallow, and the README), PR and Issue (open or closed, searchable, 30 a page), 提交 (the branch's history) and 分支 (all branches, searchable; a tap shows the code at it). A file opens with its content: Markdown drawn (or its source), code in fenced blocks with its language, 400 lines a page. Binary files and files over 1 MB are not shown.
 
-- its state, branches, labels and assignees;
-- the head commit's checks (counts, and the names of failed ones);
-- each reviewer's latest review, and requested reviewers who have not answered;
-- the description and the newest five comments;
-- a link to GitHub, and the name of its knowledge-base conversation.
+**A PR** has four tabs:
 
-Anything else opens on GitHub. The navigation entry's badge counts PRs waiting for your review. It is refreshed every ten minutes while the page is on.
+- 概览: state, author, branches (with the fork), files, additions, deletions, commits, whether it can be merged and why not, labels, assignees and milestone. When checks fail, the failed ones come first with the error lines of the first failed Actions log and a button to run the failed jobs again. Then the description, each reviewer's latest review and the requested reviewers and teams, the checks' counts, the whole conversation (comments, reviews with their verdict, comments on lines opening the file, commits pushed and timeline events; the latest 30, earlier ones on 更早的), and the buttons to comment, review and merge.
+- 改动: the changed files (100 a page, up to GitHub's 3,000), each with its status, additions, deletions and comment count. A file opens its diff: a section per hunk, each line with its number (the new file's; a removed line the old file's), and every conversation on a line right under that line, with its replies, whether it is resolved (GraphQL) and a reply button. Conversations on lines the PR no longer has come at the end with the code they were on. 600 lines a page.
+- 提交: its commits (GitHub lists up to 250).
+- CI: the head commit's check runs and commit statuses, failed first; the tab's title counts the failed ones. A check run opens with its annotations, its steps that did not pass, the error lines picked from its log and the log up to its last error. A log can take a minute to come from GitHub's storage: the page waits a few seconds, then shows that it is reading and draws again when the log has come.
 
-The page is a declarative view. Apps from before UI version 3 get rows instead of the segmented tabs, a search field instead of the search box, and a back button.
+**An issue** has the same overview without the PR's parts.
+
+**Writes.** From the page you can comment, comment on a line, reply to a conversation, submit a review (comment, approve, request changes), merge (squash, merge commit, rebase) and run failed Actions jobs again. Each one is filled in, then previewed word for word with where it goes and who will see it, and sent only with the preview's button, which the app asks about once more. A comment on a line is checked against the diff first. A merge is sent with the head commit the preview showed, so a push after the preview stops it. Writes are at most 2,000 characters (a field's limit). These are the user's own taps; the assistant's writes still go through the hub's gate.
+
+**Reading.** Every list is read with `If-None-Match`, so what has not changed costs nothing of the hour's requests. The five tabs are cached for a minute; the refresh button reads again. When the hour's rate limit is nearly used up, the tabs show what they read before and keep the remaining requests for the inbox.
+
+**Rendering.** The page uses the declarative components the hub has today: code and diffs are fenced Markdown blocks (```` ```diff ````, ```` ```go ````), files and comments are rows. Descriptions, comments and READMEs are cleaned to the Markdown the hub accepts: images become links, relative links resolve against the repository, HTML and reference links are rewritten, and a comment the hub would still refuse is shown as text. When the hub has the code-hosting components of UI version 4 (nwverse/persona#2951), the diff, code, file tree and conversations will use them, and older apps keep this rendering.
+
+Apps from before UI version 3 get rows instead of the segmented tabs, a search field instead of the search box, plain text instead of Markdown and a back button.
 
 Limits of declarative views:
 
 - An extension view cannot open a Persona conversation or an inbox item. The detail page names the knowledge-base conversation instead.
-- There are no tabs beyond the five-choice segmented control.
+- Lines of a diff cannot be tapped: a comment on a line is written with its line number.
 - Images are limited to avatars.
 
 ## Configuration

@@ -1,5 +1,5 @@
-// The GitHub extension (nwverse/persona-extensions#26): the GitHub connector Persona's hub had built in, moved here, and a
-// page of what needs the user on GitHub.
+// The GitHub extension (nwverse/persona-extensions#26): the GitHub connector Persona's hub had built in, moved here, and the
+// GitHub page (what needs the user, their repositories and code, PR / issue review).
 //
 //   - connectors (id github): the inbox (review requests, @s, assignments, comments and reviews on the user's PRs
 //     and issues, failing CI), the knowledge base's archive of the PRs and issues the user is part of (chats

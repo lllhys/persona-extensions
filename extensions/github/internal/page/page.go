@@ -1,12 +1,16 @@
-// Package page is the extension's GitHub page (ui contribution "github", a nav_page): what needs the user on GitHub
-// in five tabs — PRs waiting for their review, their own PRs with CI and reviews, what is assigned to them or mentions
-// them, the notifications, and the activity of what they follow — and a PR or issue opened on top of it. It reads
-// with the connector's own token, so it shows only what the connector may read; nothing is written from here.
+// Package page is the extension's GitHub page (ui contribution "github", a nav_page), laid out as nwverse/persona#2951
+// says for both code-hosting extensions: what needs the user on GitHub in four tabs (PRs waiting for their review,
+// their own PRs, what they are part of — assigned, mentioned, the notifications, the activity they follow — and their
+// repositories), a repository with its code, PRs, issues, commits and branches (repo.go), and a PR or issue in full
+// — its overview and conversation, its files and diffs with the conversations on their lines, its commits, its checks
+// and their logs (detail.go, diff.go) — with the writes the user makes from there, each previewed and confirmed first
+// (write.go). It reads with the connector's own token, so it shows only what the connector may read.
 package page
 
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,25 +39,54 @@ type Page struct {
 // New is the page of c.
 func New(c *github.Connector) *Page { return &Page{c: c, now: time.Now} }
 
-// state is the page's: the tab, the search, and (a page on top) the PR or issue open.
+// state is the page's: which page it is (v), and what it shows. A state without v is the list, or (n set) a PR or
+// issue: the state the pages before the repository side wrote.
 type state struct {
-	Tab    string `json:"t,omitempty"`
+	V      string `json:"v,omitempty"` // "" (the list, or a PR / issue), repo, file, diff, check, write
+	Tab    string `json:"t,omitempty"` // the list's, a repository's, a PR's tab
 	Q      string `json:"q,omitempty"`
+	F      string `json:"f,omitempty"` // the filter: which repositories, notifications or activity; a repository's PRs: closed
 	Repo   string `json:"r,omitempty"`
 	Number int    `json:"n,omitempty"`
+	Ref    string `json:"ref,omitempty"`
+	Path   string `json:"p,omitempty"`
+	Page   int    `json:"pg,omitempty"` // pages of a list read so far ("加载更多"), 1 when 0
+	PR     bool   `json:"pr,omitempty"` // items: PRs, not issues
+	ID     int64  `json:"id,omitempty"` // check: the check run; write: the conversation answered
+	Src    bool   `json:"src,omitempty"`
+	// A write being made (v write): what (comment, review, line, reply, merge), and its words and choices; Preview
+	// once the user asked to see it before sending.
+	W       string `json:"w,omitempty"`
+	Body    string `json:"b,omitempty"`
+	Event   string `json:"e,omitempty"` // a review's event, a merge's method
+	Line    int    `json:"l,omitempty"`
+	Side    string `json:"s,omitempty"`
+	Preview bool   `json:"pv,omitempty"`
 }
+
+func (s state) page() int { return max(s.Page, 1) }
 
 type tab struct{ id, short, title, empty string }
 
 var tabs = []tab{
-	{github.TabReview, "待 review", "等你 review 的 PR", "没有等你 review 的 PR"},
-	{github.TabMine, "我的 PR", "你开着的 PR", "你没有开着的 PR"},
-	{github.TabInvolved, "和我有关", "指派给你、提到你的", "没有指派给你、提到你的 issue 和 PR"},
-	{github.TabNotify, "通知", "GitHub 通知", "没有通知"},
-	{github.TabActivity, "动态", "你关注的仓库和人的动态", "最近没有动态"},
+	{github.TabReview, "待我 review", "等你 review 的 PR", "没有等你 review 的 PR"},
+	{github.TabMine, "我提的", "你开着的 PR", "你没有开着的 PR"},
+	{github.TabInvolved, "我参与的", "指派给你、提到你的", "没有指派给你、提到你的 issue 和 PR"},
+	{tabRepos, "仓库", "仓库", "没有仓库"},
 }
 
+// tabRepos is the list's repositories. The notifications and the activity (tabs of their own before) are choices
+// of 我参与的's filter.
+const tabRepos = "repos"
+
+// involvedLists are 我参与的's filter.
+var involvedLists = []wire.Choice{{Value: github.TabInvolved, Title: "指派、提到我的"}, {Value: github.TabNotify, Title: "通知"},
+	{Value: github.TabActivity, Title: "关注的动态"}}
+
 func tabOf(id string) tab {
+	if id == github.TabNotify || id == github.TabActivity { // the tabs before
+		id = github.TabInvolved
+	}
 	for _, t := range tabs {
 		if t.id == id {
 			return t
@@ -73,44 +106,157 @@ func (p *Page) Render(ctx context.Context, r *ext.UIRequest) (*wire.View, error)
 	var s state
 	_ = r.DecodeState(&s)
 	p.keepHub(r.Hub)
-	if s.Number > 0 {
-		return p.detail(ctx, r, s, false), nil
-	}
-	return p.list(ctx, r, s, false), nil
+	return fit(p.view(ctx, r, s, false)), nil
 }
+
+// view is the page s says.
+func (p *Page) view(ctx context.Context, r *ext.UIRequest, s state, fresh bool) *wire.View {
+	if empty, ok := p.unavailable(ctx); ok && s.V != "" {
+		return &wire.View{Title: "GitHub", State: ext.EncodeState(s), Sections: []wire.Section{{Items: []wire.Component{empty}}}}
+	}
+	switch s.V {
+	case viewRepo:
+		return p.repo(ctx, r, s)
+	case viewFile:
+		return p.file(ctx, r, s)
+	case viewDiff:
+		return p.diff(ctx, r, s)
+	case viewCheck:
+		return p.check(ctx, r, s)
+	case viewWrite:
+		return p.write(ctx, r, s, "")
+	}
+	if s.Number > 0 {
+		return p.detail(ctx, r, s, fresh)
+	}
+	return p.list(ctx, r, s, fresh)
+}
+
+// The pages besides the list and a PR / issue.
+const (
+	viewRepo  = "repo"
+	viewDiff  = "diff"
+	viewCheck = "check"
+	viewWrite = "write"
+)
 
 // Action answers a tap.
 func (p *Page) Action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult, error) {
+	res, err := p.act(ctx, r)
+	if res != nil {
+		res.View = fit(res.View)
+	}
+	return res, err
+}
+
+func (p *Page) act(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult, error) {
 	var s state
 	_ = r.DecodeState(&s)
 	p.keepHub(r.Hub)
 	kind, arg, _ := strings.Cut(r.Action, ":")
+	again := func(s state) (*wire.ActionResult, error) {
+		return &wire.ActionResult{View: p.view(ctx, r, s, false)}, nil
+	}
 	switch kind {
 	case "tab":
 		if arg == "" { // the segmented control: the choice is in the values
 			arg = r.Values["tab"]
 		}
-		s.Tab, s.Q = tabOf(arg).id, ""
-		return &wire.ActionResult{View: p.list(ctx, r, s, false)}, nil
+		if s.V != "" || s.Number > 0 { // a repository's, a PR's or an issue's own tabs
+			s.Tab, s.Page, s.Q, s.F = arg, 0, "", ""
+			return again(s)
+		}
+		s.Tab, s.Q, s.F, s.Page = tabOf(arg).id, "", "", 0
+		return again(s)
+	case "filter":
+		s.F, s.Page = r.Values["f"], 0
+		return again(s)
+	case "ref": // the repository's branch: from the filter, or a row of its 分支 (ref:<i>)
+		ref := r.Values["ref"]
+		if arg != "" {
+			if b, ok := p.branchAt(ctx, s, arg); ok {
+				ref = b
+			}
+		}
+		s.Ref, s.Path, s.Tab, s.Page = ref, "", tabCode, 0
+		return again(s)
 	case "search":
-		s.Q = strings.TrimSpace(r.Values["q"])
-		return &wire.ActionResult{View: p.list(ctx, r, s, false)}, nil
+		q := strings.TrimSpace(r.Values["q"])
+		if s.V == "" && s.Number == 0 {
+			if to, title, ok := p.link(q); ok { // a PR's, an issue's or a repository's link (or owner/repo#12): open it
+				return &wire.ActionResult{View: p.view(ctx, r, s, false), Push: &wire.Push{State: ext.EncodeState(to), Title: title}}, nil
+			}
+		}
+		s.Q, s.Page = q, 0
+		return again(s)
+	case "rerun":
+		return p.rerun(ctx, r, s)
+	case "more":
+		s.Page = s.page() + 1
+		return again(s)
+	case "cd": // a directory of the repository, in place: the stack stays as deep as it was
+		switch arg {
+		case "..":
+			s.Path = parentDir(s.Path)
+		default:
+			if e, ok := p.entry(ctx, s, arg); ok {
+				s.Path = e.Path
+			}
+		}
+		s.Page = 0
+		return again(s)
+	case "src":
+		s.Src = !s.Src
+		return again(s)
 	case "refresh":
 		if s.Number > 0 {
 			p.c.ForgetDetail(s.Repo, s.Number)
-			return &wire.ActionResult{View: p.detail(ctx, r, s, true), Toast: "已刷新"}, nil
 		}
-		return &wire.ActionResult{View: p.list(ctx, r, s, true), Toast: "已刷新"}, nil
+		return &wire.ActionResult{View: p.view(ctx, r, s, true), Toast: "已刷新"}, nil
 	case "web":
 		if u, ok := httpsURL(arg); ok {
 			return &wire.ActionResult{OpenURL: u}, nil
 		}
 		return &wire.ActionResult{Toast: "这一条没有能打开的链接"}, nil
+	case "preview", "edit", "send":
+		return p.writeAction(ctx, r, s, kind)
 	case "back": // apps before UI version 3: the open one closes in place
-		s.Repo, s.Number = "", 0
-		return &wire.ActionResult{View: p.list(ctx, r, s, false)}, nil
+		return again(state{})
 	}
 	return nil, nil
+}
+
+// link is a pasted GitHub link as the page that shows it: a PR, an issue, a repository (a file or directory in it
+// opens the repository). Only whole links: the search box acts while the user is still typing.
+func (p *Page) link(q string) (state, string, bool) {
+	u, err := url.Parse(q)
+	if err != nil || u.Scheme != "https" || !strings.EqualFold(u.Host, strings.TrimPrefix(p.c.Web(), "https://")) || strings.ContainsAny(q, " \t") {
+		return state{}, "", false
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) < 2 {
+		return state{}, "", false
+	}
+	repo := parts[0] + "/" + parts[1]
+	if !github.ValidRepo(repo) {
+		return state{}, "", false
+	}
+	if len(parts) >= 4 && (parts[2] == "pull" || parts[2] == "issues") {
+		if n, err := strconv.Atoi(parts[3]); err == nil && n > 0 {
+			return state{Repo: repo, Number: n}, fmt.Sprintf("%s#%d", repo, n), true
+		}
+	}
+	return state{V: viewRepo, Repo: repo}, repo, true
+}
+
+// invalidate has the apps draw the page again (what was being read came).
+func (p *Page) invalidate() {
+	p.mu.Lock()
+	hub := p.hub
+	p.mu.Unlock()
+	if hub != nil {
+		_ = hub.Invalidate(ID)
+	}
 }
 
 func (p *Page) keepHub(h *ext.Hub) {
@@ -138,6 +284,15 @@ func (p *Page) unavailable(ctx context.Context) (wire.Component, bool) {
 }
 
 func (p *Page) list(ctx context.Context, r *ext.UIRequest, s state, fresh bool) *wire.View {
+	if s.Tab == github.TabNotify || s.Tab == github.TabActivity { // a state of the tabs before
+		s.Tab, s.F = github.TabInvolved, s.Tab
+	}
+	if s.Tab == "" { // what waits for the user first, else their own PRs
+		s.Tab = github.TabReview
+		if entries, _, err := p.c.List(ctx, github.TabReview, false); err == nil && len(entries) == 0 {
+			s.Tab = github.TabMine
+		}
+	}
 	t := tabOf(s.Tab)
 	s.Tab = t.id
 	v := &wire.View{Title: "GitHub", State: ext.EncodeState(s), RefreshAfter: refreshAfter}
@@ -146,7 +301,22 @@ func (p *Page) list(ctx context.Context, r *ext.UIRequest, s state, fresh bool) 
 		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{empty}})
 		return v
 	}
-	entries, at, err := p.c.List(ctx, t.id, fresh)
+	if t.id == tabRepos {
+		return p.repoList(ctx, r, s, v, fresh)
+	}
+	from := t.id
+	if t.id == github.TabInvolved {
+		switch s.F {
+		case github.TabNotify:
+			from, t.title, t.empty = github.TabNotify, "GitHub 通知", "没有通知"
+		case github.TabActivity:
+			from, t.title, t.empty = github.TabActivity, "你关注的仓库和人的动态", "最近没有动态"
+		}
+		if r.UIVersion >= 3 {
+			v.Filter = &wire.Filter{Name: "f", Title: "看什么", Value: from, Action: wire.Action{ID: "filter"}, Choices: involvedLists}
+		}
+	}
+	entries, at, err := p.c.List(ctx, from, fresh)
 	if t.id == github.TabReview && err == nil {
 		p.setBadge(len(entries))
 	}
@@ -235,7 +405,7 @@ func (p *Page) row(r *ext.UIRequest, s state, e github.Entry) wire.Component {
 		}
 	}
 	if e.Number > 0 && e.Repo != "" {
-		row.Action = ext.Open("open:"+e.Ref(), "", state{Tab: s.Tab, Q: s.Q, Repo: e.Repo, Number: e.Number}, e.Ref())
+		row.Action = ext.Open("open:"+e.Ref(), "", state{Repo: e.Repo, Number: e.Number}, e.Ref())
 	} else if u, ok := httpsURL(e.URL); ok {
 		if len("web:"+u) > 128 { // an action's id is at most 128: the repository's page instead
 			u = p.c.Web() + "/" + e.Repo
