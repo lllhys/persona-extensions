@@ -216,6 +216,38 @@ class CompanionTests(unittest.IsolatedAsyncioTestCase):
         FakeAuth.failure = True
         self.assertEqual((await self.request('session.check'))['result'], {'state': 'error'})
 
+    async def test_message_during_check_is_delivered(self):
+        probe, ready, delivered = threading.Event(), threading.Event(), threading.Event()
+        class SlowAuth(FakeAuth):
+            def validate(self, fetch_profile=False):
+                if ready.is_set():
+                    probe.wait(1)
+                return FakeAuth.validate(self, fetch_profile)
+        class LateClient(FakeClient):
+            async def connect_websocket(self, on_message):
+                while not ready.is_set():
+                    await asyncio.sleep(0.005)
+                await asyncio.sleep(0.02)
+                await on_message(message())
+                delivered.set()
+                await asyncio.Future()
+        self.bridge.auth_type, self.bridge.client_type, self.bridge.timeout = SlowAuth, LateClient, 2
+        await self.opened()
+        ready.set()
+        check = asyncio.create_task(self.request('session.check'))
+        for _ in range(200):
+            if delivered.is_set():
+                break
+            await asyncio.sleep(0.005)
+        probe.set()
+        self.assertEqual((await check)['result'], {'state': 'ok'})
+        self.assertEqual([e['event'] for e in self.events], ['message'])
+
+    async def test_check_rejects_changed_self_id(self):
+        await self.opened()
+        FakeAuth.user = 'self-b'
+        self.assertEqual((await self.request('session.check'))['result'], {'state': 'not_signed_in'})
+
     async def test_disconnect_status_and_no_reconnect(self):
         FakeClient.disconnect = True
         await self.opened()

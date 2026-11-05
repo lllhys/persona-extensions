@@ -1,11 +1,14 @@
 package github
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -22,18 +25,22 @@ type fakeNotifications struct {
 	prs           map[string]string // path -> JSON
 	comments      map[string]string // path -> JSON
 	notModified   bool              // answer 304 when If-Modified-Since comes
+	failPage      int               // answer this page of the notifications with a 502
+	rateLeft      string            // X-RateLimit-Remaining of 5000 (default 4000)
 	sinceSeen     []string
 	requests      []string
 	posted        []string
 }
 
 func (f *fakeNotifications) server(t *testing.T) *Connector {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		f.requests = append(f.requests, r.Method+" "+r.URL.Path)
 		w.Header().Set("X-RateLimit-Limit", "5000")
-		w.Header().Set("X-RateLimit-Remaining", "4000")
+		w.Header().Set("X-RateLimit-Remaining", cmp.Or(f.rateLeft, "4000"))
+		w.Header().Set("X-RateLimit-Reset", "9999999999")
 		switch {
 		case r.URL.Path == "/user":
 			_, _ = w.Write([]byte(`{"login":"me"}`))
@@ -44,8 +51,28 @@ func (f *fakeNotifications) server(t *testing.T) *Connector {
 				w.WriteHeader(http.StatusNotModified)
 				return
 			}
+			// Pages of per_page (at most 50), newest first, the next one named in Link, like GitHub.
+			page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			page = max(page, 1)
+			if page == f.failPage {
+				w.WriteHeader(http.StatusBadGateway)
+				_, _ = w.Write([]byte(`{"message":"Server Error"}`))
+				return
+			}
+			per, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+			if per <= 0 || per > 50 {
+				per = 50
+			}
+			var all []json.RawMessage
+			_ = json.Unmarshal([]byte(f.notifications), &all)
+			from, to := min((page-1)*per, len(all)), min(page*per, len(all))
+			if to < len(all) {
+				w.Header().Set("Link", fmt.Sprintf(`<%s/notifications?per_page=%d&page=%d>; rel="next", <%s/notifications?per_page=%d&page=%d>; rel="last"`,
+					srv.URL, per, page+1, srv.URL, per, (len(all)+per-1)/per))
+			}
 			w.Header().Set("Last-Modified", "Mon, 02 Nov 2026 10:00:00 GMT")
-			_, _ = w.Write([]byte(f.notifications))
+			b, _ := json.Marshal(all[from:to])
+			_, _ = w.Write(b)
 		case r.Method == http.MethodPost:
 			b, _ := io.ReadAll(r.Body)
 			f.posted = append(f.posted, r.URL.Path+" "+string(b))
@@ -203,9 +230,99 @@ func TestFewRequestsLeftReadsNoThreads(t *testing.T) {
 	f.mu.Unlock()
 	var ns []notification
 	_ = json.Unmarshal([]byte(f.notifications), &ns)
-	c.applyNotifications(context.Background(), ns, time.Now())
+	c.applyNotifications(context.Background(), ns, true, time.Now())
 	if len(f.requests) != before {
 		t.Fatalf("threads were read with few requests left: %v", f.requests[before:])
+	}
+}
+
+// noise is n newer notifications the inbox passes over (subscribed issues), to fill the first pages.
+func noise(n int) []string {
+	var out []string
+	for i := range n {
+		out = append(out, note(fmt.Sprintf("s%d", i), "subscribed", "Issue",
+			fmt.Sprintf("https://api.github.com/repos/example-org/example-repo/issues/%d", 100+i), "2026-11-02T10:00:00Z"))
+	}
+	return out
+}
+
+func pagedPR() *fakeNotifications {
+	return &fakeNotifications{prs: map[string]string{api12: openPR(`{"login":"me"}`), "/repos/example-org/example-repo/issues/12": `{"comments":0}`},
+		comments: map[string]string{}}
+}
+
+// A review request behind 50 newer notifications is on the second page: it comes in all the same, and only the
+// first page is asked with If-Modified-Since.
+func TestReviewRequestPastFirstPageComesIn(t *testing.T) {
+	f := pagedPR()
+	f.notifications = "[" + strings.Join(append(noise(50), note("1", "review_requested", "PullRequest", "https://api.github.com"+api12, t1)), ",") + "]"
+	c := f.server(t)
+	if _, _, err := c.poll(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := things(t, c)["example-org/example-repo#12"]; !ok {
+		t.Fatalf("the review request on the second page is not in the inbox: %v", things(t, c))
+	}
+	c.inbox.lastModified = "Mon, 02 Nov 2026 10:00:00 GMT"
+	f.sinceSeen = nil
+	if _, _, err := c.poll(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.sinceSeen) != 2 || f.sinceSeen[0] == "" || f.sinceSeen[1] != "" {
+		t.Fatalf("If-Modified-Since by page: %q", f.sinceSeen)
+	}
+}
+
+// A thing still unread on GitHub but pushed to the second page by newer notifications is not read elsewhere.
+func TestUnreadThingPushedToSecondPageStaysUnread(t *testing.T) {
+	f := pagedPR()
+	f.notifications = "[" + note("1", "review_requested", "PullRequest", "https://api.github.com"+api12, t1) + "]"
+	c := f.server(t)
+	c.poll(context.Background())
+	if th, ok := things(t, c)["example-org/example-repo#12"]; !ok || th.Read {
+		t.Fatalf("first poll: %+v %v", th, ok)
+	}
+	f.mu.Lock()
+	f.notifications = "[" + strings.Join(append(noise(50), note("1", "review_requested", "PullRequest", "https://api.github.com"+api12, t1)), ",") + "]"
+	f.mu.Unlock()
+	c.inbox.fullAt = time.Time{}
+	if _, _, err := c.poll(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if th := things(t, c)["example-org/example-repo#12"]; th.Read {
+		t.Fatalf("still unread on GitHub but marked read: %+v", th)
+	}
+}
+
+// When the pages stop early (the page cap, a page that fails, requests running low) the unread list is not
+// whole, so nothing is marked read elsewhere; a whole read afterwards does.
+func TestNotificationPagesStopEarlyMarkNothingRead(t *testing.T) {
+	f := pagedPR()
+	f.notifications = "[" + note("1", "review_requested", "PullRequest", "https://api.github.com"+api12, t1) + "]"
+	c := f.server(t)
+	c.poll(context.Background())
+	f.notifications = "[" + strings.Join(noise(120), ",") + "]" // #12 read on GitHub, but on no page read below
+	defer func(n int) { notificationPages = n }(notificationPages)
+	for _, tc := range []struct {
+		name     string
+		pages    int
+		fail     int
+		rateLeft string
+	}{{"page cap", 2, 0, ""}, {"page fails", 10, 2, ""}, {"requests low", 10, 0, "100"}} {
+		notificationPages, f.failPage, f.rateLeft = tc.pages, tc.fail, tc.rateLeft
+		c.inbox.fullAt = time.Time{}
+		if _, _, err := c.poll(context.Background()); err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if th := things(t, c)["example-org/example-repo#12"]; th.Read {
+			t.Fatalf("%s: marked read from a partial list: %+v", tc.name, th)
+		}
+	}
+	notificationPages, f.failPage, f.rateLeft = 10, 0, ""
+	c.inbox.fullAt = time.Time{}
+	c.poll(context.Background())
+	if th := things(t, c)["example-org/example-repo#12"]; !th.Read {
+		t.Fatalf("all three pages read: %+v", th)
 	}
 }
 

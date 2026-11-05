@@ -54,8 +54,9 @@ type client interface {
 	Done() <-chan struct{}
 	// Dialogs is the account's conversations, newest first: the main list and the archive folder, up to limit each.
 	Dialogs(ctx context.Context, limit int) ([]dialog, error)
-	// History is a conversation's messages newer than minID, oldest first. With minID 0 (a first read) it goes back
-	// to since, at most max messages.
+	// History is a conversation's messages newer than minID, oldest first, at most max. With minID 0 (a first read) it
+	// goes back to since and keeps the newest; otherwise it keeps the oldest, so a read cut short goes on from the
+	// newest it gave.
 	History(ctx context.Context, d dialog, minID int, since time.Time, max int) ([]message, error)
 	// Older is a conversation's limit messages before the id before (0: the newest) and sent before until (zero: no
 	// bound), oldest first: one request.

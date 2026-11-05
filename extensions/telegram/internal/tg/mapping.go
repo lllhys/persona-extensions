@@ -318,6 +318,9 @@ func (g *gotdClient) Dialogs(ctx context.Context, limit int) ([]dialog, error) {
 }
 
 func (g *gotdClient) History(ctx context.Context, d dialog, minID int, since time.Time, max int) ([]message, error) {
+	if minID > 0 {
+		return g.historyAfter(ctx, d, minID, max)
+	}
 	var got []message
 	offset := 0
 	for len(got) < max {
@@ -344,6 +347,35 @@ func (g *gotdClient) History(ctx context.Context, d dialog, minID int, since tim
 	}
 	for i, j := 0, len(got)-1; i < j; i, j = i+1, j-1 { // oldest first
 		got[i], got[j] = got[j], got[i]
+	}
+	return got, nil
+}
+
+// historyAfter reads up from minID, oldest first, at most max messages: the ones right after minID, so the next read
+// goes on from the newest of them. Telegram pages newest first; add_offset -page turns a page to the page messages
+// from offset_id up.
+func (g *gotdClient) historyAfter(ctx context.Context, d dialog, minID int, max int) ([]message, error) {
+	var got []message
+	from := minID
+	for len(got) < max {
+		page := min(100, max-len(got))
+		res, err := g.c.API().MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{Peer: inputPeer(d.Peer), OffsetID: from + 1, AddOffset: -page, Limit: page, MinID: minID})
+		if err != nil {
+			return nil, err
+		}
+		msgs, e := messagesOf(res)
+		next := from
+		for i := len(msgs) - 1; i >= 0; i-- { // newest first: turn around
+			if mm := messageOf(msgs[i], e); mm.ID > from && len(got) < max {
+				got = append(got, mm)
+				next = mm.ID
+			}
+		}
+		if len(msgs) < page || next == from {
+			break
+		}
+		from = next
+		// The next page waits its turn at the gate (client.go), like every request.
 	}
 	return got, nil
 }

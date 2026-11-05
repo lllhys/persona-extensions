@@ -16,7 +16,7 @@ LINUX DO's firewall often requires browser verification for JSON list endpoints 
 - `/hot.rss`, `/top.rss?period=daily`, `/top.rss?period=weekly`, `/latest.rss`: up to 30 topics each, including title, author, category, time, summary, post count and participant count.
 - `/t/topic/<id>.json`: the topic and its first 20 posts.
 
-Requests are serialized with at least two seconds between them. Lists are cached for five minutes and topics for ten. A `429` response pauses requests for ten minutes unless `Retry-After` specifies the delay; stale cached data remains available during the pause.
+Requests are serialized with at least two seconds between them. Lists are cached for five minutes and topics for ten. A `429` response pauses requests for ten minutes unless `Retry-After` specifies the delay; stale cached data remains available during the pause. A firewall challenge is recognized only on a non-`200` response whose page says "Just a moment", so a topic or feed that merely mentions the phrase still loads.
 
 The hub fetches and renders the reader content, so the phone does not need its own proxy to read it. Opening the original web page happens in the app's browser and requires the device itself to reach `linux.do`. This distinction matters on networks where the site is not directly accessible, including mainland China networks.
 

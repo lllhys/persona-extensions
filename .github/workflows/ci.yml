@@ -64,7 +64,8 @@ jobs:
           NAMED: ${{ inputs.extensions }}
         run: |
           if [ -n "$NAMED" ]; then
-            scripts/ci.sh release $NAMED
+            read -ra named <<< "$NAMED"  # split on spaces, no glob expansion
+            scripts/ci.sh release "${named[@]}"
           elif [ -z "$BEFORE" ] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ]; then
             scripts/ci.sh
           else
