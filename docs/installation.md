@@ -50,5 +50,6 @@ Legacy protocol names and UI placements, such as `plugin_protocol` and `plugin_p
 
 - [LINUX DO](extensions/linuxdo.md): no account; the hub must reach `linux.do`. The in-app reader fetches on the hub, while opening the original web page also requires network access on the device.
 - [Telegram](extensions/telegram.md): sign in through **Settings → Connectors → Telegram**. The hub must reach Telegram data centers directly over TCP. Local or other non-official installation sources may require disabling the extension sandbox; follow the [Telegram network instructions](extensions/telegram.md#network-and-sandbox).
+- [Bypass auto-allow](extensions/claude-bypass-allow.md): needs a hub that runs extension programs on computers (`node`). Nothing happens until you switch on a computer in its settings; it then edits that computer's Claude Code `settings.json`.
 
 Do not paste credentials into repository files or installation examples. Configure accounts through the hub/app's protected credential flow.
