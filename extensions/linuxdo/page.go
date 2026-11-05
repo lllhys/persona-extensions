@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona-extensions/pluginkit"
 )
 
-// The page (ui contribution "hot", a plugin_page): a list — the user's choice of 热门 / 今日 / 本周 / 最新, filtered by
+// The page (ui contribution "hot", a plugin_page): a list — the user's choice of hot / today / this week / latest, filtered by
 // their interests — and a topic opened in the same page (its words, its best replies, a link to the site). The state
 // it carries is which list, which topic, and whether the filter is set aside.
 
@@ -227,7 +227,7 @@ func (p *plugin) topicPage(ctx context.Context, d draw, st pageState) pluginkit.
 	return v
 }
 
-// topicMeta: alice · 11-03 17:37 · 1098 浏览 · 110 赞 · 36 帖 · 13 人 · 标签 人工智能、纯水.
+// topicMeta summarizes a topic (translated example): alice · 11-03 17:37 · 1098 views · 110 likes · 36 posts · 13 people · tags AI, Casual Chat.
 func topicMeta(t topicDoc, loc *time.Location) string {
 	var parts []string
 	if op, ok := t.opening(); ok && op.Username != "" {

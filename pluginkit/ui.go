@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Declarative UI (Persona docs/plugins.md「声明式 UI」「UI 插槽」): a plugin answers ui.render with a View the apps
+// Declarative UI (docs/reference.md#process-protocol-and-views): a plugin answers ui.render with a View the apps
 // draw with their own components, and ui.action with what a button did. Where it is drawn (the slot) and for whom
 // (time zone, language, platform, the UI version the app draws) comes with each request.
 
@@ -163,7 +163,7 @@ type ChartSeries struct {
 	Points []ChartPoint `json:"points"`
 }
 
-// ChartPoint is a value at a label; Display is how to write it ("1.2 万", "$3.40"), the value with the chart's unit
+// ChartPoint is a value at a label; Display is how to write it ("12k", "$3.40"), the value with the chart's unit
 // when empty.
 type ChartPoint struct {
 	Label   string  `json:"label"`

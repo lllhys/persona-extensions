@@ -1,4 +1,4 @@
-// Package pluginkit is a Persona extension's side of the process protocol (Persona's docs/extensions.md「进程扩展协议」)
+// Package pluginkit is a Persona extension's side of the process protocol (docs/reference.md#process-protocol-and-views)
 // as this repository's extensions use it. The protocol itself is the official SDK's (sdk/go/ext, a copy kept by
 // Persona's scripts/gen/sync-sdk.sh): this package keeps the shape the extensions were written against (handlers by
 // full method name, InitParams) and adds the helpers they share (inbox, quota, ui).
@@ -70,8 +70,8 @@ type InitParams struct {
 
 // Hub capabilities (InitParams.Hub.Capabilities).
 const (
-	// HubInboxGroup: the hub relates a connector's batches of new messages to inbox events (Persona's docs/inbox.md
-	// 「事件合成」): a connector that declares the capability "group" hands batches and writes the events' meta.
+	// HubInboxGroup: the hub relates a connector's batches of new messages to inbox events (the host's
+	// event-composition contract): a connector that declares the capability "group" hands batches and writes the events' meta.
 	HubInboxGroup = "inbox_group"
 )
 

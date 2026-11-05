@@ -1,7 +1,7 @@
 // Package serve runs the Telegram connector as an extension program: the hub starts it and talks the process protocol
-// (Persona's docs/extensions.md「进程扩展协议」) to it over stdin / stdout through Persona's official Go SDK
+// (docs/reference.md#process-protocol-and-views) to it over stdin / stdout through Persona's official Go SDK
 // (sdk/go/ext), the connector protocol's methods in the connector namespace (connector.status, …;
-// docs/connector-protocol.md). One connector per program.
+// docs/reference.md#process-protocol-and-views). One connector per program.
 //
 // The hub calls the methods below; the program calls back for its secret (connector.secrets.*: the hub binds them to
 // this program's connector) and tells the hub what changed (connector.changed). Nothing here logs what crosses the
@@ -95,14 +95,14 @@ type (
 	}
 )
 
-// Namespace is the connector extension point's (docs/plugins.md): under the plugin protocol every method above is
+// Namespace is the connector extension point's (docs/reference.md#process-protocol-and-views): under the plugin protocol every method above is
 // Namespace + "." + method, with the connector's id as the contribution.
 const Namespace = "connector"
 
 // InPlugin is a method's name under the plugin protocol.
 func InPlugin(method string) string { return Namespace + "." + method }
 
-// Protocol is the version of the connector protocol (docs/connector-protocol.md): the program answers it in its
+// Protocol is the version of the host's connector protocol: the program answers it in its
 // connector's manifest (connector.manifest), and the hub refuses a program of another version.
 const Protocol = 2
 

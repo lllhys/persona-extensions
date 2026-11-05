@@ -27,37 +27,37 @@ const (
 
 // InboxThing is one thread a connector thinks may need the user. The hub turns things into inbox items: one open
 // item per thread gathers its later moves until the user deals with it; a move after that starts a new item. What
-// happens to an item afterwards (triage, the AI 分身, done, kept for a while) is the hub's, the same for every source.
+// happens to an item afterwards (triage, the AI alter ego, done, kept for a while) is the hub's, the same for every source.
 type InboxThing struct {
 	// Thread is the connector's stable key of the thread ("example-org/example-repo#12").
 	Thread string `json:"thread"`
 	// Kind is the connector's kind of thing ("review_requested"): prompts/inbox/kinds/<id>.md tells the models
-	// what it means; Label is the row's tag for people (「请你 review」).
+	// what it means; Label is the row's tag for people ("Review requested").
 	Kind    string `json:"kind"`
 	Label   string `json:"label,omitempty"`
 	Title   string `json:"title,omitempty"`
 	Sender  string `json:"sender,omitempty"`  // who made the newest move
 	Preview string `json:"preview,omitempty"` // the newest move in a line
-	Context string `json:"context,omitempty"` // the thread as text, for triage, drafting and the AI 分身
+	Context string `json:"context,omitempty"` // the thread as text, for triage, drafting and the AI alter ego
 	// At is when the newest move happened; Last marks it, and a different Last adds to the open item.
 	At   time.Time `json:"at,omitempty"`
 	Last string    `json:"last,omitempty"`
 	URL  string    `json:"url,omitempty"` // the thread on the web, opened in the app
-	// OpenURL is a link the system opens instead (sms:…: 在信息里回复), kept apart from URL.
+	// OpenURL is a link the system opens instead (sms:…: reply in Messages), kept apart from URL.
 	OpenURL string `json:"open_url,omitempty"`
-	// ReplyTo says where a reply goes and who sees it (「评论到 example-org/example-repo#12（仓库可见的人都能看到）」);
+	// ReplyTo says where a reply goes and who sees it ("Comment on example-org/example-repo#12 (visible to anyone with repository access)");
 	// CanReply: Reply works for this thread.
 	ReplyTo  string `json:"reply_to,omitempty"`
 	CanReply bool   `json:"can_reply,omitempty"`
 	// Tier is the tier the connector's rules decide (action, fyi, noise): the item gets it without a model. "" leaves it
-	// to the model (a human's ordinary comment). Why says which rule, for people (「规则：真人 @ 你」).
+	// to the model (a human's ordinary comment). Why says which rule, for people ("Rule: a person mentioned you").
 	Tier Tier   `json:"tier,omitempty"`
 	Why  string `json:"why,omitempty"`
 	// Rules are the user's own triage rules for this thing, in their words (a source's or an account's): when set
 	// the model gets them instead of the hub's inbox.rules; the default criteria stay underneath. "" uses inbox.rules.
 	Rules string `json:"rules,omitempty"`
 	// Done ends the open item (DoneRead, DoneReplied): the thread is over; Why says how when it is not obvious
-	// (「GitHub：后来成功了」).
+	// ("GitHub: subsequently succeeded").
 	Done string `json:"done,omitempty"`
 	// Read: seen somewhere else (the notification read on GitHub); an item that does not need the user is done.
 	Read bool `json:"read,omitempty"`
@@ -70,7 +70,7 @@ type InboxThing struct {
 }
 
 // MigratableConnectors are the hub's own connectors a plugin may take over while they move out of the hub (Feishu
-// through larkintegration, docs/plan-plugins.md「第 3 步」): a plugin's connector with the same id replaces the hub's while
+// through larkintegration, under the host's connector migration contract): a plugin's connector with the same id replaces the hub's while
 // the plugin is on, and its inbox things may carry the items' own blocks (ThingExtra).
 var MigratableConnectors = []string{"lark"}
 
@@ -98,7 +98,7 @@ type Tag struct {
 	Name  string `json:"name,omitempty"`
 }
 
-// Tag keys. The user can mute by the first three (the inbox row's 静音这个仓库 / 会话 / 发件人).
+// Tag keys. The user can mute by the first three (the inbox row's mute-this-repository / conversation / sender actions).
 const (
 	TagRepo   = "repo"
 	TagChat   = "chat"
@@ -122,7 +122,7 @@ type InboxReply struct {
 	Text   string `json:"text,omitempty"`
 	// ClientID is the app's id for the send: a retry with the same one goes out once (empty: the connector derives one).
 	ClientID string `json:"client_id,omitempty"`
-	// Changes move a document row's status first (a document item's 改状态, the AI 分身's proposal); Text may then be empty.
+	// Changes move a document row's status first (a document item's Change Status action, the AI alter ego's proposal); Text may then be empty.
 	Changes []StatusChange `json:"changes,omitempty"`
 }
 

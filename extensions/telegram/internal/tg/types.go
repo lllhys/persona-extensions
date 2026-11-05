@@ -40,7 +40,7 @@ type dialog struct {
 }
 
 // kept says whether the conversation goes into the knowledge base: private chats with people and groups
-// (docs/plan-telegram.md「读什么」).
+// (the connector's archive-selection contract).
 func (d dialog) kept() bool { return !d.Bot && !d.Self && !d.Broadcast }
 
 // message is one message, already in words.

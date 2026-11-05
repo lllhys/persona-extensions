@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// The quota extension point (Persona's docs/plugins.md「额度」): the report a quota plugin answers with, and sending
+// The quota extension point (the host's quota contract): the report a quota plugin answers with, and sending
 // requests to the launcher's gateway through the hub. The plugin never sees the key: it writes KeyPlaceholder where the
 // key goes, and whoever holds the key puts it in.
 

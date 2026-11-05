@@ -1,7 +1,7 @@
 // Package tgcli is tg, the Telegram connector's command line for the assistant (its telegram skill), as the connector
 // plans it: Persona's personad tool --cli telegram hands each command line to the telegram_cli tool, which answers the
 // call it means (PlanOf) and shows the answer for people (Render); personad calls that tool through the hub, whose
-// gate decides each write (Persona docs/connector-protocol.md「命令行」). Moved here from Persona's internal/tgcli
+// gate decides each write (docs/extensions/telegram.md#cli-reference). Moved here from Persona's internal/tgcli
 // (#1704): the subcommands, their arguments and the text are tg's as they were; the exit codes and the error kinds
 // are personad tool's, the same as tg's.
 package tgcli

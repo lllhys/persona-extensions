@@ -1,5 +1,5 @@
 // Package telegram is the Telegram connector: the user's own account through MTProto (gotd/td), read-only
-// (docs/plan-telegram.md). It runs in jarvisd-telegram, not in jarvisd (connector/serve, connector/proc): gotd would
+// (docs/extensions/telegram.md). It runs in jarvisd-telegram, not in jarvisd (connector/serve, connector/proc): gotd would
 // double jarvisd's size.
 //
 // Everything it keeps — the API credentials the user entered and the session — is one sealed blob in the hub

@@ -193,7 +193,7 @@ func TestEditFlow(t *testing.T) {
 	}
 }
 
-// TestListMore: 加载更多 shows 20 more, until all 60; search and filter start over.
+// TestListMore: load more shows 20 more, until all 60; search and filter start over.
 func TestListMore(t *testing.T) {
 	a := newApp()
 	ctx := context.Background()
@@ -226,7 +226,7 @@ func TestListMore(t *testing.T) {
 	}
 }
 
-// TestInvalidate: 要数据 answers loading, and the data comes after a.after.
+// TestInvalidate: the request-data action answers loading, and the data comes after a.after.
 func TestInvalidate(t *testing.T) {
 	a := newApp()
 	a.after = 10 * time.Millisecond

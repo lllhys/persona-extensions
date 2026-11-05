@@ -1,7 +1,7 @@
 // Command linuxdo is a Persona plugin for LINUX DO (https://linux.do), a Discourse community, read only and
-// without an account (Persona's docs/plugins.md):
+// without an account (docs/extensions/linuxdo.md):
 //
-//   - ui (plugin_page "hot"): a page of its hot topics — 热门, 今日 / 本周最热, 最新 — filtered by the user's
+//   - ui (plugin_page "hot"): a page of its hot topics — hot, today's / this week's top topics, latest — filtered by the user's
 //     interests (the plugin's settings); a topic opens in the page as its text and its best replies, read by the
 //     hub, so the phone needs no way to the site.
 //   - connectors (id linuxdo, tools): linuxdo_hot and linuxdo_topic, for the assistant.

@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona-extensions/extensions/telegram/internal/connector"
 )
 
-// The inbox's conversations as the app's conversation page (connector.Threads, docs/plan-telegram.md「会话页」): a page
+// The inbox's conversations as the app's conversation page (connector.Threads; docs/extensions/telegram.md#request-pacing): a page
 // of messages a request (and one more for the messages they reply to that the page does not have), and each picture
 // when the app shows it, a request a part. A group's headcount comes with its chat when Telegram said it there; else
 // its first page asks once (Info) and that answer holds for membersFor. Everything goes through the connector's gate:

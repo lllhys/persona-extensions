@@ -74,7 +74,7 @@ func ToolNames() []string {
 }
 
 // KindDescriptions is what each kind of the connector's inbox things means, for the models (the manifest's
-// kind_descriptions): the hub writes 「类型：」 before it, as Persona's prompts/inbox/kinds/telegram.md read.
+// kind_descriptions): the hub prepends the localized type prefix "类型：" ("Type:"), as in Persona's prompts/inbox/kinds/telegram.md.
 var KindDescriptions = map[string]string{
 	"dm":      "Telegram 里有人私聊用户，还没读",
 	"mention": "Telegram 群里 @ 了用户，或回复了用户的消息",

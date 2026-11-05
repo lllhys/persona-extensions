@@ -139,7 +139,7 @@ var (
 )
 
 // postText is a post's cooked HTML as segments: paragraphs and lists as text, code blocks kept as they are, a picture
-// as [图片] (emojis and avatars dropped), a link preview as its link.
+// as the localized image placeholder [图片] (emojis and avatars dropped), a link preview as its link.
 func postText(cooked string) []segment {
 	s := dropRE.ReplaceAllString(cooked, "")
 	s = oneboxRE.ReplaceAllStringFunc(s, func(m string) string {

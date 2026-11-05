@@ -20,7 +20,7 @@ func TestKindsAreDescribed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The hub writes 「类型：」 before a description itself (Persona's prompts/inbox/item.md): one here would read twice.
+	// The hub prepends the localized type prefix "类型：" ("Type:") itself (Persona's prompts/inbox/item.md); adding it here would duplicate it.
 	for kind, d := range prompts.KindDescriptions {
 		if d == "" || strings.HasPrefix(d, "类型") {
 			t.Errorf("%s: %q", kind, d)

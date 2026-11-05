@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The market's index (Persona docs/extensions.md「扩展市场」), in two files with the same entries:
+"""The market's index (docs/releases.md, "Market and indexes"), in two files with the same entries:
 
   persona-extensions.json   key "extensions", read by hubs that know extensions (nwverse/persona#1844)
   persona-plugins.json      key "plugins" with the old manifest, read by hubs from before the rename

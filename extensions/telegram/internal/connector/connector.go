@@ -1,7 +1,7 @@
 // Package connector is how a source of the user's information (GitHub, iMessage, later Feishu and mail) plugs into
 // the hub: one connector per source, and each pipe the hub has — the assistant's tools, writes behind a gate, the
 // settings page's status, realtime kicks — picks up what the connector implements, so adding a source does not
-// touch those pipes (docs/connectors.md).
+// touch those pipes (the host's connector capability contract).
 //
 // A connector implements Connector, whose Manifest declares its capabilities; the hub finds each declared one's
 // interface with As. Runner, Events and Machines are how it runs, found by type assertion.
@@ -21,7 +21,7 @@ type Connector interface {
 	// ID names it everywhere: the key in hub.json, the prefix of its tools ("github_read"), InboxItem.Source.
 	// Lowercase letters and digits only.
 	ID() string
-	// Name is for people: GitHub, 信息.
+	// Name is for people: GitHub, Messages.
 	Name() string
 	// Manifest is what it declares (Check holds it to that).
 	Manifest() Manifest
@@ -39,16 +39,16 @@ const (
 	StateDisabled = "disabled"
 )
 
-// Status is how a connector is doing, for 设置 › 连接器 and the assistant: only an ok connector offers tools.
+// Status is how a connector is doing, for Settings › Connectors and the assistant: only an ok connector offers tools.
 type Status struct {
 	State string `json:"state"`
-	// Account is the account it reads as, for display (a GitHub login, 「这台 Mac 上的信息」).
+	// Account is the account it reads as, for display (a GitHub login, "Messages on this Mac").
 	Account string `json:"account,omitempty"`
-	// Via says where the sign-in comes from (「来自 <机器> 的 gh 登录」).
+	// Via says where the sign-in comes from ("gh sign-in from <machine>").
 	Via string `json:"via,omitempty"`
-	// Error is one sentence for people when State is not ok (「<机器> 上的 gh 登录失效了…」); never a secret.
+	// Error is one sentence for people when State is not ok ("The gh sign-in on <machine> has expired…"); never a secret.
 	Error string `json:"error,omitempty"`
-	// Guide is how to fix it, a step a sentence, when the user can (「打开系统设置 › …」); shown under Error.
+	// Guide is how to fix it, a step a sentence, when the user can ("Open System Settings › …"); shown under Error.
 	Guide     []string  `json:"guide,omitempty"`
 	LastSync  time.Time `json:"last_sync,omitempty"`
 	LastEvent time.Time `json:"last_event,omitempty"`
@@ -61,14 +61,14 @@ type Accounts interface {
 }
 
 // ReadTools are tools that only read, offered to the assistant without asking the user (like lark_*). Every name
-// starts with "<ID>_"; descriptions and schemas of built-in connectors are in prompts/mcp/<id>/ (docs/prompts.md).
+// starts with "<ID>_"; built-in connectors' descriptions and schemas live in the host's prompts/mcp/<id>/ directory.
 type ReadTools interface {
 	Tools() []proto.Tool
 	Call(ctx context.Context, name string, args json.RawMessage) (string, error)
 }
 
-// Action is what the user is shown before a write: Visible says who will see it (「example-org/example-repo#12
-// 的所有参与者」), and the card always says so.
+// Action is what the user is shown before a write: Visible says who will see it ("All participants in
+// example-org/example-repo#12"), and the card always says so.
 type Action struct {
 	Name    string `json:"name,omitempty"`
 	Visible string `json:"visible,omitempty"`
@@ -125,7 +125,7 @@ type Machines interface {
 }
 
 // Chats is a connector whose conversations the knowledge base reads chat by chat, each with its own cursor
-// (Feishu's chats, 公司圈 posts): one kb.Source per stream, its Name the prefix of its chats' ids (which never
+// (Feishu's chats, Moments posts): one kb.Source per stream, its Name the prefix of its chats' ids (which never
 // changes). A source that can read further back also implements kb.Backfiller.
 type Chats interface {
 	ChatSources() []kb.Source

@@ -1,4 +1,4 @@
-// 组件展示: every component of an extension's view, in every state, a page each (nwverse/persona#1852). For the people
+// Showcase: every component of an extension's view, in every state, a page each (docs/extensions/showcase.md). For the people
 // who write extensions to see what each looks like, and for each app (web, Android, iOS, Mac) to screenshot the same
 // views: TestSnapshots writes every page to snapshots/, which the apps' screenshot tests draw.
 //

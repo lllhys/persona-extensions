@@ -201,7 +201,7 @@ func nonEmpty(xs []string) []string {
 	return out
 }
 
-// meta is a topic of a list in a line: 开发调优 · alice · 75 帖 · 59 人 · 3 小时前.
+// meta summarizes a topic from a list in one line (translated example): Development and Optimization · alice · 75 posts · 59 people · 3 hours ago.
 func (t hotTopic) meta(now time.Time) string {
 	var parts []string
 	for _, s := range []string{t.Category, t.Author} {

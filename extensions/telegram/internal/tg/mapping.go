@@ -162,8 +162,8 @@ func peerOfMessage(m tg.MessageClass) tg.PeerClass {
 	return nil
 }
 
-// messageOf is a message in words: a forward says from whom, media is a placeholder ([图片], [文件 名字 · 大小]),
-// a group event is a line of its own.
+// messageOf is a message in words: a forward says from whom, media uses localized placeholders ([图片] for an image,
+// [文件 <name> · <size>] for a file), and a group event is a line of its own.
 func messageOf(mc tg.MessageClass, e entities) message {
 	switch m := mc.(type) {
 	case *tg.Message:

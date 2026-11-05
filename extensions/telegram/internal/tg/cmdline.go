@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona-extensions/extensions/telegram/internal/tgcli"
 )
 
-// cmdLine is the tg command line's own tool (spec.CLITool; Persona's docs/connector-protocol.md「命令行」): it plans a
+// cmdLine is the tg command line's own tool (spec.CLITool; docs/extensions/telegram.md#cli-reference): it plans a
 // command line or shows an answer as text, from the words alone, so it answers when Telegram does not (help, a
 // mistake in the words) and a flood wait does not hold it.
 func cmdLine(args json.RawMessage) (string, error) {

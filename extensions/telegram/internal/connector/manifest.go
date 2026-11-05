@@ -15,7 +15,7 @@ type Capability string
 
 // Capabilities and the interface each stands for. The names are the ones GET /api/v1/connectors lists (except
 // CapSettle and CapFallback, which only the hub uses). CapFallback is a promise, not an interface: every inbox thing
-// carries a fallback tier (ThingExtra.RuleTier), so its items never need the model to come in (docs/plugins.md).
+// carries a fallback tier (ThingExtra.RuleTier), so its items never need the model to come in (docs/extensions/telegram.md#inbox-triage).
 const (
 	CapStatus   Capability = "status"   // Accounts
 	CapTools    Capability = "tools"    // ReadTools
@@ -58,12 +58,12 @@ var capabilities = []capability{
 	{CapFallback, nil, false},
 }
 
-// Manifest is what a connector says it is and does, in one place (docs/connectors.md「二 · 1」): read whenever the
+// Manifest is what a connector says it is and does, in one place (the host's connector manifest contract): read whenever the
 // hub needs it, so it answers from memory. A program's (connector/proc) is what the program said when it started.
 type Manifest struct {
 	Capabilities []Capability
 	// Hosts are the web hosts its links live on (github.com, or an Enterprise host only the config knows): the app
-	// uses them for the link card's icon and 「在 GitHub 打开」.
+	// uses them for the link card's icon and "Open in GitHub".
 	Hosts []string
 	// AgentTools are the tools (patterns, path.Match: "mail_*") the coding agents get too, not only the assistant.
 	AgentTools []string
@@ -80,16 +80,16 @@ type Manifest struct {
 	// Kinds are the kinds its inbox things have (InboxThing.Kind): prompts/inbox/kinds/<id>.md tells the models what
 	// each means. A thing of a kind not here is still taken, and logged.
 	Kinds []string
-	// KindDescriptions tell the models what each kind is (the plugin manifest's kind_descriptions, "类型：…" in the
-	// inbox's prompts): a plugin's connector says them itself, as the hub has no prompt file for it.
+	// KindDescriptions tell the models what each kind is (the plugin manifest's kind_descriptions, with the localized
+	// "类型：" ("Type:") prefix in the inbox's prompts): a plugin's connector says them itself, as the hub has no prompt file for it.
 	KindDescriptions map[string]string
 	// ArchiveSources are other names its archive may file conversations under (ChatBatch.Source), besides its id:
 	// one kind of conversation kept apart from the rest (a feed's posts the user is in, besides the chats), or ids
-	// the knowledge base had before a connector moved (docs/connector-protocol.md「知识库」). Same pattern as an id.
+	// the knowledge base had before a connector moved (the host's archive-source naming contract). Same pattern as an id.
 	ArchiveSources []string
 	// CLI is the command on the assistant's PATH that is this connector's command line (Telegram's tg): the node
 	// writes it to run `personad tool --cli <id>`, which has the connector's <id>_cli tool read each command line and
-	// calls the tool it names, through the gate (docs/connector-protocol.md「命令行」). Empty: none.
+	// calls the tool it names, through the gate (docs/extensions/telegram.md#cli-reference). Empty: none.
 	CLI string
 	// Proxy: it answers for a program or a machine (connector/proc), so it implements every interface and has only
 	// what it declares. Check holds the others to "declared exactly what it implements".

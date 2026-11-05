@@ -16,9 +16,9 @@ import (
 // as last listed (an archive round, Telegram's updates, connecting) with a few messages of context for each thing —
 // so the hub's every collection costs Telegram nothing.
 //
-// - A private chat whose last message is the other person's and unread: 私聊. Read somewhere: done. I wrote last:
+// - A private chat whose last message is the other person's and unread: direct message. Read somewhere: done. I wrote last:
 //   replied.
-// - A group with unread messages that @ me or reply to me (Telegram counts both): @你. Read: done.
+// - A group with unread messages that @ me or reply to me (Telegram counts both): mentions you. Read: done.
 // - Muted and archived conversations stay out (the knowledge base still has them); so do bots and channels.
 
 const (
@@ -92,7 +92,7 @@ func (c *Conn) Collect(context.Context) ([]connector.InboxThing, error) {
 	return out, nil
 }
 
-// Reply: the connector only reads. The app shows 「在 Telegram 里回复」 (OpenURL) instead.
+// Reply: the connector only reads. The app shows "Reply in Telegram" (OpenURL) instead.
 func (c *Conn) Reply(context.Context, connector.InboxReply) error {
 	return errors.New("Telegram 是只读的：在 Telegram 里回复")
 }

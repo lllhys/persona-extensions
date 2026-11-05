@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona/sdk/go/wire"
 )
 
-// The list page: search, a filter, 加载更多 (20 at a time out of 60), and a row opening its detail, whose 编辑 opens a
+// The list page: search, a filter, load more (20 at a time out of 60), and a row opening its detail, whose Edit action opens a
 // form that saves and goes back (list → detail → edit → save → pop).
 
 type item struct {
@@ -87,7 +87,7 @@ func (a *app) list(r *ext.UIRequest, s state) *wire.View {
 		v.Filter = &wire.Filter{Name: "kind", Title: "种类", Choices: kinds, Value: orDefault(s.Kind, "all"), Action: wire.Action{ID: "kind"}}
 		return v
 	}
-	// An app before UI version 3: no search box, filter or 加载更多; a field, a choice and buttons instead.
+	// An app before UI version 3: no search box, filter or load-more control; a field, a choice and buttons instead.
 	tools := []wire.Component{
 		{Type: wire.ComponentField, Name: "q", Label: "搜索", Kind: wire.FieldKindText, Value: s.Q, Placeholder: "条目名"},
 		{Type: wire.ComponentField, Name: "kind", Label: "种类", Kind: wire.FieldKindChoice, Value: orDefault(s.Kind, "all"), Choices: kinds},
@@ -174,7 +174,7 @@ func (a *app) save(r *ext.UIRequest, s state) (*wire.ActionResult, error) {
 	return &wire.ActionResult{Toast: "保存了", Pop: true}, nil
 }
 
-// The invalidate page: 「要数据」 answers loading at once; the data comes after a.after, and the extension tells the hub
+// The invalidate page: the request-data action answers loading at once; the data comes after a.after, and the extension tells the hub
 // (ui.invalidate), which has the apps showing the page draw it again.
 
 func (a *app) ask() {

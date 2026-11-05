@@ -7,7 +7,7 @@ import (
 	"unicode/utf8"
 )
 
-// The inbox (Persona's docs/plugins.md「收件箱」, nwverse/persona#1730): what every plugin whose connector declares the
+// The inbox (the host's inbox contract, nwverse/persona#1730): what every plugin whose connector declares the
 // capability "inbox" follows, as ready-made pieces. Three rules are common; how a plugin decides when to hand things
 // over (which kinds at once, how often the rest) is its own.
 //
@@ -23,9 +23,9 @@ import (
 type Tier string
 
 const (
-	TierAction Tier = "action" // 需要你
-	TierFYI    Tier = "fyi"    // 知悉即可
-	TierNoise  Tier = "noise"  // 噪音
+	TierAction Tier = "action" // needs you
+	TierFYI    Tier = "fyi"    // for your information
+	TierNoise  Tier = "noise"  // noise
 )
 
 // Known says whether t is one of the hub's tiers ("" is not).
@@ -115,7 +115,7 @@ const (
 )
 
 // TriageRulesProperty is the setting as a plugin's manifest declares it under configuration.properties (copy it; a
-// test can compare): source names the plugin's things for the user ("飞书", "GitHub"), example is a rule in the
+// test can compare): source names the plugin's things for the user ("Feishu", "GitHub"), example is a rule in the
 // user's words. A "\n" written out is a line break (the apps' settings fields are one line): TriageRules reads it so.
 func TriageRulesProperty(source, example string) map[string]any {
 	return map[string]any{

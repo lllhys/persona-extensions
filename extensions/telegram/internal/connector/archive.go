@@ -25,7 +25,7 @@ type Archive interface {
 
 // ArchiveMedia is an Archive whose messages' Media (refs the connector made) can be fetched, so the knowledge base
 // keeps a conversation's pictures and files with it as it does for the hub's own sources. Optional: without it the
-// lines say [附件] and nothing is kept. At most ArchiveMediaMost bytes.
+// lines use the localized attachment placeholder [附件] and nothing is kept. At most ArchiveMediaMost bytes.
 type ArchiveMedia interface {
 	ArchiveMedia(ctx context.Context, ref string) (Media, error)
 }

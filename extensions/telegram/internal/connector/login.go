@@ -40,9 +40,9 @@ type Prompt struct {
 	Interval int    `json:"interval,omitempty"`
 	// QR is URL's QR code for PromptQRCode: the hub fills it in on the way to the app (a connector leaves it out).
 	QR *QRCode `json:"qr,omitempty"`
-	// Hint is for people: where the code went (「验证码发到了你别的 Telegram 设备上」), the password's hint.
+	// Hint is for people: where the code went ("The code was sent to your other Telegram devices"), the password's hint.
 	Hint string `json:"hint,omitempty"`
-	// Error is what was wrong with the values just given (「验证码不对」), for people: the same step is asked again.
+	// Error is what was wrong with the values just given ("Incorrect code"), for people: the same step is asked again.
 	Error string `json:"error,omitempty"`
 	Done  bool   `json:"done,omitempty"`
 	// Account is who is signed in, once Done.

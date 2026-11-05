@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 )
 
-// Inbox events (Persona's docs/inbox.md「事件合成」, nwverse/persona#1680): a connector that declares the capability
+// Inbox events (the host's event-composition contract, nwverse/persona#1680): a connector that declares the capability
 // "group" hands a conversation's new messages over as a batch (InboxThing's Group, a ThingGroup) instead of one thing
 // per conversation, and the hub's model relates each message to an event of that conversation. The connector's side is
 // GroupHandlers, each optional:
