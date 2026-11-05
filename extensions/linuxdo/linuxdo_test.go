@@ -254,6 +254,36 @@ func TestParseFeed(t *testing.T) {
 	if m := a.meta(time.Now()); m != "开发调优 · alice · 75 帖 · 59 人 · 3 小时前" && m != "开发调优 · alice · 75 帖 · 59 人 · 2 小时前" {
 		t.Fatal(m)
 	}
+
+	// An English-locale feed: the English counts line parses and the "Read full topic" suffix never leaks,
+	// with or without a counts line. The last item covers the Chinese suffix trimmed without a counts line.
+	english := `<?xml version="1.0" encoding="UTF-8" ?><rss version="2.0" xmlns:discourse="http://www.discourse.org/" xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><title>LINUX DO</title>` +
+		`<item><discourse:topicPinned>No</discourse:topicPinned><title>Synthetic English topic</title><dc:creator><![CDATA[alice]]></dc:creator><category>Dev</category>` +
+		`<description><![CDATA[<p>An English excerpt.</p><p><a href="https://linux.do/t/topic/2001">75 posts - 59 participants</a></p> <p><a href="https://linux.do/t/topic/2001">Read full topic</a></p>]]></description>` +
+		`<link>https://linux.do/t/topic/2001</link><pubDate>Fri, 06 Nov 2026 03:04:05 +0000</pubDate></item>` +
+		`<item><discourse:topicPinned>No</discourse:topicPinned><title>No counts line</title><dc:creator><![CDATA[bob]]></dc:creator><category>Dev</category>` +
+		`<description><![CDATA[<p>No counts here.</p> <p><a href="https://linux.do/t/topic/2002">Read full topic</a></p>]]></description>` +
+		`<link>https://linux.do/t/topic/2002</link><pubDate>Fri, 06 Nov 2026 03:04:05 +0000</pubDate></item>` +
+		`<item><discourse:topicPinned>No</discourse:topicPinned><title>没有计数行</title><dc:creator><![CDATA[carol]]></dc:creator><category>开发调优</category>` +
+		`<description><![CDATA[<p>中文摘要。</p> <p><a href="https://linux.do/t/topic/2003">阅读完整话题</a></p>]]></description>` +
+		`<link>https://linux.do/t/topic/2003</link><pubDate>Fri, 06 Nov 2026 03:04:05 +0000</pubDate></item>` +
+		`</channel></rss>`
+	en, err := parseFeed([]byte(english))
+	if err != nil || len(en) != 3 {
+		t.Fatalf("%v %v", en, err)
+	}
+	if en[0].ID != 2001 || en[0].Posts != 75 || en[0].People != 59 || en[0].Excerpt != "An English excerpt." ||
+		strings.Contains(en[0].Excerpt, "Read full topic") {
+		t.Fatalf("english counts item: %+v", en[0])
+	}
+	if en[1].ID != 2002 || en[1].Posts != 0 || en[1].Excerpt != "No counts here." ||
+		strings.Contains(en[1].Excerpt, "Read full topic") {
+		t.Fatalf("english suffix-only item: %+v", en[1])
+	}
+	if en[2].ID != 2003 || en[2].Excerpt != "中文摘要。" || strings.Contains(en[2].Excerpt, "阅读完整话题") {
+		t.Fatalf("chinese suffix-only item: %+v", en[2])
+	}
+
 	if _, err := parseFeed([]byte("<html>Just a moment</html>")); err == nil {
 		t.Fatal("a page that is not RSS read as one")
 	}

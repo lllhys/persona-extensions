@@ -93,6 +93,7 @@ func parseFeed(raw []byte) ([]hotTopic, error) {
 			desc = desc[:c[0]]
 		}
 		desc = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(desc), "阅读完整话题"))
+		desc = strings.TrimSpace(strings.TrimSuffix(desc, "Read full topic"))
 		t.Excerpt = clip(desc, 200)
 		out = append(out, t)
 	}
