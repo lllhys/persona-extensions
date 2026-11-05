@@ -76,12 +76,15 @@ jobs:
         run: |
           if [ -z "$EXTENSION_MARKET_SIGNING_KEY" ]; then echo "::warning::no EXTENSION_MARKET_SIGNING_KEY; index not signed"; exit 0; fi
           scripts/sign-index.py && scripts/sign-index.py verify
+      # Staged first, so signatures that were not there before (an index whose entries were removed by hand, and its
+      # stale .sig with them) are committed too.
       - name: Commit the index
         run: |
-          if git diff --quiet -- persona-extensions.json persona-plugins.json persona-extensions.json.sig persona-plugins.json.sig; then exit 0; fi
+          for f in persona-extensions.json persona-plugins.json persona-extensions.json.sig persona-plugins.json.sig; do
+            if [ -e "$f" ]; then git add "$f"; fi
+          done
+          if git diff --cached --quiet; then exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add persona-extensions.json persona-plugins.json
-          git add persona-extensions.json.sig persona-plugins.json.sig
           git commit -m "market: index after ${GITHUB_SHA::7}"
           git push
