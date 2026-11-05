@@ -1,6 +1,6 @@
 # persona-extensions
 
-Persona 的扩展里，**以后可以公开**的那些：不依赖任何公司内部的服务、账号或数据，代码和文档里也没有内部信息。仓库现在是 private，公开与否由维护者决定。
+Persona 的公开扩展：不依赖任何公司内部的服务、账号或数据，代码和文档里也没有内部信息。
 不打算公开的扩展在 [`nwverse/persona-integration`](https://github.com/nwverse/persona-integration)（原 `integration`），两个仓库同一套结构和脚本。
 扩展怎么写、怎么装见 Persona 的 `docs/extensions.md`（改名前是 `docs/plugins.md`）；这个仓库是 nwverse/persona#1843 的阶段 2（#1847）建的。
 
@@ -8,6 +8,11 @@ Persona 的扩展里，**以后可以公开**的那些：不依赖任何公司�
 | --- | --- | --- |
 | `linuxdo` | `ui`、`connectors` | LINUX DO 的热门帖子：扩展页里按兴趣看热门 / 今日 / 本周 / 最新，点开读正文和热门回复（hub 去读，手机不用代理）；助手的工具。只读公开内容、不用账号。从 internal 搬来。见 `extensions/linuxdo/README.md` |
 | `telegram` | `connectors`、`assistant` | 你自己的 Telegram 账号（MTProto，hub 直连 Telegram 的数据中心）：App 里的 Telegram 会话、收件箱（私聊、@我）、知识库归档、助手的工具和 `tg` 命令行；写操作先在手机上确认。登录加密存在 hub 的数据库里。从 internal 搬来（0.1.3 起在这里发版）。见 `extensions/telegram/README.md` |
+| `starter-kit` | `skills`、`prompts`、`triage_templates`、`themes` | 纯声明扩展的例子（不跑程序）：周回顾技能、回答风格的说明、三条快捷提示、两份收件箱分拣规则模板、一个主题色「森林」。要 #1854 之后的 hub |
+| `starter-pack` | `extension_pack` | 扩展合集的例子：一次装好 `starter-kit` 和 `linuxdo`。要 #1854 之后的 hub |
+
+纯声明的扩展（没有 `runtime`）只有清单和它指向的文件（`skills/`、`assistant/`），`scripts/package.sh` 不编程序；合集只有清单。
+写法见 Persona 的 `docs/extensions.md`「纯声明贡献」「依赖、导出和合集」。
 
 ## 放哪个仓库
 

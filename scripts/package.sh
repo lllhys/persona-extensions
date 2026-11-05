@@ -20,10 +20,12 @@ done
 for extra in skills assistant; do
   [ -d "$src/$extra" ] && cp -R "$src/$extra" "$out/"
 done
-python3 -c 'import json,sys;[print(k, v) for k, v in json.load(open(sys.argv[1]))["runtime"]["command"].items()]' "$manifest" |
+# A declarative extension (no runtime: skills, prompts, themes, a pack…) has no program to build.
+python3 -c 'import json,sys;[print(k, v) for k, v in json.load(open(sys.argv[1])).get("runtime", {}).get("command", {}).items()]' "$manifest" |
 while read -r plat path; do
   GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "$out/$path" "./$src"
 done
+rmdir "$out/bin" 2>/dev/null || true # nothing built: no empty bin/ in the package
 # No macOS metadata: bsdtar would add AppleDouble ._* entries (a second top-level entry, so the hub finds no
 # manifest) and xattr records; COPYFILE_DISABLE is ignored elsewhere, and GNU tar knows --no-xattrs too.
 COPYFILE_DISABLE=1 tar --no-xattrs -C dist -czf "dist/$id-$version.tar.gz" "$id"

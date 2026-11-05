@@ -1,0 +1,13 @@
+{
+  "manifest_version": 1,
+  "id": "starter-pack",
+  "name": "入门合集",
+  "version": "0.1.0",
+  "description": "一次装好入门套件和 LINUX DO 热门：扩展合集（extension_pack）的例子。",
+  "publisher": "nwverse",
+  "engines": {"persona": ">=202611042338"},
+  "extension_pack": [
+    {"id": "starter-kit"},
+    {"id": "linuxdo"}
+  ]
+}
