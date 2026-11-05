@@ -41,7 +41,7 @@ The list selector is segmented on UI version 2 and newer. Earlier apps see four 
 
 Timestamps use the configured `tz`, then the user's time zone supplied by the hub (`tz` in UI version 2 requests), then the hub machine's time zone.
 
-A topic view contains title, author, time, views, likes, posts, participants and tags; body text is capped at 12,000 characters. Code blocks retain code styling and images become textual placeholders. The ten highest-scoring replies from the first 20 posts are shown, followed by actions to open the website or return to the list.
+A topic view contains title, author, time, views, likes, posts, participants and tags; body text is capped at 12,000 characters and 200 text items (each code block starts a new item), then a caption points to the website. Code blocks retain code styling and images become textual placeholders. The ten highest-scoring replies from the first 20 posts are shown, followed by actions to open the website or return to the list.
 
 Views follow the host's `plugin.CheckView` limits: at most 300 items per page, 2,000 characters per item text field and HTTPS links only. Tests exercise equivalent validation.
 

@@ -438,6 +438,21 @@ func TestLongTopicFitsThePage(t *testing.T) {
 	}
 }
 
+// Every <pre> starts a new segment, so a short post of many code blocks is many items; the view still fits in 300.
+func TestManyCodeBlocksFitThePage(t *testing.T) {
+	f := newFakeSite(t)
+	var replies []string
+	for i := 0; i < 19; i++ {
+		replies = append(replies, "<p>回复</p>")
+	}
+	f.topics[8] = topicJSON(8, "命令合集", strings.Repeat("<p>步骤</p><pre><code>ls</code></pre>", 200), replies...)
+	p := testPlugin(t, f, nil)
+	v, _ := act(t, p, "", "topic:8") // checkView: at most 300 items
+	if !strings.Contains(texts(v), "正文太长，后面的在网页里看") || !strings.Contains(texts(v), "热门回复") {
+		t.Fatalf("no caption or no replies:\n%s", texts(v))
+	}
+}
+
 func TestSiteFailures(t *testing.T) {
 	f := newFakeSite(t)
 	sample(f)
