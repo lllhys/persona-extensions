@@ -154,7 +154,10 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 		sec.Items = append(sec.Items, pluginkit.Item{Type: "row", Title: clip(t.Title, 300), Subtitle: t.meta(now),
 			Action: &pluginkit.UIAction{ID: fmt.Sprintf("topic:%d", t.ID)}})
 	}
-	if len(shown) == 0 {
+	switch {
+	case len(topics) == 0:
+		sec.Items = append(sec.Items, pluginkit.Item{Type: "text", Text: "这个列表现在没有帖子", Style: "secondary"})
+	case len(shown) == 0:
 		sec.Items = append(sec.Items, pluginkit.Item{Type: "text", Text: "没有符合你兴趣的帖子", Style: "secondary"})
 	}
 	if f.describe() != "" && (st.All || len(shown) < len(topics)) {

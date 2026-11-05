@@ -384,6 +384,14 @@ func TestPage(t *testing.T) {
 		t.Errorf("daily:\n%s", page)
 	}
 
+	// A feed with zero topics says the list is empty, not that the user's filter hid everything.
+	f.feeds["/top.rss?period=weekly"] = rss()
+	weekly, _ := act(t, p, v.State, "list:weekly")
+	if page := texts(weekly); !strings.Contains(page, "本周最热 · 0 / 0 条") ||
+		!strings.Contains(page, "这个列表现在没有帖子") || strings.Contains(page, "没有符合你兴趣的帖子") {
+		t.Errorf("an empty weekly list:\n%s", page)
+	}
+
 	topic, _ := act(t, p, v.State, "topic:1001")
 	page = texts(topic)
 	for _, want := range []string{"Claude 新模型实测 & 对比\n", "op · 11-03 17:37 · 1098 浏览 · 110 赞 · 4 帖 · 13 人 · 标签 人工智能",
