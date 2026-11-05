@@ -6,6 +6,101 @@
     {
       "manifest": {
         "manifest_version": 1,
+        "id": "claude-bypass-allow",
+        "name": "Bypass 自动允许",
+        "version": "0.1.1",
+        "description": "Claude Code 开着 bypassPermissions（--dangerously-skip-permissions）时，有些 Bash 命令（如 cd 之后 rm 一个 glob、rm 的目标是变量）仍会弹确认框，无人值守的 Agent 就卡在「在等你」。在你选的电脑上给 Claude Code 装一个 PermissionRequest hook：只在会话是 bypass 模式、工具是 Bash 时自动允许，不覆盖你自己配的 ask / deny 规则，每次自动允许都记一条（命令截断、去掉密钥）。别的模式照常问你。",
+        "publisher": "nwverse",
+        "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/claude-bypass-allow",
+        "engines": {
+          "persona": ">=202611041602",
+          "extension_protocol": 1
+        },
+        "runtime": {
+          "command": {
+            "linux-amd64": "bin/claude-bypass-allow-linux-amd64",
+            "linux-arm64": "bin/claude-bypass-allow-linux-arm64",
+            "darwin-arm64": "bin/claude-bypass-allow-darwin-arm64",
+            "darwin-amd64": "bin/claude-bypass-allow-darwin-amd64"
+          },
+          "args": [
+            "hub"
+          ]
+        },
+        "node": {
+          "command": {
+            "linux-amd64": "bin/claude-bypass-allow-linux-amd64",
+            "linux-arm64": "bin/claude-bypass-allow-linux-arm64",
+            "darwin-arm64": "bin/claude-bypass-allow-darwin-arm64",
+            "darwin-amd64": "bin/claude-bypass-allow-darwin-amd64"
+          },
+          "args": [
+            "node"
+          ],
+          "machines": "machines",
+          "permissions": {
+            "files": true
+          }
+        },
+        "contributes": {
+          "ui": [
+            {
+              "id": "log",
+              "title": "自动允许记录",
+              "placement": "extension_page"
+            }
+          ]
+        },
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "machines": {
+              "type": "array",
+              "title": "在哪些电脑上自动允许",
+              "description": "打开的电脑上，Claude Code 的 settings.json 里会多一个 PermissionRequest hook；关掉、停用或卸载扩展时去掉。",
+              "items": {
+                "type": "string",
+                "format": "machine",
+                "x-os": [
+                  "darwin",
+                  "linux"
+                ]
+              },
+              "x-confirm": "这台电脑上 bypass 模式的 Claude Code 会话，Bash 的安全确认（如危险的 rm）将不再问你、直接执行。每次都会记录。"
+            },
+            "config_dirs": {
+              "type": "array",
+              "title": "Claude Code 配置目录",
+              "description": "装 hook 的目录，~ 是那台电脑的家目录。用了 CLAUDE_CONFIG_DIR 的把那个目录也加上。",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "maxItems": 8,
+              "default": [
+                "~/.claude"
+              ]
+            }
+          }
+        }
+      },
+      "tags": [
+        "claude-code",
+        "agents",
+        "permissions"
+      ],
+      "packages": [
+        {
+          "url": "release:claude-bypass-allow-v0.1.1/claude-bypass-allow-0.1.1.tar.gz",
+          "sha256": "c4e8d5d056111cfd1a1046942513a795aaea7b7c112932334d9b3d11890d9e9c",
+          "size": 11607747
+        }
+      ]
+    },
+    {
+      "manifest": {
+        "manifest_version": 1,
         "id": "linuxdo",
         "name": "LINUX DO",
         "version": "0.1.1",
