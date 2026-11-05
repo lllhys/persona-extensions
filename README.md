@@ -7,6 +7,7 @@ Persona 的扩展里，**以后可以公开**的那些：不依赖任何公司�
 | 扩展 | 扩展点 | 说明 |
 | --- | --- | --- |
 | `linuxdo` | `ui`、`connectors` | LINUX DO 的热门帖子：扩展页里按兴趣看热门 / 今日 / 本周 / 最新，点开读正文和热门回复（hub 去读，手机不用代理）；助手的工具。只读公开内容、不用账号。从 internal 搬来。见 `extensions/linuxdo/README.md` |
+| `telegram` | `connectors`、`assistant` | 你自己的 Telegram 账号（MTProto，hub 直连 Telegram 的数据中心）：App 里的 Telegram 会话、收件箱（私聊、@我）、知识库归档、助手的工具和 `tg` 命令行；写操作先在手机上确认。登录加密存在 hub 的数据库里。从 internal 搬来（0.1.3 起在这里发版）。见 `extensions/telegram/README.md` |
 
 ## 放哪个仓库
 
