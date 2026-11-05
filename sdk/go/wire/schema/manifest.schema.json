@@ -32,6 +32,7 @@
         "node": {"$ref": "#/$defs/NodeRuntime"},
         "activation_events": {"type": "array", "items": {"$ref": "#/$defs/ActivationEvent"}},
         "contributes": {"$ref": "#/$defs/Contributes"},
+        "off_by_default": {"description": "Contributions (\"<point>/<id>\") that start switched off: at install, and at an upgrade the ones the version before did not have (docs「贡献的开关」). Not a connector or a channel bound to one (their switch is the connector's). Hubs before it refuse the manifest.", "type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9_.-]+/[a-z0-9][a-z0-9_-]*$"}},
         "depends": {
           "description": "Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.",
           "type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/Dependency"}
@@ -173,7 +174,8 @@
         "hub_api": {"type": "boolean", "description": "The old way: the hub's full token. With hub scopes, the scopes win."},
         "hub": {"type": "array", "description": "The scopes of the hub's API it calls: its token opens their routes only.",
           "items": {"type": "string", "pattern": "^(kb\\.read|kb\\.write|inbox\\.read|inbox\\.write|agents\\.read|agents\\.control|machines\\.read|notify|assistant\\.ask|extensions\\.call:[a-z0-9][a-z0-9_-]{0,31})$"}},
-        "launcher_keys": {"type": "boolean"}
+        "launcher_keys": {"type": "boolean"},
+        "gh_login": {"type": "boolean", "description": "It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector), held in its memory only."}
       }
     },
     "Contributes": {
@@ -198,7 +200,9 @@
         "skills": {"type": "array", "items": {"$ref": "#/$defs/SkillItem"}},
         "prompts": {"type": "array", "items": {"$ref": "#/$defs/PromptItem"}},
         "themes": {"type": "array", "items": {"$ref": "#/$defs/ThemeItem"}},
-        "triage_templates": {"type": "array", "items": {"$ref": "#/$defs/TriageTemplateItem"}}
+        "triage_templates": {"type": "array", "items": {"$ref": "#/$defs/TriageTemplateItem"}},
+        "agent_filters": {"type": "array", "items": {"$ref": "#/$defs/AgentFilterItem"}},
+        "messaging": {"type": "array", "items": {"$ref": "messaging.schema.json#/$defs/MessagingItem"}}
       }
     },
     "SkillItem": {
@@ -261,6 +265,21 @@
         "text": {"type": "string", "minLength": 1, "maxLength": 4000}
       },
       "required": ["id", "title", "text"]
+    },
+    "AgentFilterItem": {
+      "description": "Agent sessions kept out of Agents (docs「Agent 过滤」): a session goes when it is one of agents and any of the matchers fits it.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "title": {"type": "string", "maxLength": 40, "description": "What the extension's contributions list calls it."},
+        "when": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$", "description": "A boolean field of the configuration: the filter holds only while it is true, and that field is its only switch. Without it the filter holds while the extension is on."},
+        "agents": {"type": "array", "items": {"type": "string", "enum": ["claude", "codex"]}, "description": "Whose sessions: Claude Code, Codex; none: both."},
+        "originators": {"type": "array", "items": {"type": "string", "minLength": 1}, "maxItems": 16, "description": "Codex: session_meta.originator of the rollout, exactly."},
+        "added_dirs": {"type": "array", "items": {"type": "string", "minLength": 2}, "maxItems": 16, "description": "Claude Code: a directory the session was given besides its own (additionalWorkingDirectories), this or under it; ~/ is the home directory."},
+        "first_message_prefixes": {"type": "array", "items": {"type": "string", "minLength": 8, "maxLength": 200}, "maxItems": 16, "description": "The first user message starts with one of these (leading blanks ignored): a fallback for sessions without a marker."}
+      },
+      "required": ["id"]
     },
     "ConnectorItem": {
       "description": "The connector protocol's manifest (docs/connector-protocol.md).",

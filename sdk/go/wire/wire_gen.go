@@ -34,6 +34,10 @@ type Manifest struct {
 	Node             *NodeRuntime `json:"node,omitempty"`
 	ActivationEvents []string     `json:"activation_events,omitempty"`
 	Contributes      *Contributes `json:"contributes,omitempty"`
+	// Contributions ("<point>/<id>") that start switched off: at install, and at an upgrade the ones the version before
+	// did not have (docs「贡献的开关」). Not a connector or a channel bound to one (their switch is the connector's). Hubs
+	// before it refuse the manifest.
+	OffByDefault []string `json:"off_by_default,omitempty"`
 	// Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.
 	Depends []Dependency `json:"depends,omitempty"`
 	Exports *Exports     `json:"exports,omitempty"`
@@ -139,6 +143,9 @@ type Permissions struct {
 	// The scopes of the hub's API it calls: its token opens their routes only.
 	Hub          []string `json:"hub,omitempty"`
 	LauncherKeys bool     `json:"launcher_keys,omitempty"`
+	// It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector),
+	// held in its memory only.
+	GhLogin bool `json:"gh_login,omitempty"`
 }
 
 // Contributes: contributions by extension point. A point this hub does not know installs with a warning, not taking
@@ -161,6 +168,8 @@ type Contributes struct {
 	Prompts         []PromptItem         `json:"prompts,omitempty"`
 	Themes          []ThemeItem          `json:"themes,omitempty"`
 	TriageTemplates []TriageTemplateItem `json:"triage_templates,omitempty"`
+	AgentFilters    []AgentFilterItem    `json:"agent_filters,omitempty"`
+	Messaging       []MessagingItem      `json:"messaging,omitempty"`
 	// Extra keys stay at this object's level on the wire; they cannot replace declared fields.
 	AdditionalProperties map[string]json.RawMessage `json:"-"`
 }
@@ -171,7 +180,7 @@ func (v *Contributes) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	declared := map[string]json.RawMessage{}
-	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates"} {
+	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates", "agent_filters", "messaging"} {
 		if value, ok := extra[key]; ok {
 			declared[key] = value
 			delete(extra, key)
@@ -203,7 +212,7 @@ func (v Contributes) MarshalJSON() ([]byte, error) {
 	}
 	for key, value := range v.AdditionalProperties {
 		switch key {
-		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates":
+		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates", "agent_filters", "messaging":
 			continue
 		}
 		fields[key] = value
@@ -263,6 +272,27 @@ type TriageTemplateItem struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
 	Text  string `json:"text"`
+}
+
+// AgentFilterItem: agent sessions kept out of Agents (docs「Agent 过滤」): a session goes when it is one of agents and
+// any of the matchers fits it.
+type AgentFilterItem struct {
+	ID string `json:"id"`
+	// What the extension's contributions list calls it.
+	Title string `json:"title,omitempty"`
+	// A boolean field of the configuration: the filter holds only while it is true, and that field is its only switch.
+	// Without it the filter holds while the extension is on.
+	When string `json:"when,omitempty"`
+	// Whose sessions: Claude Code, Codex; none: both.
+	Agents []string `json:"agents,omitempty"`
+	// Codex: session_meta.originator of the rollout, exactly.
+	Originators []string `json:"originators,omitempty"`
+	// Claude Code: a directory the session was given besides its own (additionalWorkingDirectories), this or under it;
+	// ~/ is the home directory.
+	AddedDirs []string `json:"added_dirs,omitempty"`
+	// The first user message starts with one of these (leading blanks ignored): a fallback for sessions without a
+	// marker.
+	FirstMessagePrefixes []string `json:"first_message_prefixes,omitempty"`
 }
 
 // ConnectorItem: the connector protocol's manifest (docs/connector-protocol.md).
@@ -989,6 +1019,13 @@ type ViewAction struct {
 	Error       string            `json:"error,omitempty"`
 	UpdatedAt   time.Time         `json:"updated_at,omitzero"`
 	At          time.Time         `json:"at"`
+	// Absent or action: a declared Action (action is its id). html: an HTML bridge reply (action is the html component's
+	// key, text the confirmed reply).
+	Kind string `json:"kind,omitempty"`
+	// The card version the user saw and confirmed when this was committed; absent on records committed before #2019.
+	Version int64 `json:"version,omitempty"`
+	// kind html only: the reply text the user confirmed.
+	Text string `json:"text,omitempty"`
 }
 
 // Values of ViewActionStatus.
@@ -1000,6 +1037,78 @@ const (
 
 // ViewActionStatuses are the values of ViewActionStatus, in order.
 var ViewActionStatuses = []string{"pending", "sent", "failed"}
+
+// Values of ViewActionKind.
+const (
+	ViewActionKindAction = "action"
+	ViewActionKindHtml   = "html"
+)
+
+// ViewActionKinds are the values of ViewActionKind, in order.
+var ViewActionKinds = []string{"action", "html"}
+
+// ViewActionInput: the body of POST /api/v1/assistant/conversations/{id}/views/{key}/actions. The reply text and form
+// definition are read from the stored View, never from the client.
+type ViewActionInput struct {
+	// A declared reply action's id.
+	Action string `json:"action"`
+	// The named page the action is on; absent for the root page.
+	Page string `json:"page,omitempty"`
+	// The fields this action submits, by name.
+	Values      map[string]string `json:"values,omitempty"`
+	ClientMsgID string            `json:"client_msg_id"`
+	// The user confirmed the action's confirm prompt natively.
+	Confirmed bool `json:"confirmed,omitempty"`
+	// The card version shown (and confirmed) to the user. Required when the action has confirm; a different stored
+	// version answers 409 view_changed.
+	ExpectedVersion int64 `json:"expected_version,omitempty"`
+}
+
+// Values of AssistantHTMLActionKind.
+const (
+	AssistantHTMLActionKindReply = "reply"
+	AssistantHTMLActionKindOpen  = "open"
+)
+
+// AssistantHTMLActionKinds are the values of AssistantHTMLActionKind, in order.
+var AssistantHTMLActionKinds = []string{"reply", "open"}
+
+// AssistantHTMLActionInput: the body of POST /api/v1/assistant/conversations/{id}/views/{key}/html-actions: a
+// persona.reply / persona.open call of a keyed html component, after the user confirmed it natively.
+type AssistantHTMLActionInput struct {
+	Kind string `json:"kind"`
+	// The key of the html component on that page of the stored card.
+	ComponentKey string `json:"component_key"`
+	// The named page the component is on; absent for the root page.
+	Page string `json:"page,omitempty"`
+	// The card version that ran the HTML and was shown in the confirmation.
+	ExpectedVersion int64 `json:"expected_version"`
+	// reply only: the text shown in full in the confirmation.
+	Text string `json:"text,omitempty"`
+	// open only: an https or supported persona:// target.
+	URL         string `json:"url,omitempty"`
+	ClientMsgID string `json:"client_msg_id"`
+	// Always true: the call was confirmed natively, outside the HTML.
+	Confirmed bool `json:"confirmed"`
+}
+
+// AssistantHTMLOpenResult: what an html-actions open answers: the validated target to open inside the app, and the
+// card version it was checked against.
+type AssistantHTMLOpenResult struct {
+	Open    string `json:"open"`
+	Version int64  `json:"version"`
+}
+
+// ViewChangedError: 409 code view_changed: the stored card is not the version the user saw. Refresh, keep the draft
+// and confirm again; never resubmit with the new version automatically.
+type ViewChangedError struct {
+	Error string `json:"error"`
+	Code  string `json:"code"`
+	// The current stored version.
+	Version int64 `json:"version"`
+	// The current card, as feed.views carries it (a transcript card: id is its key, version 1).
+	View *AssistantView `json:"view,omitempty"`
+}
 
 // Action: what a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push
 // or pop a page) are fields added here.
@@ -1180,94 +1289,785 @@ type CardPart struct {
 	Note  string  `json:"note,omitempty"`
 }
 
+// MessagingCapability: what a source supports (docs「三、能力」). The apps show only what is supported; an unknown one is
+// ignored.
+const (
+	MessagingCapabilityAccounts          = "accounts"
+	MessagingCapabilityPinned            = "pinned"
+	MessagingCapabilityMentions          = "mentions"
+	MessagingCapabilityAttachments       = "attachments"
+	MessagingCapabilityAttachmentReplies = "attachment_replies"
+	MessagingCapabilityThreads           = "threads"
+	MessagingCapabilityTopics            = "topics"
+	MessagingCapabilityReactions         = "reactions"
+	MessagingCapabilityReadReceipts      = "read_receipts"
+	MessagingCapabilityChatPins          = "chat_pins"
+	MessagingCapabilityProfiles          = "profiles"
+	MessagingCapabilityURLPreviews       = "url_previews"
+	MessagingCapabilityDocuments         = "documents"
+	MessagingCapabilityDocComments       = "doc_comments"
+	MessagingCapabilityPosts             = "posts"
+	MessagingCapabilityEditHistory       = "edit_history"
+	MessagingCapabilityTranslation       = "translation"
+)
+
+// MessagingCapabilities are the values of MessagingCapability, in order.
+var MessagingCapabilities = []string{"accounts", "pinned", "mentions", "attachments", "attachment_replies", "threads", "topics", "reactions", "read_receipts", "chat_pins", "profiles", "url_previews", "documents", "doc_comments", "posts", "edit_history", "translation"}
+
+// MessagingComposerMode: A message box mode besides plain (docs「七、输入框模式」): what is sent is handled by the extension
+// (encoded, sealed).
+type MessagingComposerMode struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	// A name from the fixed icon set (NavIcon), or lock / shield; an unknown one draws as the default.
+	Icon string `json:"icon,omitempty"`
+	// One line over the box while the mode is chosen.
+	Description string `json:"description,omitempty"`
+	// Pictures and files can go with it.
+	Attachments bool `json:"attachments"`
+	// @ works in it.
+	Mentions bool `json:"mentions"`
+	// Sending takes a compose step first (POST compose → token or a view to fill).
+	Prepare bool `json:"prepare,omitempty"`
+	// It can go into a thread (reply_to + thread).
+	Threads bool `json:"threads,omitempty"`
+}
+
+// MessagingLink: links the source opens when tapped in the apps.
+type MessagingLink struct {
+	Hosts []string `json:"hosts"`
+	// Path prefixes; none is any path.
+	Paths []string `json:"paths,omitempty"`
+	Opens string   `json:"opens"`
+}
+
+// MessagingItem: the manifest's contributes.messaging[]: one messaging source (docs「二、清单」).
+type MessagingItem struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Icon string `json:"icon,omitempty"`
+	// MessagingCapability values; one this hub does not know is kept (a newer extension), the apps ignore it.
+	Capabilities  []string                `json:"capabilities,omitempty"`
+	ComposerModes []MessagingComposerMode `json:"composer_modes,omitempty"`
+	// A ui contribution (extension_page) of the same extension.
+	SettingsUI string          `json:"settings_ui,omitempty"`
+	Links      []MessagingLink `json:"links,omitempty"`
+}
+
+// MessagingSource: GET /api/v1/messaging: an enabled source, its manifest item and the extension it is in.
+type MessagingSource struct {
+	Extension     string                  `json:"extension"`
+	ID            string                  `json:"id"`
+	Name          string                  `json:"name"`
+	Icon          string                  `json:"icon,omitempty"`
+	Capabilities  []string                `json:"capabilities,omitempty"`
+	ComposerModes []MessagingComposerMode `json:"composer_modes,omitempty"`
+	SettingsUI    string                  `json:"settings_ui,omitempty"`
+	Links         []MessagingLink         `json:"links,omitempty"`
+}
+
+type MessagingSources struct {
+	Sources []MessagingSource `json:"sources"`
+}
+
+// MessagingStatus: GET status: whether the source is set up and signed in, and the composer modes usable now.
+type MessagingStatus struct {
+	Configured bool     `json:"configured"`
+	Connected  bool     `json:"connected"`
+	SignedIn   bool     `json:"signed_in"`
+	Name       string   `json:"name,omitempty"`
+	Error      string   `json:"error,omitempty"`
+	Modes      []string `json:"modes,omitempty"`
+}
+
+// MessagingMe: GET me: who the account is now (the outbox keys sends by it).
+type MessagingMe struct {
+	Account string `json:"account"`
+	UserID  string `json:"user_id"`
+	Name    string `json:"name,omitempty"`
+}
+
+type MessagingAccount struct {
+	ID       string `json:"id"`
+	Name     string `json:"name,omitempty"`
+	Avatar   string `json:"avatar,omitempty"`
+	Tenant   string `json:"tenant,omitempty"`
+	SignedIn bool   `json:"signed_in"`
+	Unread   int    `json:"unread,omitempty"`
+}
+
+type MessagingAccounts struct {
+	Accounts []MessagingAccount `json:"accounts"`
+	Default  string             `json:"default,omitempty"`
+}
+
+// Values of MessagingConversationKind.
+const (
+	MessagingConversationKindDirect     = "direct"
+	MessagingConversationKindGroup      = "group"
+	MessagingConversationKindTopicGroup = "topic_group"
+	MessagingConversationKindBot        = "bot"
+)
+
+// MessagingConversationKinds are the values of MessagingConversationKind, in order.
+var MessagingConversationKinds = []string{"direct", "group", "topic_group", "bot"}
+
+type MessagingConversation struct {
+	ID              string    `json:"id"`
+	Name            string    `json:"name"`
+	Avatar          string    `json:"avatar,omitempty"`
+	Kind            string    `json:"kind"`
+	Unread          int       `json:"unread"`
+	MarkedUnread    bool      `json:"marked_unread,omitempty"`
+	Mentioned       bool      `json:"mentioned,omitempty"`
+	Muted           bool      `json:"muted,omitempty"`
+	Pinned          bool      `json:"pinned,omitempty"`
+	Preview         string    `json:"preview"`
+	PreviewSender   string    `json:"preview_sender,omitempty"`
+	PreviewMine     bool      `json:"preview_mine,omitempty"`
+	UpdatedAt       time.Time `json:"updated_at,omitzero"`
+	ReadPosition    string    `json:"read_position,omitempty"`
+	MentionPosition string    `json:"mention_position,omitempty"`
+}
+
+type MessagingConversationPage struct {
+	Account       string                  `json:"account,omitempty"`
+	Conversations []MessagingConversation `json:"conversations"`
+	NextCursor    string                  `json:"next_cursor,omitempty"`
+}
+
+type MessagingPerson struct {
+	ID     string `json:"id,omitempty"`
+	Name   string `json:"name"`
+	Avatar string `json:"avatar,omitempty"`
+	Kind   string `json:"kind,omitempty"`
+}
+
+type MessagingMembers struct {
+	Members []MessagingPerson `json:"members"`
+}
+
+type MessagingReplyTo struct {
+	ID         string `json:"id"`
+	SenderName string `json:"sender_name,omitempty"`
+	Summary    string `json:"summary"`
+	Recalled   bool   `json:"recalled,omitempty"`
+}
+
+type MessagingThread struct {
+	Count    int       `json:"count"`
+	LatestAt time.Time `json:"latest_at,omitzero"`
+}
+
+type MessagingReaction struct {
+	Key   string   `json:"key"`
+	Count int      `json:"count"`
+	Mine  bool     `json:"mine,omitempty"`
+	Users []string `json:"users,omitempty"`
+}
+
+// MessagingDecoration: A small line under a message's body the extension adds (勇攀高峰 · 已解码, 加密消息 · 对外展示).
+type MessagingDecoration struct {
+	Text string `json:"text"`
+	Icon string `json:"icon,omitempty"`
+	Tone string `json:"tone,omitempty"`
+}
+
+// MessagingAction: an action of the extension's on a message, in its long-press menu: POST
+// messages/{id}/actions/{id}.
+type MessagingAction struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Icon        string `json:"icon,omitempty"`
+	Destructive bool   `json:"destructive,omitempty"`
+	Confirm     string `json:"confirm,omitempty"`
+}
+
+type MessagingEditVersion struct {
+	EditedAt time.Time       `json:"edited_at,omitzero"`
+	Text     string          `json:"text"`
+	Parts    []MessagingPart `json:"parts,omitempty"`
+}
+
+type MessagingMessage struct {
+	ID          string                 `json:"id"`
+	Position    string                 `json:"position"`
+	CreatedAt   time.Time              `json:"created_at,omitzero"`
+	Sender      MessagingPerson        `json:"sender"`
+	Mine        bool                   `json:"mine"`
+	ClientID    string                 `json:"client_id,omitempty"`
+	State       string                 `json:"state,omitempty"`
+	Parts       []MessagingPart        `json:"parts"`
+	Text        string                 `json:"text"`
+	ReplyTo     *MessagingReplyTo      `json:"reply_to,omitempty"`
+	Thread      *MessagingThread       `json:"thread,omitempty"`
+	Reactions   []MessagingReaction    `json:"reactions,omitempty"`
+	Edited      bool                   `json:"edited,omitempty"`
+	EditHistory []MessagingEditVersion `json:"edit_history,omitempty"`
+	Recalled    bool                   `json:"recalled,omitempty"`
+	Decorations []MessagingDecoration  `json:"decorations,omitempty"`
+	// The body must not be written to disk (an opened sealed message): caches keep private_text.
+	Private     bool              `json:"private,omitempty"`
+	PrivateText string            `json:"private_text,omitempty"`
+	Actions     []MessagingAction `json:"actions,omitempty"`
+	CanPin      bool              `json:"can_pin,omitempty"`
+	CanUnpin    bool              `json:"can_unpin,omitempty"`
+	CanReply    bool              `json:"can_reply,omitempty"`
+	CanReact    bool              `json:"can_react,omitempty"`
+	Read        bool              `json:"read,omitempty"`
+}
+
+type MessagingMessagePage struct {
+	Account     string             `json:"account,omitempty"`
+	Messages    []MessagingMessage `json:"messages"`
+	HasOlder    bool               `json:"has_older"`
+	HasNewer    bool               `json:"has_newer,omitempty"`
+	OlderCursor string             `json:"older_cursor,omitempty"`
+	NewerCursor string             `json:"newer_cursor,omitempty"`
+	Root        *MessagingMessage  `json:"root,omitempty"`
+	// The conversation is a topic group and messages are its topics' roots.
+	Topic bool `json:"topic,omitempty"`
+}
+
+// MessagingMessageAnswer: GET messages/{id}.
+type MessagingMessageAnswer struct {
+	Account string           `json:"account,omitempty"`
+	Message MessagingMessage `json:"message"`
+}
+
+// Values of MessagingMarks.
+const (
+	MessagingMarksBold      = "bold"
+	MessagingMarksItalic    = "italic"
+	MessagingMarksUnderline = "underline"
+	MessagingMarksStrike    = "strike"
+	MessagingMarksCode      = "code"
+)
+
+// MessagingMarkses are the values of MessagingMarks, in order.
+var MessagingMarkses = []string{"bold", "italic", "underline", "strike", "code"}
+
+// Values of MessagingBlock.
+const (
+	MessagingBlockParagraph = "paragraph"
+	MessagingBlockHeading1  = "heading1"
+	MessagingBlockHeading2  = "heading2"
+	MessagingBlockHeading3  = "heading3"
+	MessagingBlockQuote     = "quote"
+	MessagingBlockCode      = "code"
+	MessagingBlockListItem  = "list_item"
+)
+
+// MessagingBlocks are the values of MessagingBlock, in order.
+var MessagingBlocks = []string{"paragraph", "heading1", "heading2", "heading3", "quote", "code", "list_item"}
+
+type MessagingList struct {
+	Ordered bool `json:"ordered"`
+	Level   int  `json:"level,omitempty"`
+	Start   int  `json:"start,omitempty"`
+}
+
+type MessagingMediaSize struct {
+	Media  string `json:"media"`
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
+}
+
+type MessagingField struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+type MessagingPreview struct {
+	SenderName string `json:"sender_name,omitempty"`
+	Text       string `json:"text"`
+}
+
+// MessagingPart: A piece of a message's body, told apart by kind (docs「五」). An app that does not know a kind draws
+// its text, or skips it. One struct for every variant: kind says which fields mean something.
+type MessagingPart struct {
+	Kind  string         `json:"kind"`
+	Text  string         `json:"text,omitempty"`
+	Marks []string       `json:"marks,omitempty"`
+	URL   string         `json:"url,omitempty"`
+	Block string         `json:"block,omitempty"`
+	List  *MessagingList `json:"list,omitempty"`
+	// Consecutive text parts with the same block_id are one block; another id starts another.
+	BlockID    string              `json:"block_id,omitempty"`
+	UserID     string              `json:"user_id,omitempty"`
+	All        bool                `json:"all,omitempty"`
+	Key        string              `json:"key,omitempty"`
+	Media      string              `json:"media,omitempty"`
+	Width      int                 `json:"width,omitempty"`
+	Height     int                 `json:"height,omitempty"`
+	Name       string              `json:"name,omitempty"`
+	Size       int64               `json:"size,omitempty"`
+	Ext        string              `json:"ext,omitempty"`
+	Expired    bool                `json:"expired,omitempty"`
+	DurationMs int                 `json:"duration_ms,omitempty"`
+	Poster     *MessagingMediaSize `json:"poster,omitempty"`
+	Language   string              `json:"language,omitempty"`
+	View       *View               `json:"view,omitempty"`
+	Title      string              `json:"title,omitempty"`
+	Messages   []MessagingMessage  `json:"messages,omitempty"`
+	Previews   []MessagingPreview  `json:"previews,omitempty"`
+	Count      int                 `json:"count,omitempty"`
+	Subtitle   string              `json:"subtitle,omitempty"`
+	Image      *MessagingMediaSize `json:"image,omitempty"`
+	Fields     []MessagingField    `json:"fields,omitempty"`
+}
+
+// MessagingPart kinds.
+const (
+	MessagingPartText    = "text"
+	MessagingPartMention = "mention"
+	MessagingPartLink    = "link"
+	MessagingPartEmoji   = "emoji"
+	MessagingPartSticker = "sticker"
+	MessagingPartImage   = "image"
+	MessagingPartFile    = "file"
+	MessagingPartVideo   = "video"
+	MessagingPartAudio   = "audio"
+	MessagingPartCode    = "code"
+	MessagingPartDivider = "divider"
+	MessagingPartCard    = "card"
+	MessagingPartForward = "forward"
+	MessagingPartShare   = "share"
+	MessagingPartSystem  = "system"
+)
+
+// MessagingPartKinds are the kinds of MessagingPart, in order.
+var MessagingPartKinds = []string{"text", "mention", "link", "emoji", "sticker", "image", "file", "video", "audio", "code", "divider", "card", "forward", "share", "system"}
+
+type MessagingMention struct {
+	UserID string `json:"user_id"`
+	Name   string `json:"name"`
+}
+
+// MessagingOutgoing: POST conversations/{id}/messages (docs「六、发送」).
+type MessagingOutgoing struct {
+	ClientID string             `json:"client_id"`
+	Text     string             `json:"text"`
+	Mentions []MessagingMention `json:"mentions,omitempty"`
+	ReplyTo  string             `json:"reply_to,omitempty"`
+	Thread   bool               `json:"thread,omitempty"`
+	Mode     string             `json:"mode,omitempty"`
+	Prepared string             `json:"prepared,omitempty"`
+	// GET me's user_id: not sent (409 account_changed) when the account is someone else's now.
+	ExpectUser string `json:"expect_user,omitempty"`
+}
+
+type MessagingSendReceipt struct {
+	MessageID string `json:"message_id,omitempty"`
+}
+
+// MessagingCompose: POST conversations/{id}/compose: a mode that prepares before sending.
+type MessagingCompose struct {
+	Mode    string            `json:"mode"`
+	Text    string            `json:"text"`
+	ReplyTo string            `json:"reply_to,omitempty"`
+	Values  map[string]string `json:"values,omitempty"`
+}
+
+// MessagingComposeAnswer: ready to send with token, or a view (declarative UI) the user fills first.
+type MessagingComposeAnswer struct {
+	Ready bool   `json:"ready,omitempty"`
+	Token string `json:"token,omitempty"`
+	View  *View  `json:"view,omitempty"`
+}
+
+type MessagingReadReport struct {
+	Position   string   `json:"position"`
+	MessageIds []string `json:"message_ids,omitempty"`
+}
+
+type MessagingReadState struct {
+	MessageID string `json:"message_id"`
+	Read      int    `json:"read"`
+	Unread    int    `json:"unread"`
+}
+
+type MessagingReadStates struct {
+	States []MessagingReadState `json:"states"`
+}
+
+type MessagingChatPin struct {
+	ID           string            `json:"id"`
+	MessageID    string            `json:"message_id"`
+	Message      *MessagingMessage `json:"message,omitempty"`
+	OperatorName string            `json:"operator_name,omitempty"`
+	CreatedAt    time.Time         `json:"created_at,omitzero"`
+}
+
+type MessagingChatPins struct {
+	Account    string             `json:"account,omitempty"`
+	Items      []MessagingChatPin `json:"items"`
+	NextCursor string             `json:"next_cursor,omitempty"`
+	Total      int                `json:"total,omitempty"`
+}
+
+type MessagingPinTarget struct {
+	Message MessagingMessage     `json:"message"`
+	Root    *MessagingMessage    `json:"root,omitempty"`
+	Page    MessagingMessagePage `json:"page"`
+}
+
+type MessagingPinTargetAnswer struct {
+	Account string             `json:"account,omitempty"`
+	Target  MessagingPinTarget `json:"target"`
+}
+
+type MessagingPinAnswer struct {
+	Account string `json:"account,omitempty"`
+	Pinned  bool   `json:"pinned"`
+}
+
+type MessagingEmoji struct {
+	Label string `json:"label"`
+	URL   string `json:"url,omitempty"`
+}
+
+type MessagingEmojiGroup struct {
+	Title string   `json:"title"`
+	Keys  []string `json:"keys"`
+}
+
+type MessagingEmojis struct {
+	Emojis map[string]MessagingEmoji `json:"emojis"`
+	Groups []MessagingEmojiGroup     `json:"groups,omitempty"`
+}
+
+type MessagingQuickReactions struct {
+	Keys []string `json:"keys"`
+}
+
+type MessagingURLPreview struct {
+	URL     string              `json:"url"`
+	Title   string              `json:"title,omitempty"`
+	Host    string              `json:"host,omitempty"`
+	Summary string              `json:"summary,omitempty"`
+	Image   *MessagingMediaSize `json:"image,omitempty"`
+	Author  *MessagingPerson    `json:"author,omitempty"`
+}
+
+type MessagingProfileField struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+	URL   string `json:"url,omitempty"`
+	// Another person's id: tapping the row opens their profile.
+	Person string `json:"person,omitempty"`
+}
+
+type MessagingProfile struct {
+	ID          string                  `json:"id"`
+	Name        string                  `json:"name"`
+	Avatar      string                  `json:"avatar,omitempty"`
+	Cover       string                  `json:"cover,omitempty"`
+	Kind        string                  `json:"kind,omitempty"`
+	Subtitle    string                  `json:"subtitle,omitempty"`
+	Status      string                  `json:"status,omitempty"`
+	Description string                  `json:"description,omitempty"`
+	Fields      []MessagingProfileField `json:"fields,omitempty"`
+	CanChat     bool                    `json:"can_chat,omitempty"`
+}
+
+type MessagingChatOpened struct {
+	ConversationID string `json:"conversation_id"`
+}
+
+// Values of MessagingDocBlockKind.
+const (
+	MessagingDocBlockKindHeading   = "heading"
+	MessagingDocBlockKindParagraph = "paragraph"
+	MessagingDocBlockKindList      = "list"
+	MessagingDocBlockKindQuote     = "quote"
+	MessagingDocBlockKindCode      = "code"
+	MessagingDocBlockKindCallout   = "callout"
+	MessagingDocBlockKindTable     = "table"
+	MessagingDocBlockKindImage     = "image"
+	MessagingDocBlockKindDivider   = "divider"
+	MessagingDocBlockKindEmbed     = "embed"
+)
+
+// MessagingDocBlockKinds are the values of MessagingDocBlockKind, in order.
+var MessagingDocBlockKinds = []string{"heading", "paragraph", "list", "quote", "code", "callout", "table", "image", "divider", "embed"}
+
+// MessagingDocBlock: A block of a document. Inline content is parts (text / mention / link / emoji); list items and
+// table cells are blocks.
+type MessagingDocBlock struct {
+	ID       string                `json:"id,omitempty"`
+	Kind     string                `json:"kind"`
+	Level    int                   `json:"level,omitempty"`
+	Ordered  bool                  `json:"ordered,omitempty"`
+	Language string                `json:"language,omitempty"`
+	Parts    []MessagingPart       `json:"parts,omitempty"`
+	Items    []MessagingDocBlock   `json:"items,omitempty"`
+	Rows     [][]MessagingDocBlock `json:"rows,omitempty"`
+	Image    *MessagingMediaSize   `json:"image,omitempty"`
+	Title    string                `json:"title,omitempty"`
+	URL      string                `json:"url,omitempty"`
+}
+
+type MessagingDocPermission struct {
+	Copy   bool `json:"copy,omitempty"`
+	Export bool `json:"export,omitempty"`
+}
+
+type MessagingDocument struct {
+	Title      string                  `json:"title"`
+	URL        string                  `json:"url"`
+	Blocks     []MessagingDocBlock     `json:"blocks"`
+	Permission *MessagingDocPermission `json:"permission,omitempty"`
+	Partial    bool                    `json:"partial,omitempty"`
+}
+
+type MessagingCommentReply struct {
+	ID        string          `json:"id"`
+	Author    MessagingPerson `json:"author"`
+	Parts     []MessagingPart `json:"parts"`
+	CreatedAt time.Time       `json:"created_at,omitzero"`
+	Edited    bool            `json:"edited,omitempty"`
+}
+
+type MessagingCommentThread struct {
+	ID       string                  `json:"id"`
+	Quote    string                  `json:"quote,omitempty"`
+	BlockID  string                  `json:"block_id,omitempty"`
+	Resolved bool                    `json:"resolved"`
+	Replies  []MessagingCommentReply `json:"replies"`
+}
+
+type MessagingCommentThreads struct {
+	Threads []MessagingCommentThread `json:"threads"`
+}
+
+// MessagingCommentWrite: POST documents/comments and …/{thread}/replies.
+type MessagingCommentWrite struct {
+	URL      string             `json:"url"`
+	Parts    []MessagingPart    `json:"parts"`
+	Mentions []MessagingMention `json:"mentions,omitempty"`
+	Quote    string             `json:"quote,omitempty"`
+	BlockID  string             `json:"block_id,omitempty"`
+	ClientID string             `json:"client_id"`
+}
+
+// MessagingResolve: POST documents/comments/{thread}/resolve: resolved false opens it again.
+type MessagingResolve struct {
+	URL      string `json:"url"`
+	Resolved bool   `json:"resolved"`
+}
+
+type MessagingPostImage struct {
+	Media  string `json:"media"`
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
+}
+
+type MessagingPost struct {
+	ID           string               `json:"id"`
+	Author       MessagingPerson      `json:"author"`
+	Parts        []MessagingPart      `json:"parts"`
+	Images       []MessagingPostImage `json:"images,omitempty"`
+	Reactions    []MessagingReaction  `json:"reactions,omitempty"`
+	CommentCount int                  `json:"comment_count,omitempty"`
+	CreatedAt    time.Time            `json:"created_at,omitzero"`
+	Categories   []string             `json:"categories,omitempty"`
+}
+
+type MessagingPostComment struct {
+	ID        string          `json:"id"`
+	Author    MessagingPerson `json:"author"`
+	Parts     []MessagingPart `json:"parts"`
+	CreatedAt time.Time       `json:"created_at,omitzero"`
+	Hot       bool            `json:"hot,omitempty"`
+}
+
+type MessagingPostComments struct {
+	Comments []MessagingPostComment `json:"comments"`
+}
+
+// MessagingChanged: the event messaging.changed (and the WebSocket {type: messaging, …} the hub pushes with it).
+type MessagingChanged struct {
+	Source          string   `json:"source"`
+	Conversations   []string `json:"conversations,omitempty"`
+	Account         string   `json:"account,omitempty"`
+	SettingsChanged bool     `json:"settings_changed,omitempty"`
+}
+
+// MessagingConversationRef: where an inbox item or a notification opens: a conversation of a source, and where in it.
+type MessagingConversationRef struct {
+	Source          string `json:"source"`
+	ID              string `json:"id"`
+	Account         string `json:"account,omitempty"`
+	StartPosition   string `json:"start_position,omitempty"`
+	ReadPosition    string `json:"read_position,omitempty"`
+	MentionPosition string `json:"mention_position,omitempty"`
+}
+
+// MessagingError: an error answer. code is one of the codes the apps act on (docs「四、接口」); view comes with
+// input_required.
+type MessagingError struct {
+	Error string `json:"error"`
+	Code  string `json:"code,omitempty"`
+	View  *View  `json:"view,omitempty"`
+}
+
 // newDef makes a value of each definition, for tests that read examples by definition name.
 var newDef = map[string]func() any{
-	"Manifest":              func() any { return new(Manifest) },
-	"Dependency":            func() any { return new(Dependency) },
-	"Exports":               func() any { return new(Exports) },
-	"ExportedPoint":         func() any { return new(ExportedPoint) },
-	"PackMember":            func() any { return new(PackMember) },
-	"Engines":               func() any { return new(Engines) },
-	"Runtime":               func() any { return new(Runtime) },
-	"Resources":             func() any { return new(Resources) },
-	"NodeRuntime":           func() any { return new(NodeRuntime) },
-	"NodePermissions":       func() any { return new(NodePermissions) },
-	"SecretSpec":            func() any { return new(SecretSpec) },
-	"Permissions":           func() any { return new(Permissions) },
-	"Contributes":           func() any { return new(Contributes) },
-	"SkillItem":             func() any { return new(SkillItem) },
-	"PromptItem":            func() any { return new(PromptItem) },
-	"ThemeColors":           func() any { return new(ThemeColors) },
-	"ThemeItem":             func() any { return new(ThemeItem) },
-	"TriageTemplateItem":    func() any { return new(TriageTemplateItem) },
-	"ConnectorItem":         func() any { return new(ConnectorItem) },
-	"NamedItem":             func() any { return new(NamedItem) },
-	"QuotaItem":             func() any { return new(QuotaItem) },
-	"ProviderItem":          func() any { return new(ProviderItem) },
-	"ProviderModel":         func() any { return new(ProviderModel) },
-	"APIItem":               func() any { return new(APIItem) },
-	"APIReceipt":            func() any { return new(APIReceipt) },
-	"AssistantItem":         func() any { return new(AssistantItem) },
-	"UIItem":                func() any { return new(UIItem) },
-	"AgentSourceItem":       func() any { return new(AgentSourceItem) },
-	"ChannelItem":           func() any { return new(ChannelItem) },
-	"ChannelCapabilities":   func() any { return new(ChannelCapabilities) },
-	"EventsItem":            func() any { return new(EventsItem) },
-	"ShortcutItem":          func() any { return new(ShortcutItem) },
-	"ShortcutParam":         func() any { return new(ShortcutParam) },
-	"Frame":                 func() any { return new(Frame) },
-	"RPCError":              func() any { return new(RPCError) },
-	"InitializeParams":      func() any { return new(InitializeParams) },
-	"ExportedContribution":  func() any { return new(ExportedContribution) },
-	"HubInfo":               func() any { return new(HubInfo) },
-	"ExtensionInfo":         func() any { return new(ExtensionInfo) },
-	"InitializeResult":      func() any { return new(InitializeResult) },
-	"UIParams":              func() any { return new(UIParams) },
-	"UIMachine":             func() any { return new(UIMachine) },
-	"UILauncher":            func() any { return new(UILauncher) },
-	"UIInboxItem":           func() any { return new(UIInboxItem) },
-	"BadgeEvent":            func() any { return new(BadgeEvent) },
-	"InvalidateEvent":       func() any { return new(InvalidateEvent) },
-	"UIContext":             func() any { return new(UIContext) },
-	"UIRequest":             func() any { return new(UIRequest) },
-	"UIPlace":               func() any { return new(UIPlace) },
-	"UIPlaces":              func() any { return new(UIPlaces) },
-	"WidgetPlace":           func() any { return new(WidgetPlace) },
-	"WidgetPlaces":          func() any { return new(WidgetPlaces) },
-	"WidgetRequest":         func() any { return new(WidgetRequest) },
-	"WidgetAnswer":          func() any { return new(WidgetAnswer) },
-	"DeviceWidget":          func() any { return new(DeviceWidget) },
-	"DeviceWidgets":         func() any { return new(DeviceWidgets) },
-	"WidgetPush":            func() any { return new(WidgetPush) },
-	"ShortcutPlace":         func() any { return new(ShortcutPlace) },
-	"ShortcutPlaces":        func() any { return new(ShortcutPlaces) },
-	"ShortcutRequest":       func() any { return new(ShortcutRequest) },
-	"ShortcutRunParams":     func() any { return new(ShortcutRunParams) },
-	"ShortcutResult":        func() any { return new(ShortcutResult) },
-	"NotifyAction":          func() any { return new(NotifyAction) },
-	"NotifyActionInput":     func() any { return new(NotifyActionInput) },
-	"ExtensionNotification": func() any { return new(ExtensionNotification) },
-	"View":                  func() any { return new(View) },
-	"Section":               func() any { return new(Section) },
-	"Component":             func() any { return new(Component) },
-	"AssistantView":         func() any { return new(AssistantView) },
-	"ViewAction":            func() any { return new(ViewAction) },
-	"Action":                func() any { return new(Action) },
-	"Push":                  func() any { return new(Push) },
-	"Search":                func() any { return new(Search) },
-	"Filter":                func() any { return new(Filter) },
-	"More":                  func() any { return new(More) },
-	"Avatar":                func() any { return new(Avatar) },
-	"Thumbnail":             func() any { return new(Thumbnail) },
-	"TableColumn":           func() any { return new(TableColumn) },
-	"EmptyButton":           func() any { return new(EmptyButton) },
-	"Badge":                 func() any { return new(Badge) },
-	"Choice":                func() any { return new(Choice) },
-	"ChartSeries":           func() any { return new(ChartSeries) },
-	"ChartPoint":            func() any { return new(ChartPoint) },
-	"Stat":                  func() any { return new(Stat) },
-	"ActionResult":          func() any { return new(ActionResult) },
-	"PersonaCard":           func() any { return new(PersonaCard) },
-	"CardAmount":            func() any { return new(CardAmount) },
-	"CardPart":              func() any { return new(CardPart) },
+	"Manifest":                  func() any { return new(Manifest) },
+	"Dependency":                func() any { return new(Dependency) },
+	"Exports":                   func() any { return new(Exports) },
+	"ExportedPoint":             func() any { return new(ExportedPoint) },
+	"PackMember":                func() any { return new(PackMember) },
+	"Engines":                   func() any { return new(Engines) },
+	"Runtime":                   func() any { return new(Runtime) },
+	"Resources":                 func() any { return new(Resources) },
+	"NodeRuntime":               func() any { return new(NodeRuntime) },
+	"NodePermissions":           func() any { return new(NodePermissions) },
+	"SecretSpec":                func() any { return new(SecretSpec) },
+	"Permissions":               func() any { return new(Permissions) },
+	"Contributes":               func() any { return new(Contributes) },
+	"SkillItem":                 func() any { return new(SkillItem) },
+	"PromptItem":                func() any { return new(PromptItem) },
+	"ThemeColors":               func() any { return new(ThemeColors) },
+	"ThemeItem":                 func() any { return new(ThemeItem) },
+	"TriageTemplateItem":        func() any { return new(TriageTemplateItem) },
+	"AgentFilterItem":           func() any { return new(AgentFilterItem) },
+	"ConnectorItem":             func() any { return new(ConnectorItem) },
+	"NamedItem":                 func() any { return new(NamedItem) },
+	"QuotaItem":                 func() any { return new(QuotaItem) },
+	"ProviderItem":              func() any { return new(ProviderItem) },
+	"ProviderModel":             func() any { return new(ProviderModel) },
+	"APIItem":                   func() any { return new(APIItem) },
+	"APIReceipt":                func() any { return new(APIReceipt) },
+	"AssistantItem":             func() any { return new(AssistantItem) },
+	"UIItem":                    func() any { return new(UIItem) },
+	"AgentSourceItem":           func() any { return new(AgentSourceItem) },
+	"ChannelItem":               func() any { return new(ChannelItem) },
+	"ChannelCapabilities":       func() any { return new(ChannelCapabilities) },
+	"EventsItem":                func() any { return new(EventsItem) },
+	"ShortcutItem":              func() any { return new(ShortcutItem) },
+	"ShortcutParam":             func() any { return new(ShortcutParam) },
+	"Frame":                     func() any { return new(Frame) },
+	"RPCError":                  func() any { return new(RPCError) },
+	"InitializeParams":          func() any { return new(InitializeParams) },
+	"ExportedContribution":      func() any { return new(ExportedContribution) },
+	"HubInfo":                   func() any { return new(HubInfo) },
+	"ExtensionInfo":             func() any { return new(ExtensionInfo) },
+	"InitializeResult":          func() any { return new(InitializeResult) },
+	"UIParams":                  func() any { return new(UIParams) },
+	"UIMachine":                 func() any { return new(UIMachine) },
+	"UILauncher":                func() any { return new(UILauncher) },
+	"UIInboxItem":               func() any { return new(UIInboxItem) },
+	"BadgeEvent":                func() any { return new(BadgeEvent) },
+	"InvalidateEvent":           func() any { return new(InvalidateEvent) },
+	"UIContext":                 func() any { return new(UIContext) },
+	"UIRequest":                 func() any { return new(UIRequest) },
+	"UIPlace":                   func() any { return new(UIPlace) },
+	"UIPlaces":                  func() any { return new(UIPlaces) },
+	"WidgetPlace":               func() any { return new(WidgetPlace) },
+	"WidgetPlaces":              func() any { return new(WidgetPlaces) },
+	"WidgetRequest":             func() any { return new(WidgetRequest) },
+	"WidgetAnswer":              func() any { return new(WidgetAnswer) },
+	"DeviceWidget":              func() any { return new(DeviceWidget) },
+	"DeviceWidgets":             func() any { return new(DeviceWidgets) },
+	"WidgetPush":                func() any { return new(WidgetPush) },
+	"ShortcutPlace":             func() any { return new(ShortcutPlace) },
+	"ShortcutPlaces":            func() any { return new(ShortcutPlaces) },
+	"ShortcutRequest":           func() any { return new(ShortcutRequest) },
+	"ShortcutRunParams":         func() any { return new(ShortcutRunParams) },
+	"ShortcutResult":            func() any { return new(ShortcutResult) },
+	"NotifyAction":              func() any { return new(NotifyAction) },
+	"NotifyActionInput":         func() any { return new(NotifyActionInput) },
+	"ExtensionNotification":     func() any { return new(ExtensionNotification) },
+	"View":                      func() any { return new(View) },
+	"Section":                   func() any { return new(Section) },
+	"Component":                 func() any { return new(Component) },
+	"AssistantView":             func() any { return new(AssistantView) },
+	"ViewAction":                func() any { return new(ViewAction) },
+	"ViewActionInput":           func() any { return new(ViewActionInput) },
+	"AssistantHTMLActionInput":  func() any { return new(AssistantHTMLActionInput) },
+	"AssistantHTMLOpenResult":   func() any { return new(AssistantHTMLOpenResult) },
+	"ViewChangedError":          func() any { return new(ViewChangedError) },
+	"Action":                    func() any { return new(Action) },
+	"Push":                      func() any { return new(Push) },
+	"Search":                    func() any { return new(Search) },
+	"Filter":                    func() any { return new(Filter) },
+	"More":                      func() any { return new(More) },
+	"Avatar":                    func() any { return new(Avatar) },
+	"Thumbnail":                 func() any { return new(Thumbnail) },
+	"TableColumn":               func() any { return new(TableColumn) },
+	"EmptyButton":               func() any { return new(EmptyButton) },
+	"Badge":                     func() any { return new(Badge) },
+	"Choice":                    func() any { return new(Choice) },
+	"ChartSeries":               func() any { return new(ChartSeries) },
+	"ChartPoint":                func() any { return new(ChartPoint) },
+	"Stat":                      func() any { return new(Stat) },
+	"ActionResult":              func() any { return new(ActionResult) },
+	"PersonaCard":               func() any { return new(PersonaCard) },
+	"CardAmount":                func() any { return new(CardAmount) },
+	"CardPart":                  func() any { return new(CardPart) },
+	"MessagingComposerMode":     func() any { return new(MessagingComposerMode) },
+	"MessagingLink":             func() any { return new(MessagingLink) },
+	"MessagingItem":             func() any { return new(MessagingItem) },
+	"MessagingSource":           func() any { return new(MessagingSource) },
+	"MessagingSources":          func() any { return new(MessagingSources) },
+	"MessagingStatus":           func() any { return new(MessagingStatus) },
+	"MessagingMe":               func() any { return new(MessagingMe) },
+	"MessagingAccount":          func() any { return new(MessagingAccount) },
+	"MessagingAccounts":         func() any { return new(MessagingAccounts) },
+	"MessagingConversation":     func() any { return new(MessagingConversation) },
+	"MessagingConversationPage": func() any { return new(MessagingConversationPage) },
+	"MessagingPerson":           func() any { return new(MessagingPerson) },
+	"MessagingMembers":          func() any { return new(MessagingMembers) },
+	"MessagingReplyTo":          func() any { return new(MessagingReplyTo) },
+	"MessagingThread":           func() any { return new(MessagingThread) },
+	"MessagingReaction":         func() any { return new(MessagingReaction) },
+	"MessagingDecoration":       func() any { return new(MessagingDecoration) },
+	"MessagingAction":           func() any { return new(MessagingAction) },
+	"MessagingEditVersion":      func() any { return new(MessagingEditVersion) },
+	"MessagingMessage":          func() any { return new(MessagingMessage) },
+	"MessagingMessagePage":      func() any { return new(MessagingMessagePage) },
+	"MessagingMessageAnswer":    func() any { return new(MessagingMessageAnswer) },
+	"MessagingList":             func() any { return new(MessagingList) },
+	"MessagingMediaSize":        func() any { return new(MessagingMediaSize) },
+	"MessagingField":            func() any { return new(MessagingField) },
+	"MessagingPreview":          func() any { return new(MessagingPreview) },
+	"MessagingPart":             func() any { return new(MessagingPart) },
+	"MessagingMention":          func() any { return new(MessagingMention) },
+	"MessagingOutgoing":         func() any { return new(MessagingOutgoing) },
+	"MessagingSendReceipt":      func() any { return new(MessagingSendReceipt) },
+	"MessagingCompose":          func() any { return new(MessagingCompose) },
+	"MessagingComposeAnswer":    func() any { return new(MessagingComposeAnswer) },
+	"MessagingReadReport":       func() any { return new(MessagingReadReport) },
+	"MessagingReadState":        func() any { return new(MessagingReadState) },
+	"MessagingReadStates":       func() any { return new(MessagingReadStates) },
+	"MessagingChatPin":          func() any { return new(MessagingChatPin) },
+	"MessagingChatPins":         func() any { return new(MessagingChatPins) },
+	"MessagingPinTarget":        func() any { return new(MessagingPinTarget) },
+	"MessagingPinTargetAnswer":  func() any { return new(MessagingPinTargetAnswer) },
+	"MessagingPinAnswer":        func() any { return new(MessagingPinAnswer) },
+	"MessagingEmoji":            func() any { return new(MessagingEmoji) },
+	"MessagingEmojiGroup":       func() any { return new(MessagingEmojiGroup) },
+	"MessagingEmojis":           func() any { return new(MessagingEmojis) },
+	"MessagingQuickReactions":   func() any { return new(MessagingQuickReactions) },
+	"MessagingURLPreview":       func() any { return new(MessagingURLPreview) },
+	"MessagingProfileField":     func() any { return new(MessagingProfileField) },
+	"MessagingProfile":          func() any { return new(MessagingProfile) },
+	"MessagingChatOpened":       func() any { return new(MessagingChatOpened) },
+	"MessagingDocBlock":         func() any { return new(MessagingDocBlock) },
+	"MessagingDocPermission":    func() any { return new(MessagingDocPermission) },
+	"MessagingDocument":         func() any { return new(MessagingDocument) },
+	"MessagingCommentReply":     func() any { return new(MessagingCommentReply) },
+	"MessagingCommentThread":    func() any { return new(MessagingCommentThread) },
+	"MessagingCommentThreads":   func() any { return new(MessagingCommentThreads) },
+	"MessagingCommentWrite":     func() any { return new(MessagingCommentWrite) },
+	"MessagingResolve":          func() any { return new(MessagingResolve) },
+	"MessagingPostImage":        func() any { return new(MessagingPostImage) },
+	"MessagingPost":             func() any { return new(MessagingPost) },
+	"MessagingPostComment":      func() any { return new(MessagingPostComment) },
+	"MessagingPostComments":     func() any { return new(MessagingPostComments) },
+	"MessagingChanged":          func() any { return new(MessagingChanged) },
+	"MessagingConversationRef":  func() any { return new(MessagingConversationRef) },
+	"MessagingError":            func() any { return new(MessagingError) },
 }

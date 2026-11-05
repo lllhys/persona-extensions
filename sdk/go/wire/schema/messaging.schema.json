@@ -1,0 +1,799 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "messaging.schema.json",
+  "title": "Messaging sources",
+  "description": "What a messaging source answers the apps with (docs/extension-messaging.md, #2138): conversations, messages and their parts, sends, documents and posts. The apps draw them with their own messaging components; the hub checks every answer against these before passing it on.",
+  "$defs": {
+    "MessagingCapability": {
+      "description": "What a source supports (docs「三、能力」). The apps show only what is supported; an unknown one is ignored.",
+      "type": "string",
+      "enum": ["accounts", "pinned", "mentions", "attachments", "attachment_replies", "threads", "topics", "reactions",
+               "read_receipts", "chat_pins", "profiles", "url_previews", "documents", "doc_comments", "posts",
+               "edit_history", "translation"]
+    },
+    "MessagingComposerMode": {
+      "description": "A message box mode besides plain (docs「七、输入框模式」): what is sent is handled by the extension (encoded, sealed).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 20},
+        "icon": {"type": "string", "description": "A name from the fixed icon set (NavIcon), or lock / shield; an unknown one draws as the default."},
+        "description": {"type": "string", "maxLength": 200, "description": "One line over the box while the mode is chosen."},
+        "attachments": {"type": "boolean", "description": "Pictures and files can go with it."},
+        "mentions": {"type": "boolean", "description": "@ works in it."},
+        "prepare": {"type": "boolean", "description": "Sending takes a compose step first (POST compose → token or a view to fill)."},
+        "threads": {"type": "boolean", "description": "It can go into a thread (reply_to + thread)."}
+      },
+      "required": ["id", "title", "attachments", "mentions"]
+    },
+    "MessagingLink": {
+      "description": "Links the source opens when tapped in the apps.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hosts": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"type": "string", "pattern": "^(\\*\\.)?[a-z0-9.-]+$"}},
+        "paths": {"type": "array", "maxItems": 16, "items": {"type": "string", "pattern": "^/"}, "description": "Path prefixes; none is any path."},
+        "opens": {"type": "string", "pattern": "^(document|post|ui:[a-z][a-z0-9_-]{0,31})$"}
+      },
+      "required": ["hosts", "opens"]
+    },
+    "MessagingItem": {
+      "description": "The manifest's contributes.messaging[]: one messaging source (docs「二、清单」).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 12},
+        "icon": {"type": "string"},
+        "capabilities": {"type": "array", "maxItems": 32, "description": "MessagingCapability values; one this hub does not know is kept (a newer extension), the apps ignore it.", "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"}},
+        "composer_modes": {"type": "array", "maxItems": 6, "items": {"$ref": "#/$defs/MessagingComposerMode"}},
+        "settings_ui": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,31}$", "description": "A ui contribution (extension_page) of the same extension."},
+        "links": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/MessagingLink"}}
+      },
+      "required": ["id", "name"]
+    },
+    "MessagingSource": {
+      "description": "GET /api/v1/messaging: an enabled source, its manifest item and the extension it is in.",
+      "type": "object",
+      "properties": {
+        "extension": {"type": "string"},
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "icon": {"type": "string"},
+        "capabilities": {"type": "array", "items": {"type": "string"}},
+        "composer_modes": {"type": "array", "items": {"$ref": "#/$defs/MessagingComposerMode"}},
+        "settings_ui": {"type": "string"},
+        "links": {"type": "array", "items": {"$ref": "#/$defs/MessagingLink"}}
+      },
+      "required": ["extension", "id", "name"]
+    },
+    "MessagingSources": {
+      "type": "object",
+      "properties": {"sources": {"type": "array", "items": {"$ref": "#/$defs/MessagingSource"}}},
+      "required": ["sources"]
+    },
+    "MessagingStatus": {
+      "description": "GET status: whether the source is set up and signed in, and the composer modes usable now.",
+      "type": "object",
+      "properties": {
+        "configured": {"type": "boolean"},
+        "connected": {"type": "boolean"},
+        "signed_in": {"type": "boolean"},
+        "name": {"type": "string", "maxLength": 200},
+        "error": {"type": "string", "maxLength": 2000},
+        "modes": {"type": "array", "maxItems": 6, "items": {"type": "string"}}
+      },
+      "required": ["configured", "connected", "signed_in"]
+    },
+    "MessagingMe": {
+      "description": "GET me: who the account is now (the outbox keys sends by it).",
+      "type": "object",
+      "properties": {
+        "account": {"type": "string", "maxLength": 200},
+        "user_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "name": {"type": "string", "maxLength": 200}
+      },
+      "required": ["account", "user_id"]
+    },
+    "MessagingAccount": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "name": {"type": "string", "maxLength": 200},
+        "avatar": {"type": "string", "maxLength": 2000},
+        "tenant": {"type": "string", "maxLength": 200},
+        "signed_in": {"type": "boolean"},
+        "unread": {"type": "integer", "minimum": 0}
+      },
+      "required": ["id", "signed_in"]
+    },
+    "MessagingAccounts": {
+      "type": "object",
+      "properties": {
+        "accounts": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/MessagingAccount"}},
+        "default": {"type": "string"}
+      },
+      "required": ["accounts"]
+    },
+    "MessagingConversationKind": {"type": "string", "enum": ["direct", "group", "topic_group", "bot"]},
+    "MessagingConversation": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "name": {"type": "string", "maxLength": 500},
+        "avatar": {"type": "string", "maxLength": 2000},
+        "kind": {"$ref": "#/$defs/MessagingConversationKind"},
+        "unread": {"type": "integer", "minimum": 0},
+        "marked_unread": {"type": "boolean"},
+        "mentioned": {"type": "boolean"},
+        "muted": {"type": "boolean"},
+        "pinned": {"type": "boolean"},
+        "preview": {"type": "string", "maxLength": 2000},
+        "preview_sender": {"type": "string", "maxLength": 200},
+        "preview_mine": {"type": "boolean"},
+        "updated_at": {"type": "string", "format": "date-time"},
+        "read_position": {"$ref": "#/$defs/MessagingPosition"},
+        "mention_position": {"$ref": "#/$defs/MessagingPosition"}
+      },
+      "required": ["id", "name", "kind", "unread", "preview"]
+    },
+    "MessagingPosition": {
+      "description": "A message's place in its conversation: a non-negative decimal integer, newer is larger; compared by (length, string).",
+      "type": "string",
+      "pattern": "^[0-9]{1,40}$"
+    },
+    "MessagingConversationPage": {
+      "type": "object",
+      "properties": {
+        "account": {"type": "string"},
+        "conversations": {"type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/MessagingConversation"}},
+        "next_cursor": {"type": "string", "maxLength": 2000}
+      },
+      "required": ["conversations"]
+    },
+    "MessagingPerson": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "maxLength": 200},
+        "name": {"type": "string", "maxLength": 200},
+        "avatar": {"type": "string", "maxLength": 2000},
+        "kind": {"type": "string", "enum": ["user", "bot", "system"]}
+      },
+      "required": ["name"]
+    },
+    "MessagingMembers": {
+      "type": "object",
+      "properties": {"members": {"type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/MessagingPerson"}}},
+      "required": ["members"]
+    },
+    "MessagingReplyTo": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "maxLength": 200},
+        "sender_name": {"type": "string", "maxLength": 200},
+        "summary": {"type": "string", "maxLength": 2000},
+        "recalled": {"type": "boolean"}
+      },
+      "required": ["id", "summary"]
+    },
+    "MessagingThread": {
+      "type": "object",
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "latest_at": {"type": "string", "format": "date-time"}
+      },
+      "required": ["count"]
+    },
+    "MessagingReaction": {
+      "type": "object",
+      "properties": {
+        "key": {"type": "string", "minLength": 1, "maxLength": 100},
+        "count": {"type": "integer", "minimum": 0},
+        "mine": {"type": "boolean"},
+        "users": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 200}}
+      },
+      "required": ["key", "count"]
+    },
+    "MessagingDecoration": {
+      "description": "A small line under a message's body the extension adds (勇攀高峰 · 已解码, 加密消息 · 对外展示).",
+      "type": "object",
+      "properties": {
+        "text": {"type": "string", "minLength": 1, "maxLength": 60},
+        "icon": {"type": "string"},
+        "tone": {"$ref": "view.schema.json#/$defs/Tone"}
+      },
+      "required": ["text"]
+    },
+    "MessagingAction": {
+      "description": "An action of the extension's on a message, in its long-press menu: POST messages/{id}/actions/{id}.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 20},
+        "icon": {"type": "string"},
+        "destructive": {"type": "boolean"},
+        "confirm": {"type": "string", "maxLength": 200}
+      },
+      "required": ["id", "title"]
+    },
+    "MessagingEditVersion": {
+      "type": "object",
+      "properties": {
+        "edited_at": {"type": "string", "format": "date-time"},
+        "text": {"type": "string", "maxLength": 20000},
+        "parts": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/MessagingPart"}}
+      },
+      "required": ["text"]
+    },
+    "MessagingMessage": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "position": {"$ref": "#/$defs/MessagingPosition"},
+        "created_at": {"type": "string", "format": "date-time"},
+        "sender": {"$ref": "#/$defs/MessagingPerson"},
+        "mine": {"type": "boolean"},
+        "client_id": {"type": "string", "maxLength": 100},
+        "state": {"type": "string", "enum": ["pending", "failed"]},
+        "parts": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/MessagingPart"}},
+        "text": {"type": "string", "maxLength": 20000},
+        "reply_to": {"$ref": "#/$defs/MessagingReplyTo"},
+        "thread": {"$ref": "#/$defs/MessagingThread"},
+        "reactions": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/MessagingReaction"}},
+        "edited": {"type": "boolean"},
+        "edit_history": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/MessagingEditVersion"}},
+        "recalled": {"type": "boolean"},
+        "decorations": {"type": "array", "maxItems": 3, "items": {"$ref": "#/$defs/MessagingDecoration"}},
+        "private": {"type": "boolean", "description": "The body must not be written to disk (an opened sealed message): caches keep private_text."},
+        "private_text": {"type": "string", "maxLength": 2000},
+        "actions": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/MessagingAction"}},
+        "can_pin": {"type": "boolean"},
+        "can_unpin": {"type": "boolean"},
+        "can_reply": {"type": "boolean"},
+        "can_react": {"type": "boolean"},
+        "read": {"type": "boolean"}
+      },
+      "required": ["id", "position", "sender", "mine", "parts", "text"]
+    },
+    "MessagingMessagePage": {
+      "type": "object",
+      "properties": {
+        "account": {"type": "string"},
+        "messages": {"type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/MessagingMessage"}},
+        "has_older": {"type": "boolean"},
+        "has_newer": {"type": "boolean"},
+        "older_cursor": {"type": "string", "maxLength": 2000},
+        "newer_cursor": {"type": "string", "maxLength": 2000},
+        "root": {"$ref": "#/$defs/MessagingMessage"},
+        "topic": {"type": "boolean", "description": "The conversation is a topic group and messages are its topics' roots."}
+      },
+      "required": ["messages", "has_older"]
+    },
+    "MessagingMessageAnswer": {
+      "description": "GET messages/{id}.",
+      "type": "object",
+      "properties": {"account": {"type": "string"}, "message": {"$ref": "#/$defs/MessagingMessage"}},
+      "required": ["message"]
+    },
+    "MessagingMarks": {"type": "string", "enum": ["bold", "italic", "underline", "strike", "code"]},
+    "MessagingBlock": {"type": "string", "enum": ["paragraph", "heading1", "heading2", "heading3", "quote", "code", "list_item"]},
+    "MessagingList": {
+      "type": "object",
+      "properties": {
+        "ordered": {"type": "boolean"},
+        "level": {"type": "integer", "minimum": 0, "maximum": 8},
+        "start": {"type": "integer", "minimum": 0}
+      },
+      "required": ["ordered"]
+    },
+    "MessagingMediaSize": {
+      "type": "object",
+      "properties": {
+        "media": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "width": {"type": "integer", "minimum": 0},
+        "height": {"type": "integer", "minimum": 0}
+      },
+      "required": ["media"]
+    },
+    "MessagingField": {
+      "type": "object",
+      "properties": {"label": {"type": "string", "maxLength": 100}, "value": {"type": "string", "maxLength": 2000}},
+      "required": ["label", "value"]
+    },
+    "MessagingPreview": {
+      "type": "object",
+      "properties": {"sender_name": {"type": "string", "maxLength": 200}, "text": {"type": "string", "maxLength": 2000}},
+      "required": ["text"]
+    },
+    "MessagingPart": {
+      "description": "A piece of a message's body, told apart by kind (docs「五」). An app that does not know a kind draws its text, or skips it.",
+      "oneOf": [
+        {"$ref": "#/$defs/MessagingTextPart"}, {"$ref": "#/$defs/MessagingMentionPart"}, {"$ref": "#/$defs/MessagingLinkPart"},
+        {"$ref": "#/$defs/MessagingEmojiPart"}, {"$ref": "#/$defs/MessagingStickerPart"}, {"$ref": "#/$defs/MessagingImagePart"},
+        {"$ref": "#/$defs/MessagingFilePart"}, {"$ref": "#/$defs/MessagingVideoPart"}, {"$ref": "#/$defs/MessagingAudioPart"},
+        {"$ref": "#/$defs/MessagingCodePart"}, {"$ref": "#/$defs/MessagingDividerPart"}, {"$ref": "#/$defs/MessagingCardPart"},
+        {"$ref": "#/$defs/MessagingForwardPart"}, {"$ref": "#/$defs/MessagingSharePart"}, {"$ref": "#/$defs/MessagingSystemPart"}
+      ],
+      "x-discriminator": "kind"
+    },
+    "MessagingTextPart": {
+      "type": "object",
+      "properties": {
+        "kind": {"const": "text"},
+        "text": {"type": "string", "maxLength": 20000},
+        "marks": {"type": "array", "maxItems": 5, "items": {"$ref": "#/$defs/MessagingMarks"}},
+        "url": {"type": "string", "maxLength": 2000},
+        "block": {"$ref": "#/$defs/MessagingBlock"},
+        "list": {"$ref": "#/$defs/MessagingList"},
+        "block_id": {"type": "string", "maxLength": 200, "description": "Consecutive text parts with the same block_id are one block; another id starts another."}
+      },
+      "required": ["kind", "text"]
+    },
+    "MessagingMentionPart": {
+      "type": "object",
+      "properties": {
+        "kind": {"const": "mention"},
+        "text": {"type": "string", "maxLength": 200},
+        "user_id": {"type": "string", "maxLength": 200},
+        "all": {"type": "boolean"}
+      },
+      "required": ["kind", "text"]
+    },
+    "MessagingLinkPart": {
+      "type": "object",
+      "properties": {
+        "kind": {"const": "link"},
+        "text": {"type": "string", "maxLength": 2000},
+        "url": {"type": "string", "minLength": 1, "maxLength": 2000}
+      },
+      "required": ["kind", "text", "url"]
+    },
+    "MessagingEmojiPart": {
+      "type": "object",
+      "properties": {
+        "kind": {"const": "emoji"},
+        "key": {"type": "string", "minLength": 1, "maxLength": 100},
+        "text": {"type": "string", "maxLength": 100}
+      },
+      "required": ["kind", "key", "text"]
+    },
+    "MessagingStickerPart": {
+      "type": "object",
+      "properties": {
+        "kind": {"const": "sticker"},
+        "media": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "width": {"type": "integer", "minimum": 0},
+        "height": {"type": "integer", "minimum": 0},
+        "text": {"type": "string", "maxLength": 100}
+      },
+      "required": ["kind", "media"]
+    },
+    "MessagingImagePart": {
+      "type": "object",
+      "properties": {
+        "kind": {"const": "image"},
+        "media": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "width": {"type": "integer", "minimum": 0},
+        "height": {"type": "integer", "minimum": 0},
+        "text": {"type": "string", "maxLength": 100}
+      },
+      "required": ["kind", "media"]
+    },
+    "MessagingFilePart": {
+      "type": "object",
+      "properties": {
+        "kind": {"const": "file"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 500},
+        "media": {"type": "string", "maxLength": 2000},
+        "size": {"type": "integer", "minimum": 0, "x-go-type": "int64"},
+        "ext": {"type": "string", "maxLength": 20},
+        "expired": {"type": "boolean"},
+        "text": {"type": "string", "maxLength": 500}
+      },
+      "required": ["kind", "name"]
+    },
+    "MessagingVideoPart": {
+      "type": "object",
+      "properties": {
+        "kind": {"const": "video"},
+        "media": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "duration_ms": {"type": "integer", "minimum": 0},
+        "poster": {"$ref": "#/$defs/MessagingMediaSize"},
+        "text": {"type": "string", "maxLength": 100}
+      },
+      "required": ["kind", "media"]
+    },
+    "MessagingAudioPart": {
+      "type": "object",
+      "properties": {
+        "kind": {"const": "audio"},
+        "media": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "duration_ms": {"type": "integer", "minimum": 0},
+        "text": {"type": "string", "maxLength": 100}
+      },
+      "required": ["kind", "media"]
+    },
+    "MessagingCodePart": {
+      "type": "object",
+      "properties": {
+        "kind": {"const": "code"},
+        "text": {"type": "string", "maxLength": 20000},
+        "language": {"type": "string", "maxLength": 40}
+      },
+      "required": ["kind", "text"]
+    },
+    "MessagingDividerPart": {
+      "type": "object",
+      "properties": {"kind": {"const": "divider"}, "text": {"type": "string", "maxLength": 100}},
+      "required": ["kind"]
+    },
+    "MessagingCardPart": {
+      "description": "A card: the source's card turned into a declarative View by the extension; fallback when it cannot be drawn.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "card"},
+        "view": {"$ref": "view.schema.json#/$defs/View"},
+        "text": {"type": "string", "maxLength": 2000, "description": "The fallback: what to show when the view cannot be drawn."}
+      },
+      "required": ["kind", "view"]
+    },
+    "MessagingForwardPart": {
+      "description": "Forwarded messages, merged: the messages (at most 50) or only previews of them.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "forward"},
+        "title": {"type": "string", "maxLength": 500},
+        "messages": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/MessagingMessage"}},
+        "previews": {"type": "array", "maxItems": 10, "items": {"$ref": "#/$defs/MessagingPreview"}},
+        "count": {"type": "integer", "minimum": 0},
+        "text": {"type": "string", "maxLength": 500}
+      },
+      "required": ["kind", "title"]
+    },
+    "MessagingSharePart": {
+      "description": "Something shared as a card: a group, a person, an event, a meeting, a vote.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "share"},
+        "title": {"type": "string", "maxLength": 500},
+        "subtitle": {"type": "string", "maxLength": 500},
+        "image": {"$ref": "#/$defs/MessagingMediaSize"},
+        "fields": {"type": "array", "maxItems": 12, "items": {"$ref": "#/$defs/MessagingField"}},
+        "url": {"type": "string", "maxLength": 2000},
+        "text": {"type": "string", "maxLength": 500}
+      },
+      "required": ["kind", "title"]
+    },
+    "MessagingSystemPart": {
+      "type": "object",
+      "properties": {"kind": {"const": "system"}, "text": {"type": "string", "maxLength": 2000}},
+      "required": ["kind", "text"]
+    },
+    "MessagingMention": {
+      "type": "object",
+      "properties": {"user_id": {"type": "string", "minLength": 1, "maxLength": 200}, "name": {"type": "string", "maxLength": 200}},
+      "required": ["user_id", "name"]
+    },
+    "MessagingOutgoing": {
+      "description": "POST conversations/{id}/messages (docs「六、发送」).",
+      "type": "object",
+      "properties": {
+        "client_id": {"type": "string", "pattern": "^[0-9a-f-]{8,64}$"},
+        "text": {"type": "string", "maxLength": 20000},
+        "mentions": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/MessagingMention"}},
+        "reply_to": {"type": "string", "maxLength": 200},
+        "thread": {"type": "boolean"},
+        "mode": {"type": "string", "maxLength": 32},
+        "prepared": {"type": "string", "maxLength": 2000},
+        "expect_user": {"type": "string", "maxLength": 200, "description": "GET me's user_id: not sent (409 account_changed) when the account is someone else's now."}
+      },
+      "required": ["client_id", "text"]
+    },
+    "MessagingSendReceipt": {
+      "type": "object",
+      "properties": {"message_id": {"type": "string", "maxLength": 200}}
+    },
+    "MessagingCompose": {
+      "description": "POST conversations/{id}/compose: a mode that prepares before sending.",
+      "type": "object",
+      "properties": {
+        "mode": {"type": "string", "minLength": 1, "maxLength": 32},
+        "text": {"type": "string", "maxLength": 20000},
+        "reply_to": {"type": "string", "maxLength": 200},
+        "values": {"type": "object", "additionalProperties": {"type": "string", "maxLength": 2000}}
+      },
+      "required": ["mode", "text"]
+    },
+    "MessagingComposeAnswer": {
+      "description": "Ready to send with token, or a view (declarative UI) the user fills first.",
+      "type": "object",
+      "properties": {
+        "ready": {"type": "boolean"},
+        "token": {"type": "string", "maxLength": 2000},
+        "view": {"$ref": "view.schema.json#/$defs/View"}
+      }
+    },
+    "MessagingReadReport": {
+      "type": "object",
+      "properties": {
+        "position": {"$ref": "#/$defs/MessagingPosition"},
+        "message_ids": {"type": "array", "maxItems": 100, "items": {"type": "string", "maxLength": 200}}
+      },
+      "required": ["position"]
+    },
+    "MessagingReadState": {
+      "type": "object",
+      "properties": {
+        "message_id": {"type": "string", "maxLength": 200},
+        "read": {"type": "integer", "minimum": 0},
+        "unread": {"type": "integer", "minimum": 0}
+      },
+      "required": ["message_id", "read", "unread"]
+    },
+    "MessagingReadStates": {
+      "type": "object",
+      "properties": {"states": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/MessagingReadState"}}},
+      "required": ["states"]
+    },
+    "MessagingChatPin": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "maxLength": 200},
+        "message_id": {"type": "string", "maxLength": 200},
+        "message": {"$ref": "#/$defs/MessagingMessage"},
+        "operator_name": {"type": "string", "maxLength": 200},
+        "created_at": {"type": "string", "format": "date-time"}
+      },
+      "required": ["id", "message_id"]
+    },
+    "MessagingChatPins": {
+      "type": "object",
+      "properties": {
+        "account": {"type": "string"},
+        "items": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/MessagingChatPin"}},
+        "next_cursor": {"type": "string", "maxLength": 2000},
+        "total": {"type": "integer", "minimum": 0}
+      },
+      "required": ["items"]
+    },
+    "MessagingPinTarget": {
+      "type": "object",
+      "properties": {
+        "message": {"$ref": "#/$defs/MessagingMessage"},
+        "root": {"$ref": "#/$defs/MessagingMessage"},
+        "page": {"$ref": "#/$defs/MessagingMessagePage"}
+      },
+      "required": ["message", "page"]
+    },
+    "MessagingPinTargetAnswer": {
+      "type": "object",
+      "properties": {"account": {"type": "string"}, "target": {"$ref": "#/$defs/MessagingPinTarget"}},
+      "required": ["target"]
+    },
+    "MessagingPinAnswer": {
+      "type": "object",
+      "properties": {"account": {"type": "string"}, "pinned": {"type": "boolean"}},
+      "required": ["pinned"]
+    },
+    "MessagingEmoji": {
+      "type": "object",
+      "properties": {"label": {"type": "string", "maxLength": 100}, "url": {"type": "string", "maxLength": 2000}},
+      "required": ["label"]
+    },
+    "MessagingEmojiGroup": {
+      "type": "object",
+      "properties": {"title": {"type": "string", "maxLength": 100}, "keys": {"type": "array", "maxItems": 1000, "items": {"type": "string"}}},
+      "required": ["title", "keys"]
+    },
+    "MessagingEmojis": {
+      "type": "object",
+      "properties": {
+        "emojis": {"type": "object", "additionalProperties": {"$ref": "#/$defs/MessagingEmoji"}},
+        "groups": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/MessagingEmojiGroup"}}
+      },
+      "required": ["emojis"]
+    },
+    "MessagingQuickReactions": {
+      "type": "object",
+      "properties": {"keys": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 100}}},
+      "required": ["keys"]
+    },
+    "MessagingURLPreview": {
+      "type": "object",
+      "properties": {
+        "url": {"type": "string", "maxLength": 2000},
+        "title": {"type": "string", "maxLength": 500},
+        "host": {"type": "string", "maxLength": 200},
+        "summary": {"type": "string", "maxLength": 2000},
+        "image": {"$ref": "#/$defs/MessagingMediaSize"},
+        "author": {"$ref": "#/$defs/MessagingPerson"}
+      },
+      "required": ["url"]
+    },
+    "MessagingProfileField": {
+      "type": "object",
+      "properties": {
+        "label": {"type": "string", "maxLength": 100},
+        "value": {"type": "string", "maxLength": 2000},
+        "url": {"type": "string", "maxLength": 2000},
+        "person": {"type": "string", "maxLength": 200, "description": "Another person's id: tapping the row opens their profile."}
+      },
+      "required": ["label", "value"]
+    },
+    "MessagingProfile": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "maxLength": 200},
+        "name": {"type": "string", "maxLength": 200},
+        "avatar": {"type": "string", "maxLength": 2000},
+        "cover": {"type": "string", "maxLength": 2000},
+        "kind": {"type": "string", "enum": ["user", "bot"]},
+        "subtitle": {"type": "string", "maxLength": 500},
+        "status": {"type": "string", "maxLength": 200},
+        "description": {"type": "string", "maxLength": 2000},
+        "fields": {"type": "array", "maxItems": 30, "items": {"$ref": "#/$defs/MessagingProfileField"}},
+        "can_chat": {"type": "boolean"}
+      },
+      "required": ["id", "name"]
+    },
+    "MessagingChatOpened": {
+      "type": "object",
+      "properties": {"conversation_id": {"type": "string", "minLength": 1, "maxLength": 200}},
+      "required": ["conversation_id"]
+    },
+    "MessagingDocBlockKind": {"type": "string", "enum": ["heading", "paragraph", "list", "quote", "code", "callout", "table", "image", "divider", "embed"]},
+    "MessagingDocBlock": {
+      "description": "A block of a document. Inline content is parts (text / mention / link / emoji); list items and table cells are blocks.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "maxLength": 200},
+        "kind": {"$ref": "#/$defs/MessagingDocBlockKind"},
+        "level": {"type": "integer", "minimum": 1, "maximum": 6},
+        "ordered": {"type": "boolean"},
+        "language": {"type": "string", "maxLength": 40},
+        "parts": {"type": "array", "maxItems": 2000, "items": {"$ref": "#/$defs/MessagingPart"}},
+        "items": {"type": "array", "maxItems": 2000, "items": {"$ref": "#/$defs/MessagingDocBlock"}},
+        "rows": {"type": "array", "maxItems": 500, "items": {"type": "array", "items": {"$ref": "#/$defs/MessagingDocBlock"}}},
+        "image": {"$ref": "#/$defs/MessagingMediaSize"},
+        "title": {"type": "string", "maxLength": 500},
+        "url": {"type": "string", "maxLength": 2000}
+      },
+      "required": ["kind"]
+    },
+    "MessagingDocPermission": {
+      "type": "object",
+      "properties": {"copy": {"type": "boolean"}, "export": {"type": "boolean"}}
+    },
+    "MessagingDocument": {
+      "type": "object",
+      "properties": {
+        "title": {"type": "string", "maxLength": 2000},
+        "url": {"type": "string", "maxLength": 2000},
+        "blocks": {"type": "array", "maxItems": 20000, "items": {"$ref": "#/$defs/MessagingDocBlock"}},
+        "permission": {"$ref": "#/$defs/MessagingDocPermission"},
+        "partial": {"type": "boolean"}
+      },
+      "required": ["title", "url", "blocks"]
+    },
+    "MessagingCommentReply": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "maxLength": 200},
+        "author": {"$ref": "#/$defs/MessagingPerson"},
+        "parts": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/MessagingPart"}},
+        "created_at": {"type": "string", "format": "date-time"},
+        "edited": {"type": "boolean"}
+      },
+      "required": ["id", "author", "parts"]
+    },
+    "MessagingCommentThread": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "maxLength": 200},
+        "quote": {"type": "string", "maxLength": 2000},
+        "block_id": {"type": "string", "maxLength": 200},
+        "resolved": {"type": "boolean"},
+        "replies": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/MessagingCommentReply"}}
+      },
+      "required": ["id", "resolved", "replies"]
+    },
+    "MessagingCommentThreads": {
+      "type": "object",
+      "properties": {"threads": {"type": "array", "maxItems": 1000, "items": {"$ref": "#/$defs/MessagingCommentThread"}}},
+      "required": ["threads"]
+    },
+    "MessagingCommentWrite": {
+      "description": "POST documents/comments and …/{thread}/replies.",
+      "type": "object",
+      "properties": {
+        "url": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "parts": {"type": "array", "minItems": 1, "maxItems": 500, "items": {"$ref": "#/$defs/MessagingPart"}},
+        "mentions": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/MessagingMention"}},
+        "quote": {"type": "string", "maxLength": 2000},
+        "block_id": {"type": "string", "maxLength": 200},
+        "client_id": {"type": "string", "pattern": "^[0-9a-f-]{8,64}$"}
+      },
+      "required": ["url", "parts", "client_id"]
+    },
+    "MessagingResolve": {
+      "description": "POST documents/comments/{thread}/resolve: resolved false opens it again.",
+      "type": "object",
+      "properties": {"url": {"type": "string", "minLength": 1, "maxLength": 2000}, "resolved": {"type": "boolean"}},
+      "required": ["url", "resolved"]
+    },
+    "MessagingPostImage": {
+      "type": "object",
+      "properties": {
+        "media": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "width": {"type": "integer", "minimum": 0},
+        "height": {"type": "integer", "minimum": 0}
+      },
+      "required": ["media"]
+    },
+    "MessagingPost": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "maxLength": 200},
+        "author": {"$ref": "#/$defs/MessagingPerson"},
+        "parts": {"type": "array", "maxItems": 2000, "items": {"$ref": "#/$defs/MessagingPart"}},
+        "images": {"type": "array", "maxItems": 30, "items": {"$ref": "#/$defs/MessagingPostImage"}},
+        "reactions": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/MessagingReaction"}},
+        "comment_count": {"type": "integer", "minimum": 0},
+        "created_at": {"type": "string", "format": "date-time"},
+        "categories": {"type": "array", "maxItems": 10, "items": {"type": "string", "maxLength": 100}}
+      },
+      "required": ["id", "author", "parts"]
+    },
+    "MessagingPostComment": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "maxLength": 200},
+        "author": {"$ref": "#/$defs/MessagingPerson"},
+        "parts": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/MessagingPart"}},
+        "created_at": {"type": "string", "format": "date-time"},
+        "hot": {"type": "boolean"}
+      },
+      "required": ["id", "author", "parts"]
+    },
+    "MessagingPostComments": {
+      "type": "object",
+      "properties": {"comments": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/MessagingPostComment"}}},
+      "required": ["comments"]
+    },
+    "MessagingChanged": {
+      "description": "The event messaging.changed (and the WebSocket {type: messaging, …} the hub pushes with it).",
+      "type": "object",
+      "properties": {
+        "source": {"type": "string"},
+        "conversations": {"type": "array", "maxItems": 500, "items": {"type": "string", "maxLength": 200}},
+        "account": {"type": "string"},
+        "settings_changed": {"type": "boolean"}
+      },
+      "required": ["source"]
+    },
+    "MessagingConversationRef": {
+      "description": "Where an inbox item or a notification opens: a conversation of a source, and where in it.",
+      "type": "object",
+      "properties": {
+        "source": {"type": "string", "minLength": 1, "maxLength": 32},
+        "id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "account": {"type": "string", "maxLength": 200},
+        "start_position": {"$ref": "#/$defs/MessagingPosition"},
+        "read_position": {"$ref": "#/$defs/MessagingPosition"},
+        "mention_position": {"$ref": "#/$defs/MessagingPosition"}
+      },
+      "required": ["source", "id"]
+    },
+    "MessagingError": {
+      "description": "An error answer. code is one of the codes the apps act on (docs「四、接口」); view comes with input_required.",
+      "type": "object",
+      "properties": {
+        "error": {"type": "string", "maxLength": 2000},
+        "code": {"type": "string", "enum": ["not_signed_in", "account_changed", "input_required", "result_unknown", "unsupported", "rate_limited", "op_id_reused", "not_found", "extension_bad_response"]},
+        "view": {"$ref": "view.schema.json#/$defs/View"}
+      },
+      "required": ["error"]
+    }
+  }
+}

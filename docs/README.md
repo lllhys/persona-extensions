@@ -5,6 +5,7 @@
 ## Using extensions
 
 - [Installation](installation.md): register the public market, install local packages and handle older hubs.
+- [GitHub](extensions/github.md): the inbox, knowledge-base archive, assistant tools and sign-in of the GitHub connector (moved out of the hub), and a page of what needs you on GitHub.
 - [LINUX DO](extensions/linuxdo.md): public topics, filtering, request limits and the app view.
 - [Telegram](extensions/telegram.md): login, inbox, archives, network requirements, tools and the `tg` CLI.
 - [Bypass auto-allow (Claude Code)](extensions/claude-bypass-allow.md): auto-allow Claude Code's remaining Bash prompts in bypassPermissions sessions on chosen computers, without overriding your own ask/deny rules; audit log and limits.

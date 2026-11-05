@@ -374,7 +374,10 @@
         "at": {
           "type": "string",
           "format": "date-time"
-        }
+        },
+        "kind": {"$ref": "#/$defs/ViewActionKind", "description": "Absent or action: a declared Action (action is its id). html: an HTML bridge reply (action is the html component's key, text the confirmed reply)."},
+        "version": {"type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-go-type": "int64", "description": "The card version the user saw and confirmed when this was committed; absent on records committed before #2019."},
+        "text": {"type": "string", "maxLength": 2000, "description": "kind html only: the reply text the user confirmed."}
       },
       "required": [
         "key",
@@ -391,6 +394,64 @@
         "sent",
         "failed"
       ]
+    },
+    "ViewActionKind": {
+      "type": "string",
+      "enum": ["action", "html"]
+    },
+    "ViewActionInput": {
+      "description": "The body of POST /api/v1/assistant/conversations/{id}/views/{key}/actions. The reply text and form definition are read from the stored View, never from the client.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "action": {"type": "string", "minLength": 1, "maxLength": 128, "description": "A declared reply action's id."},
+        "page": {"type": "string", "maxLength": 64, "description": "The named page the action is on; absent for the root page."},
+        "values": {"type": "object", "additionalProperties": {"type": "string", "maxLength": 2000}, "description": "The fields this action submits, by name."},
+        "client_msg_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "confirmed": {"type": "boolean", "description": "The user confirmed the action's confirm prompt natively."},
+        "expected_version": {"type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-go-type": "int64", "description": "The card version shown (and confirmed) to the user. Required when the action has confirm; a different stored version answers 409 view_changed."}
+      },
+      "required": ["action", "client_msg_id"]
+    },
+    "AssistantHTMLActionKind": {
+      "type": "string",
+      "enum": ["reply", "open"]
+    },
+    "AssistantHTMLActionInput": {
+      "description": "The body of POST /api/v1/assistant/conversations/{id}/views/{key}/html-actions: a persona.reply / persona.open call of a keyed html component, after the user confirmed it natively.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"$ref": "#/$defs/AssistantHTMLActionKind"},
+        "component_key": {"type": "string", "minLength": 1, "maxLength": 128, "description": "The key of the html component on that page of the stored card."},
+        "page": {"type": "string", "maxLength": 64, "description": "The named page the component is on; absent for the root page."},
+        "expected_version": {"type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-go-type": "int64", "description": "The card version that ran the HTML and was shown in the confirmation."},
+        "text": {"type": "string", "minLength": 1, "maxLength": 2000, "description": "reply only: the text shown in full in the confirmation."},
+        "url": {"type": "string", "minLength": 1, "maxLength": 2048, "description": "open only: an https or supported persona:// target."},
+        "client_msg_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "confirmed": {"const": true, "type": "boolean", "description": "Always true: the call was confirmed natively, outside the HTML."}
+      },
+      "required": ["kind", "component_key", "expected_version", "client_msg_id", "confirmed"]
+    },
+    "AssistantHTMLOpenResult": {
+      "description": "What an html-actions open answers: the validated target to open inside the app, and the card version it was checked against.",
+      "type": "object",
+      "properties": {
+        "open": {"type": "string", "minLength": 1},
+        "version": {"type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-go-type": "int64"}
+      },
+      "required": ["open", "version"]
+    },
+    "ViewChangedError": {
+      "description": "409 code view_changed: the stored card is not the version the user saw. Refresh, keep the draft and confirm again; never resubmit with the new version automatically.",
+      "type": "object",
+      "properties": {
+        "error": {"type": "string"},
+        "code": {"const": "view_changed", "type": "string"},
+        "version": {"type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-go-type": "int64", "description": "The current stored version."},
+        "view": {"$ref": "#/$defs/AssistantView", "description": "The current card, as feed.views carries it (a transcript card: id is its key, version 1)."}
+      },
+      "required": ["error", "code", "version"]
     },
     "Action": {
       "description": "What a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push or pop a page) are fields added here.",
