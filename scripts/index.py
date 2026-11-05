@@ -7,8 +7,8 @@
   scripts/index.py add <id> <tag>   put dist/<id>-<version>.tar.gz in as the release asset of <tag>
   scripts/index.py has <id> <tag>   exit 0 when both files list <id> with a package of release <tag>
                                     (release:<tag>/<file>, pinned by its sha256); its entry is replaced, the others stay
-  scripts/index.py check            both files list the same extensions, versions and packages, and no entry's
-                                    manifest has tags (what CI runs)
+  scripts/index.py check            both files list the same full entries (manifest, tags and packages), no id
+                                    twice in one index, and no entry's manifest has tags (what CI runs)
 
 An entry's manifest is scripts/manifest.py packaged (the manifest without tags, as the package carries it); its tags
 are the manifest's.
@@ -28,7 +28,8 @@ OLD = os.path.join(ROOT, "persona-plugins.json")
 def read(p, key):
     if not os.path.exists(p):
         return None
-    d = json.load(open(p))
+    with open(p) as f:
+        d = json.load(f)
     d.setdefault(key, [])
     return d
 
@@ -79,12 +80,20 @@ def check():
         print("persona-extensions.json and persona-plugins.json must both be there", file=sys.stderr)
         return False
 
-    def key(d, k):
-        return [(e["manifest"]["id"], e["manifest"]["version"], json.dumps(e["packages"], sort_keys=True)) for e in d[k]]
+    def canon(entries):
+        # Whole entries, not just id/version/packages: a drift in the manifest body or the entry tags is a bad
+        # hand-edit too. sort_keys keeps key order irrelevant; the entries themselves stay ordered by id.
+        return json.dumps(entries, sort_keys=True, ensure_ascii=False)
 
-    if key(new, "extensions") != key(old, "plugins"):
-        print("persona-extensions.json and persona-plugins.json list different extensions or packages", file=sys.stderr)
+    if canon(new["extensions"]) != canon(old["plugins"]):
+        print("persona-extensions.json and persona-plugins.json list different entries (manifest, tags or packages)", file=sys.stderr)
         return False
+    for path, d, key in ((NEW, new, "extensions"), (OLD, old, "plugins")):
+        ids = [e["manifest"]["id"] for e in d[key]]
+        dup = sorted({i for i in ids if ids.count(i) > 1})
+        if dup:
+            print("%s lists an id more than once: %s" % (os.path.basename(path), ", ".join(dup)), file=sys.stderr)
+            return False
     tagged = [e["manifest"]["id"] for d, k in ((new, "extensions"), (old, "plugins")) for e in d[k] if "tags" in e["manifest"]]
     if tagged:
         print("index entries whose manifest has tags (hubs from before tags refuse it): %s" % ", ".join(tagged), file=sys.stderr)

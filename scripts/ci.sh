@@ -46,6 +46,7 @@ done
 
 step index
 scripts/index.py check
+python3 -I scripts/test-index.py
 
 step signature
 scripts/sign-index.py verify
