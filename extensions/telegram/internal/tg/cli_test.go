@@ -13,6 +13,28 @@ import (
 	"github.com/nwverse/persona-extensions/extensions/telegram/internal/connector"
 )
 
+// parseArgs decodes exactly one object: like an unknown field, anything left after the value (a second object,
+// stray tokens) is refused, so it cannot silently ride along with the arguments the action takes.
+func TestParseArgsRejectsTrailingData(t *testing.T) {
+	if a, err := parseArgs(json.RawMessage(`{"chat":"u1"}`)); err != nil || a.Chat != "u1" {
+		t.Fatalf("one object: %+v, %v", a, err)
+	}
+	if a, err := parseArgs(json.RawMessage("{}\n \t")); err != nil {
+		t.Fatalf("whitespace after the object is nothing: %+v, %v", a, err)
+	}
+	for _, args := range []string{
+		`{}x`,
+		`{} {}`,
+		`{"chat":"u1"} {"chat":"u2"}`,
+		`{} null`,
+		`{} {`, // a second value cut off is not a clean EOF either
+	} {
+		if _, err := parseArgs(json.RawMessage(args)); err == nil || !strings.Contains(err.Error(), "arguments: trailing data") {
+			t.Errorf("%s: %v, want arguments: trailing data", args, err)
+		}
+	}
+}
+
 // The models see the assistant's three read tools only; the CLI's reads and writes are there to be called by name.
 func TestCLIToolsAreUnlisted(t *testing.T) {
 	c, _, ctx := archiveAccount(t)

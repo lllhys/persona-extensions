@@ -41,3 +41,24 @@ func TestCommandLineTool(t *testing.T) {
 		t.Fatal("a read ran signed out")
 	}
 }
+
+// telegram_cli decodes exactly one object: a second object or stray tokens after it are refused like an unknown
+// field, instead of the first one being taken and the rest silently dropped.
+func TestCommandLineRejectsTrailingData(t *testing.T) {
+	c, ctx := New(&memSecrets{}, nil), context.Background()
+	for _, args := range []string{
+		`{"argv":["help"]}x`,
+		`{"argv":["help"]} {}`,
+		`{"argv":["help"]} null`,
+		`{"argv":[]}{"argv":[]}`,
+		`{"argv":["help"]} {`, // a second value cut off is not a clean EOF either
+	} {
+		if _, err := c.Call(ctx, "telegram_cli", json.RawMessage(args)); err == nil ||
+			!strings.Contains(err.Error(), "trailing data") {
+			t.Errorf("%s: %v, want trailing data", args, err)
+		}
+	}
+	if _, err := c.Call(ctx, "telegram_cli", json.RawMessage("{\"argv\":[\"help\"]}\n  ")); err != nil {
+		t.Fatalf("whitespace after the object is nothing: %v", err)
+	}
+}

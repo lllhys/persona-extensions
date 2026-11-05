@@ -1,12 +1,14 @@
 package telegram
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"reflect"
 	"regexp"
@@ -63,15 +65,30 @@ var argNames = func() map[string]bool {
 	return out
 }()
 
+// decodeArgs decodes exactly one JSON value into v: an unknown field is refused, and so is anything left after
+// the value (another object, stray tokens), so trailing data cannot silently ride along with the arguments.
+func decodeArgs(args json.RawMessage, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(args))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return errors.New("trailing data")
+	}
+	return nil
+}
+
 func parseArgs(args json.RawMessage) (cliArgs, error) {
 	var a cliArgs
 	if len(args) == 0 {
 		return a, nil
 	}
 	// encoding/json fills a field from a key in any case ("Chat", "CHAT"), but connector_gate's rules look a
-	// field up by its exact name, so a key that is not one of cliArgs' names as written is refused.
+	// field up by its exact name, so a key that is not one of cliArgs' names as written is refused. This one
+	// reads the key names only; decodeArgs below also checks the value is the one and only JSON value.
 	var keys map[string]json.RawMessage
-	if err := json.Unmarshal(args, &keys); err != nil {
+	if err := json.NewDecoder(bytes.NewReader(args)).Decode(&keys); err != nil {
 		return a, fmt.Errorf("arguments: %w", err)
 	}
 	for k := range keys {
@@ -79,9 +96,7 @@ func parseArgs(args json.RawMessage) (cliArgs, error) {
 			return a, fmt.Errorf("arguments: unknown field %q", k)
 		}
 	}
-	dec := json.NewDecoder(strings.NewReader(string(args)))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&a); err != nil {
+	if err := decodeArgs(args, &a); err != nil {
 		return a, fmt.Errorf("arguments: %w", err)
 	}
 	return a, nil

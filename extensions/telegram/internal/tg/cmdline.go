@@ -1,7 +1,6 @@
 package telegram
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -20,9 +19,7 @@ func cmdLine(args json.RawMessage) (string, error) {
 		Result string   `json:"result"`
 	}
 	if len(args) > 0 {
-		dec := json.NewDecoder(bytes.NewReader(args))
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&a); err != nil {
+		if err := decodeArgs(args, &a); err != nil {
 			return "", fmt.Errorf("%s arguments: %w", spec.CLITool, err)
 		}
 	}
