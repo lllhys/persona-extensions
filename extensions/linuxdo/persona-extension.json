@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "linuxdo",
   "name": "LINUX DO",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "LINUX DO 社区的热门帖子：扩展里的一页按你的兴趣看热门、今日 / 本周最热和最新，点开在 App 里读正文和热门回复（hub 去读，手机不用代理）；助手能用工具查热门、读帖子。只读公开内容，不用账号。",
   "publisher": "nwverse",
   "tags": ["社区", "热门", "阅读"],
@@ -112,7 +112,7 @@
       "tz": {
         "type": "string",
         "title": "时区",
-        "description": "页面和工具里的时间用这个时区（如 Asia/Shanghai）；空着用 hub 机器的"
+        "description": "页面和工具里的时间都用这个时区（如 Asia/Shanghai）；空着时，页面先用 App/用户所在时区、再用 hub 机器的，工具直接用 hub 机器的"
       }
     }
   },
