@@ -11,7 +11,9 @@ import (
 // The user's own permission rules. Claude Code's hook input does not say why it asks, so a prompt from an ask rule
 // the user wrote (permissions.ask: ["Bash(git push:*)"]) looks the same as one from a safety check. The hook reads the
 // rules it can find and stays out of any call one of them might be about. It errs on the side of asking: a rule
-// counts when the literal start of its pattern appears anywhere in the command, a bare "Bash" counts for every command.
+// counts when the literal start of its pattern appears anywhere in the command, either as written or as the shell
+// reads its words (quotes, backslashes and line continuations taken out, each run of whitespace one space), so
+// Bash(git push:*) counts for "git  push", "git\tpush" and "'git' push" too. A bare "Bash" counts for every command.
 // Deny rules are read the same way, although Claude Code denies those before it asks.
 //
 // What it cannot see: rules given on the command line (--settings, --allowedTools), ones added in the session
@@ -80,11 +82,20 @@ func isBashRule(r string) bool {
 func matchingRule(rules []string, cmd string) string {
 	for _, r := range rules {
 		lit, all := ruleLiteral(r)
-		if all || strings.Contains(cmd, lit) {
+		if all || strings.Contains(cmd, lit) || strings.Contains(shellWords(cmd), shellWords(lit)) {
 			return r
 		}
 	}
 	return ""
+}
+
+// shellWords is s with what the shell takes out of its words taken out: line continuations (backslash-newline),
+// quotes and backslashes, and each run of spaces, tabs and newlines made one space. It is looser than the shell
+// ("'a b'" becomes two words), which only makes more rules count.
+func shellWords(s string) string {
+	s = strings.ReplaceAll(s, "\\\n", "")
+	s = strings.NewReplacer(`'`, "", `"`, "", `\`, "").Replace(s)
+	return strings.Join(strings.Fields(s), " ")
 }
 
 // ruleLiteral is the literal start of a Bash rule's pattern: "git push" for Bash(git push:*), Bash(git push *) and

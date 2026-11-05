@@ -171,6 +171,36 @@ func TestRuleLiteral(t *testing.T) {
 	}
 }
 
+// Claude Code 2.1.318 asks for each "asks" command here under ask: [Bash(touch:*), Bash(rm -rf:*)], measured in a
+// bypass-mode session; the git push ones are the same shapes under the other rule.
+func TestMatchingRule(t *testing.T) {
+	rules := []string{"Bash(git push:*)", "Bash(rm -rf:*)", "Bash(touch:*)"}
+	for _, c := range []struct{ cmd, rule string }{
+		{"git push origin HEAD", "Bash(git push:*)"},
+		{"git  push --force", "Bash(git push:*)"},
+		{"git\tpush", "Bash(git push:*)"},
+		{"'git' push", "Bash(git push:*)"},
+		{"git 'push' origin main", "Bash(git push:*)"},
+		{"git \\\n  push", "Bash(git push:*)"},
+		{"g\\it push", "Bash(git push:*)"},
+		{`"rm" -rf /x`, "Bash(rm -rf:*)"},
+		{"rm  -rf /x", "Bash(rm -rf:*)"},
+		{"cd x &&\n  rm \t-rf y", "Bash(rm -rf:*)"},
+		{"touch\ta3.tmp", "Bash(touch:*)"},
+		{"touch \\\n  a4.tmp", "Bash(touch:*)"},
+		// Flags in another order or split: Claude Code does not ask for these either.
+		{"rm -fr d", ""},
+		{"rm -r -f d", ""},
+		{"git pull", ""},
+		{"cd view && rm -f sub/*", ""},
+		{"echo 'git' && push", ""},
+	} {
+		if got := matchingRule(rules, c.cmd); got != c.rule {
+			t.Errorf("matchingRule(%q) = %q, want %q", c.cmd, got, c.rule)
+		}
+	}
+}
+
 func TestRedact(t *testing.T) {
 	for _, c := range []struct{ in, gone string }{
 		{"GITHUB_TOKEN=ghp_TEST00000000daf86f70 gh pr list", "ghp_TEST00000000daf86f70"},
@@ -179,14 +209,23 @@ func TestRedact(t *testing.T) {
 		{"git clone https://me:s3cretpass@example.com/r.git", "s3cretpass"},
 		{"echo 0123456789abcdef0123456789abcdef0123", "0123456789abcdef0123456789abcdef0123"},
 		{"export API_KEY='a b c'; run", "a b c"},
+		{"mysql -h db -u root -pS3cretpw app", "S3cretpw"},
+		{"mysqldump -u root -p'S3cret pw' app > a.sql", "S3cret pw"},
+		{"sshpass -p hunter22 ssh me@example.com", "hunter22"},
+		{"sshpass -phunter22 ssh me@example.com", "hunter22"},
+		{"curl -u me:s3cretpass https://example.com", "s3cretpass"},
+		{"curl -sS --user 'me:s3cretpass' https://example.com", "s3cretpass"},
+		{"curl -fsSL -ume:s3cretpass https://example.com", "s3cretpass"},
 	} {
 		got := redact(c.in)
 		if strings.Contains(got, c.gone) {
 			t.Errorf("redact(%q) = %q, still has %q", c.in, got, c.gone)
 		}
 	}
-	if got := redact("cd view && rm -f sub/*; ls"); got != "cd view && rm -f sub/*; ls" {
-		t.Errorf("an ordinary command changed: %q", got)
+	for _, ordinary := range []string{"cd view && rm -f sub/*; ls", "mkdir -p build && cp -pr a b", "mysql -p app", "docker run -u 1000:1000 img", "curl -u me https://example.com"} {
+		if got := redact(ordinary); got != ordinary {
+			t.Errorf("an ordinary command changed: %q", got)
+		}
 	}
 	long := redact(strings.Repeat("echo hi; ", 100))
 	if n := len([]rune(long)); n != commandShown+1 || !strings.HasSuffix(long, "…") {

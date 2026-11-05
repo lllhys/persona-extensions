@@ -202,8 +202,13 @@ var secretPatterns = []struct {
 	{regexp.MustCompile(`(?i)\b([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASSWD|PASSPHRASE|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|AUTH|CREDENTIALS?|COOKIE|SESSION)[A-Z0-9_]*)=("[^"]*"|'[^']*'|\S+)`), "$1=***"},
 	// Authorization: Bearer …, token …, Basic …
 	{regexp.MustCompile(`(?i)\b(bearer|token|basic)(\s+)[A-Za-z0-9._~+/=-]{8,}`), "$1$2***"},
-	// --password=…, --token …, -p…: flags that carry one
+	// --password=…, --token …: flags that carry one
 	{regexp.MustCompile(`(?i)(--?(?:password|passwd|token|secret|api-?key|auth)[= ])("[^"]*"|'[^']*'|\S+)`), "$1***"},
+	// mysql -pS3cret (the password joined to -p), sshpass -p pw: -p means a password only for these programs
+	{regexp.MustCompile(`(\b(?:mysql|mysqldump|mysqladmin|mariadb|mariadb-dump)\b[^|;&\n]*?\s-p)("[^"]*"|'[^']*'|[^\s"']+)`), "$1***"},
+	{regexp.MustCompile(`(\bsshpass\b[^|;&\n]*?\s-p\s*)("[^"]*"|'[^']*'|\S+)`), "$1***"},
+	// curl -u user:password, --user user:password: the part after the colon
+	{regexp.MustCompile(`(\bcurl\b[^|;&\n]*?\s(?:-u\s*|--user[= ])['"]?[^\s:'"]*:)([^\s'"]+)`), "$1***"},
 	// user:password@ in a URL
 	{regexp.MustCompile(`://[^/\s:@]+:[^/\s@]+@`), "://***@"},
 	// long opaque strings: keys, tokens, hashes
