@@ -165,11 +165,9 @@ func TestNewsRoundsAreThrottled(t *testing.T) {
 	newsEvery, newsEveryMost = 200*time.Millisecond, 800*time.Millisecond
 	t.Cleanup(func() { newsEvery, newsEveryMost = time.Minute, 16*time.Minute })
 	c, f, ctx := archiveAccount(t)
-	wctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	var mu sync.Mutex
 	var kicks []time.Time // the archive's
-	go c.Watch(wctx, func(s connector.Scope) {
+	watch(t, ctx, c, func(s connector.Scope) {
 		if s == connector.ScopeChats {
 			mu.Lock()
 			kicks = append(kicks, time.Now())

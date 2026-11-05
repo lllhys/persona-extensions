@@ -176,9 +176,7 @@ func TestWatchKicks(t *testing.T) {
 	default:
 	}
 	got := make(chan string, 8)
-	wctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go c.Watch(wctx, func(scope connector.Scope) { got <- string(scope) })
+	watch(t, ctx, c, func(scope connector.Scope) { got <- string(scope) })
 	f.mu.Lock()
 	updated := f.updated
 	f.mu.Unlock()

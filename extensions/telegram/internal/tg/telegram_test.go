@@ -473,10 +473,23 @@ func running(t *testing.T, sec *memSecrets, f *fakeTelegram) (*Conn, context.Con
 	t.Helper()
 	quickPace(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 	c := newConn(sec, f.dial)
-	go c.Run(ctx)
+	done := make(chan struct{})
+	go func() { defer close(done); c.Run(ctx) }()
+	// Run reads the package's timings: it has returned before the cleanups registered earlier (quickPace's) put
+	// them back.
+	t.Cleanup(func() { cancel(); <-done })
 	return c, ctx
+}
+
+// watch runs c.Watch for the rest of the test. Like running's Run, it has returned before the cleanups registered
+// earlier (archiveAccount's newsSettle, a test's newsEvery) put the timings it reads back.
+func watch(t *testing.T, ctx context.Context, c *Conn, changed func(connector.Scope)) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() { defer close(done); _ = c.Watch(ctx, changed) }()
+	t.Cleanup(func() { cancel(); <-done })
 }
 
 func waitState(t *testing.T, c *Conn, state string) connector.Status {
