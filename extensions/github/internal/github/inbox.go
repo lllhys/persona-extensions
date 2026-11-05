@@ -30,11 +30,12 @@ type inboxState struct {
 }
 
 var (
-	pollDefault  = 60 * time.Second   // when GitHub does not say (X-Poll-Interval)
-	fullEvery    = 10 * time.Minute   // read everything now and then: a notification read on GitHub may not change Last-Modified
-	maxDetails   = 30                 // threads read per poll; the rest wait for the next
-	forgetAfter  = 8 * 24 * time.Hour // things kept for the hub to settle its items, like its own inboxForget
-	contextMoves = 8                  // newest comments / reviews in a thing's context
+	pollDefault       = 60 * time.Second   // when GitHub does not say (X-Poll-Interval)
+	fullEvery         = 10 * time.Minute   // read everything now and then: a notification read on GitHub may not change Last-Modified
+	maxDetails        = 30                 // threads read per poll; the rest wait for the next
+	notificationPages = 10                 // pages of 50 notifications read per poll (GitHub's largest page)
+	forgetAfter       = 8 * 24 * time.Hour // things kept for the hub to settle its items, like its own inboxForget
+	contextMoves      = 8                  // newest comments / reviews in a thing's context
 )
 
 type notification struct {
@@ -75,7 +76,8 @@ func (c *Connector) Watch(ctx context.Context, changed func(connector.Scope)) er
 }
 
 // poll reads the unread notifications (not at all when nothing changed: 304) and returns how long GitHub wants
-// the next poll to wait and whether a thing changed.
+// the next poll to wait and whether a thing changed. They come 50 to a page, newest first: poll follows the pages
+// up to notificationPages (only the first while requests run low).
 func (c *Connector) poll(ctx context.Context) (time.Duration, bool, error) {
 	st := &c.inbox
 	st.mu.Lock()
@@ -94,6 +96,23 @@ func (c *Connector) poll(ctx context.Context) (time.Duration, bool, error) {
 	if err != nil {
 		return 0, false, err
 	}
+	whole := true // every unread notification read: those not among them can be marked read elsewhere
+	for page, ph := 1, h; code != http.StatusNotModified; page++ {
+		next, more := nextPage(ph, c.api)
+		if !more {
+			break
+		}
+		if next == "" || page == notificationPages || c.ratesLow() {
+			whole = false
+			break
+		}
+		var batch []notification
+		if _, ph, err = c.request(ctx, http.MethodGet, next, nil, nil, &batch); err != nil {
+			whole = false // what was read still comes in; the rest next time
+			break
+		}
+		ns = append(ns, batch...)
+	}
 	wait := pollDefault
 	if s, err := strconv.Atoi(h.Get("X-Poll-Interval")); err == nil && s > 0 {
 		wait = time.Duration(s) * time.Second
@@ -107,16 +126,16 @@ func (c *Connector) poll(ctx context.Context) (time.Duration, bool, error) {
 		st.fullAt = time.Now()
 	}
 	st.mu.Unlock()
-	moved := c.applyNotifications(ctx, ns, time.Now())
+	moved := c.applyNotifications(ctx, ns, whole, time.Now())
 	if c.followUpCI(ctx) {
 		moved = true
 	}
 	return wait, moved, nil
 }
 
-// applyNotifications reads the threads that moved (at most maxDetails, none while requests run low) and marks
-// those no longer unread as read elsewhere.
-func (c *Connector) applyNotifications(ctx context.Context, ns []notification, now time.Time) bool {
+// applyNotifications reads the threads that moved (at most maxDetails, none while requests run low) and, when ns
+// is every unread notification (whole), marks those no longer unread as read elsewhere.
+func (c *Connector) applyNotifications(ctx context.Context, ns []notification, whole bool, now time.Time) bool {
 	st := &c.inbox
 	me := c.Status(ctx).Account
 	budget := maxDetails
@@ -193,11 +212,26 @@ func (c *Connector) applyNotifications(ctx context.Context, ns []notification, n
 		switch {
 		case now.Sub(t.At) > forgetAfter:
 			delete(st.things, thread)
-		case !unread[thread] && !t.Read && t.Done == "":
+		case whole && !unread[thread] && !t.Read && t.Done == "":
 			t.Read, moved = true, true
 		}
 	}
 	return moved
+}
+
+var linkNext = regexp.MustCompile(`<([^>]+)>;\s*rel="next"`)
+
+// nextPage is the path of the next page a list answer's Link header names, and whether it names one. A next page
+// outside api (not GitHub's own) is not followed: "", true.
+func nextPage(h http.Header, api string) (string, bool) {
+	m := linkNext.FindStringSubmatch(h.Get("Link"))
+	if m == nil {
+		return "", false
+	}
+	if !strings.HasPrefix(m[1], api+"/") {
+		return "", true
+	}
+	return strings.TrimPrefix(m[1], api), true
 }
 
 // tagsOf is what a notification's thing is about: its repository, who made the newest move (a person's PR / issue
