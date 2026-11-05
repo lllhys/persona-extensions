@@ -362,6 +362,8 @@ func (c *Connector) over(thread string, o InboxOptions) string {
 		case o.ci() == CIOff:
 			return "GitHub：CI 失败已设为不提醒"
 		}
+	} else if rest, ok := strings.CutPrefix(thread, "subject:"); ok {
+		repo, _, _ = strings.Cut(rest, "@")
 	} else if r, _, ok := strings.Cut(thread, "#"); ok {
 		repo = r
 	}

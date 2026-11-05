@@ -342,3 +342,37 @@ func TestReplyComments(t *testing.T) {
 		}
 	}
 }
+
+// An @ in a Discussion (GitHub sends no subject URL) or on a commit is a person's, not a CI run: it links to the
+// discussions or the commit, and settling does not close it as an old per-notification CI item.
+func TestDiscussionAndCommitMentionsAreNotCI(t *testing.T) {
+	f := &fakeNotifications{}
+	f.notifications = "[" + strings.Join([]string{
+		note("77", "mention", "Discussion", "", t1),
+		note("78", "mention", "Commit", "https://api.github.com/repos/example-org/example-repo/commits/abc123", t1),
+	}, ",") + "]"
+	c := f.server(t)
+	if _, _, err := c.poll(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := c.Collect(context.Background())
+	if len(list) != 2 {
+		t.Fatalf("%d things: %+v", len(list), list)
+	}
+	want := map[string][2]string{ // title -> thread, URL
+		"Subject 77": {"subject:example-org/example-repo@77", "https://github.com/example-org/example-repo/discussions"},
+		"Subject 78": {"subject:example-org/example-repo@78", "https://github.com/example-org/example-repo/commit/abc123"},
+	}
+	var threads []string
+	for _, th := range list {
+		w := want[th.Title]
+		if th.Thread != w[0] || th.URL != w[1] || th.Kind != "mention" || th.Sender == "GitHub Actions" ||
+			strings.Contains(th.Context, "CI") || th.Tier != "action" || th.CanReply {
+			t.Errorf("%s: thread %q url %q sender %q tier %q context %q", th.Title, th.Thread, th.URL, th.Sender, th.Tier, th.Context)
+		}
+		threads = append(threads, th.Thread)
+	}
+	if over := c.Settle(context.Background(), threads); len(over) != 0 {
+		t.Errorf("settled %v", over)
+	}
+}

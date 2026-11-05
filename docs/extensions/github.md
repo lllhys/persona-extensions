@@ -14,7 +14,7 @@ Switching the extension on turns on what the hub already did before (the connect
 ## The connector
 
 - **Inbox.** It polls GitHub's notifications at the pace GitHub asks for (`X-Poll-Interval`, at least a minute) and keeps one item per PR or issue. Each poll reads up to 10 pages of 50 notifications (only the first while the hour's requests run low). An item is marked read elsewhere only after a poll that read every unread notification. Kinds:
-  - `review_requested`, `mention`, `team_mention`, `assign`;
+  - `review_requested`, `mention`, `team_mention`, `assign`; an @ or assignment in a Discussion or on a commit is its own item, linked to the repository's discussions or the commit;
   - `author`: new comments or reviews on your own PR or issue;
   - `ci_failed`: a failing GitHub Actions run of yours, followed up until the branch is green, merged or deleted.
 

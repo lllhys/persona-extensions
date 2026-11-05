@@ -275,16 +275,22 @@ func classify(n notification) (kind, label string) {
 	return "", ""
 }
 
-var subjectURL = regexp.MustCompile(`/repos/([^/]+/[^/]+)/(?:issues|pulls)/(\d+)$`)
+var (
+	subjectURL = regexp.MustCompile(`/repos/([^/]+/[^/]+)/(?:issues|pulls)/(\d+)$`)
+	commitURL  = regexp.MustCompile(`/repos/[^/]+/[^/]+/commits/([0-9a-fA-F]+)$`)
+)
 
 // threadOf is the PR / issue a notification is about ("example-org/example-repo#12"), so a review request and an @
-// on the same PR are one thing; anything else is its own notification.
+// on the same PR are one thing; anything else (a Discussion, a commit) is its own notification. These are not
+// "notification:<id>": that is what CI items were before they were merged per branch, and Settle closes those.
 func threadOf(n notification) string {
 	if m := subjectURL.FindStringSubmatch(n.Subject.URL); m != nil {
 		return m[1] + "#" + m[2]
 	}
-	return "notification:" + n.ID
+	return subjectThread(n.Repository.FullName, n.ID)
 }
+
+func subjectThread(repo, id string) string { return "subject:" + repo + "@" + id }
 
 // move is a comment or a review, for the preview and the context.
 type move struct {
@@ -302,9 +308,16 @@ func isBot(u user) bool { return u.Type == "Bot" || strings.HasSuffix(u.Login, "
 func (c *Connector) describe(ctx context.Context, n notification, me string) (connector.InboxThing, error) {
 	t := connector.InboxThing{Title: n.Subject.Title, At: n.UpdatedAt}
 	m := subjectURL.FindStringSubmatch(n.Subject.URL)
-	if m == nil { // a CI run: there is nothing to read or answer, only the failure to look at
-		t.Sender, t.Preview, t.URL = "GitHub Actions", n.Subject.Title, n.Repository.HTMLURL+"/actions"
-		t.Context = fmt.Sprintf("仓库 %s 的 CI（GitHub Actions）：%s", n.Repository.FullName, n.Subject.Title)
+	if m == nil { // a Discussion (GitHub gives no URL for it), a commit, a release: only its title to show
+		t.Preview, t.URL = n.Subject.Title, n.Repository.HTMLURL
+		switch sha := commitURL.FindStringSubmatch(n.Subject.URL); {
+		case n.Subject.Type == "Discussion":
+			t.URL += "/discussions"
+		case sha != nil:
+			t.URL += "/commit/" + sha[1]
+		}
+		t.Context = fmt.Sprintf("GitHub 仓库 %s 的 %s：%s\n%s", n.Repository.FullName, n.Subject.Type, n.Subject.Title, t.URL)
+		t.Tier, t.Why = tierOf(n.Reason, user{}, nil)
 		return t, nil
 	}
 	repo, number := m[1], m[2]

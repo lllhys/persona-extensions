@@ -178,12 +178,13 @@ func TestInboxOptionsAndSettle(t *testing.T) {
 		t.Fatal(err)
 	}
 	over := c.Settle(context.Background(), []string{"notification:9", "ci:example-org/example-repo@train/1", "ci:example-org/example-repo@main",
-		"example-org/noisy#3", "example-org/example-repo#12"})
+		"example-org/noisy#3", "subject:example-org/noisy@5", "example-org/example-repo#12", "subject:example-org/example-repo@6"})
 	want := map[string]string{
 		"notification:9":                      "GitHub 降噪：CI 失败改为按分支合并成一条",
 		"ci:example-org/example-repo@train/1": "GitHub：自动分支的 CI 不提醒",
 		"ci:example-org/example-repo@main":    "GitHub：CI 失败已设为不提醒",
 		"example-org/noisy#3":                 "GitHub：仓库已静音",
+		"subject:example-org/noisy@5":         "GitHub：仓库已静音",
 	}
 	if len(over) != len(want) {
 		t.Fatalf("settled %v", over)
