@@ -39,6 +39,23 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # scripts/release.sh uses gh, which a self-hosted runner may not have: then a fixed release of GitHub's own,
+      # checked against the sha256 written here, unpacked in the job's temporary directory (no sudo, nothing kept).
+      - name: gh
+        run: |
+          if command -v gh >/dev/null; then gh --version | head -1; exit 0; fi
+          v=2.103.3
+          case "$(uname -m)" in
+            x86_64) arch=amd64 sum=4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d ;;
+            aarch64 | arm64) arch=arm64 sum=ee32df2323c8847f5fac6cb6b4b69ca75828e9329a8f22f677021f7b3306ce63 ;;
+            *) echo "::error::no gh for $(uname -m)"; exit 1 ;;
+          esac
+          f="gh_${v}_linux_${arch}.tar.gz"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$f" "https://github.com/cli/cli/releases/download/v${v}/$f"
+          echo "$sum  $RUNNER_TEMP/$f" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/gh_${v}_linux_${arch}/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/gh_${v}_linux_${arch}/bin/gh" --version | head -1
       - name: Check and release
         env:
           BEFORE: ${{ github.event.before }}
