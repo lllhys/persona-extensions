@@ -63,7 +63,7 @@ func explain(err error) string {
 	}
 	line, _, _ := strings.Cut(err.Error(), "\n")
 	if len(line) > 200 {
-		line = line[:200] + "…"
+		line = clip(line, 200)
 	}
 	return line
 }
