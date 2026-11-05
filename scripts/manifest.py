@@ -5,16 +5,19 @@
   scripts/manifest.py version <id>    its version
   scripts/manifest.py packaged <id>   the manifest as packages and indexes carry it: without "tags"
   scripts/manifest.py ids             every extension in extensions/
-  scripts/manifest.py check           every manifest is sound (what CI runs)
+  scripts/manifest.py check           every manifest is sound (what CI runs): id, version, tags, no retired files,
+                                      the files it references are in its package, its pack members are here
   scripts/manifest.py changed <ref>   the extensions whose version is not what it was at <ref> (new ones too)
 """
-import json, os, re, subprocess, sys
+import json, os, posixpath, re, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NEW, OLD = "persona-extension.json", "persona-plugin.json"
 SEMVER = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$")
 # What a hub takes as a market entry's tags (nwverse/persona server/internal/extension/market.go).
 TAGS_MOST, TAG_LONGEST = 16, 24
+# The directories scripts/package.sh copies into a package besides the manifest and the program.
+PACKAGED_DIRS = ("skills", "assistant")
 
 
 def ids():
@@ -59,6 +62,63 @@ def version_at(ref, id):
     return None
 
 
+def referenced(m):
+    """The package paths a manifest references, as (what, path, kind): kind "skill" is a directory with SKILL.md,
+    "file" a file. The hub refuses a package without them at install (nwverse/persona server/internal/extension)."""
+    c = m.get("contributes") or {}
+    out = []
+    for s in c.get("skills") or []:
+        out.append(("skills %s: dir" % s.get("id"), s.get("dir"), "skill"))
+    for p in c.get("prompts") or []:
+        if p.get("kind") == "instructions":
+            out.append(("prompts %s: file" % p.get("id"), p.get("file"), "file"))
+    for a in c.get("assistant") or []:
+        for sk in a.get("skills") or []:
+            out.append(("assistant %s: skills" % a.get("id"), sk, "skill"))
+        for key in ("instructions", "gate"):
+            if a.get(key):
+                out.append(("assistant %s: %s" % (a.get("id"), key), a.get(key), "file"))
+    return out
+
+
+def inside(p):
+    """A clean relative path inside the package, as the hub takes one (its checkPackagePath)."""
+    return isinstance(p, str) and p not in ("", ".", "..") and not p.startswith(("/", "../")) and "\\" not in p \
+        and posixpath.normpath(p) == p
+
+
+def check_files(id, m):
+    """Each path the manifest references is inside the extension, under a directory scripts/package.sh copies, and
+    there: a path anywhere else would be left out of the package without a word."""
+    bad = []
+    root = os.path.join(ROOT, "extensions", id)
+    for what, p, kind in referenced(m):
+        where = "extensions/%s: %s %r" % (id, what, p)
+        if not inside(p):
+            bad.append("%s is not a path inside the package" % where)
+        elif p.split("/", 1)[0] not in PACKAGED_DIRS:
+            bad.append("%s is not under %s/: scripts/package.sh would leave it out" % (where, "/ or ".join(PACKAGED_DIRS)))
+        elif kind == "skill" and not os.path.isfile(os.path.join(root, p, "SKILL.md")):
+            bad.append("%s has no SKILL.md" % where)
+        elif kind == "file" and not os.path.isfile(os.path.join(root, p)):
+            bad.append("%s is not a file in the extension" % where)
+    return bad
+
+
+def check_pack(id, m):
+    """A pack's members from its own market (no "market" of their own) are extensions of this repository."""
+    bad, here = [], ids()
+    for e in m.get("extension_pack") or []:
+        member = e.get("id") if isinstance(e, dict) else None
+        if isinstance(e, dict) and e.get("market"):
+            continue
+        if member == id:
+            bad.append("extensions/%s: extension_pack lists the pack itself" % id)
+        elif member not in here:
+            bad.append("extensions/%s: extension_pack member %r is not an extension in extensions/" % (id, member))
+    return bad
+
+
 def check():
     bad = []
     for id in ids():
@@ -74,6 +134,7 @@ def check():
         for gone in (OLD, "market.json"):
             if os.path.exists(os.path.join(ROOT, "extensions", id, gone)):
                 bad.append("extensions/%s: no %s (one manifest: %s; see docs/reference.md)" % (id, gone, NEW))
+        bad += check_files(id, m) + check_pack(id, m)
     for b in bad:
         print(b, file=sys.stderr)
     return not bad

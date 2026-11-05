@@ -4,7 +4,7 @@
 
 ## Manifests and configuration
 
-Each extension is rooted at `extensions/<id>/` and has one manifest, `persona-extension.json`. [scripts/manifest.py](../scripts/manifest.py) checks directory/id agreement, versions and tags, and rejects a committed `persona-plugin.json` or `market.json`.
+Each extension is rooted at `extensions/<id>/` and has one manifest, `persona-extension.json`. [scripts/manifest.py](../scripts/manifest.py) checks directory/id agreement, versions and tags, that every file the manifest references is in the extension under `skills/` or `assistant/` (the directories packaging copies), and that `extension_pack` members without their own `market` are extensions in this repository; it rejects a committed `persona-plugin.json` or `market.json`. [extensions/manifests_test.go](../extensions/manifests_test.go) validates every manifest, with and without `tags`, against the SDK `Manifest` schema.
 
 | Field or file | Purpose |
 | --- | --- |

@@ -43,7 +43,7 @@ go test ./...
 scripts/ci.sh
 ```
 
-`scripts/ci.sh` checks local documentation links and their regression tests, manifests, Go formatting, `go vet`, Go tests, the [LarkAgentX companion's synthetic Python tests](extensions/larkagentx.md#local-validation-and-remaining-work), builds for every platform declared by each manifest, equivalent market entries and existing index signatures. It packages extensions locally, but without the `release` argument it does not publish anything.
+`scripts/ci.sh` checks local documentation links and their regression tests, manifests (`scripts/manifest.py check`), Go formatting, `go vet`, Go tests, the [LarkAgentX companion's synthetic Python tests](extensions/larkagentx.md#local-validation-and-remaining-work), builds for every platform declared by each manifest, equivalent market entries and existing index signatures. It packages extensions locally, but without the `release` argument it does not publish anything.
 
 The copied SDK is a nested module, so root `go test ./...` does not run its own test packages. To check that copy separately:
 
@@ -61,7 +61,7 @@ go test ./extensions/telegram/...
 scripts/package.sh linuxdo
 ```
 
-Packaging produces `dist/<id>-<version>.tar.gz` and a SHA-256 file. It includes both manifest names and any `skills/` or `assistant/` directories the extension ships. Archives omit macOS AppleDouble metadata and extended attributes, which otherwise can hide the manifest from the hub's package reader.
+Packaging produces `dist/<id>-<version>.tar.gz` and a SHA-256 file. It includes both manifest names and any `skills/` or `assistant/` directories the extension ships. Files a manifest references (skill directories, instruction prompts, assistant skills, instructions and gates) must therefore live under `skills/` or `assistant/`; `scripts/manifest.py check` fails when one is elsewhere or missing. Every manifest, including those of extensions without a program, is also validated against the SDK `Manifest` schema as committed and as packaged, by `go test ./extensions`. Archives omit macOS AppleDouble metadata and extended attributes, which otherwise can hide the manifest from the hub's package reader.
 
 See [installation](installation.md#install-a-local-package) to install the package on a hub. Extension tests use fake services; running them does not require real account credentials.
 
