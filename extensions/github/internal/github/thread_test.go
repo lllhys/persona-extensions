@@ -225,6 +225,47 @@ func TestThreadAvatar(t *testing.T) {
 	}
 }
 
+// The avatar URL cache is bounded: past etagKeep distinct logins it is reset, keeping only the newest entry;
+// an evicted login is looked up again by Media (see TestThreadAvatar's /users/<login> fallback).
+func TestThreadAvatarCacheIsBounded(t *testing.T) {
+	c := &Connector{}
+	for i := 0; i <= etagKeep; i++ { // etagKeep+1 distinct logins
+		login := fmt.Sprintf("user%04d", i)
+		avatarURL := fmt.Sprintf("https://avatars.example.com/u/%d?v=4", i)
+		if tp := c.threadPerson(person{Login: login, AvatarURL: avatarURL}); tp.Avatar != "avatar:"+login+":4" {
+			t.Fatalf("person %d rendered as %+v", i, tp)
+		}
+		c.etags.mu.Lock()
+		n := len(c.etags.avatars)
+		c.etags.mu.Unlock()
+		if n > etagKeep {
+			t.Fatalf("avatars grew to %d, past the %d bound", n, etagKeep)
+		}
+	}
+	last := fmt.Sprintf("user%04d", etagKeep)
+	c.etags.mu.Lock()
+	n := len(c.etags.avatars)
+	src, ok := c.etags.avatars[last]
+	_, firstKept := c.etags.avatars["user0000"]
+	c.etags.mu.Unlock()
+	if n != 1 || !ok || firstKept {
+		t.Fatalf("after %d distinct logins: %d entries, last kept=%v (%q), first login evicted=%v",
+			etagKeep+1, n, ok, src, !firstKept)
+	}
+	if want := fmt.Sprintf("https://avatars.example.com/u/%d?v=4", etagKeep); src != want {
+		t.Fatalf("the newest login resolves to %q, want %q", src, want)
+	}
+	// re-rendering the same login overwrites in place and never grows the cache
+	c.threadPerson(person{Login: last, AvatarURL: "https://avatars.example.com/u/999?v=7"})
+	c.etags.mu.Lock()
+	n = len(c.etags.avatars)
+	src = c.etags.avatars[last]
+	c.etags.mu.Unlock()
+	if n != 1 || src != "https://avatars.example.com/u/999?v=7" {
+		t.Fatalf("re-rendering %s: %d entries, %q", last, n, src)
+	}
+}
+
 // The thread page's reply ({chat, text}) is a github_comment like the assistant's ({repo, number, body}).
 func TestCommentFromTheThreadPage(t *testing.T) {
 	a, err := parseWrite("github_comment", json.RawMessage(`{"chat":"example-org/example-repo#12","text":" 好的 "}`))

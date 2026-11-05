@@ -618,7 +618,9 @@ func (c *Connector) threadPerson(p person) *connector.ThreadPerson {
 		if err == nil {
 			tp.Avatar = "avatar:" + p.Login + ":" + cmp.Or(u.Query().Get("v"), "1")
 			c.etags.mu.Lock()
-			if c.etags.avatars == nil {
+			// the connector runs for weeks: like the logs map, the map is dropped whole at the bound
+			// (a missing avatar is looked up again in Media via /users/<login>).
+			if c.etags.avatars == nil || len(c.etags.avatars) >= etagKeep {
 				c.etags.avatars = map[string]string{}
 			}
 			c.etags.avatars[p.Login] = p.AvatarURL
