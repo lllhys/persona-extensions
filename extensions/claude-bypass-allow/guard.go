@@ -429,7 +429,14 @@ func redirectTarget(rs []rune, i int) (int, string) {
 	var t strings.Builder
 	for i+1 < len(rs) && !strings.ContainsRune(" \t\n;&|()<>", rs[i+1]) {
 		i++
-		if rs[i] != '\'' && rs[i] != '"' {
+		switch {
+		case rs[i] == '\\' && i+1 < len(rs):
+			// an escaped character is itself (/tmp/\.\./etc), and a backslash-newline joins the next line on
+			i++
+			if rs[i] != '\n' {
+				t.WriteRune(rs[i])
+			}
+		case rs[i] != '\'' && rs[i] != '"':
 			t.WriteRune(rs[i])
 		}
 	}
@@ -441,7 +448,14 @@ func redirectTarget(rs []rune, i int) (int, string) {
 }
 
 // scratch says whether a file is one nobody keeps: under /dev/ or /tmp/.
-func scratch(f string) bool { return strings.HasPrefix(f, "/dev/") || strings.HasPrefix(f, "/tmp/") }
+// The path is cleaned first, so /tmp/../etc/hosts is not one.
+func scratch(f string) bool {
+	if !strings.HasPrefix(f, "/") {
+		return false
+	}
+	f = path.Clean(f)
+	return strings.HasPrefix(f, "/dev/") || strings.HasPrefix(f, "/tmp/")
+}
 
 func isDigits(s string) bool {
 	for _, r := range s {
