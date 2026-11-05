@@ -43,15 +43,16 @@ type bridge interface {
 }
 
 type processBridge struct {
-	cmd     *exec.Cmd
-	in      io.WriteCloser
-	mu      sync.Mutex
-	writeMu sync.Mutex
-	n       int
-	pending map[int]chan bridgeReply
-	events  chan bridgeEvent
-	done    chan struct{}
-	stop    sync.Once
+	cmd      *exec.Cmd
+	in       io.WriteCloser
+	mu       sync.Mutex
+	writeMu  sync.Mutex
+	n        int
+	pending  map[int]chan bridgeReply
+	events   chan bridgeEvent
+	done     chan struct{}
+	shutdown chan struct{}
+	stop     sync.Once
 }
 
 func startBridge(ctx context.Context, argv []string) (bridge, error) {
@@ -73,7 +74,7 @@ func startBridge(ctx context.Context, argv []string) (bridge, error) {
 		_ = in.Close()
 		return nil, failure("unavailable")
 	}
-	b := &processBridge{cmd: cmd, in: in, pending: map[int]chan bridgeReply{}, events: make(chan bridgeEvent, 64), done: make(chan struct{})}
+	b := &processBridge{cmd: cmd, in: in, pending: map[int]chan bridgeReply{}, events: make(chan bridgeEvent, 64), done: make(chan struct{}), shutdown: make(chan struct{})}
 	go b.read(out)
 	return b, nil
 }
@@ -88,9 +89,14 @@ func (b *processBridge) read(out io.Reader) {
 			return
 		}
 		if r.Event != "" {
+			// Delivery blocks for as long as the consumer needs: the watch
+			// goroutine holds the event across a slow op (a 10s secret save
+			// or a 30s session check), so a full buffer must not tear down a
+			// healthy companion. Only Close() unblocks delivery, by closing
+			// shutdown; then read() returns and fail-closes the bridge.
 			select {
 			case b.events <- r.bridgeEvent:
-			case <-time.After(5 * time.Second):
+			case <-b.shutdown:
 				return
 			}
 			continue
@@ -167,6 +173,7 @@ func (b *processBridge) Events() <-chan bridgeEvent { return b.events }
 func (b *processBridge) Done() <-chan struct{}      { return b.done }
 func (b *processBridge) Close() {
 	b.stop.Do(func() {
+		close(b.shutdown)
 		_ = b.in.Close()
 		go func() {
 			select {

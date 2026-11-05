@@ -19,7 +19,7 @@ import (
 )
 
 const id = "larkagentx"
-const version = "0.1.3"
+const version = "0.1.4"
 const sendAction = "larkagentx_send_text"
 
 //go:embed persona-extension.json

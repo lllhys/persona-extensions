@@ -38,6 +38,17 @@ func TestCompanionProcessHelper(t *testing.T) {
 		_, _ = io.Copy(io.Discard, os.Stdin)
 		os.Exit(0)
 	}
+	if mode == "burst" {
+		// Emit more frames than the 64-slot event buffer before the
+		// consumer reads any of them, then stay alive until stdin closes.
+		// read() must block on delivery instead of tearing the bridge
+		// down; all 100 frames must still reach the consumer in order.
+		for i := 0; i < 100; i++ {
+			fmt.Printf("{\"event\":\"message\",\"message\":{\"id\":\"message-%03d\",\"chat\":\"chat-test\",\"sender\":\"sender-test\",\"text\":\"Synthetic event %d\"}}\n", i, i)
+		}
+		_, _ = io.Copy(io.Discard, os.Stdin)
+		os.Exit(0)
+	}
 	fmt.Fprintln(os.Stderr, "synthetic-secret-must-not-be-forwarded")
 	sc := bufio.NewScanner(os.Stdin)
 	sc.Buffer(make([]byte, 4096), frameScanLimit)
@@ -211,6 +222,78 @@ func TestFrameLimitBoundary(t *testing.T) {
 			t.Fatal("oversized inbound frame did not stop the reader")
 		}
 	})
+}
+
+// TestSlowConsumerDoesNotTearDownBridge pins the read() contract from
+// issue #45: the watch goroutine legitimately holds an event across a slow
+// op (10s secret save, up to 30s session check), so a full event buffer
+// must not kill a healthy companion. The synthetic helper emits 100 events
+// while the consumer is paused past the old 5s delivery give-up; the bridge
+// must stay alive, every event is then delivered in order, and Done()
+// fires only after Close().
+func TestSlowConsumerDoesNotTearDownBridge(t *testing.T) {
+	t.Setenv("PERSONA_LARKAGENTX_TEST_HELPER", "burst")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	b, err := startBridge(ctx, []string{os.Args[0], "-test.run=^TestCompanionProcessHelper$"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	pb := b.(*processBridge)
+	waitFor(t, 2*time.Second, func() bool { return len(pb.events) == cap(pb.events) },
+		"helper never filled the event buffer")
+	// The reader is blocked delivering frame 65 while the consumer is
+	// paused longer than the removed 5s teardown timeout.
+	select {
+	case <-b.Done():
+		t.Fatal("healthy bridge torn down while the consumer was paused")
+	case <-time.After(6 * time.Second):
+	}
+	for i := 0; i < 100; i++ {
+		select {
+		case ev := <-b.Events():
+			if want := fmt.Sprintf("Synthetic event %d", i); ev.Message.Text != want {
+				t.Fatalf("event %d is %q, want %q", i, ev.Message.Text, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("event %d was lost", i)
+		}
+	}
+	select {
+	case <-b.Done():
+		t.Fatal("Done fired before Close")
+	default:
+	}
+	b.Close()
+	select {
+	case <-b.Done():
+	case <-time.After(7 * time.Second):
+		t.Fatal("bridge did not stop after Close")
+	}
+}
+
+// TestCloseUnblocksStalledDelivery proves shutdown stays fail-closed: with
+// the reader blocked delivering into the full event buffer, Close() must
+// unblock delivery and close Done promptly — well inside the 5s kill
+// watchdog and without the consumer draining anything.
+func TestCloseUnblocksStalledDelivery(t *testing.T) {
+	t.Setenv("PERSONA_LARKAGENTX_TEST_HELPER", "burst")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	b, err := startBridge(ctx, []string{os.Args[0], "-test.run=^TestCompanionProcessHelper$"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pb := b.(*processBridge)
+	waitFor(t, 2*time.Second, func() bool { return len(pb.events) == cap(pb.events) },
+		"helper never filled the event buffer")
+	b.Close()
+	select {
+	case <-b.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close did not unblock a stalled delivery")
+	}
 }
 
 // TestMalformedFrameFailsClosed pins the read() contract in transport.go:
