@@ -9,12 +9,18 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/nwverse/persona-extensions/extensions/github/internal/connector"
 )
 
-func fakeWrites(t *testing.T) (*Connector, *[]string) {
+func fakeWrites(t *testing.T) (*Connector, *[]string, *int) {
 	var mu sync.Mutex
 	var posted []string
+	var hits int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits++
+		mu.Unlock()
 		switch {
 		case r.Method == http.MethodPost:
 			b, _ := io.ReadAll(r.Body)
@@ -32,11 +38,11 @@ func fakeWrites(t *testing.T) (*Connector, *[]string) {
 	t.Cleanup(srv.Close)
 	c := New(Config{Auth: AuthConfig{FromMachine: "mac"}}, "Mac", (&machine{tokens: []string{oldToken}}).fetch)
 	c.api = srv.URL
-	return c, &posted
+	return c, &posted, &hits
 }
 
 func TestWritesDescribeTheCardAndPost(t *testing.T) {
-	c, posted := fakeWrites(t)
+	c, posted, _ := fakeWrites(t)
 	ctx := context.Background()
 	if names := []string{c.Actions()[0].Name, c.Actions()[1].Name}; names[0] != "github_comment" || names[1] != "github_review" {
 		t.Fatalf("%v", names)
@@ -72,7 +78,7 @@ func TestWritesDescribeTheCardAndPost(t *testing.T) {
 }
 
 func TestBadWritesPostNothing(t *testing.T) {
-	c, posted := fakeWrites(t)
+	c, posted, _ := fakeWrites(t)
 	for _, tc := range []struct{ name, args string }{
 		{"github_comment", `{"repo":"example-org/example-repo","number":12,"body":"  "}`},
 		{"github_comment", `{"repo":"../x","number":12,"body":"x"}`},
@@ -85,5 +91,28 @@ func TestBadWritesPostNothing(t *testing.T) {
 	}
 	if len(*posted) != 0 {
 		t.Fatalf("posted %v", *posted)
+	}
+}
+
+// Describe refuses arguments it cannot parse before the user is asked: no card, and GitHub is never contacted.
+func TestDescribeRefusesBadWrites(t *testing.T) {
+	for _, tc := range []struct{ name, args string }{
+		{"github_comment", `{"repo":"../x","number":12,"body":"x"}`},
+		{"github_comment", `{"repo":"example-org/example-repo","number":12,"body":"  "}`},
+		{"github_review", `{"repo":"example-org/example-repo","number":12,"event":"MAYBE"}`},
+	} {
+		t.Run(tc.name+" "+tc.args, func(t *testing.T) {
+			c, posted, hits := fakeWrites(t)
+			act, card, err := c.Describe(context.Background(), tc.name, json.RawMessage(tc.args))
+			if err == nil {
+				t.Fatalf("Describe %s %s refused nothing", tc.name, tc.args)
+			}
+			if act != (connector.Action{}) || card != "" {
+				t.Fatalf("Describe %s %s gave card %q for %+v despite error %v", tc.name, tc.args, card, act, err)
+			}
+			if *hits != 0 || len(*posted) != 0 {
+				t.Fatalf("Describe %s %s reached the server: %d requests, posted %v", tc.name, tc.args, *hits, *posted)
+			}
+		})
 	}
 }

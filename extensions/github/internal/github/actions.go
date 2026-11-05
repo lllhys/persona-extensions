@@ -70,11 +70,11 @@ func parseWrite(name string, args json.RawMessage) (writeArgs, error) {
 }
 
 // Describe is the phone's card: the action, the PR / issue (with its title when GitHub answers quickly), the full
-// text. Arguments it cannot read are listed as they are.
+// text. Arguments it cannot parse are refused before the user is asked, the same way Do refuses them.
 func (c *Connector) Describe(ctx context.Context, name string, args json.RawMessage) (connector.Action, string, error) {
 	a, err := parseWrite(name, args)
 	if err != nil {
-		return connector.Action{Name: name}, name + " " + string(args), nil
+		return connector.Action{}, "", err
 	}
 	where := a.ref()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
