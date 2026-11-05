@@ -111,7 +111,9 @@ func (s *site) fetch(ctx context.Context, path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("连不上 LINUX DO：%w", err)
 	}
-	challenge := bytes.Contains(body[:min(len(body), 2048)], []byte("Just a moment"))
+	// The firewall's page answers 403 or 503; a 200 topic or feed may just
+	// mention the phrase.
+	challenge := res.StatusCode != http.StatusOK && bytes.Contains(body[:min(len(body), 2048)], []byte("Just a moment"))
 	switch {
 	case res.StatusCode == http.StatusTooManyRequests:
 		pause := pauseFor

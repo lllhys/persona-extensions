@@ -474,6 +474,25 @@ func TestSiteFailures(t *testing.T) {
 	}
 }
 
+// A good answer that only mentions the challenge page is still a good answer.
+func TestJustAMomentInContent(t *testing.T) {
+	f := newFakeSite(t)
+	sample(f)
+	f.topics[2001] = topicJSON(2001, "Help: page stuck on Just a moment", `<p>Cloudflare keeps showing "Just a moment..." on every site, any idea?</p>`)
+	f.feeds["/hot.rss"] = rss(item{id: 3001, title: "Just a moment 验证页一直转圈怎么办", author: "a", cat: "开发调优", posts: 3, people: 2})
+	p := testPlugin(t, f, nil)
+
+	if _, err := p.topic(context.Background(), 2001); err != nil {
+		t.Errorf("topic: %v", err)
+	}
+	if ts, err := p.hot(context.Background(), "hot", false); err != nil || len(ts) != 1 {
+		t.Errorf("hot: %d topics, %v", len(ts), err)
+	}
+	if s, _ := p.cStatus(context.Background(), nil, nil); s.(connectorStatus).State != "ok" {
+		t.Fatalf("status: %+v", s)
+	}
+}
+
 func TestTools(t *testing.T) {
 	f := newFakeSite(t)
 	sample(f)
