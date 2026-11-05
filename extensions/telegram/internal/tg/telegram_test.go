@@ -602,6 +602,51 @@ func TestLogout(t *testing.T) {
 	}
 }
 
+// Signing out when Telegram could not be asked whether the session is signed in (a flood wait, a network error)
+// says so and keeps the session: the device stays signed in at Telegram, so the app must not say signed out.
+// Once Telegram answers again, signing out ends the session there.
+func TestLogoutWhenTelegramCannotBeAsked(t *testing.T) {
+	raw, _ := json.Marshal(stored{APIID: 1234567, APIHash: exampleHash, Session: []byte("example session")})
+	sec := &memSecrets{data: raw}
+	f := &fakeTelegram{}
+	c, ctx := running(t, sec, f)
+	waitState(t, c, connector.StateOK)
+
+	c.gate.mu.Lock()
+	c.gate.until = time.Now().Add(time.Hour)
+	c.gate.mu.Unlock()
+	if err := c.Logout(ctx); err == nil || !strings.Contains(err.Error(), "Telegram 限流中") {
+		t.Fatalf("signing out during a flood wait: %v", err)
+	}
+	c.gate.mu.Lock()
+	c.gate.until = time.Now().Add(-time.Millisecond)
+	c.gate.mu.Unlock()
+	f.mu.Lock()
+	f.fail = func(method string) error {
+		if method == "Me" {
+			return errors.New("dial tcp: connection reset by peer")
+		}
+		return nil
+	}
+	f.mu.Unlock()
+	if err := c.Logout(ctx); err == nil || !strings.Contains(err.Error(), "connection reset") {
+		t.Fatalf("signing out without a connection: %v", err)
+	}
+	if f.loggedOut || sec.data == nil {
+		t.Fatalf("logged out %v, kept %s", f.loggedOut, sec.data)
+	}
+
+	f.mu.Lock()
+	f.fail = nil
+	f.mu.Unlock()
+	if err := c.Logout(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !f.loggedOut || sec.data != nil {
+		t.Fatalf("logged out %v, kept %s", f.loggedOut, sec.data)
+	}
+}
+
 // Telegram's flood limit is said for people, with how long to wait.
 func TestFloodWait(t *testing.T) {
 	why, ok := userError(tgerr.New(420, "FLOOD_WAIT_30"))
