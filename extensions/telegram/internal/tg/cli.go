@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/nwverse/persona-extensions/extensions/telegram/internal/connector"
@@ -411,7 +412,12 @@ func (c *Conn) plan(name string, args json.RawMessage) (write, error) {
 		if strings.TrimSpace(a.Text) == "" {
 			return w, errors.New("text is required")
 		}
-		if n := utf8.RuneCountInString(a.Text); n > textMost {
+		// Telegram counts the limit in UTF-16 code units, so an astral rune (an emoji) is 2.
+		n := 0
+		for _, r := range a.Text {
+			n += utf16.RuneLen(r) // invalid bytes range as RuneError, which counts as one BMP unit
+		}
+		if n > textMost {
 			return w, fmt.Errorf("text has %d characters; Telegram takes at most %d in one message", n, textMost)
 		}
 		if a.ReplyTo < 0 {

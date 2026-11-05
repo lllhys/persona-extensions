@@ -205,6 +205,7 @@ func TestCLIWrites(t *testing.T) {
 	for _, bad := range []struct{ name, args, says string }{
 		{"telegram_send", `{"chat":"u1"}`, "text is required"},
 		{"telegram_send", `{"chat":"u1","text":"` + strings.Repeat("字", textMost+1) + `"}`, "at most 4096"},
+		{"telegram_send", `{"chat":"u1","text":"` + strings.Repeat("😀", textMost) + `"}`, "at most 4096"},
 		{"telegram_forward", `{"chat":"c2","ids":[],"to":"u1"}`, "ids"},
 		{"telegram_forward", `{"chat":"c2","ids":[11],"to":"u9"}`, "to: 不认识会话"},
 		{"telegram_react", `{"chat":"c2","id":12}`, "emoji"},
@@ -217,6 +218,41 @@ func TestCLIWrites(t *testing.T) {
 	}
 	if got := f.written(); len(got) != len(want) {
 		t.Fatalf("a refused write reached Telegram: %q", got)
+	}
+}
+
+// The send limit is Telegram's, counted in UTF-16 code units: an astral rune (an emoji) is two. Exactly the limit
+// passes the pre-flight check and, once allowed, sends; one unit over is refused before the card, whatever the runes.
+func TestCLISendLengthUTF16(t *testing.T) {
+	c, f, ctx := archiveAccount(t)
+	r := connector.NewRegistry(nil)
+	if err := r.Add(c); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Call(ctx, "telegram_list_chats", nil); err != nil {
+		t.Fatal(err)
+	}
+	var card string
+	yes := func(_ context.Context, summary string, _ json.RawMessage) bool { card = summary; return true }
+
+	before := len(f.written())
+	atLimit := json.RawMessage(`{"chat":"u1","text":"` + strings.Repeat("😀", textMost/2) + `"}`) // 2048 runes, 4096 units
+	if res := r.Call(ctx, "telegram_send", atLimit, yes); res.IsError || !strings.Contains(card, strings.Repeat("😀", 4)) ||
+		len(f.written()) != before+1 {
+		t.Fatalf("exactly 4096 UTF-16 units was refused: %+v, card %q", res, card)
+	}
+
+	for i, text := range []string{
+		strings.Repeat("😀", textMost),         // 4096 runes, 8192 units
+		strings.Repeat("😀", textMost/2) + "x", // 2049 runes, 4097 units
+	} {
+		card = ""
+		sent := len(f.written())
+		args := json.RawMessage(`{"chat":"u1","text":"` + text + `"}`)
+		if res := r.Call(ctx, "telegram_send", args, yes); !res.IsError ||
+			!strings.Contains(res.Content[0].Text, "at most 4096") || card != "" || len(f.written()) != sent {
+			t.Fatalf("case %d: over the UTF-16 limit reached the card or Telegram: %+v, card %q", i, res, card)
+		}
 	}
 }
 
