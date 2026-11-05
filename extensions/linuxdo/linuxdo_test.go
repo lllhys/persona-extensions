@@ -495,6 +495,50 @@ func TestManyCodeBlocksFitThePage(t *testing.T) {
 	}
 }
 
+// A hot reply that renders to no words (only an emoji image, or only a video/audio upload) is skipped:
+// it would be an empty text item, which the host's view check refuses, and the whole topic page must still open.
+// A plain picture reply still renders the [图片] placeholder, so it is not over-filtered.
+func TestRepliesWithoutTextDoNotBreakThePage(t *testing.T) {
+	f := newFakeSite(t)
+	emojiOnly := `<p><img src="https://cdn.example/fire.png" title=":fire:" class="emoji" alt=":fire:"></p>`
+	videoOnly := `<p><video controls="controls"><source src="https://cdn.example/v.mp4"></video></p>`
+	imageOnly := `<p><img src="https://cdn.example/plain.png" alt=""></p>`
+	audioOnly := `<p><audio controls="controls"><source src="https://cdn.example/a.mp3"></audio></p>`
+	f.topics[40] = topicJSON(40, "一个帖子", `<p>正文在这里</p>`, emojiOnly, videoOnly, imageOnly, audioOnly, `<p>正常回复</p>`)
+	p := testPlugin(t, f, nil)
+
+	var td topicDoc
+	_ = json.Unmarshal([]byte(f.topics[40]), &td)
+	rs := td.bestReplies(10)
+	if len(rs) != 2 || rs[0].PostNumber != 6 || rs[1].PostNumber != 4 {
+		t.Fatalf("the picture reply and the reply with words are the best replies: %+v", rs)
+	}
+
+	// act runs the in-test copy of the host's plugin.CheckView; the fixed view carries no empty text item.
+	v, _ := act(t, p, "", "topic:40")
+	page := texts(v)
+	if !strings.Contains(page, "前 6 楼里最热的 2 条（共 6 帖）") || !strings.Contains(page, "正常回复") ||
+		!strings.Contains(page, "[图片]") {
+		t.Fatalf("the picture and the reply with words are shown with an honest count:\n%s", page)
+	}
+	if strings.Contains(page, "#2 u2") || strings.Contains(page, "#3 u3") || strings.Contains(page, "#5 u5") {
+		t.Fatalf("a reply without words was listed:\n%s", page)
+	}
+
+	text, err := p.toolTopic(context.Background(), 40, 10)
+	if err != nil || !strings.Contains(text, "正常回复") || strings.Contains(text, "）：\n") {
+		t.Fatalf("the tool skips wordless replies too: %v\n%s", err, text)
+	}
+
+	// When every reply is wordless the replies section is simply absent, and the page still passes the view check.
+	f.topics[41] = topicJSON(41, "只有表情和视频", `<p>正文</p>`, emojiOnly, videoOnly)
+	v2, _ := act(t, p, "", "topic:41")
+	page = texts(v2)
+	if strings.Contains(page, "热门回复") || strings.Contains(page, "#2 u2") {
+		t.Fatalf("a topic with only wordless replies shows no replies section:\n%s", page)
+	}
+}
+
 func TestSiteFailures(t *testing.T) {
 	f := newFakeSite(t)
 	sample(f)
