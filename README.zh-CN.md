@@ -28,6 +28,7 @@ personad extension market add github:nwverse/persona-extensions
 | --- | --- |
 | [LINUX DO](docs/extensions/linuxdo.md) | 只读公开的热门、今日、本周和最新帖子；按兴趣过滤；在 App 中或通过助手工具阅读正文与热门回复。不需要账号。 |
 | [Telegram](docs/extensions/telegram.md) | 接入你自己的账号：会话、收件箱、知识库归档、助手工具和 `tg` 命令行。写操作默认需要确认，凭据只加密保存在 hub 上。 |
+| [飞书 / LarkAgentX 适配器](docs/extensions/larkagentx.md) | 实验性的飞书文本接收与始终需确认的发送，双精确白名单、扫码 / 登录态导入和本地登出。与 larkintegration 并存；上游由用户自行安装在 Python 伴随机器上，不再分发，也不装到 hub。真实账号验证与市场发布尚未完成。 |
 | [Showcase](docs/extensions/showcase.md) | 纯本地的界面示例：每种组件与状态、小组件、快捷指令，以及各端共用的截图输入。 |
 | [Starter kit](docs/extensions/starter-kit.md) | 不跑程序的扩展示例：周回顾技能、助手说明、快捷提示、收件箱分拣模板和主题色。 |
 | [Starter pack](docs/extensions/starter-kit.md#starter-pack) | 扩展合集，一次安装 starter-kit 和 LINUX DO。 |

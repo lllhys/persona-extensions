@@ -7,6 +7,7 @@
 - [Installation](installation.md): register the public market, install local packages and handle older hubs.
 - [LINUX DO](extensions/linuxdo.md): public topics, filtering, request limits and the app view.
 - [Telegram](extensions/telegram.md): login, inbox, archives, network requirements, tools and the `tg` CLI.
+- [Feishu / LarkAgentX adapter](extensions/larkagentx.md): non-redistributing user-installed companion, headless QR/import login, exact allowlists, always-confirmed text sends and experimental validation limits.
 
 ## Developing and maintaining extensions
 

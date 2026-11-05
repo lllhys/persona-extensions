@@ -1,0 +1,4 @@
+{
+  "tags": ["feishu", "lark", "connector", "experimental"],
+  "description": "Experimental Feishu connector using a separately user-installed LarkAgentX companion; no upstream code is redistributed."
+}

@@ -28,6 +28,9 @@ go vet ./...
 step test
 go test ./...
 
+step companion
+python3 -I -B extensions/larkagentx/bridge_test.py
+
 step build
 for id in $(scripts/manifest.py ids); do
   scripts/package.sh "$id" >/dev/null
