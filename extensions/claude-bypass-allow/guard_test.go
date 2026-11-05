@@ -54,6 +54,9 @@ func TestPersonOnly(t *testing.T) {
 		"/usr/bin/ssh host rm -rf /x", "sudo ssh host rm -rf /x", "ssh host ssh host2 rm -rf /y",
 		// after ssh every word is a possible program: a path whose name is a floor program errs toward asking
 		"ssh host ls /tmp/rm",
+		// gh's -R/--repo before the command
+		"gh -R o/r secret set TOKEN", "gh --repo o/r variable set X", "gh --repo=o/r secret delete-all", "gh -Ro/r ssh-key add k.pub",
+		"gh -R o/r repo deploy-key add k.pub", "gh -R o/r repo edit --visibility public",
 		// from the review: $'…' escapes, nested arithmetic, a continued line, a shell on the line before, backticks,
 		// and delimiters with - or # in them
 		"cat <<X $'a\\''\ndata\nX\n# '\nrm -rf \"$t\"\nX", "echo $(( (1+(2)) << x ))\nrm -rf \"$t\"",
@@ -69,7 +72,7 @@ func TestPersonOnly(t *testing.T) {
 		}
 	}
 	goes := []string{
-		"ls -la", "cd view && ls sub/*", "go test ./...", "git status", "git push", "git push origin feat/x",
+		"ls -la", "gh -R o/r pr list", "gh --repo o/r issue view 3", "cd view && ls sub/*", "go test ./...", "git status", "git push", "git push origin feat/x",
 		"git push -u origin feat/x", "git checkout -b feat/x", "git checkout main", "git switch feat/x", "git branch -a",
 		"git reset HEAD~1", "git stash list", "git stash push -m x", "git fetch --prune", "git log --format=%H",
 		"gh pr create --title t", "gh pr merge 3 --squash", "gh api repos/o/r/pulls", "gh api repos/o/r/collaborators",

@@ -639,6 +639,13 @@ func ghPersonOnly(args []string) string {
 	if has(args, "delete") || has(args, "--delete-branch") || hasPrefix(args, "--delete") {
 		return "deletion: gh"
 	}
+	// gh takes -R/--repo before the command too (gh -R o/r secret set X): skip flags to find the command
+	for len(args) > 0 && strings.HasPrefix(args[0], "-") {
+		if (args[0] == "-R" || args[0] == "--repo") && len(args) > 1 {
+			args = args[1:]
+		}
+		args = args[1:]
+	}
 	if len(args) == 0 {
 		return ""
 	}
