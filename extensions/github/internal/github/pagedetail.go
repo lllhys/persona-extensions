@@ -74,6 +74,9 @@ type Comment struct {
 // commentsShown is how many of the newest comments the page shows.
 const commentsShown = 5
 
+// detailReviewPages bounds how many pages of a PR's reviews (100 each) the detail page's reviewer rollup reads.
+const detailReviewPages = 10
+
 // Detail reads repo#number for the page.
 func (c *Connector) Detail(ctx context.Context, repo string, number int) (Detail, error) {
 	if !validRepo(repo) || number <= 0 {
@@ -169,9 +172,17 @@ func (c *Connector) pullDetail(ctx context.Context, d *Detail) error {
 	case pr.Draft && d.State == "open":
 		d.State = "draft"
 	}
+	// Reviews come oldest first, with no count to jump to the last page by, and every reply in an inline thread
+	// is one: read on until a short page, so each reviewer's latest verdict is seen on a busy PR.
 	var reviews []threadComment
-	if err := c.cachedGet(ctx, fmt.Sprintf("/repos/%s/pulls/%d/reviews?per_page=100", d.Repo, d.Number), &reviews); err != nil {
-		return err
+	for page := 1; page <= detailReviewPages; page++ {
+		var batch []threadComment
+		if err := c.cachedGet(ctx, fmt.Sprintf("/repos/%s/pulls/%d/reviews?per_page=100&page=%d", d.Repo, d.Number, page), &batch); err != nil {
+			return err
+		}
+		if reviews = append(reviews, batch...); len(batch) < 100 {
+			break
+		}
 	}
 	latest := map[string]string{}
 	var order []string
