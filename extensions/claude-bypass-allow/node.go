@@ -37,6 +37,11 @@ type node struct {
 
 	mu   sync.Mutex
 	dirs []dirState
+
+	// beatWG is the heartbeat ticker goroutine. cleanup joins it before it removes the heartbeat, so a beat
+	// already due cannot land during cleanup and recreate the file (a fresh heartbeat with the entry still in
+	// would keep answering allow after this program exited).
+	beatWG sync.WaitGroup
 }
 
 // dirState is one config directory: where its settings are, and whether the entry is in.
@@ -100,7 +105,9 @@ func (n *node) init(ctx context.Context, in *ext.Init, _ *ext.Hub) (map[string]a
 	n.mu.Lock()
 	n.install(c.dirs())
 	n.mu.Unlock()
+	n.beatWG.Add(1)
 	go func() {
+		defer n.beatWG.Done()
 		t := time.NewTicker(heartbeatEvery)
 		defer t.Stop()
 		for {
@@ -162,10 +169,13 @@ func (n *node) check() []dirState {
 	return out
 }
 
-// cleanup takes the entries out and stops the heartbeat; the program is about to exit.
+// cleanup takes the entries out and stops the heartbeat; the program is about to exit. ext.Main has returned by
+// then, so the run context is cancelled: join the ticker goroutine (under the node lock, which a beat never
+// takes) before removing the heartbeat, and no beat can afterwards resurrect it.
 func (n *node) cleanup() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	n.beatWG.Wait()
 	if n.data != "" {
 		_ = os.Remove(filepath.Join(n.data, heartbeatFile))
 	}

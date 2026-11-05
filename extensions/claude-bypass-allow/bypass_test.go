@@ -393,7 +393,6 @@ func TestNodeInstallsAndCleansUp(t *testing.T) {
 	in.Extension = &wire.ExtensionInfo{ID: "claude-bypass-allow", DataDir: e.data}
 	in.InitializeParams.Config = json.RawMessage(`{"machines":["m1"],"config_dirs":["~/claude","~/missing","relative/dir"]}`)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	if _, err := n.init(ctx, in, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -416,12 +415,30 @@ func TestNodeInstallsAndCleansUp(t *testing.T) {
 	if _, err := h(ctx, "nope", nil); err == nil {
 		t.Error("an unknown method")
 	}
+	// Real shutdown: ext.Main has returned, so the run context is cancelled before cleanup runs; cleanup joins
+	// the ticker goroutine there and must not leave a heartbeat it could resurrect.
+	cancel()
 	n.cleanup()
 	if hasHook(p) {
 		t.Error("entry left after cleanup")
 	}
 	if _, err := os.Stat(filepath.Join(e.data, heartbeatFile)); err == nil {
 		t.Error("heartbeat left after cleanup")
+	}
+}
+
+// A node program the hub stops before it initialized has no ticker goroutine: cleanup's WaitGroup join must
+// return immediately rather than block.
+func TestCleanupBeforeInitDoesNotBlock(t *testing.T) {
+	done := make(chan struct{})
+	go func() {
+		(&node{}).cleanup()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("cleanup blocked joining a ticker that never started")
 	}
 }
 
