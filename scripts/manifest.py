@@ -20,6 +20,11 @@ SEMVER = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$")
 TAGS_MOST, TAG_LONGEST = 16, 24
 # The directories scripts/package.sh copies into a package besides the manifest and the program.
 PACKAGED_DIRS = ("skills", "assistant")
+# macOS/editor junk by basename: AppleDouble ._* and .DS_Store (a stray ._* at the package root is a second
+# top-level entry, so the hub finds no manifest) and Python's __pycache__/. scripts/package.sh excludes the same
+# names from the tar; failing here names the file to remove before a package is ever built.
+JUNK_NAMES = (".DS_Store", "__pycache__")
+JUNK_PREFIXES = ("._",)
 
 
 def ids():
@@ -163,6 +168,41 @@ def check_pack(id, m):
     return bad
 
 
+def is_junk(name):
+    return name in JUNK_NAMES or any(name.startswith(p) for p in JUNK_PREFIXES)
+
+
+def check_junk(id):
+    """No macOS/editor junk under the trees scripts/package.sh copies verbatim: the tar excludes these basenames,
+    so shipping them silently drops files at install time; a top-level ._* also hides the manifest from the hub."""
+    bad = []
+    root = os.path.join(ROOT, "extensions", id)
+
+    def raise_error(e):
+        raise e  # an unreadable tree must fail the check, not scan as clean
+
+    for d in PACKAGED_DIRS:
+        top = os.path.join(root, d)
+        if not os.path.isdir(top):
+            continue  # most extensions have neither directory; os.walk's NotFound is not junk to report
+        for dirpath, dirnames, filenames in os.walk(top, onerror=raise_error):
+            kept = []
+            for name in dirnames:
+                if is_junk(name):
+                    rel = os.path.relpath(os.path.join(dirpath, name), root)
+                    bad.append("extensions/%s: %s is packaging junk (._* AppleDouble, .DS_Store, __pycache__); "
+                               "remove it" % (id, rel))
+                else:
+                    kept.append(name)  # no point descending into a directory that is itself junk
+            dirnames[:] = kept
+            for name in filenames:
+                if is_junk(name):
+                    rel = os.path.relpath(os.path.join(dirpath, name), root)
+                    bad.append("extensions/%s: %s is packaging junk (._* AppleDouble, .DS_Store, __pycache__); "
+                               "remove it" % (id, rel))
+    return bad
+
+
 def check():
     bad = []
     for id in ids():
@@ -182,7 +222,7 @@ def check():
         for gone in (OLD, "market.json"):
             if os.path.exists(os.path.join(ROOT, "extensions", id, gone)):
                 bad.append("extensions/%s: no %s (one manifest: %s; see docs/reference.md)" % (id, gone, NEW))
-        bad += check_files(id, m) + check_pack(id, m)
+        bad += check_files(id, m) + check_pack(id, m) + check_junk(id)
     for b in bad:
         print(b, file=sys.stderr)
     return not bad

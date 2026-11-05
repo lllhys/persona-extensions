@@ -43,6 +43,7 @@ for id in $(scripts/manifest.py ids); do
   scripts/package.sh "$id" >/dev/null
   echo "$id $(scripts/manifest.py version "$id"): ok"
 done
+python3 -I scripts/test-package.py
 
 step index
 scripts/index.py check

@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""Tests for what scripts/ci.sh release picks from its arguments: python3 -I scripts/test-manifest.py."""
+"""Tests for scripts/manifest.py: what scripts/ci.sh release picks and the check() invariants.
+Run: python3 -I scripts/test-manifest.py."""
 import importlib.util
+import io
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 
 spec = importlib.util.spec_from_file_location('manifest', pathlib.Path(__file__).with_name('manifest.py'))
 manifest = importlib.util.module_from_spec(spec)
@@ -48,6 +52,70 @@ class SelectedTests(unittest.TestCase):
                 manifest.load('dup')
         finally:
             manifest.ROOT = old_root
+
+
+class JunkTests(unittest.TestCase):
+    """macOS/editor junk (AppleDouble ._*, .DS_Store, __pycache__) under skills/assistant must fail the check:
+    scripts/package.sh copies those trees verbatim, so the junk would ship (issue #99)."""
+
+    def make_ext(self, files):
+        d = pathlib.Path(tempfile.mkdtemp())
+        ext = d / 'extensions' / 'junk'
+        ext.mkdir(parents=True)
+        (ext / manifest.NEW).write_text('{"id": "junk", "version": "0.1.0"}\n')
+        for rel in files:
+            p = ext / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text('')
+        self.addCleanup(shutil.rmtree, d)
+        return d
+
+    def with_root(self, d):
+        self._old_root = manifest.ROOT
+        manifest.ROOT = str(d)
+        self.addCleanup(self._restore_root)
+
+    def _restore_root(self):
+        manifest.ROOT = self._old_root
+
+    def test_junk_under_skills_and_assistant_is_rejected(self):
+        planted = [
+            'skills/._SKILL.md',
+            'skills/.DS_Store',
+            'skills/review/__pycache__/mod.pyc',
+            'skills/review/._SKILL.md',
+            'assistant/.DS_Store',
+            'assistant/._answer-style.md',
+            # A real skill next to the junk must still be there.
+            'skills/review/SKILL.md',
+            'assistant/answer-style.md',
+        ]
+        d = self.make_ext(planted)
+        self.with_root(d)
+        bad = manifest.check_junk('junk')
+        flagged = {b.split(': ', 1)[1].split(' is packaging junk')[0] for b in bad}
+        self.assertEqual(flagged, {
+            'skills/._SKILL.md',
+            'skills/.DS_Store',
+            'skills/review/__pycache__',
+            'skills/review/._SKILL.md',
+            'assistant/.DS_Store',
+            'assistant/._answer-style.md',
+        })
+        with redirect_stderr(io.StringIO()):
+            self.assertFalse(manifest.check())
+
+    def test_a_clean_tree_passes(self):
+        d = self.make_ext(['skills/review/SKILL.md', 'assistant/answer-style.md'])
+        self.with_root(d)
+        self.assertEqual(manifest.check_junk('junk'), [])
+        self.assertTrue(manifest.check())
+
+    def test_junk_outside_packaged_dirs_is_not_scanned(self):
+        # package.sh copies only skills/ and assistant/, so junk elsewhere cannot land in the tarball.
+        d = self.make_ext(['.DS_Store', '._foo', 'src/.DS_Store'])
+        self.with_root(d)
+        self.assertEqual(manifest.check_junk('junk'), [])
 
 
 if __name__ == '__main__':
