@@ -64,24 +64,30 @@ func (h *memoryHub) Notify(event string, p any) error {
 }
 
 type fakeBridge struct {
-	mu     sync.Mutex
-	calls  []string
-	fail   string
-	poll   string
-	events chan bridgeEvent
-	done   chan struct{}
-	stop   sync.Once
+	mu         sync.Mutex
+	calls      []string
+	fail       string
+	failCode   string
+	check      string
+	openParams any
+	poll       string
+	events     chan bridgeEvent
+	done       chan struct{}
+	stop       sync.Once
 }
 
 func newFakeBridge() *fakeBridge {
-	return &fakeBridge{events: make(chan bridgeEvent, 8), done: make(chan struct{}), poll: "pending"}
+	return &fakeBridge{failCode: "auth_expired", events: make(chan bridgeEvent, 8), done: make(chan struct{}), poll: "pending"}
 }
 func (b *fakeBridge) Call(_ context.Context, m string, p, out any) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.calls = append(b.calls, m)
 	if b.fail == m {
-		return failure("auth_expired")
+		return failure(b.failCode)
+	}
+	if m == "session.open" {
+		b.openParams = p
 	}
 	result := any(map[string]any{"state": "ok"})
 	switch m {
@@ -91,6 +97,10 @@ func (b *fakeBridge) Call(_ context.Context, m string, p, out any) error {
 		result = map[string]string{"state": "pending", "qr": "synthetic-qr-payload"}
 	case "login.poll":
 		result = map[string]any{"state": b.poll, "credentials": syntheticSession}
+	case "session.check":
+		if b.check != "" {
+			result = map[string]any{"state": b.check}
+		}
 	}
 	if out != nil {
 		raw, _ := json.Marshal(result)
@@ -105,6 +115,11 @@ func (b *fakeBridge) count(m string) int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return len(slices.DeleteFunc(slices.Clone(b.calls), func(x string) bool { return x != m }))
+}
+func (b *fakeBridge) snapshot() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return slices.Clone(b.calls)
 }
 
 func fixture(t *testing.T) (*connector, *memoryHub, *fakeBridge) {
