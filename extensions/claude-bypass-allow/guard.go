@@ -44,8 +44,8 @@ var sqlDestructive = regexp.MustCompile(`(?i)\b(drop\s+(table|database|schema|in
 // onlinePermission is a path in a GitHub API call that is about who may do what.
 var onlinePermission = regexp.MustCompile(`(?i)(collaborators|permissions|protection|/teams|/members|memberships|invitations|rulesets|/keys|secrets|/hooks|environments)`)
 
-// heredoc is the start of a heredoc (<<EOF, <<-'EOF', << "EOF"), not a here-string (<<<).
-var heredoc = regexp.MustCompile(`(?:^|[^<])<<(-?)\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)['"]?`)
+// heredocOp is what follows a heredoc's << (-EOF, 'EOF', "EOF"): the dash, and the delimiter.
+var heredocOp = regexp.MustCompile(`^(-?)\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?`)
 
 // personOnly says why cmd must stay with a person ("" when it need not).
 func personOnly(cmd string) string { return personOnlyDepth(cmd, 0) }
@@ -88,16 +88,16 @@ func personOnlyDepth(cmd string, depth int) string {
 }
 
 // stripHeredocs takes out the body of each heredoc that is not fed to a shell: what cat, tee or python read is data.
+// Only a << the shell reads as one starts a heredoc: not one inside quotes ('usage: x <<FILE'), a comment, or
+// arithmetic ($((1<<n))), whose following lines are commands.
 func stripHeredocs(cmd string) string {
 	lines := strings.Split(cmd, "\n")
 	var out []string
+	var st heredocScan
+	var pending []heredocStart
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
 		out = append(out, line)
-		m := heredoc.FindStringSubmatch(line)
-		if m == nil {
-			continue
-		}
 		keep := false
 		segs, _ := scan(line)
 		for _, words := range segs {
@@ -105,22 +105,84 @@ func stripHeredocs(cmd string) string {
 				keep = keep || shells[path.Base(w)]
 			}
 		}
-		for i+1 < len(lines) {
+		for _, h := range st.line(line) {
+			h.keep = keep
+			pending = append(pending, h)
+		}
+		if st.single || st.double {
+			continue // a quote goes on to the next line, and the bodies start after the line it ends on
+		}
+		for _, h := range pending {
+			for i+1 < len(lines) {
+				i++
+				end := lines[i]
+				if h.dash {
+					end = strings.TrimLeft(end, "\t")
+				}
+				if end == h.delim {
+					out = append(out, lines[i])
+					break
+				}
+				if h.keep {
+					out = append(out, lines[i])
+				}
+			}
+		}
+		pending = nil
+	}
+	return strings.Join(out, "\n")
+}
+
+// heredocStart is a heredoc operator: its delimiter, whether it was <<- (leading tabs stripped), and whether its
+// line feeds a shell (its body is then commands).
+type heredocStart struct {
+	delim      string
+	dash, keep bool
+}
+
+// heredocScan reads a command line by line for heredoc operators, carrying quotes and arithmetic across lines.
+type heredocScan struct {
+	single, double bool
+	arith          int // depth of (( … )) and $(( … ))
+}
+
+// line is the heredoc operators on one line that the shell reads as operators.
+func (st *heredocScan) line(line string) []heredocStart {
+	var found []heredocStart
+	rs := []rune(line)
+	for i := 0; i < len(rs); i++ {
+		r := rs[i]
+		switch {
+		case st.single:
+			st.single = r != '\''
+		case r == '\\':
+			i++ // the next character is escaped, in double quotes too
+		case st.double:
+			st.double = r != '"'
+		case r == '\'':
+			st.single = true
+		case r == '"':
+			st.double = true
+		case r == '#' && (i == 0 || strings.ContainsRune(" \t;&|()", rs[i-1])):
+			return found // a comment, to the end of the line
+		case r == '(' && i+1 < len(rs) && rs[i+1] == '(':
+			st.arith++
 			i++
-			end := lines[i]
-			if m[1] == "-" {
-				end = strings.TrimLeft(end, "\t")
+		case r == ')' && i+1 < len(rs) && rs[i+1] == ')' && st.arith > 0:
+			st.arith--
+			i++
+		case r == '<' && st.arith == 0 && i+1 < len(rs) && rs[i+1] == '<':
+			if i+2 < len(rs) && rs[i+2] == '<' {
+				i += 2 // a here-string
+				continue
 			}
-			if end == m[3] {
-				out = append(out, lines[i])
-				break
-			}
-			if keep {
-				out = append(out, lines[i])
+			i++
+			if m := heredocOp.FindStringSubmatch(string(rs[i+1:])); m != nil {
+				found = append(found, heredocStart{delim: m[2], dash: m[1] == "-"})
 			}
 		}
 	}
-	return strings.Join(out, "\n")
+	return found
 }
 
 // withoutMessages drops free text: what follows git's -m and --message, and gh's --title, --body, --notes, -t, -b

@@ -42,6 +42,12 @@ func TestPersonOnly(t *testing.T) {
 		// third review
 		"rsync -a --del src/ dst/", "npx rimraf dist", "sed -i 's/a/b/' config.yaml", "sed --in-place=.bak s/a/b/ f",
 		"ln -sf /dev/null ~/.bash_history", "install -m 600 key ~/.ssh/id",
+		// a << the shell does not read as a heredoc hides nothing after it: in quotes, a comment or arithmetic
+		"echo 'usage: x <<FILE'\ncd view && rm -f sub/*", "echo \"a <<EOF\"\nrm -rf \"$t\"\nEOF",
+		"git commit -m 'msg\nsee <<END'\nrm -rf \"$t\"", "# feed it <<EOF\nrm -rf \"$t\"\nEOF",
+		"n=$((1<<shift))\nrm -rf \"$t\"", "(( m = 1<<k ))\nrm -rf \"$t\"", "cat <<<'x <<EOF'\nrm -rf \"$t\"",
+		// two heredocs on a line: both bodies are skipped, then the commands after them count
+		"cat <<A <<B\nx\nA\ny\nB\nrm -rf \"$t\"",
 	}
 	for _, c := range stays {
 		if personOnly(c) == "" {
@@ -62,7 +68,8 @@ func TestPersonOnly(t *testing.T) {
 		"git commit -m 'Map a -> b'", "python3 -c 'print(1 if 2 > 1 else 0)'", "awk '$3 > 100' data.csv", "grep -n '<div>' index.html",
 		"cat docs/grant.md", "grep -rn truncate src/", "git mv old new", "find . -name '*.go' -exec grep -l x {} +",
 		"go build | tee /tmp/build.log", "go test > /tmp/test.log 2>&1", "cat > /tmp/x.json <<EOF\n{\"rm\": 1}\nEOF",
-		"cat <<'EOF' | python3 -\nimport os; print('rm -rf would be bad')\nEOF", "git log --format='%h > %s'", "echo ok 2>/dev/null",
+		"cat <<'EOF' | python3 -\nimport os; print('rm -rf would be bad')\nEOF", "cat <<A <<'B'\nrm a\nA\nrm b\nB",
+		"diff <(cat <<EOF\nrm x\nEOF\n) f", "cat > /tmp/x <<-EOF\n\trm x\n\tEOF", "echo \"$((1<<3))\" && cat <<EOF\nrm x\nEOF", "git log --format='%h > %s'", "echo ok 2>/dev/null",
 		"command -v rm", "sed -n 1,20p f", "sed 's/a/b/' f", "ln -s a b", "npx prettier --check .",
 	}
 	for _, c := range goes {
