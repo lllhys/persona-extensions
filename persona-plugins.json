@@ -8,7 +8,7 @@
         "manifest_version": 1,
         "id": "linuxdo",
         "name": "LINUX DO",
-        "version": "0.1.0",
+        "version": "0.1.1",
         "description": "LINUX DO 社区的热门帖子：扩展里的一页按你的兴趣看热门、今日 / 本周最热和最新，点开在 App 里读正文和热门回复（hub 去读，手机不用代理）；助手能用工具查热门、读帖子。只读公开内容，不用账号。",
         "publisher": "nwverse",
         "engines": {
@@ -134,9 +134,109 @@
       ],
       "packages": [
         {
-          "url": "release:linuxdo-v0.1.0/linuxdo-0.1.0.tar.gz",
-          "sha256": "22b6c6774dd08924b627cda23cab129932bf31999a41cee11b172ec38c09ecd5",
-          "size": 11788941
+          "url": "release:linuxdo-v0.1.1/linuxdo-0.1.1.tar.gz",
+          "sha256": "858ed2154b89c1fec152c40c9c0615f1eb657b8d0ef5cfb67495918c3cb05a5d",
+          "size": 11895357
+        }
+      ]
+    },
+    {
+      "manifest": {
+        "manifest_version": 1,
+        "id": "telegram",
+        "name": "Telegram",
+        "version": "0.1.3",
+        "description": "用你自己的 Telegram 账号（MTProto，hub 直连 Telegram 的数据中心）：App 里的 Telegram 会话，收件箱（私聊、@我），知识库归档，助手的 Telegram 工具和 tg 命令行。发消息、回复、转发、点 reaction、标为已读都先在手机上确认。登录（api_id、api_hash 和会话）加密存在 hub 的数据库里，不在扩展目录。",
+        "publisher": "nwverse",
+        "engines": {
+          "persona": ">=202611041602",
+          "plugin_protocol": 1
+        },
+        "runtime": {
+          "command": {
+            "linux-amd64": "bin/telegram-linux-amd64",
+            "linux-arm64": "bin/telegram-linux-arm64",
+            "darwin-arm64": "bin/telegram-darwin-arm64",
+            "darwin-amd64": "bin/telegram-darwin-amd64"
+          }
+        },
+        "contributes": {
+          "connectors": [
+            {
+              "id": "telegram",
+              "name": "Telegram",
+              "capabilities": [
+                "status",
+                "tools",
+                "actions",
+                "events",
+                "inbox",
+                "archive",
+                "login",
+                "threads",
+                "fallback"
+              ],
+              "unlisted": [
+                "telegram_list_chats",
+                "telegram_read_messages",
+                "telegram_search_messages",
+                "telegram_get_message",
+                "telegram_get_chat",
+                "telegram_list_members",
+                "telegram_send",
+                "telegram_forward",
+                "telegram_react",
+                "telegram_mark_read",
+                "telegram_cli"
+              ],
+              "kinds": [
+                "dm",
+                "mention"
+              ],
+              "kind_descriptions": {
+                "dm": "Telegram 里有人私聊用户，还没读",
+                "mention": "Telegram 群里 @ 了用户，或回复了用户的消息"
+              },
+              "cli": "tg"
+            }
+          ],
+          "assistant": [
+            {
+              "id": "telegram",
+              "skills": [
+                "skills/telegram"
+              ]
+            }
+          ]
+        },
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "triage_rules": {
+              "type": "string",
+              "title": "分拣规则",
+              "maxLength": 4000,
+              "description": "Telegram 的条目按什么分「需要你 / 知悉即可 / 噪音」，用你自己的话写；填了就只用它（只管 Telegram）。一般不在这里改：和助手说（比如「Telegram 里陌生人的私聊都算噪音」），它来改。写 \\n 换行；空着时私聊和 @你 都算「需要你」，和以前一样"
+            }
+          }
+        },
+        "permissions": {
+          "network": [
+            "telegram.org",
+            "*.telegram.org"
+          ]
+        }
+      },
+      "tags": [
+        "聊天",
+        "收件箱",
+        "知识库"
+      ],
+      "packages": [
+        {
+          "url": "release:telegram-v0.1.3/telegram-0.1.3.tar.gz",
+          "sha256": "96d121fdc58f13a2bcbcdaea8c5f9f57cbf914b6e9be7054553bcedee76d3454",
+          "size": 21929958
         }
       ]
     }
