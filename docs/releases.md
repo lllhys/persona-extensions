@@ -22,7 +22,7 @@ Package locations use `release:<tag>/<file>` in the index. [scripts/index.py](..
 
 [CI](../.github/workflows/ci.yml) runs [scripts/ci.sh](../scripts/ci.sh) for pull requests. On a push to `main`, it releases only extensions whose manifest version changed in that push, including new extensions.
 
-A version is released once: CI skips an existing release; `scripts/release.sh` refuses to overwrite it. Do not rewrite published tags or historical commits to change documentation language.
+A version is released once: CI skips an existing release (and only puts it into the index when an earlier index commit was lost, #59); `scripts/release.sh` refuses to overwrite it. Do not rewrite published tags or historical commits to change documentation language.
 
 After packaging and creating releases, CI updates both indexes, signs them and commits the indexes and signatures. Its index commit message is already English. A manual workflow run takes extension ids and can release a version merged earlier but deliberately held back. A push without a usable previous ref runs checks only.
 

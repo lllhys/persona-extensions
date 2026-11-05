@@ -5,6 +5,7 @@
   persona-plugins.json      key "plugins" with the old manifest, read by hubs from before the rename
 
   scripts/index.py add <id> <tag>   put dist/<id>-<version>.tar.gz in as the release asset of <tag>
+  scripts/index.py has <id> <tag>   exit 0 when both files list <id> with a package of release <tag>
                                     (release:<tag>/<file>, pinned by its sha256); its entry is replaced, the others stay
   scripts/index.py check            both files list the same extensions, versions and packages, and no entry's
                                     manifest has tags (what CI runs)
@@ -63,6 +64,15 @@ def add(id, tag):
     print("index: %s %s → release:%s/%s" % (id, m["version"], tag, pkg))
 
 
+def has(id, tag):
+    """Whether both indexes list id with a package of release tag."""
+    for path, key in ((NEW, "extensions"), (OLD, "plugins")):
+        d = read(path, key)
+        if d is None or not any(e["manifest"]["id"] == id and any(p["url"].startswith("release:%s/" % tag) for p in e["packages"]) for e in d[key]):
+            return False
+    return True
+
+
 def check():
     new, old = read(NEW, "extensions"), read(OLD, "plugins")
     if new is None or old is None:
@@ -87,6 +97,8 @@ def check():
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if cmd == "has" and len(sys.argv) == 4:
+        sys.exit(0 if has(sys.argv[2].rstrip("/").removeprefix("extensions/"), sys.argv[3]) else 1)
     if cmd == "add" and len(sys.argv) == 4:
         add(sys.argv[2].rstrip("/").removeprefix("extensions/"), sys.argv[3])
     elif cmd == "check":

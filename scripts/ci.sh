@@ -6,7 +6,7 @@
 #   scripts/ci.sh release <base>    then release the extensions whose version changed since the git ref <base>
 #                                   (a push to main: its "before"); a version merged but meant to wait is not released
 #   scripts/ci.sh release <id>…     then release these (CI's manual run)
-# A version is released once: one that has its release already is skipped.
+# A version is released once: one that has its release already is skipped, unless the index does not have it yet.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 step() { printf '\n== %s\n' "$*"; }
@@ -63,7 +63,15 @@ if [ "${1:-}" = release ]; then
   for id in "${ids[@]}"; do
     tag="$id-v$(scripts/manifest.py version "$id")"
     if gh release view "$tag" >/dev/null 2>&1; then
-      echo "$tag: released already"
+      if scripts/index.py has "$id" "$tag"; then
+        echo "$tag: released already"
+      else
+        # Released, but the index commit after it was lost (a push racing another merge to main): put the package
+        # that was uploaded into the index, not a new build of it (its bytes, so its sha256, may differ).
+        echo "$tag: released, not in the index: adding it"
+        gh release download "$tag" -p "$id-$(scripts/manifest.py version "$id").tar.gz" -D dist --clobber
+        scripts/index.py add "$id" "$tag"
+      fi
     else
       scripts/release.sh "$id"
     fi
