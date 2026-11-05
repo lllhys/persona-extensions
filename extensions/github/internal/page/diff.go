@@ -132,7 +132,7 @@ func (p *Page) diff(ctx context.Context, r *ext.UIRequest, s state) *wire.View {
 	}
 	items := []wire.Component{head}
 	if f.Previous != "" {
-		items = append(items, wire.Component{Type: wire.ComponentRow, Key: "previous", Title: "原来的路径", Value: clip(f.Previous, 300)})
+		items = append(items, wire.Component{Type: wire.ComponentRow, Key: "previous", Title: "原来的路径", Subtitle: clip(f.Previous, 300)})
 	}
 	if f.Patch != "" {
 		items = append(items, wire.Component{Type: wire.ComponentButton, Key: "w-line", Title: "评论一行",

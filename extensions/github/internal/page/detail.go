@@ -164,7 +164,7 @@ func (p *Page) overview(ctx context.Context, r *ext.UIRequest, s state, d github
 			if d.HeadRepo != "" {
 				from = strings.SplitN(d.HeadRepo, "/", 2)[0] + ":" + d.Head
 			}
-			head = append(head, wire.Component{Type: wire.ComponentRow, Key: "branch", Title: "分支", Value: clip(from+" → "+d.Base, 300)})
+			head = append(head, wire.Component{Type: wire.ComponentRow, Key: "branch", Title: "分支", Subtitle: clip(from+" → "+d.Base, 300)})
 		}
 		if r.UIVersion >= 2 {
 			head = append(head, wire.Component{Type: wire.ComponentStatGrid, Key: "size", Stats: []wire.Stat{

@@ -38,12 +38,12 @@ func (p *Page) write(ctx context.Context, r *ext.UIRequest, s state, problem str
 	target := []wire.Component{{Type: wire.ComponentRow, Key: "target", Title: clip(oneLine(d.Title), 300), Subtitle: ref, Avatar: avatar(r, d.Avatar)}}
 	switch s.W {
 	case "line", "reply":
-		target = append(target, wire.Component{Type: wire.ComponentRow, Key: "where", Title: "位置", Value: clip(fmt.Sprintf("%s:%d", s.Path, s.Line), 300)})
+		target = append(target, wire.Component{Type: wire.ComponentRow, Key: "where", Title: "位置", Subtitle: clip(fmt.Sprintf("%s:%d", s.Path, s.Line), 300)})
 	case "merge":
 		if m := mergeLine(d); m.text != "" {
 			target = append(target, wire.Component{Type: wire.ComponentRow, Key: "mergeable", Title: "现在", Value: m.text, Badge: &wire.Badge{Text: m.badge, Tone: m.tone}})
 		}
-		target = append(target, wire.Component{Type: wire.ComponentRow, Key: "into", Title: "合并", Value: clip(d.Head+" → "+d.Base, 300)})
+		target = append(target, wire.Component{Type: wire.ComponentRow, Key: "into", Title: "合并", Subtitle: clip(d.Head+" → "+d.Base, 300)})
 	}
 	if s.W == "reply" {
 		if c, ok := p.conversationOf(ctx, s); ok {
