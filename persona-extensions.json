@@ -143,6 +143,235 @@
     {
       "manifest": {
         "manifest_version": 1,
+        "id": "showcase",
+        "name": "组件展示",
+        "version": "0.1.0",
+        "description": "扩展界面的每一种组件、每一种状态各一页：文字、数字、进度、行、按钮、链接、输入、图表、Markdown、表格、空状态、加载中；列表的搜索 / 筛选 / 加载更多，列表 → 详情 → 编辑 → 返回，invalidate；外加一张总览卡片、一个小组件和两个快捷指令。给写扩展的人看效果，也给各端做截图对齐。纯本地数据，不出网、不要密钥。",
+        "publisher": "nwverse",
+        "engines": {
+          "extension_protocol": 1
+        },
+        "runtime": {
+          "command": {
+            "linux-amd64": "bin/showcase-linux-amd64",
+            "linux-arm64": "bin/showcase-linux-arm64",
+            "darwin-amd64": "bin/showcase-darwin-amd64",
+            "darwin-arm64": "bin/showcase-darwin-arm64"
+          }
+        },
+        "contributes": {
+          "ui": [
+            {
+              "id": "showcase",
+              "title": "组件展示",
+              "placement": "nav_page",
+              "icon": "star"
+            },
+            {
+              "id": "showcase-card",
+              "title": "组件展示",
+              "placement": "overview_card",
+              "opens": "showcase"
+            },
+            {
+              "id": "showcase-widget",
+              "title": "组件展示",
+              "placement": "widget",
+              "families": [
+                "small",
+                "medium",
+                "large",
+                "accessory_circular",
+                "accessory_rectangular",
+                "accessory_inline"
+              ],
+              "refresh_minutes": 60,
+              "opens": "showcase"
+            }
+          ],
+          "shortcuts": [
+            {
+              "id": "showcase-echo",
+              "title": "组件展示：说一句",
+              "description": "把你写的话原样说回来",
+              "params": [
+                {
+                  "name": "text",
+                  "title": "说什么",
+                  "kind": "text",
+                  "required": true
+                }
+              ],
+              "ui": "showcase"
+            },
+            {
+              "id": "showcase-count",
+              "title": "组件展示：数一数",
+              "description": "按单位数到一个数，回一张结果卡片",
+              "params": [
+                {
+                  "name": "n",
+                  "title": "数到几",
+                  "kind": "number",
+                  "required": true
+                },
+                {
+                  "name": "unit",
+                  "title": "单位",
+                  "kind": "choice",
+                  "choices": [
+                    {
+                      "value": "apple",
+                      "title": "苹果"
+                    },
+                    {
+                      "value": "star",
+                      "title": "星星"
+                    }
+                  ]
+                },
+                {
+                  "name": "loud",
+                  "title": "大声",
+                  "kind": "toggle"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "tags": [
+        "示例",
+        "开发"
+      ],
+      "packages": [
+        {
+          "url": "release:showcase-v0.1.0/showcase-0.1.0.tar.gz",
+          "sha256": "5a2635aeb2ab9da24dbf7c3448efd01fbb2f4f5957ff2a725fe39f7b184ce386",
+          "size": 11050745
+        }
+      ]
+    },
+    {
+      "manifest": {
+        "manifest_version": 1,
+        "id": "starter-kit",
+        "name": "入门套件",
+        "version": "0.1.0",
+        "description": "只有声明、不跑程序：一个周回顾技能、一段回答风格的说明、几条快捷提示、两份收件箱分拣规则模板和一个主题色。",
+        "publisher": "nwverse",
+        "engines": {
+          "persona": ">=202611042338"
+        },
+        "contributes": {
+          "skills": [
+            {
+              "id": "weekly-review",
+              "dir": "skills/weekly-review"
+            }
+          ],
+          "prompts": [
+            {
+              "id": "answer-style",
+              "kind": "instructions",
+              "file": "assistant/answer-style.md"
+            },
+            {
+              "id": "today",
+              "kind": "quick",
+              "title": "今天做了什么",
+              "text": "把我今天在各台电脑上做的事按项目整理成几行，每行一句话。"
+            },
+            {
+              "id": "todo",
+              "kind": "quick",
+              "title": "整理待办",
+              "text": "看一下我最近的收件箱和对话，列出还没做完、需要我决定的事，按急的先后排。"
+            },
+            {
+              "id": "explain",
+              "kind": "quick",
+              "title": "讲给我听",
+              "text": "用三五句话讲清楚这件事是什么、为什么重要、我接下来要做什么："
+            }
+          ],
+          "triage_templates": [
+            {
+              "id": "mentions-only",
+              "title": "群聊只看提到我的",
+              "text": "私聊和提到我的群消息算要处理；需要我决定、回复或审批的算要处理。其余群聊消息、机器人通知、广播算知道就行；营销和自动订阅算噪音。"
+            },
+            {
+              "id": "work-hours",
+              "title": "工作和生活分开",
+              "text": "工作相关、有截止时间、别人在等我回复的算要处理；家人朋友的私聊算要处理；新闻、推广、自动通知算知道就行；广告和重复的提醒算噪音。"
+            }
+          ],
+          "themes": [
+            {
+              "id": "forest",
+              "name": "森林",
+              "light": {
+                "accent": "#2E7D32",
+                "positive": "#1B5E20"
+              },
+              "dark": {
+                "accent": "#81C784",
+                "positive": "#A5D6A7"
+              }
+            }
+          ]
+        }
+      },
+      "tags": [
+        "入门",
+        "助手",
+        "收件箱",
+        "主题"
+      ],
+      "packages": [
+        {
+          "url": "release:starter-kit-v0.1.0/starter-kit-0.1.0.tar.gz",
+          "sha256": "f1ae884cd570c2b844e7d89005c831829dd1d60a55b2b49e4a61cf8db332eb53",
+          "size": 2006
+        }
+      ]
+    },
+    {
+      "manifest": {
+        "manifest_version": 1,
+        "id": "starter-pack",
+        "name": "入门合集",
+        "version": "0.1.0",
+        "description": "一次装好入门套件和 LINUX DO 热门：扩展合集（extension_pack）的例子。",
+        "publisher": "nwverse",
+        "engines": {
+          "persona": ">=202611042338"
+        },
+        "extension_pack": [
+          {
+            "id": "starter-kit"
+          },
+          {
+            "id": "linuxdo"
+          }
+        ]
+      },
+      "tags": [
+        "入门",
+        "合集"
+      ],
+      "packages": [
+        {
+          "url": "release:starter-pack-v0.1.0/starter-pack-0.1.0.tar.gz",
+          "sha256": "3fa824b5770fbc18cde31a4d9bdb3e4cc319decb9a911955aaa452f71f348abc",
+          "size": 463
+        }
+      ]
+    },
+    {
+      "manifest": {
+        "manifest_version": 1,
         "id": "telegram",
         "name": "Telegram",
         "version": "0.1.3",
