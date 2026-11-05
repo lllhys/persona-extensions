@@ -200,7 +200,8 @@ func TestRunWakeReentersBackoffImmediately(t *testing.T) {
 	}
 }
 
-// Auth-expired check (RPC error or non-ok state) expires and detaches.
+// An explicit sign-out (RPC auth_expired or a "not_signed_in" result)
+// expires and detaches without reconnecting.
 func TestRunDetachesOnAuthExpiredCheck(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -228,29 +229,47 @@ func TestRunDetachesOnAuthExpiredCheck(t *testing.T) {
 	}
 }
 
-// Non-auth check failure sets "error", detaches, then auto-reconnects.
+// Non-auth check failures set "error", detach, then auto-reconnect. The
+// companion reports a probe it could not complete two ways: an "unavailable"
+// RPC error frame, or a successful reply whose state is "error" (the shape
+// bridge.py returns when validate() raises or times out). Both must behave
+// the same; the "error" result must not be mistaken for "not_signed_in".
 func TestRunReconnectsAfterTransientCheckError(t *testing.T) {
-	r := newRunHarness(t, persistedSessionData, 0)
-	b0 := waitOpen(t, r)
-	r.setFailFirst(100) // freeze the detached "error" state for observation
-	b0.setFailCode("unavailable")
-	b0.setFail("session.check")
-	r.c.signal()
-	waitFor(t, 2*time.Second, func() bool { return connectorState(r.c) == "error" },
-		"transient session.check failure did not set the error state")
-	if connectorAttached(r.c) {
-		t.Fatal("companion stayed attached after a transient session.check failure")
-	}
-	assertClosed(t, b0)
-	r.setFailFirst(0)
-	r.c.signal()
-	waitFor(t, 2*time.Second, func() bool { return connectorState(r.c) == "ok" },
-		"loop did not reconnect after a transient failure")
-	if s, n, _ := r.stats(); n < 2 {
-		t.Fatalf("loop did not open a replacement companion: starts=%d bridges=%d", s, n)
-	}
-	if b1 := r.bridge(1); b1.count("session.open") != 1 {
-		t.Fatal("replacement companion did not open the session once", b1.snapshot())
+	for _, tc := range []struct {
+		name string
+		mark func(*fakeBridge)
+	}{
+		{"rpc unavailable error", func(b *fakeBridge) {
+			b.setFailCode("unavailable")
+			b.setFail("session.check")
+		}},
+		{"error result state", func(b *fakeBridge) {
+			b.setCheckState("error")
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRunHarness(t, persistedSessionData, 0)
+			b0 := waitOpen(t, r)
+			r.setFailFirst(100) // freeze the detached "error" state for observation
+			tc.mark(b0)
+			r.c.signal()
+			waitFor(t, 2*time.Second, func() bool { return connectorState(r.c) == "error" },
+				"transient session.check failure did not set the error state")
+			if connectorAttached(r.c) {
+				t.Fatal("companion stayed attached after a transient session.check failure")
+			}
+			assertClosed(t, b0)
+			r.setFailFirst(0)
+			r.c.signal()
+			waitFor(t, 2*time.Second, func() bool { return connectorState(r.c) == "ok" },
+				"loop did not reconnect after a transient failure")
+			if s, n, _ := r.stats(); n < 2 {
+				t.Fatalf("loop did not open a replacement companion: starts=%d bridges=%d", s, n)
+			}
+			if b1 := r.bridge(1); b1.count("session.open") != 1 {
+				t.Fatal("replacement companion did not open the session once", b1.snapshot())
+			}
+		})
 	}
 }
 

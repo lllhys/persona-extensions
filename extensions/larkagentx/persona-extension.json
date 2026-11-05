@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "larkagentx",
   "name": "Feishu (LarkAgentX adapter)",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "独立的飞书个人账号适配器：用户自行在伴随机器上安装 LarkAgentX，hub 使用 Go 程序经 SSH 接入。只收双白名单内的文本消息，发送全文始终需要确认；不启动 Agent、不发已读回执，不替换现有的飞书接入。非官方协议，真实账号联调尚未验证。",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/larkagentx",

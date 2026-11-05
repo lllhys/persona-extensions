@@ -19,7 +19,7 @@ import (
 )
 
 const id = "larkagentx"
-const version = "0.1.4"
+const version = "0.1.5"
 const sendAction = "larkagentx_send_text"
 
 //go:embed persona-extension.json
@@ -280,8 +280,16 @@ func (c *connector) run() {
 			if err := b.Call(c.ctx, "session.check", nil, &result); err != nil {
 				c.setError(err)
 				c.detach()
-			} else if result.State != "ok" {
+			} else if result.State == "not_signed_in" {
+				// An explicit sign-out is the only probe result that expires
+				// the stored session and requires interactive sign-in.
 				c.setError(failure("auth_expired"))
+				c.detach()
+			} else if result.State != "ok" {
+				// The companion replies state "error" when the probe could not
+				// complete (network/timeout), not when credentials are gone.
+				// Detach and let reconnect run session.open, which revalidates.
+				c.setError(failure("unavailable"))
 				c.detach()
 			}
 		}
