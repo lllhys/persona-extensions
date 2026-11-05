@@ -200,7 +200,13 @@ func (c *Conn) Logout(ctx context.Context) error {
 	cl := c.cl
 	c.mu.Unlock()
 	if cl != nil {
-		if _, ok, _ := cl.Me(ctx); ok {
+		// Only a session Telegram says is not signed in is forgotten without auth.logOut: when it could not be asked
+		// (a flood wait, the network), the session is kept for another try, as it is still signed in there.
+		_, ok, err := cl.Me(ctx)
+		if err != nil {
+			return c.writeError(err)
+		}
+		if ok {
 			if err := cl.LogOut(ctx); err != nil {
 				return scrubbed(err)
 			}
