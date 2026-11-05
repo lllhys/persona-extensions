@@ -48,8 +48,10 @@ Legacy protocol names and UI placements, such as `plugin_protocol` and `plugin_p
 
 ## Extension-specific setup
 
+- [GitHub](extensions/github.md): sign in through **Settings → Connectors → GitHub**, either by sharing a computer's `gh` login (that computer must be online and the extension uses its `gh_login` permission) or through the device flow. The hub must reach `github.com`, `api.github.com` and GitHub's avatar and CI-log hosts.
 - [LINUX DO](extensions/linuxdo.md): no account; the hub must reach `linux.do`. The in-app reader fetches on the hub, while opening the original web page also requires network access on the device.
 - [Telegram](extensions/telegram.md): sign in through **Settings → Connectors → Telegram**. The hub must reach Telegram data centers directly over TCP. Local or other non-official installation sources may require disabling the extension sandbox; follow the [Telegram network instructions](extensions/telegram.md#network-and-sandbox).
 - [Bypass auto-allow](extensions/claude-bypass-allow.md): needs a hub that runs extension programs on computers (`node`). Nothing happens until you switch on a computer in its settings; it then edits that computer's Claude Code `settings.json`.
+- [Feishu (LarkAgentX adapter)](extensions/larkagentx.md): experimental and Feishu-only. The hub package is not enough: it also needs a separate Linux/macOS companion with Python 3.9+ and the pinned LarkAgentX user-installed in a virtual environment, reached over an SSH command you configure. The guide walks through the local-package install, helper extraction, chat/sender allowlists and QR/import sign-in. It does not replace larkintegration.
 
 Do not paste credentials into repository files or installation examples. Configure accounts through the hub/app's protected credential flow.
