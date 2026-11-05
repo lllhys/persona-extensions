@@ -19,6 +19,11 @@ import (
 // now is the clock relative times ("2h") count back from (replaced by tests).
 var now = time.Now
 
+// forwardMost is how many messages one forward takes: the same 20 as the telegram_forward tool
+// schema (maxItems 20), the docs ("Forward up to 20 messages") and the connector's own check, so a
+// too-long command line fails here at plan time (exit 2) instead of after the hub round trip.
+const forwardMost = 20
+
 const usage = `tg: the user's Telegram through the Persona hub (the telegram skill)
 
   tg chats [--unread] [--limit N]           conversations, newest first (ids: u… private, g… group, c… supergroup)
@@ -119,6 +124,9 @@ var commands = map[string]command{
 					return nil, fmt.Errorf("%q is not a list of message ids (991,992)", p.pos[1])
 				}
 				ids = append(ids, id)
+			}
+			if len(ids) > forwardMost {
+				return nil, fmt.Errorf("ids: 1 to %d message ids", forwardMost)
 			}
 			return map[string]any{"chat": p.pos[0], "ids": ids, "to": p.strings["to"]}, nil
 		}},

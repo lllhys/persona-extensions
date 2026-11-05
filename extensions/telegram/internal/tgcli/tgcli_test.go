@@ -54,7 +54,9 @@ func TestCommandsBuildTheirCalls(t *testing.T) {
 // A wrong command line plans nothing: what is wrong, with exit 2; help is exit 0.
 func TestUsage(t *testing.T) {
 	for _, line := range []string{"", "nope", "messages", "message u7 x", "chats --limit 0", "chats --limitt 5", "send u7",
-		"forward c12 991", "forward c12 a,b --to u7", "messages u7 --since yesterday", "chats --unread=yes",
+		"forward c12 991", "forward c12 a,b --to u7",
+		"forward c12 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21 --to u7",
+		"messages u7 --since yesterday", "chats --unread=yes",
 		"reply u7 0 hi", "chat c1 c2"} {
 		p := PlanOf(strings.Fields(line), "")
 		if p.Call != nil || p.Exit == nil || *p.Exit != 2 {
@@ -63,6 +65,15 @@ func TestUsage(t *testing.T) {
 		if line != "" && p.Stderr == "" {
 			t.Errorf("tg %q: says nothing", line)
 		}
+	}
+	// 20 is the schema's maxItems: 21 ids fail at plan time (above), 20 still plan their call.
+	p := PlanOf(strings.Fields("forward c12 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20 --to u7"), "")
+	if p.Call == nil || p.Exit != nil {
+		t.Fatalf("20 forward ids should still plan: %+v", p)
+	}
+	ids, _ := p.Call.Args["ids"].([]int)
+	if len(ids) != 20 {
+		t.Fatalf("20 forward ids planned %d ids", len(ids))
 	}
 	if p := PlanOf([]string{"--help"}, ""); p.Exit == nil || *p.Exit != 0 || !strings.Contains(p.Stdout, "tg send <chat>") {
 		t.Fatalf("help: %+v", p)
