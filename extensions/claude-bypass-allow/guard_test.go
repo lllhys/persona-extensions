@@ -54,6 +54,14 @@ func TestPersonOnly(t *testing.T) {
 		"/usr/bin/ssh host rm -rf /x", "sudo ssh host rm -rf /x", "ssh host ssh host2 rm -rf /y",
 		// after ssh every word is a possible program: a path whose name is a floor program errs toward asking
 		"ssh host ls /tmp/rm",
+		// from the review: $'…' escapes, nested arithmetic, a continued line, a shell on the line before, backticks,
+		// and delimiters with - or # in them
+		"cat <<X $'a\\''\ndata\nX\n# '\nrm -rf \"$t\"\nX", "echo $(( (1+(2)) << x ))\nrm -rf \"$t\"",
+		"cat <<EOF \\\n; rm -rf \"$t\"\nEOF", "bash \\\n<<EOF\nrm -rf \"$t\"\nEOF", "echo `cat <<'E'`\nrm -rf \"$t\"\nE",
+		"cat <<E-O-F\nx\nE-O-F\nrm -rf \"$t\"\nE", "cat <<EOF#c\nx\nEOF#c\nrm -rf \"$t\"\nEOF",
+		"cat <<$(echo END)\ndata\n$(echo END)\nrm -rf \"$t\"\n$", "cat <<EOF\\\nFOO\nx\nEOFFOO\nrm -rf \"$t\"\nEOF\\",
+		"cat <<A `echo\ny`; rm -rf \"$t\"\nA", "cat <<A $(echo\ny); rm -rf \"$t\"\nA",
+		"cat <<A; x=$(cat <<B\nbbody\nB\n)\nabody\nA\nrm -rf \"$t\"",
 	}
 	for _, c := range stays {
 		if personOnly(c) == "" {
@@ -75,7 +83,10 @@ func TestPersonOnly(t *testing.T) {
 		"cat docs/grant.md", "grep -rn truncate src/", "git mv old new", "find . -name '*.go' -exec grep -l x {} +",
 		"go build | tee /tmp/build.log", "go test > /tmp/test.log 2>&1", "cat > /tmp/x.json <<EOF\n{\"rm\": 1}\nEOF",
 		"cat <<'EOF' | python3 -\nimport os; print('rm -rf would be bad')\nEOF", "cat <<A <<'B'\nrm a\nA\nrm b\nB",
-		"diff <(cat <<EOF\nrm x\nEOF\n) f", "cat > /tmp/x <<-EOF\n\trm x\n\tEOF", "echo \"$((1<<3))\" && cat <<EOF\nrm x\nEOF", "git log --format='%h > %s'", "echo ok 2>/dev/null",
+		"diff <(cat <<EOF\nrm x\nEOF\n) f", "cat > /tmp/x <<-EOF\n\trm x\n\tEOF", "echo \"$((1<<3))\" && cat <<EOF\nrm x\nEOF",
+		"((cd /tmp) && echo ok)\ncat > /tmp/o <<'EOF'\nrm x\nEOF", "cat > /tmp/o <<\\EOF\nrm x\nEOF",
+		"git commit -m \"$(cat <<'EOF'\nDrop the rm -rf cleanup\nEOF\n)\"", "python3 - <<'PY'\nimport os; os.remove('x')\nPY",
+		"x=$(cat <<'EOF'\nrm x\nEOF\n)", "(cat <<EOF\nrm x\nEOF\n) | wc -l", "cat <<EOF | (wc -l\nrm x\nEOF\n)", "git log --format='%h > %s'", "echo ok 2>/dev/null",
 		"command -v rm", "sed -n 1,20p f", "sed 's/a/b/' f", "ln -s a b", "npx prettier --check .",
 		// a read-only remote command, or a plain login, still goes: the ssh fix only asks toward destruction
 		"ssh host ls -la", "ssh host git status", "ssh host kubectl get pods", "ssh -p 2222 user@host docker ps",
