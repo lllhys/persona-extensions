@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -24,6 +25,17 @@ func TestCompanionProcessHelper(t *testing.T) {
 		// One byte more than the scanner's max token size: read() must
 		// fail ErrTooLong and close the bridge (fail closed).
 		fmt.Fprintf(os.Stdout, "%s\n", strings.Repeat("x", frameScanLimit+1))
+		os.Exit(0)
+	}
+	if mode == "malformed" {
+		// A line that is not JSON (an SSH banner or shell garbage),
+		// followed by a valid event frame. read() must tear down on the
+		// bad line and never process the frame after it. The helper stays
+		// alive until its stdin closes, so a reader that wrongly skipped
+		// the bad line would keep scanning instead of tearing down.
+		fmt.Println("SSH-2.0-synthetic-banner this is not json")
+		fmt.Println(`{"event":"message","message":{"id":"message-test","chat":"chat-test","sender":"sender-test","text":"Synthetic event after garbage"}}`)
+		_, _ = io.Copy(io.Discard, os.Stdin)
 		os.Exit(0)
 	}
 	fmt.Fprintln(os.Stderr, "synthetic-secret-must-not-be-forwarded")
@@ -199,4 +211,79 @@ func TestFrameLimitBoundary(t *testing.T) {
 			t.Fatal("oversized inbound frame did not stop the reader")
 		}
 	})
+}
+
+// TestMalformedFrameFailsClosed pins the read() contract in transport.go:
+// any inbound line that is not valid JSON must tear the bridge down instead
+// of being skipped. The helper emits garbage, then a valid event frame, and
+// stays alive; tolerating the bad line would deliver that frame and keep
+// Done() open.
+func TestMalformedFrameFailsClosed(t *testing.T) {
+	t.Setenv("PERSONA_LARKAGENTX_TEST_HELPER", "malformed")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	b, err := startBridge(ctx, []string{os.Args[0], "-test.run=^TestCompanionProcessHelper$"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	select {
+	case <-b.Done():
+	case <-time.After(7 * time.Second):
+		t.Fatal("reader tolerated a non-JSON line instead of tearing down")
+	}
+	select {
+	case ev := <-b.Events():
+		t.Fatalf("frame after the garbage line was processed: %+v", ev)
+	default:
+	}
+	if err = b.Call(ctx, "session.ping", nil, nil); err == nil {
+		t.Fatal("call on the torn-down bridge succeeded")
+	}
+}
+
+// TestMalformedCompanionOutputMakesConnectorUnavailable watches the same
+// teardown through the connector: watch() must detach the dead bridge and
+// move the connector out of "ok", so a confirmed send is refused.
+func TestMalformedCompanionOutputMakesConnectorUnavailable(t *testing.T) {
+	t.Setenv("PERSONA_LARKAGENTX_TEST_HELPER", "malformed")
+	c, _, _ := fixture(t)
+	c.argv = []string{os.Args[0], "-test.run=^TestCompanionProcessHelper$"}
+	c.factory = startBridge
+	c.op.Lock()
+	c.detach()
+	b, err := c.create()
+	if err != nil {
+		c.op.Unlock()
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	c.state = "ok"
+	c.mu.Unlock()
+	c.op.Unlock()
+	select {
+	case <-b.Done():
+	case <-time.After(7 * time.Second):
+		t.Fatal("bridge tolerated a non-JSON line instead of tearing down")
+	}
+	deadline := time.Now().Add(7 * time.Second)
+	for {
+		c.mu.Lock()
+		state, attached := c.state, c.b != nil
+		c.mu.Unlock()
+		if state == "error" && !attached {
+			break
+		}
+		if !time.Now().Before(deadline) {
+			t.Fatalf("connector stayed available: state %q, bridge attached %v", state, attached)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	status, err := invoke(c, "status", map[string]any{})
+	if err != nil || status.(map[string]any)["state"] != "error" {
+		t.Fatal("connector did not report the error state", status, err)
+	}
+	if _, err = invoke(c, "actions.do", sendParams("malformed-output-test", "Synthetic text")); err == nil {
+		t.Fatal("send accepted after malformed companion output")
+	}
 }
