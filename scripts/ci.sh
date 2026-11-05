@@ -56,7 +56,8 @@ python3 -I scripts/test-sign-index.py
 if [ "${1:-}" = release ]; then
   shift
   step release
-  # Captured, not read from a process substitution: an argument that is neither an id nor a git commit stops here.
+  # Captured, not read from a process substitution: under set -e an argument that is neither an id nor a git
+  # commit, or manifest.py's own git failing, stops the release here instead of an empty "nothing to release".
   ids=$(scripts/manifest.py selected "$@")
   [ -n "$ids" ] || echo "nothing to release"
   for id in $ids; do

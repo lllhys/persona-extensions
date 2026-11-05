@@ -72,19 +72,44 @@ def dumps(m):
     return json.dumps(m, ensure_ascii=False, indent=2) + "\n"
 
 
+def git(*args):
+    """Run git in ROOT, capturing text output. Callers interpret the status; every caller must distinguish a name
+    git does not know from git itself failing (issue #100)."""
+    try:
+        return subprocess.run(["git", "-C", ROOT, *args], capture_output=True, text=True)
+    except OSError as e:
+        sys.exit("could not run git: %s" % e)
+
+
 def version_at(ref, id):
-    """The version at a git ref, or None when the extension wasn't there (also under its pre-monorepo path)."""
+    """The version at a git ref, or None when the extension wasn't there (also under its pre-monorepo path).
+    git failing for any reason besides that absence is fatal: taken for absence it would mark every extension
+    new and release it all (issue #100)."""
     for p in ("extensions/%s/%s" % (id, NEW), "extensions/%s/%s" % (id, OLD), "%s/%s" % (id, OLD)):
-        r = subprocess.run(["git", "-C", ROOT, "show", "%s:%s" % (ref, p)], capture_output=True, text=True)
+        r = git("show", "%s:%s" % (ref, p))
         if r.returncode == 0:
             return json.loads(r.stdout).get("version")
+        # show fails both for a path that is not at the ref and when git is broken (an unreadable object). ls-tree
+        # tells them apart: an absent path lists nothing, a present one lists a line, a broken git fails itself.
+        t = git("ls-tree", ref, "--", p)
+        if t.returncode != 0:
+            sys.exit("git could not read %s at %s: %s" % (p, ref, (t.stderr or r.stderr).strip() or "git gave no error"))
+        if t.stdout.strip():
+            sys.exit("git show %s:%s failed though that path is in the tree: %s"
+                     % (ref, p, r.stderr.strip() or "git gave no error"))
     return None
 
 
 def is_commit(ref):
-    r = subprocess.run(["git", "-C", ROOT, "rev-parse", "--verify", "--quiet", "--end-of-options", ref + "^{commit}"],
-                       capture_output=True)
-    return r.returncode == 0
+    r = git("rev-parse", "--verify", "--quiet", "--end-of-options", ref + "^{commit}")
+    if r.returncode == 0:
+        return True
+    # --quiet silences only "no such revision"; an operational failure (a broken git, an unreadable repository)
+    # still explains itself on stderr. Surface it rather than passing a broken git off as an unknown ref (#100).
+    why = r.stderr.strip()
+    if why:
+        sys.exit("git could not resolve %r as a commit: %s" % (ref, why))
+    return False
 
 
 def changed(ref):
