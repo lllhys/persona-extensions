@@ -70,6 +70,7 @@ type state struct {
 	Ref    string `json:"ref,omitempty"`
 	Path   string `json:"p,omitempty"`
 	Page   int    `json:"pg,omitempty"` // pages of a list read so far ("加载更多"), 1 when 0
+	Open   string `json:"o,omitempty"`  // a PR's files for UI version 4: a file loaded besides the first ones
 	PR     bool   `json:"pr,omitempty"` // items: PRs, not issues
 	ID     int64  `json:"id,omitempty"` // check: the check run; write: the conversation answered
 	Src    bool   `json:"src,omitempty"`
@@ -310,6 +311,8 @@ func (p *Page) act(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult, e
 		return p.writeAction(ctx, r, s, kind)
 	case "back": // apps before UI version 3: the open one closes in place
 		return again(state{})
+	case "load_diff", "context", "mark_viewed", "inline_comment", "draft_comment", "reply", "resolve", "submit_review", "discard_review":
+		return p.reviewAction(ctx, r, s, kind)
 	}
 	return nil, nil
 }

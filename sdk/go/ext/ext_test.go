@@ -69,6 +69,12 @@ func TestServe(t *testing.T) {
 				if r.Action == "toast" {
 					return &wire.ActionResult{Toast: "好"}, nil
 				}
+				if r.Action == "lines" {
+					return &wire.ActionResult{Lines: &wire.FileLines{Path: "a.go", Start: 1, Lines: []string{"x"}}}, nil
+				}
+				if r.Action == "viewed" {
+					return &wire.ActionResult{Items: []wire.Component{}}, nil
+				}
 				r.State = "next"
 				return nil, nil
 			},
@@ -98,6 +104,14 @@ func TestServe(t *testing.T) {
 	f = c.call("ui.action", wire.UIParams{Contribution: "home", Action: "toast"})
 	if json.Unmarshal(f.Result, &res) != nil || res.Toast != "好" || res.View != nil {
 		t.Fatalf("toast: %s", f.Result)
+	}
+	// UI version 5: lines, or components in place (none: done), answer as they are
+	for _, a := range []string{"lines", "viewed"} {
+		res = wire.ActionResult{}
+		f = c.call("ui.action", wire.UIParams{Contribution: "home", Action: a, UIVersion: 5})
+		if json.Unmarshal(f.Result, &res) != nil || res.View != nil || (a == "lines") != (res.Lines != nil) {
+			t.Fatalf("%s: %s", a, f.Result)
+		}
 	}
 	if f := c.call("other.method", nil); f.Error == nil || f.Error.Code != wire.ErrorCodeUnknownMethod {
 		t.Fatalf("unknown method: %+v", f.Error)

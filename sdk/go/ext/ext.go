@@ -113,6 +113,7 @@ func Serve(ctx context.Context, in io.Reader, out io.Writer, prog Program) error
 	defer cancel()
 	p := newPeer(out)
 	s := &server{prog: prog, hub: &Hub{p: p}, ctx: ctx}
+	p.onRead = s.read
 	p.onRequest = s.handle
 	p.onEvent = s.event
 	return p.serve(ctx, in)
@@ -180,11 +181,63 @@ type server struct {
 	initialized bool
 	init        *Init
 	contributes map[string]any
+
+	// initializing is open while inits initializes that were read are not answered yet: a call read behind one
+	// waits for its answer, as in the TS SDK.
+	imu          sync.Mutex
+	inits        int
+	initializing chan struct{}
+}
+
+// initWait is the context key of the initializes a call was read behind.
+type initWait struct{}
+
+// read notes an initialize as it is read, and gives a call read behind an unanswered one the initializes to wait for.
+func (s *server) read(ctx context.Context, method string) context.Context {
+	s.imu.Lock()
+	defer s.imu.Unlock()
+	if method == wire.MethodInitialize {
+		if s.inits == 0 {
+			s.initializing = make(chan struct{})
+		}
+		s.inits++
+		return ctx
+	}
+	if s.initializing == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, initWait{}, s.initializing)
+}
+
+// initDone ends an initialize noted by read.
+func (s *server) initDone() {
+	s.imu.Lock()
+	defer s.imu.Unlock()
+	if s.inits == 0 {
+		return
+	}
+	if s.inits--; s.inits == 0 {
+		close(s.initializing)
+		s.initializing = nil
+	}
+}
+
+// waitInit waits for the initializes a call was read behind to be answered (or ctx to end).
+func waitInit(ctx context.Context) {
+	ch, _ := ctx.Value(initWait{}).(chan struct{})
+	if ch == nil {
+		return
+	}
+	select {
+	case <-ch:
+	case <-ctx.Done():
+	}
 }
 
 func (s *server) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	switch method {
 	case wire.MethodInitialize:
+		defer s.initDone()
 		return s.initialize(params)
 	case wire.MethodManifest:
 		if len(s.prog.Manifest) == 0 {
@@ -192,6 +245,9 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		}
 		return answeredManifest(s.prog.Manifest), nil
 	}
+	// A call sent right behind initialize (without waiting for its answer) waits for it; one before it is not
+	// initialized.
+	waitInit(ctx)
 	s.mu.Lock()
 	ok := s.initialized
 	s.mu.Unlock()

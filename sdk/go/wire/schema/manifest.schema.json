@@ -200,6 +200,7 @@
         "skills": {"type": "array", "items": {"$ref": "#/$defs/SkillItem"}},
         "prompts": {"type": "array", "items": {"$ref": "#/$defs/PromptItem"}},
         "themes": {"type": "array", "items": {"$ref": "#/$defs/ThemeItem"}},
+        "looks": {"type": "array", "items": {"$ref": "#/$defs/LookItem"}},
         "triage_templates": {"type": "array", "items": {"$ref": "#/$defs/TriageTemplateItem"}},
         "agent_filters": {"type": "array", "items": {"$ref": "#/$defs/AgentFilterItem"}},
         "messaging": {"type": "array", "items": {"$ref": "messaging.schema.json#/$defs/MessagingItem"}}
@@ -254,6 +255,103 @@
         "dark": {"$ref": "#/$defs/ThemeColors"}
       },
       "required": ["id", "name", "light", "dark"]
+    },
+    "LookID": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$", "description": "A look's id: also a persona package's (the apps cache by it)."},
+    "BuiltinLook": {"type": "string", "enum": ["persona", "jarvis", "jarvis-circuit"], "description": "A look every app draws itself: 团子 (the default), 面罩, 汇流."},
+    "LookTexts": {
+      "description": "A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub checks).",
+      "type": "object",
+      "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 40}
+    },
+    "LookAvatarDark": {
+      "description": "The face on dark backgrounds; what it leaves out is the light one's.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sizes": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Side in pixels → a square PNG of the package."},
+        "svg": {"type": "string", "description": "An SVG of the package (the hub cleans it)."}
+      }
+    },
+    "LookAvatar": {
+      "description": "The face: square PNGs by their side in pixels (16 to 1024, at least one), an SVG, and the same for dark mode.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sizes": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Side in pixels → a square PNG of the package."},
+        "svg": {"type": "string", "description": "An SVG of the package (the hub cleans it: no scripts, nothing from outside it)."},
+        "safe": {"type": "number", "minimum": 0, "maximum": 1, "description": "The share of the circle what matters stays inside."},
+        "dark": {"$ref": "#/$defs/LookAvatarDark"}
+      },
+      "required": ["sizes"]
+    },
+    "LookPalette": {
+      "description": "An appearance's colors, #RRGGBB (docs/persona.md「色系」, the apps' PersonaPalette).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "primary": {"$ref": "#/$defs/HexColor"},
+        "secondary": {"$ref": "#/$defs/HexColor"},
+        "accent": {"$ref": "#/$defs/HexColor"},
+        "bubble": {"$ref": "#/$defs/HexColor"},
+        "bubble_text": {"$ref": "#/$defs/HexColor"}
+      }
+    },
+    "LookColors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "light": {"$ref": "#/$defs/LookPalette"},
+        "dark": {"$ref": "#/$defs/LookPalette"}
+      }
+    },
+    "LookDotState": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "file": {"type": "string", "description": "An APNG (or a still PNG) of the package."},
+        "fps": {"type": "number", "minimum": 0}
+      },
+      "required": ["file"]
+    },
+    "LookDotStates": {
+      "description": "The dot's states; idle is required.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "idle": {"$ref": "#/$defs/LookDotState"},
+        "thinking": {"$ref": "#/$defs/LookDotState"},
+        "working": {"$ref": "#/$defs/LookDotState"},
+        "needs_you": {"$ref": "#/$defs/LookDotState"},
+        "offline": {"$ref": "#/$defs/LookDotState"}
+      },
+      "required": ["idle"]
+    },
+    "LookDot": {
+      "description": "The animated dot in the Persona tab's top bar; without it the hub takes the largest avatar PNG as idle.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "size": {"type": "integer", "minimum": 16, "maximum": 512, "description": "The frames' side in pixels."},
+        "states": {"$ref": "#/$defs/LookDotStates"}
+      },
+      "required": ["states"]
+    },
+    "LookItem": {
+      "description": "A look (形象, docs/extensions.md「形象」): Persona's name, face, colors and dot. The hub serves it as a persona package; app_icon_fallback is the built-in look whose icon stands for it where only the app's own icons can be shown.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/LookID"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 20},
+        "names": {"$ref": "#/$defs/LookTexts"},
+        "subtitle": {"type": "string", "maxLength": 40},
+        "subtitles": {"$ref": "#/$defs/LookTexts"},
+        "avatar": {"$ref": "#/$defs/LookAvatar"},
+        "colors": {"$ref": "#/$defs/LookColors"},
+        "dot": {"$ref": "#/$defs/LookDot"},
+        "app_icon_fallback": {"$ref": "#/$defs/BuiltinLook"}
+      },
+      "required": ["id", "name", "avatar", "app_icon_fallback"]
     },
     "TriageTemplateItem": {
       "description": "A template of an inbox source's triage rules (triage_rules): settings offer it.",

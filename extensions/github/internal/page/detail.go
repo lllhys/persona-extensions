@@ -106,6 +106,10 @@ func (p *Page) detail(ctx context.Context, r *ext.UIRequest, s state, fresh bool
 	}
 	switch tab {
 	case tabFiles:
+		if r.UIVersion >= 4 { // a file tree beside the diffs (review.go)
+			v.Sections = append(v.Sections, p.reviewTab(ctx, r, v, s, d)...)
+			break
+		}
 		v.Sections = append(v.Sections, p.filesTab(ctx, r, s, d)...)
 	case tabPRCommit:
 		v.Sections = append(v.Sections, p.prCommits(ctx, r, d)...)

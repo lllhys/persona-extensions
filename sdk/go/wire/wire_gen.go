@@ -167,6 +167,7 @@ type Contributes struct {
 	Skills          []SkillItem          `json:"skills,omitempty"`
 	Prompts         []PromptItem         `json:"prompts,omitempty"`
 	Themes          []ThemeItem          `json:"themes,omitempty"`
+	Looks           []LookItem           `json:"looks,omitempty"`
 	TriageTemplates []TriageTemplateItem `json:"triage_templates,omitempty"`
 	AgentFilters    []AgentFilterItem    `json:"agent_filters,omitempty"`
 	Messaging       []MessagingItem      `json:"messaging,omitempty"`
@@ -180,7 +181,7 @@ func (v *Contributes) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	declared := map[string]json.RawMessage{}
-	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates", "agent_filters", "messaging"} {
+	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging"} {
 		if value, ok := extra[key]; ok {
 			declared[key] = value
 			delete(extra, key)
@@ -212,7 +213,7 @@ func (v Contributes) MarshalJSON() ([]byte, error) {
 	}
 	for key, value := range v.AdditionalProperties {
 		switch key {
-		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates", "agent_filters", "messaging":
+		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging":
 			continue
 		}
 		fields[key] = value
@@ -265,6 +266,136 @@ type ThemeItem struct {
 	Name  string      `json:"name"`
 	Light ThemeColors `json:"light"`
 	Dark  ThemeColors `json:"dark"`
+}
+
+// BuiltinLook: A look every app draws itself: 团子 (the default), 面罩, 汇流.
+const (
+	BuiltinLookPersona       = "persona"
+	BuiltinLookJarvis        = "jarvis"
+	BuiltinLookJarvisCircuit = "jarvis-circuit"
+)
+
+// BuiltinLooks are the values of BuiltinLook, in order.
+var BuiltinLooks = []string{"persona", "jarvis", "jarvis-circuit"}
+
+// LookTexts: A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters
+// (the hub checks).
+type LookTexts struct {
+	// Extra keys stay at this object's level on the wire; they cannot replace declared fields.
+	AdditionalProperties map[string]json.RawMessage `json:"-"`
+}
+
+func (v *LookTexts) UnmarshalJSON(data []byte) error {
+	var extra map[string]json.RawMessage
+	if err := json.Unmarshal(data, &extra); err != nil {
+		return err
+	}
+	declared := map[string]json.RawMessage{}
+	for _, key := range []string{} {
+		if value, ok := extra[key]; ok {
+			declared[key] = value
+			delete(extra, key)
+		}
+	}
+	data, err := json.Marshal(declared)
+	if err != nil {
+		return err
+	}
+	type known LookTexts
+	var fields known
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	fields.AdditionalProperties = extra
+	*v = LookTexts(fields)
+	return nil
+}
+
+func (v LookTexts) MarshalJSON() ([]byte, error) {
+	type known LookTexts
+	data, err := json.Marshal(known(v))
+	if err != nil {
+		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil, err
+	}
+	for key, value := range v.AdditionalProperties {
+		fields[key] = value
+	}
+	return json.Marshal(fields)
+}
+
+// LookAvatarDark: the face on dark backgrounds; what it leaves out is the light one's.
+type LookAvatarDark struct {
+	// Side in pixels → a square PNG of the package.
+	Sizes map[string]string `json:"sizes,omitempty"`
+	// An SVG of the package (the hub cleans it).
+	Svg string `json:"svg,omitempty"`
+}
+
+// LookAvatar: the face: square PNGs by their side in pixels (16 to 1024, at least one), an SVG, and the same for dark
+// mode.
+type LookAvatar struct {
+	// Side in pixels → a square PNG of the package.
+	Sizes map[string]string `json:"sizes"`
+	// An SVG of the package (the hub cleans it: no scripts, nothing from outside it).
+	Svg string `json:"svg,omitempty"`
+	// The share of the circle what matters stays inside.
+	Safe float64         `json:"safe,omitempty"`
+	Dark *LookAvatarDark `json:"dark,omitempty"`
+}
+
+// LookPalette: an appearance's colors, #RRGGBB (docs/persona.md「色系」, the apps' PersonaPalette).
+type LookPalette struct {
+	Primary    string `json:"primary,omitempty"`
+	Secondary  string `json:"secondary,omitempty"`
+	Accent     string `json:"accent,omitempty"`
+	Bubble     string `json:"bubble,omitempty"`
+	BubbleText string `json:"bubble_text,omitempty"`
+}
+
+type LookColors struct {
+	Light *LookPalette `json:"light,omitempty"`
+	Dark  *LookPalette `json:"dark,omitempty"`
+}
+
+type LookDotState struct {
+	// An APNG (or a still PNG) of the package.
+	File string  `json:"file"`
+	Fps  float64 `json:"fps,omitempty"`
+}
+
+// LookDotStates: the dot's states; idle is required.
+type LookDotStates struct {
+	Idle     LookDotState  `json:"idle"`
+	Thinking *LookDotState `json:"thinking,omitempty"`
+	Working  *LookDotState `json:"working,omitempty"`
+	NeedsYou *LookDotState `json:"needs_you,omitempty"`
+	Offline  *LookDotState `json:"offline,omitempty"`
+}
+
+// LookDot: the animated dot in the Persona tab's top bar; without it the hub takes the largest avatar PNG as idle.
+type LookDot struct {
+	// The frames' side in pixels.
+	Size   int           `json:"size,omitempty"`
+	States LookDotStates `json:"states"`
+}
+
+// LookItem: A look (形象, docs/extensions.md「形象」): Persona's name, face, colors and dot. The hub serves it as a persona
+// package; app_icon_fallback is the built-in look whose icon stands for it where only the app's own icons can be
+// shown.
+type LookItem struct {
+	ID              string      `json:"id"`
+	Name            string      `json:"name"`
+	Names           *LookTexts  `json:"names,omitempty"`
+	Subtitle        string      `json:"subtitle,omitempty"`
+	Subtitles       *LookTexts  `json:"subtitles,omitempty"`
+	Avatar          LookAvatar  `json:"avatar"`
+	Colors          *LookColors `json:"colors,omitempty"`
+	Dot             *LookDot    `json:"dot,omitempty"`
+	AppIconFallback string      `json:"app_icon_fallback"`
 }
 
 // TriageTemplateItem: A template of an inbox source's triage rules (triage_rules): settings offer it.
@@ -540,7 +671,9 @@ type HubInfo struct {
 	ExtensionPoints map[string]int `json:"extension_points"`
 	Role            string         `json:"role,omitempty"`
 	Timezone        string         `json:"timezone,omitempty"`
-	Capabilities    []string       `json:"capabilities,omitempty"`
+	// The user's language (zh-Hans, en, ja; see docs/i18n.md); empty means zh-Hans.
+	Locale       string   `json:"locale,omitempty"`
+	Capabilities []string `json:"capabilities,omitempty"`
 	// The hub's API on this machine, for the token below.
 	URL string `json:"url,omitempty"`
 	// A token of the scopes it was granted (permissions.hub): new each start.
@@ -883,34 +1016,40 @@ const (
 var Platforms = []string{"ios", "mac", "android", "web"}
 
 // NavIcon: the fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the
-// icons after money). Each app draws its own icon for the meaning; an unknown one draws as the default (extension;
-// plugin is its old name).
+// icons after money; 4 for those after settings). Each app draws its own icon for the meaning; an unknown one draws
+// as the default (extension; plugin is its old name).
 const (
-	NavIconPlugin    = "plugin"
-	NavIconChart     = "chart"
-	NavIconGauge     = "gauge"
-	NavIconList      = "list"
-	NavIconBell      = "bell"
-	NavIconDoc       = "doc"
-	NavIconCalendar  = "calendar"
-	NavIconMoney     = "money"
-	NavIconExtension = "extension"
-	NavIconPerson    = "person"
-	NavIconChat      = "chat"
-	NavIconMail      = "mail"
-	NavIconLink      = "link"
-	NavIconFolder    = "folder"
-	NavIconStar      = "star"
-	NavIconCheck     = "check"
-	NavIconWarning   = "warning"
-	NavIconClock     = "clock"
-	NavIconTag       = "tag"
-	NavIconSearch    = "search"
-	NavIconSettings  = "settings"
+	NavIconPlugin      = "plugin"
+	NavIconChart       = "chart"
+	NavIconGauge       = "gauge"
+	NavIconList        = "list"
+	NavIconBell        = "bell"
+	NavIconDoc         = "doc"
+	NavIconCalendar    = "calendar"
+	NavIconMoney       = "money"
+	NavIconExtension   = "extension"
+	NavIconPerson      = "person"
+	NavIconChat        = "chat"
+	NavIconMail        = "mail"
+	NavIconLink        = "link"
+	NavIconFolder      = "folder"
+	NavIconStar        = "star"
+	NavIconCheck       = "check"
+	NavIconWarning     = "warning"
+	NavIconClock       = "clock"
+	NavIconTag         = "tag"
+	NavIconSearch      = "search"
+	NavIconSettings    = "settings"
+	NavIconBranch      = "branch"
+	NavIconCommit      = "commit"
+	NavIconCode        = "code"
+	NavIconPullRequest = "pull_request"
+	NavIconMerge       = "merge"
+	NavIconFile        = "file"
 )
 
 // NavIcons are the values of NavIcon, in order.
-var NavIcons = []string{"plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings"}
+var NavIcons = []string{"plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file"}
 
 type View struct {
 	Title    string    `json:"title,omitempty"`
@@ -921,6 +1060,9 @@ type View struct {
 	RefreshAfter int     `json:"refresh_after,omitempty"`
 	Search       *Search `json:"search,omitempty"`
 	Filter       *Filter `json:"filter,omitempty"`
+	Tabs         *Tabs   `json:"tabs,omitempty"`
+	Layout       string  `json:"layout,omitempty"`
+	Review       *Review `json:"review,omitempty"`
 	// Plain text for an assistant card: required by CheckAssistantView; not required for extension views.
 	Fallback string `json:"fallback,omitempty"`
 	// Assistant card details keyed by page name; at most 8. A detail page cannot contain pages itself. Push.page refers
@@ -933,6 +1075,7 @@ type Section struct {
 	Footer string      `json:"footer,omitempty"`
 	Items  []Component `json:"items"`
 	More   *More       `json:"more,omitempty"`
+	Pane   string      `json:"pane,omitempty"`
 }
 
 // Component: one component of a view, told apart by type. A type an app does not know is skipped and the rest drawn.
@@ -971,33 +1114,223 @@ type Component struct {
 	Button      *EmptyButton  `json:"button,omitempty"`
 	Html        string        `json:"html,omitempty"`
 	Height      int           `json:"height,omitempty"`
+	Badges      []Badge       `json:"badges,omitempty"`
+	Facts       []Fact        `json:"facts,omitempty"`
+	Crumbs      []Crumb       `json:"crumbs,omitempty"`
+	Entries     []TreeEntry   `json:"entries,omitempty"`
+	Selected    string        `json:"selected,omitempty"`
+	Expand      *Action       `json:"expand,omitempty"`
+	Path        string        `json:"path,omitempty"`
+	Language    string        `json:"language,omitempty"`
+	StartLine   int           `json:"start_line,omitempty"`
+	Highlight   *LineRange    `json:"highlight,omitempty"`
+	Truncated   bool          `json:"truncated,omitempty"`
+	Load        *Action       `json:"load,omitempty"`
+	// An https link to lines of this file on its site, {start} and {end} standing for the lines
+	// (…/blob/<sha>/a.go#L{start}-L{end}).
+	LineURL   string   `json:"line_url,omitempty"`
+	OldPath   string   `json:"old_path,omitempty"`
+	Status    string   `json:"status,omitempty"`
+	Additions int      `json:"additions,omitempty"`
+	Deletions int      `json:"deletions,omitempty"`
+	Binary    bool     `json:"binary,omitempty"`
+	Collapsed bool     `json:"collapsed,omitempty"`
+	Hunks     []Hunk   `json:"hunks,omitempty"`
+	Threads   []Thread `json:"threads,omitempty"`
+	Comment   *Action  `json:"comment,omitempty"`
+	// Fetch hidden lines of the file (UI version 5): values {path, side: new or old, from, to: a line or end}; the
+	// extension answers with lines (ActionResult.lines), the page is not drawn again.
+	Context *Action `json:"context,omitempty"`
+	// The user has marked this file viewed.
+	Viewed bool `json:"viewed,omitempty"`
+	// Mark the file viewed or not: values {path, viewed: true or false}. Without it the app keeps viewed on the device,
+	// by path and revision.
+	MarkViewed *Action `json:"mark_viewed,omitempty"`
+	// What this file's change is (a blob id): a viewed mark kept on the device holds for it only.
+	Revision string `json:"revision,omitempty"`
+	// A generated file or a lockfile: folded at first.
+	Generated bool `json:"generated,omitempty"`
+	// How alike a renamed file is to its old one, in percent.
+	Similarity int `json:"similarity,omitempty"`
+	// Add a comment to the pending review instead of sending it alone: values as comment's.
+	Draft *Action `json:"draft,omitempty"`
+	// The extension takes ```suggestion blocks in comments.
+	Suggestions bool             `json:"suggestions,omitempty"`
+	Comments    []Comment        `json:"comments,omitempty"`
+	Resolved    bool             `json:"resolved,omitempty"`
+	Reply       *Action          `json:"reply,omitempty"`
+	Buttons     []ComposerButton `json:"buttons,omitempty"`
 }
 
 // Component types.
 const (
-	ComponentText      = "text"
-	ComponentMetric    = "metric"
-	ComponentProgress  = "progress"
-	ComponentRow       = "row"
-	ComponentButton    = "button"
-	ComponentLink      = "link"
-	ComponentField     = "field"
-	ComponentDivider   = "divider"
-	ComponentChart     = "chart"
-	ComponentStatGrid  = "stat_grid"
-	ComponentSegmented = "segmented"
-	ComponentMarkdown  = "markdown"
-	ComponentTable     = "table"
-	ComponentEmpty     = "empty"
-	ComponentLoading   = "loading"
-	ComponentHtml      = "html"
+	ComponentText          = "text"
+	ComponentMetric        = "metric"
+	ComponentProgress      = "progress"
+	ComponentRow           = "row"
+	ComponentButton        = "button"
+	ComponentLink          = "link"
+	ComponentField         = "field"
+	ComponentDivider       = "divider"
+	ComponentChart         = "chart"
+	ComponentStatGrid      = "stat_grid"
+	ComponentSegmented     = "segmented"
+	ComponentMarkdown      = "markdown"
+	ComponentTable         = "table"
+	ComponentEmpty         = "empty"
+	ComponentLoading       = "loading"
+	ComponentHtml          = "html"
+	ComponentHeader        = "header"
+	ComponentBreadcrumb    = "breadcrumb"
+	ComponentFileTree      = "file_tree"
+	ComponentCode          = "code"
+	ComponentDiff          = "diff"
+	ComponentCommentThread = "comment_thread"
+	ComponentComposer      = "composer"
 )
 
 // ComponentTypes are the types of Component, in order.
-var ComponentTypes = []string{"text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html"}
+var ComponentTypes = []string{"text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html", "header", "breadcrumb", "file_tree", "code", "diff", "comment_thread", "composer"}
 
 // ComponentSince is the UI version that brought each type.
-var ComponentSince = map[string]int{"text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3, "html": 4}
+var ComponentSince = map[string]int{"text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3, "html": 4, "header": 4, "breadcrumb": 4, "file_tree": 4, "code": 4, "diff": 4, "comment_thread": 4, "composer": 4}
+
+// Layout: stack: sections one under another. split: on a wide screen the side pane's sections in a column at the
+// start, the rest beside it, each scrolling on its own; on a narrow one the side pane folds into a bar on top that
+// opens as a sheet.
+const (
+	LayoutStack = "stack"
+	LayoutSplit = "split"
+)
+
+// Layouts are the values of Layout, in order.
+var Layouts = []string{"stack", "split"}
+
+// Pane: where a section of a split view goes.
+const (
+	PaneMain = "main"
+	PaneSide = "side"
+)
+
+// Panes are the values of Pane, in order.
+var Panes = []string{"main", "side"}
+
+// Values of FileStatus.
+const (
+	FileStatusAdded    = "added"
+	FileStatusModified = "modified"
+	FileStatusDeleted  = "deleted"
+	FileStatusRenamed  = "renamed"
+)
+
+// FileStatuses are the values of FileStatus, in order.
+var FileStatuses = []string{"added", "modified", "deleted", "renamed"}
+
+// Values of DiffSide.
+const (
+	DiffSideOld = "old"
+	DiffSideNew = "new"
+)
+
+// DiffSides are the values of DiffSide, in order.
+var DiffSides = []string{"old", "new"}
+
+// Tabs: tabs on top of the page (UI version 4): choosing calls ui.action with action and values {name: the value}
+// (and the search's q). An older app gets a segmented, or buttons.
+type Tabs struct {
+	Name   string `json:"name"`
+	Value  string `json:"value"`
+	Items  []Tab  `json:"items"`
+	Action Action `json:"action"`
+}
+
+type Tab struct {
+	Value string `json:"value"`
+	Title string `json:"title,omitempty"`
+	Badge string `json:"badge,omitempty"`
+}
+
+// Fact: A label and its value in a header (作者 · someone).
+type Fact struct {
+	Label string `json:"label,omitempty"`
+	Value string `json:"value"`
+	Icon  string `json:"icon,omitempty"`
+}
+
+type Crumb struct {
+	Title  string  `json:"title"`
+	Action *Action `json:"action,omitempty"`
+}
+
+// TreeEntry: A file (or a directory, kind dir) by its whole path from the root, / between names.
+type TreeEntry struct {
+	Path      string `json:"path"`
+	Kind      string `json:"kind,omitempty"`
+	Status    string `json:"status,omitempty"`
+	Additions int    `json:"additions,omitempty"`
+	Deletions int    `json:"deletions,omitempty"`
+	Comments  int    `json:"comments,omitempty"`
+	Badge     *Badge `json:"badge,omitempty"`
+	Viewed    bool   `json:"viewed,omitempty"`
+	Generated bool   `json:"generated,omitempty"`
+}
+
+// Values of TreeEntryKind.
+const (
+	TreeEntryKindFile = "file"
+	TreeEntryKindDir  = "dir"
+)
+
+// TreeEntryKinds are the values of TreeEntryKind, in order.
+var TreeEntryKinds = []string{"file", "dir"}
+
+type LineRange struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
+// Hunk: A run of a diff: where it starts in the old and the new file, and its lines (' ' both, '+' new, '-' old, '\'
+// a note such as no newline at end of file).
+type Hunk struct {
+	Header   string   `json:"header,omitempty"`
+	OldStart int      `json:"old_start"`
+	NewStart int      `json:"new_start"`
+	Lines    []string `json:"lines"`
+}
+
+// Thread: inline comments at a line of a diff: line (and start_line for a range) on the side's numbering.
+type Thread struct {
+	ID        string    `json:"id,omitempty"`
+	Side      string    `json:"side"`
+	Line      int       `json:"line"`
+	StartLine int       `json:"start_line,omitempty"`
+	Resolved  bool      `json:"resolved,omitempty"`
+	Outdated  bool      `json:"outdated,omitempty"`
+	Comments  []Comment `json:"comments"`
+	Reply     *Action   `json:"reply,omitempty"`
+	// A draft of the pending review, not sent yet.
+	Pending bool `json:"pending,omitempty"`
+	// Resolve or reopen: values {thread: id, resolved: true or false}.
+	Resolve *Action `json:"resolve,omitempty"`
+}
+
+// Comment: A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge (已批准). An
+// event is a quiet line (merged, pushed two commits).
+type Comment struct {
+	ID     string    `json:"id,omitempty"`
+	Author string    `json:"author"`
+	Avatar *Avatar   `json:"avatar,omitempty"`
+	At     time.Time `json:"at,omitzero"`
+	Body   string    `json:"body,omitempty"`
+	Badge  *Badge    `json:"badge,omitempty"`
+	Event  bool      `json:"event,omitempty"`
+}
+
+type ComposerButton struct {
+	Title  string `json:"title"`
+	Action Action `json:"action"`
+	Tone   string `json:"tone,omitempty"`
+}
 
 type AssistantView struct {
 	ID           string    `json:"id"`
@@ -1129,6 +1462,9 @@ type Action struct {
 	// Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls ui.action
 	// with id).
 	Push *Push `json:"push,omitempty"`
+	// Values the action carries (UI version 4): sent with the page's and the component's values, these winning on a name
+	// they share. An older app sends none.
+	Values map[string]string `json:"values,omitempty"`
 }
 
 // Push: A page pushed on the navigation stack: ui.render of the extension's ui (this one when empty; a full page:
@@ -1250,6 +1586,31 @@ type ActionResult struct {
 	Push *Push `json:"push,omitempty"`
 	// Then go back a page; the page below is drawn again.
 	Pop bool `json:"pop,omitempty"`
+	// Lines of a file a diff's context asked for: the page is not drawn again.
+	Lines *FileLines `json:"lines,omitempty"`
+	// Components to put in place of those with the same key on the page (each has a key): the rest is not drawn again.
+	Items []Component `json:"items,omitempty"`
+}
+
+// FileLines: lines of one side of a file from start (1 the first), as many as the extension has at hand (all of it,
+// say); total is how many the file has.
+type FileLines struct {
+	Path  string   `json:"path"`
+	Side  string   `json:"side,omitempty"`
+	Start int      `json:"start"`
+	Lines []string `json:"lines"`
+	Total int      `json:"total,omitempty"`
+}
+
+// Review: the pending review (UI version 5): a bar at the page's foot saying how many drafts there are, a summary box
+// (name) and buttons (comment, approve, request changes) that send them all, discard throws them away. An older app
+// gets a text and a composer on top.
+type Review struct {
+	Count       int              `json:"count"`
+	Name        string           `json:"name"`
+	Placeholder string           `json:"placeholder,omitempty"`
+	Buttons     []ComposerButton `json:"buttons"`
+	Discard     *Action          `json:"discard,omitempty"`
 }
 
 // Values of PersonaCardKind.
@@ -1931,6 +2292,15 @@ var newDef = map[string]func() any{
 	"PromptItem":                func() any { return new(PromptItem) },
 	"ThemeColors":               func() any { return new(ThemeColors) },
 	"ThemeItem":                 func() any { return new(ThemeItem) },
+	"LookTexts":                 func() any { return new(LookTexts) },
+	"LookAvatarDark":            func() any { return new(LookAvatarDark) },
+	"LookAvatar":                func() any { return new(LookAvatar) },
+	"LookPalette":               func() any { return new(LookPalette) },
+	"LookColors":                func() any { return new(LookColors) },
+	"LookDotState":              func() any { return new(LookDotState) },
+	"LookDotStates":             func() any { return new(LookDotStates) },
+	"LookDot":                   func() any { return new(LookDot) },
+	"LookItem":                  func() any { return new(LookItem) },
 	"TriageTemplateItem":        func() any { return new(TriageTemplateItem) },
 	"AgentFilterItem":           func() any { return new(AgentFilterItem) },
 	"ConnectorItem":             func() any { return new(ConnectorItem) },
@@ -1983,6 +2353,16 @@ var newDef = map[string]func() any{
 	"View":                      func() any { return new(View) },
 	"Section":                   func() any { return new(Section) },
 	"Component":                 func() any { return new(Component) },
+	"Tabs":                      func() any { return new(Tabs) },
+	"Tab":                       func() any { return new(Tab) },
+	"Fact":                      func() any { return new(Fact) },
+	"Crumb":                     func() any { return new(Crumb) },
+	"TreeEntry":                 func() any { return new(TreeEntry) },
+	"LineRange":                 func() any { return new(LineRange) },
+	"Hunk":                      func() any { return new(Hunk) },
+	"Thread":                    func() any { return new(Thread) },
+	"Comment":                   func() any { return new(Comment) },
+	"ComposerButton":            func() any { return new(ComposerButton) },
 	"AssistantView":             func() any { return new(AssistantView) },
 	"ViewAction":                func() any { return new(ViewAction) },
 	"ViewActionInput":           func() any { return new(ViewActionInput) },
@@ -2004,6 +2384,8 @@ var newDef = map[string]func() any{
 	"ChartPoint":                func() any { return new(ChartPoint) },
 	"Stat":                      func() any { return new(Stat) },
 	"ActionResult":              func() any { return new(ActionResult) },
+	"FileLines":                 func() any { return new(FileLines) },
+	"Review":                    func() any { return new(Review) },
 	"PersonaCard":               func() any { return new(PersonaCard) },
 	"CardAmount":                func() any { return new(CardAmount) },
 	"CardPart":                  func() any { return new(CardPart) },

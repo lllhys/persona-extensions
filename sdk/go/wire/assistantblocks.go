@@ -4,16 +4,60 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 )
 
-var (
-	assistantViewHint = regexp.MustCompile(`(?i)persona-view`)
-	assistantCardHint = regexp.MustCompile(`(?i)persona-(view|card)`)
-)
+// HasAssistantView reports whether text mentions persona-view in any letter case, a cheap check before parsing fences.
+func HasAssistantView(text string) bool { return hasPersonaHint(text, false) }
 
-func HasAssistantView(text string) bool { return assistantViewHint.MatchString(text) }
+// hasPersonaHint matches what the regexps (?i)persona-view and, with card, (?i)persona-(view|card) match, without a
+// regexp: case folding gives Go's regexp no literal prefix, so it stepped through every byte of a long reply. It finds
+// each '-' with strings.IndexByte and checks the letters around it. Under (?i) Go folds by unicode.SimpleFold, and the
+// only letter here with a non-ASCII fold is 's' (U+017F LATIN SMALL LETTER LONG S); TestPersonaHintMatchesRegexp pins
+// the equivalence.
+func hasPersonaHint(text string, card bool) bool {
+	for at := 0; ; {
+		n := strings.IndexByte(text[at:], '-')
+		if n < 0 {
+			return false
+		}
+		dash := at + n
+		if personaBefore(text[:dash]) {
+			rest := text[dash+1:]
+			if len(rest) >= 4 && (equalFoldASCII(rest[:4], "view") || card && equalFoldASCII(rest[:4], "card")) {
+				return true
+			}
+		}
+		at = dash + 1
+	}
+}
+
+// personaBefore reports whether s ends with "persona" in any case, the s also written as U+017F.
+func personaBefore(s string) bool {
+	if len(s) < 7 || !equalFoldASCII(s[len(s)-3:], "ona") {
+		return false
+	}
+	s = s[:len(s)-3]
+	switch {
+	case s[len(s)-1]|0x20 == 's':
+		s = s[:len(s)-1]
+	case strings.HasSuffix(s, "\u017f"):
+		s = s[:len(s)-2]
+	default:
+		return false
+	}
+	return len(s) >= 3 && equalFoldASCII(s[len(s)-3:], "per")
+}
+
+// equalFoldASCII compares s with the lowercase ASCII letters in lower, ignoring case; s has the same length.
+func equalFoldASCII(s, lower string) bool {
+	for i := 0; i < len(lower); i++ {
+		if s[i]|0x20 != lower[i] {
+			return false
+		}
+	}
+	return true
+}
 
 type AssistantViewBlock struct {
 	Index    int
@@ -163,7 +207,7 @@ func assistantFallbackText(raw json.RawMessage) (string, bool) {
 }
 
 func AssistantCardText(markdown string) string {
-	if !assistantCardHint.MatchString(markdown) {
+	if !hasPersonaHint(markdown, true) {
 		return markdown
 	}
 	blocks := AssistantViewBlocks(markdown)

@@ -50,6 +50,9 @@ type peer struct {
 	closed  chan struct{}
 	once    sync.Once
 
+	// onRead, if set, sees each request in the order requests are read, before it is handled (each in its own
+	// goroutine), and gives the context it is handled with.
+	onRead    func(ctx context.Context, method string) context.Context
 	onRequest func(ctx context.Context, method string, params json.RawMessage) (any, error)
 	onEvent   func(event string, params json.RawMessage)
 }
@@ -68,7 +71,11 @@ func (p *peer) serve(ctx context.Context, r io.Reader) error {
 		}
 		switch {
 		case f.Method != "":
-			go p.handle(ctx, f)
+			rctx := ctx
+			if p.onRead != nil {
+				rctx = p.onRead(ctx, f.Method)
+			}
+			go p.handle(rctx, f)
 		case f.Event != "":
 			if p.onEvent != nil {
 				p.onEvent(f.Event, f.Params)

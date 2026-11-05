@@ -113,6 +113,9 @@ func hasLine(patch string, line int, side string) bool {
 
 // diff is one file of a PR.
 func (p *Page) diff(ctx context.Context, r *ext.UIRequest, s state) *wire.View {
+	if r.UIVersion >= 4 {
+		return p.diffPage(ctx, r, s) // a diff component (review.go)
+	}
 	v := &wire.View{Title: path.Base(s.Path), State: ext.EncodeState(s), RefreshAfter: refreshAfter}
 	f, err := p.c.PRFileAt(ctx, s.Repo, s.Number, s.Path)
 	if err != nil {

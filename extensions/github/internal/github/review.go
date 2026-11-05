@@ -28,6 +28,7 @@ type PRFile struct {
 	Dels     int    `json:"deletions"`
 	Patch    string `json:"patch"` // "" for a binary file or one too big for GitHub to show
 	BlobURL  string `json:"blob_url"`
+	SHA      string `json:"sha"` // the file's blob at the head
 }
 
 // filesMost is how many files GitHub lists for a PR.

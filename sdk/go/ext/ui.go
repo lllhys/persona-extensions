@@ -12,7 +12,8 @@ type Page struct {
 	// Render draws the page for r (its state, the slot, the app's context).
 	Render func(ctx context.Context, r *UIRequest) (*wire.View, error)
 	// Action answers a tap on something with an action (r.Action is its id, r.Values the page's fields when it
-	// submits). Nil, or an empty result, draws the page again.
+	// submits). Nil, or an empty result, draws the page again. UI version 5: a result with Lines, or with Items (an
+	// empty but non-nil Items says done, nothing to draw: a viewed mark), is the answer as it is.
 	Action func(ctx context.Context, r *UIRequest) (*wire.ActionResult, error)
 }
 
@@ -72,7 +73,8 @@ func (s *server) ui(ctx context.Context, method string, raw json.RawMessage) (an
 			if err != nil {
 				return nil, err
 			}
-			if res != nil && (res.View != nil || res.Toast != "" || res.OpenURL != "" || res.Push != nil || res.Pop) {
+			// UI version 5: lines, or components in place (an empty but non-nil Items: done, nothing to draw again)
+			if res != nil && (res.View != nil || res.Toast != "" || res.OpenURL != "" || res.Push != nil || res.Pop || res.Lines != nil || res.Items != nil) {
 				if older(r) {
 					return s.olderResult(ctx, r, res)
 				}

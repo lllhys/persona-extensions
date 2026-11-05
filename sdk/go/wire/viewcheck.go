@@ -19,6 +19,10 @@ const (
 	SeriesMost = 4
 	PointsMost = 120
 	StatsMost  = 6
+	// The code a view carries (code texts and diff lines, UI version 4) is at most CodeMost bytes, and a diff at most
+	// DiffLinesMost lines: an extension pages the rest (code's load, diff's collapsed and load).
+	CodeMost      = 4 << 20
+	DiffLinesMost = 20000
 )
 
 var tones = append([]string{""}, Tones...)
@@ -51,6 +55,22 @@ func CheckView(v *View) error {
 	if v.Search != nil {
 		names["q"] = true
 	}
+	if t := v.Tabs; t != nil {
+		if names[t.Name] {
+			return fmt.Errorf("tabs: field %q twice (q is the search's)", t.Name)
+		}
+		names[t.Name] = true
+		if !slices.ContainsFunc(t.Items, func(c Tab) bool { return c.Value == t.Value }) {
+			return errors.New("tabs: value is one of its items")
+		}
+	}
+	if r := v.Review; r != nil {
+		if names[r.Name] {
+			return fmt.Errorf("review: field %q twice", r.Name)
+		}
+		names[r.Name] = true
+	}
+	code := 0
 	if f := v.Filter; f != nil {
 		if names[f.Name] {
 			return fmt.Errorf("filter: field %q twice (q is the search's)", f.Name)
@@ -116,10 +136,99 @@ func CheckView(v *View) error {
 				}
 			case "markdown":
 				err = checkMarkdown(e.Text)
+			case "composer":
+				if names[e.Name] {
+					err = fmt.Errorf("field %q twice", e.Name)
+				}
+				names[e.Name] = true
+			case "code":
+				code += len(e.Text)
+				if h := e.Highlight; h != nil && h.End < h.Start {
+					err = errors.New("highlight: end is not before start")
+				} else if e.LineURL != "" {
+					err = checkLineURL(e.LineURL)
+				}
+			case "diff":
+				var lines int
+				lines, err = checkDiff(e)
+				code += lines
+			case "comment_thread":
+				err = checkComments(e.Comments)
+			}
+			if err == nil && code > CodeMost {
+				err = fmt.Errorf("a view carries at most %d bytes of code: page the rest (load)", CodeMost)
 			}
 			if err != nil {
 				return fmt.Errorf("section %d item %d (%s): %v", i, j, e.Type, err)
 			}
+		}
+	}
+	return nil
+}
+
+// checkDiff holds a diff's lines to their prefixes and its size to DiffLinesMost, its threads' bodies to markdown's
+// subset. It says how many bytes of lines it has.
+func checkDiff(e Component) (int, error) {
+	n, size := 0, 0
+	for k, h := range e.Hunks {
+		for l, line := range h.Lines {
+			if line != "" && !strings.ContainsAny(line[:1], " +-\\") {
+				return 0, fmt.Errorf("hunk %d line %d: starts with ' ', '+', '-' or '\\'", k, l)
+			}
+			size += len(line)
+		}
+		if n += len(h.Lines); n > DiffLinesMost {
+			return 0, fmt.Errorf("a diff has at most %d lines: collapse it and load it, or split it", DiffLinesMost)
+		}
+	}
+	for k, t := range e.Threads {
+		if t.StartLine > t.Line {
+			return 0, fmt.Errorf("thread %d: start_line is not after line", k)
+		}
+		if err := checkComments(t.Comments); err != nil {
+			return 0, fmt.Errorf("thread %d: %v", k, err)
+		}
+	}
+	return size, nil
+}
+
+// checkLineURL holds a code's line link to https.
+func checkLineURL(raw string) error {
+	u, err := url.Parse(strings.NewReplacer("{start}", "1", "{end}", "1").Replace(raw))
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return errors.New("line_url: an https link")
+	}
+	return nil
+}
+
+// CheckLines holds the lines a diff's context answered with (ActionResult.lines) to DiffLinesMost and CodeMost.
+func CheckLines(l *FileLines) error {
+	if l == nil {
+		return nil
+	}
+	if l.Path == "" || l.Start < 1 {
+		return errors.New("lines: a path and a start from 1")
+	}
+	if l.Side != "" && l.Side != "old" && l.Side != "new" {
+		return errors.New("lines: side is old or new")
+	}
+	if len(l.Lines) > DiffLinesMost {
+		return fmt.Errorf("lines: at most %d", DiffLinesMost)
+	}
+	size := 0
+	for _, line := range l.Lines {
+		size += len(line)
+	}
+	if size > CodeMost {
+		return fmt.Errorf("lines: at most %d bytes", CodeMost)
+	}
+	return nil
+}
+
+func checkComments(comments []Comment) error {
+	for k, c := range comments {
+		if err := checkMarkdown(c.Body); err != nil {
+			return fmt.Errorf("comment %d: %v", k, err)
 		}
 	}
 	return nil
@@ -236,6 +345,17 @@ func Actions(v *View) []*Action {
 	if v.Filter != nil {
 		out = append(out, &v.Filter.Action)
 	}
+	if v.Tabs != nil {
+		out = append(out, &v.Tabs.Action)
+	}
+	if r := v.Review; r != nil {
+		for k := range r.Buttons {
+			out = append(out, &r.Buttons[k].Action)
+		}
+		if r.Discard != nil {
+			out = append(out, r.Discard)
+		}
+	}
 	for i := range v.Sections {
 		s := &v.Sections[i]
 		for j := range s.Items {
@@ -245,6 +365,27 @@ func Actions(v *View) []*Action {
 			}
 			if e.Button != nil {
 				out = append(out, &e.Button.Action)
+			}
+			for _, a := range []*Action{e.Expand, e.Load, e.Comment, e.Reply, e.Context, e.MarkViewed, e.Draft} {
+				if a != nil {
+					out = append(out, a)
+				}
+			}
+			for k := range e.Crumbs {
+				if e.Crumbs[k].Action != nil {
+					out = append(out, e.Crumbs[k].Action)
+				}
+			}
+			for k := range e.Buttons {
+				out = append(out, &e.Buttons[k].Action)
+			}
+			for k := range e.Threads {
+				if e.Threads[k].Reply != nil {
+					out = append(out, e.Threads[k].Reply)
+				}
+				if e.Threads[k].Resolve != nil {
+					out = append(out, e.Threads[k].Resolve)
+				}
 			}
 		}
 		if s.More != nil {

@@ -62,14 +62,21 @@ Every row opens something: a PR or issue opens its page, a repository opens the 
 
 **Reading.** A page the hub would wait too long for (a big PR's first read: its comments, reviews, events, checks and commits) answers after 12 seconds with a loading page, goes on reading in the background and has the app draw it again when done (`ui.invalidate`; `refresh_after` for apps and hubs without it). The hub gives `ui.render` 20 seconds. Every list is read with `If-None-Match`, so what has not changed costs nothing of the hour's requests. The five tabs are cached for a minute; the refresh button reads again. When the hour's rate limit is nearly used up, the tabs show what they read before and keep the remaining requests for the inbox.
 
-**Rendering.** The page uses the declarative components the hub has today: code and diffs are fenced Markdown blocks (```` ```diff ````, ```` ```go ````), files and comments are rows. Descriptions, comments and READMEs are cleaned to the Markdown the hub accepts: images become links, relative links resolve against the repository, HTML and reference links are rewritten, and a comment the hub would still refuse is shown as text. When the hub has the code-hosting components of UI version 4 (nwverse/persona#2951), the diff, code, file tree and conversations will use them, and older apps keep this rendering.
+**Rendering.** Apps of UI version 4 and later (nwverse/persona#2951, #3136) get the code-hosting components: 改动 is a split view with the file tree beside one diff component per file (line numbers on both sides, unified or side by side, syntax highlighting, conversations at their lines), and a file in the repository is a code component. The first 10 files (or 3,000 lines) come with their lines; the app loads the rest as it scrolls to them. UI version 5 adds:
+
+- Hidden lines between hunks, 20 at a time or all: the file is read at the PR's head (in the fork when the head is one) and handed to the app once.
+- Viewed: GitHub's own Viewed mark, read and set through GraphQL, so it is the same on github.com.
+- Comments on a line or a range of lines (dragged over), alone or as a draft of your pending review (GitHub's pending review, nobody else sees it). Drafts show at their lines; the review bar at the foot sends them with a summary as a comment, an approval or a request for changes, or throws them away.
+- Suggestions (```` ```suggestion ```` blocks), resolving and reopening conversations, links to a file's lines.
+
+Older apps keep the earlier rendering: code and diffs are fenced Markdown blocks (```` ```diff ````, ```` ```go ````), files and comments are rows. Descriptions, comments and READMEs are cleaned to the Markdown the hub accepts: images become links, relative links resolve against the repository, HTML and reference links are rewritten, and a comment the hub would still refuse is shown as text.
 
 Apps from before UI version 3 get rows instead of the segmented tabs, a search field instead of the search box, plain text instead of Markdown and a back button.
 
 Limits of declarative views:
 
 - An extension view cannot open a Persona conversation or an inbox item. The detail page names the knowledge-base conversation instead.
-- Lines of a diff cannot be tapped: a comment on a line is written with its line number.
+- Apps before UI version 4: lines of a diff cannot be tapped, a comment on a line is written with its line number.
 - Images are limited to avatars.
 
 ## Configuration

@@ -320,6 +320,8 @@ func (p *Page) file(ctx context.Context, r *ext.UIRequest, s state) *wire.View {
 	case md && !s.Src:
 		base := fmt.Sprintf("%s/%s/blob/%s/%s", p.c.Web(), s.Repo, s.Ref, parentDir(s.Path))
 		v.Sections = append(v.Sections, wire.Section{Items: fileBody(r, s.Path, f.Text, base, false, readmeMost)})
+	case r.UIVersion >= 4: // a code component: line numbers, highlighting, line links (review.go)
+		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{codeOf(s, f)}})
 	default:
 		lines := strings.Split(strings.TrimRight(f.Text, "\n"), "\n")
 		shown := min(len(lines), s.page()*filePage)

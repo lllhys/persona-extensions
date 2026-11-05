@@ -30,9 +30,9 @@
     },
     "Platform": {"type": "string", "enum": ["ios", "mac", "android", "web"]},
     "NavIcon": {
-      "description": "The fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the icons after money). Each app draws its own icon for the meaning; an unknown one draws as the default (extension; plugin is its old name).",
+      "description": "The fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the icons after money; 4 for those after settings). Each app draws its own icon for the meaning; an unknown one draws as the default (extension; plugin is its old name).",
       "type": "string",
-      "enum": ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings"]
+      "enum": ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file"]
     },
     "View": {
       "type": "object",
@@ -44,6 +44,9 @@
           "description": "Draw again after this many seconds while on screen (30 at least; 0 never)."},
         "search": {"$ref": "#/$defs/Search", "x-since": 3},
         "filter": {"$ref": "#/$defs/Filter", "x-since": 3},
+        "tabs": {"$ref": "#/$defs/Tabs", "x-since": 4},
+        "layout": {"$ref": "#/$defs/Layout", "x-since": 4},
+        "review": {"$ref": "#/$defs/Review", "x-since": 5},
         "fallback": {"type": "string", "minLength": 1, "maxLength": 2000, "description": "Plain text for an assistant card: required by CheckAssistantView; not required for extension views."},
         "pages": {"type": "object", "additionalProperties": {"$ref": "#/$defs/View"}, "description": "Assistant card details keyed by page name; at most 8. A detail page cannot contain pages itself. Push.page refers to this root map."}
       },
@@ -55,7 +58,8 @@
         "title": {"type": "string", "maxLength": 2000},
         "footer": {"type": "string", "maxLength": 2000},
         "items": {"type": "array", "items": {"$ref": "#/$defs/Component"}},
-        "more": {"$ref": "#/$defs/More", "x-since": 3}
+        "more": {"$ref": "#/$defs/More", "x-since": 3},
+        "pane": {"$ref": "#/$defs/Pane", "x-since": 4}
       },
       "required": ["items"]
     },
@@ -78,7 +82,14 @@
         {"$ref": "#/$defs/TableComponent"},
         {"$ref": "#/$defs/EmptyComponent"},
         {"$ref": "#/$defs/LoadingComponent"},
-        {"$ref": "#/$defs/HtmlComponent"}
+        {"$ref": "#/$defs/HtmlComponent"},
+        {"$ref": "#/$defs/HeaderComponent"},
+        {"$ref": "#/$defs/BreadcrumbComponent"},
+        {"$ref": "#/$defs/FileTreeComponent"},
+        {"$ref": "#/$defs/CodeComponent"},
+        {"$ref": "#/$defs/DiffComponent"},
+        {"$ref": "#/$defs/CommentThreadComponent"},
+        {"$ref": "#/$defs/ComposerComponent"}
       ]
     },
     "TextComponent": {
@@ -296,6 +307,241 @@
         "html"
       ]
     },
+    "HeaderComponent": {
+      "description": "A detail page's head: a big title, state badges, a line of facts (author, branches, time, size). An older app gets a text and a row per fact.",
+      "type": "object", "x-since": 4,
+      "properties": {
+        "type": {"const": "header"},
+        "key": {"type": "string", "maxLength": 128},
+        "title": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "subtitle": {"type": "string", "maxLength": 2000},
+        "badges": {"type": "array", "maxItems": 4, "items": {"$ref": "#/$defs/Badge"}},
+        "facts": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/Fact"}},
+        "avatar": {"$ref": "#/$defs/Avatar"}
+      },
+      "required": ["type", "title"]
+    },
+    "BreadcrumbComponent": {
+      "description": "A path (repo / src / main.go): every crumb but the last may be tapped. An older app gets one text.",
+      "type": "object", "x-since": 4,
+      "properties": {
+        "type": {"const": "breadcrumb"},
+        "key": {"type": "string", "maxLength": 128},
+        "crumbs": {"type": "array", "minItems": 1, "maxItems": 20, "items": {"$ref": "#/$defs/Crumb"}}
+      },
+      "required": ["type", "crumbs"]
+    },
+    "FileTreeComponent": {
+      "description": "Files as a tree the app builds from their paths (a directory with one child folds into a/b/c). action opens a file (values {path}); expand loads a directory given with no entries under it (values {path}). An older app gets a row per entry.",
+      "type": "object", "x-since": 4,
+      "properties": {
+        "type": {"const": "file_tree"},
+        "key": {"type": "string", "maxLength": 128},
+        "entries": {"type": "array", "maxItems": 3000, "items": {"$ref": "#/$defs/TreeEntry"}},
+        "selected": {"type": "string", "maxLength": 4096},
+        "action": {"$ref": "#/$defs/Action"},
+        "expand": {"$ref": "#/$defs/Action"}
+      },
+      "required": ["type", "entries"]
+    },
+    "CodeComponent": {
+      "description": "A file's content: line numbers, the app's own syntax highlighting (language, else guessed from path), no wrapping. truncated with load: the rest comes from load (values {path, from: the next line}). An older app gets a code block.",
+      "type": "object", "x-since": 4,
+      "properties": {
+        "type": {"const": "code"},
+        "key": {"type": "string", "maxLength": 128},
+        "path": {"type": "string", "maxLength": 4096},
+        "language": {"type": "string", "maxLength": 64},
+        "text": {"type": "string", "maxLength": 200000},
+        "start_line": {"type": "integer", "minimum": 1},
+        "highlight": {"$ref": "#/$defs/LineRange"},
+        "truncated": {"type": "boolean"},
+        "load": {"$ref": "#/$defs/Action"},
+        "line_url": {"type": "string", "maxLength": 4096, "x-since": 5,
+          "description": "An https link to lines of this file on its site, {start} and {end} standing for the lines (…/blob/<sha>/a.go#L{start}-L{end})."}
+      },
+      "required": ["type", "text"]
+    },
+    "DiffComponent": {
+      "description": "One file's diff: hunks of lines each starting with ' ', '+', '-' or '\\'; unified or side by side is the app's choice. threads are inline comments at their lines; comment adds one (values {path, side, line, start_line?, body}); expand shows hidden lines between hunks (values {path, hunk, direction: up, down or all}); collapsed, or without hunks, it shows a button calling load (values {path}). An older app gets a code block.",
+      "type": "object", "x-since": 4,
+      "properties": {
+        "type": {"const": "diff"},
+        "key": {"type": "string", "maxLength": 128},
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "old_path": {"type": "string", "maxLength": 4096},
+        "status": {"$ref": "#/$defs/FileStatus"},
+        "language": {"type": "string", "maxLength": 64},
+        "additions": {"type": "integer", "minimum": 0},
+        "deletions": {"type": "integer", "minimum": 0},
+        "binary": {"type": "boolean"},
+        "collapsed": {"type": "boolean"},
+        "hunks": {"type": "array", "maxItems": 2000, "items": {"$ref": "#/$defs/Hunk"}},
+        "threads": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/Thread"}},
+        "load": {"$ref": "#/$defs/Action"},
+        "expand": {"$ref": "#/$defs/Action"},
+        "comment": {"$ref": "#/$defs/Action"},
+        "context": {"$ref": "#/$defs/Action", "x-since": 5,
+          "description": "Fetch hidden lines of the file (UI version 5): values {path, side: new or old, from, to: a line or end}; the extension answers with lines (ActionResult.lines), the page is not drawn again."},
+        "viewed": {"type": "boolean", "x-since": 5, "description": "The user has marked this file viewed."},
+        "mark_viewed": {"$ref": "#/$defs/Action", "x-since": 5,
+          "description": "Mark the file viewed or not: values {path, viewed: true or false}. Without it the app keeps viewed on the device, by path and revision."},
+        "revision": {"type": "string", "maxLength": 256, "x-since": 5, "description": "What this file's change is (a blob id): a viewed mark kept on the device holds for it only."},
+        "generated": {"type": "boolean", "x-since": 5, "description": "A generated file or a lockfile: folded at first."},
+        "similarity": {"type": "integer", "minimum": 0, "maximum": 100, "x-since": 5, "description": "How alike a renamed file is to its old one, in percent."},
+        "draft": {"$ref": "#/$defs/Action", "x-since": 5,
+          "description": "Add a comment to the pending review instead of sending it alone: values as comment's."},
+        "suggestions": {"type": "boolean", "x-since": 5, "description": "The extension takes ```suggestion blocks in comments."}
+      },
+      "required": ["type", "path"]
+    },
+    "CommentThreadComponent": {
+      "description": "A discussion: comments in order (an event is drawn as a quiet line), and a reply box when reply is set (values {body}). An older app gets a row and a text per comment.",
+      "type": "object", "x-since": 4,
+      "properties": {
+        "type": {"const": "comment_thread"},
+        "key": {"type": "string", "maxLength": 128},
+        "title": {"type": "string", "maxLength": 2000},
+        "comments": {"type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/Comment"}},
+        "resolved": {"type": "boolean"},
+        "reply": {"$ref": "#/$defs/Action"}
+      },
+      "required": ["type", "comments"]
+    },
+    "ComposerComponent": {
+      "description": "A multi-line input (Markdown) with a few buttons (comment, approve, request changes, merge): the one tapped sends the text as name, with the page's fields. An older app gets a field and a button each.",
+      "type": "object", "x-since": 4,
+      "properties": {
+        "type": {"const": "composer"},
+        "key": {"type": "string", "maxLength": 128},
+        "name": {"type": "string", "minLength": 1},
+        "placeholder": {"type": "string", "maxLength": 2000},
+        "value": {"type": "string", "maxLength": 2000},
+        "buttons": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"$ref": "#/$defs/ComposerButton"}}
+      },
+      "required": ["type", "name", "buttons"]
+    },
+    "Layout": {
+      "description": "stack: sections one under another. split: on a wide screen the side pane's sections in a column at the start, the rest beside it, each scrolling on its own; on a narrow one the side pane folds into a bar on top that opens as a sheet.",
+      "type": "string", "enum": ["stack", "split"]
+    },
+    "Pane": {"description": "Where a section of a split view goes.", "type": "string", "enum": ["main", "side"]},
+    "FileStatus": {"type": "string", "enum": ["added", "modified", "deleted", "renamed"]},
+    "DiffSide": {"type": "string", "enum": ["old", "new"]},
+    "Tabs": {
+      "description": "Tabs on top of the page (UI version 4): choosing calls ui.action with action and values {name: the value} (and the search's q). An older app gets a segmented, or buttons.",
+      "type": "object",
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "value": {"type": "string", "maxLength": 2000},
+        "items": {"type": "array", "minItems": 2, "maxItems": 8, "items": {"$ref": "#/$defs/Tab"}},
+        "action": {"$ref": "#/$defs/Action"}
+      },
+      "required": ["name", "value", "items", "action"]
+    },
+    "Tab": {
+      "type": "object",
+      "properties": {
+        "value": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "title": {"type": "string", "maxLength": 40},
+        "badge": {"type": "string", "maxLength": 8}
+      },
+      "required": ["value"]
+    },
+    "Fact": {
+      "description": "A label and its value in a header (作者 · someone).",
+      "type": "object",
+      "properties": {
+        "label": {"type": "string", "maxLength": 200},
+        "value": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "icon": {"$ref": "#/$defs/NavIcon"}
+      },
+      "required": ["value"]
+    },
+    "Crumb": {
+      "type": "object",
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "action": {"$ref": "#/$defs/Action"}
+      },
+      "required": ["title"]
+    },
+    "TreeEntry": {
+      "description": "A file (or a directory, kind dir) by its whole path from the root, / between names.",
+      "type": "object",
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "kind": {"$ref": "#/$defs/TreeEntryKind"},
+        "status": {"$ref": "#/$defs/FileStatus"},
+        "additions": {"type": "integer", "minimum": 0},
+        "deletions": {"type": "integer", "minimum": 0},
+        "comments": {"type": "integer", "minimum": 0},
+        "badge": {"$ref": "#/$defs/Badge"},
+        "viewed": {"type": "boolean", "x-since": 5},
+        "generated": {"type": "boolean", "x-since": 5}
+      },
+      "required": ["path"]
+    },
+    "TreeEntryKind": {"type": "string", "enum": ["file", "dir"]},
+    "LineRange": {
+      "type": "object",
+      "properties": {
+        "start": {"type": "integer", "minimum": 1},
+        "end": {"type": "integer", "minimum": 1}
+      },
+      "required": ["start", "end"]
+    },
+    "Hunk": {
+      "description": "A run of a diff: where it starts in the old and the new file, and its lines (' ' both, '+' new, '-' old, '\\' a note such as no newline at end of file).",
+      "type": "object",
+      "properties": {
+        "header": {"type": "string", "maxLength": 2000},
+        "old_start": {"type": "integer", "minimum": 0},
+        "new_start": {"type": "integer", "minimum": 0},
+        "lines": {"type": "array", "maxItems": 20000, "items": {"type": "string", "maxLength": 20000}}
+      },
+      "required": ["old_start", "new_start", "lines"]
+    },
+    "Thread": {
+      "description": "Inline comments at a line of a diff: line (and start_line for a range) on the side's numbering.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "maxLength": 256},
+        "side": {"$ref": "#/$defs/DiffSide"},
+        "line": {"type": "integer", "minimum": 1},
+        "start_line": {"type": "integer", "minimum": 1},
+        "resolved": {"type": "boolean"},
+        "outdated": {"type": "boolean"},
+        "comments": {"type": "array", "minItems": 1, "maxItems": 200, "items": {"$ref": "#/$defs/Comment"}},
+        "reply": {"$ref": "#/$defs/Action"},
+        "pending": {"type": "boolean", "x-since": 5, "description": "A draft of the pending review, not sent yet."},
+        "resolve": {"$ref": "#/$defs/Action", "x-since": 5, "description": "Resolve or reopen: values {thread: id, resolved: true or false}."}
+      },
+      "required": ["side", "line", "comments"]
+    },
+    "Comment": {
+      "description": "A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge (已批准). An event is a quiet line (merged, pushed two commits).",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "maxLength": 256},
+        "author": {"type": "string", "minLength": 1, "maxLength": 200},
+        "avatar": {"$ref": "#/$defs/Avatar"},
+        "at": {"type": "string", "format": "date-time"},
+        "body": {"type": "string", "maxLength": 20000},
+        "badge": {"$ref": "#/$defs/Badge"},
+        "event": {"type": "boolean"}
+      },
+      "required": ["author"]
+    },
+    "ComposerButton": {
+      "type": "object",
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "action": {"$ref": "#/$defs/Action"},
+        "tone": {"$ref": "#/$defs/Tone"}
+      },
+      "required": ["title", "action"]
+    },
     "AssistantView": {
       "type": "object",
       "properties": {
@@ -464,7 +710,9 @@
         "open": {"type": "string", "minLength": 1, "maxLength": 4096, "description": "Assistant only: an https URL or a validated persona/jarvis session, task, kb or file target, opened inside the app."},
         "pop": {"type": "boolean", "description": "Assistant only: return one page within the card."},
         "push": {"$ref": "#/$defs/Push", "x-since": 3,
-          "description": "Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls ui.action with id)."}
+          "description": "Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls ui.action with id)."},
+        "values": {"type": "object", "maxProperties": 8, "additionalProperties": {"type": "string", "maxLength": 2000}, "x-since": 4,
+          "description": "Values the action carries (UI version 4): sent with the page's and the component's values, these winning on a name they share. An older app sends none."}
       },
       "required": ["id"]
     },
@@ -494,7 +742,7 @@
       "properties": {
         "name": {"type": "string", "minLength": 1},
         "title": {"type": "string", "maxLength": 2000},
-        "choices": {"type": "array", "minItems": 2, "maxItems": 20, "items": {"$ref": "#/$defs/Choice"}},
+        "choices": {"type": "array", "minItems": 2, "maxItems": 100, "items": {"$ref": "#/$defs/Choice"}},
         "value": {"type": "string", "maxLength": 2000},
         "action": {"$ref": "#/$defs/Action"}
       },
@@ -599,8 +847,35 @@
         "toast": {"type": "string"},
         "open_url": {"type": "string"},
         "push": {"$ref": "#/$defs/Push", "x-since": 3, "description": "Then open this page on top (after a submit: list, detail, edit)."},
-        "pop": {"type": "boolean", "x-since": 3, "description": "Then go back a page; the page below is drawn again."}
+        "pop": {"type": "boolean", "x-since": 3, "description": "Then go back a page; the page below is drawn again."},
+        "lines": {"$ref": "#/$defs/FileLines", "x-since": 5, "description": "Lines of a file a diff's context asked for: the page is not drawn again."},
+        "items": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/Component"}, "x-since": 5,
+          "description": "Components to put in place of those with the same key on the page (each has a key): the rest is not drawn again."}
       }
+    },
+    "FileLines": {
+      "description": "Lines of one side of a file from start (1 the first), as many as the extension has at hand (all of it, say); total is how many the file has.",
+      "type": "object",
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "side": {"$ref": "#/$defs/DiffSide"},
+        "start": {"type": "integer", "minimum": 1},
+        "lines": {"type": "array", "maxItems": 20000, "items": {"type": "string", "maxLength": 20000}},
+        "total": {"type": "integer", "minimum": 0}
+      },
+      "required": ["path", "start", "lines"]
+    },
+    "Review": {
+      "description": "The pending review (UI version 5): a bar at the page's foot saying how many drafts there are, a summary box (name) and buttons (comment, approve, request changes) that send them all, discard throws them away. An older app gets a text and a composer on top.",
+      "type": "object",
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "name": {"type": "string", "minLength": 1},
+        "placeholder": {"type": "string", "maxLength": 2000},
+        "buttons": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"$ref": "#/$defs/ComposerButton"}},
+        "discard": {"$ref": "#/$defs/Action"}
+      },
+      "required": ["count", "name", "buttons"]
     },
     "PersonaCardKind": {"type": "string", "enum": ["stat", "stacked_bar", "line", "bar"]},
     "PersonaCard": {

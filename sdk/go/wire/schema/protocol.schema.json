@@ -69,6 +69,7 @@
         "extension_points": {"type": "object", "additionalProperties": {"type": "integer"}},
         "role": {"$ref": "#/$defs/HubRole"},
         "timezone": {"type": "string"},
+        "locale": {"type": "string", "description": "The user's language (zh-Hans, en, ja; see docs/i18n.md); empty means zh-Hans."},
         "capabilities": {"type": "array", "items": {"type": "string"}},
         "url": {"type": "string", "description": "The hub's API on this machine, for the token below."},
         "token": {"type": "string", "description": "A token of the scopes it was granted (permissions.hub): new each start."},
