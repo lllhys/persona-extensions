@@ -1,0 +1,19 @@
+{
+  "ui": [
+    {
+      "extension": "example-gateway",
+      "extension_name": "Example Gateway",
+      "plugin": "example-gateway",
+      "plugin_name": "Example Gateway",
+      "id": "usage",
+      "title": "用量",
+      "placement": "nav_page",
+      "size": "full",
+      "icon": "chart",
+      "badge": {
+        "text": "3",
+        "tone": "danger"
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "title": "笔记",
+  "state": "{\"q\":\"\",\"folder\":\"all\",\"page\":1}",
+  "search": {"placeholder": "搜索笔记", "action": {"id": "search"}},
+  "filter": {"name": "folder", "title": "文件夹", "value": "all", "action": {"id": "folder"},
+    "choices": [{"value": "all", "title": "全部"}, {"value": "work", "title": "工作"}, {"value": "home", "title": "生活"}]},
+  "sections": [
+    {
+      "title": "最近",
+      "items": [
+        {"type": "row", "key": "n1", "title": "周会纪要", "subtitle": "昨天 18:02", "icon": "doc",
+         "action": {"id": "open", "push": {"state": "{\"note\":\"n1\"}", "title": "周会纪要"}}},
+        {"type": "row", "key": "n2", "title": "和 Alex 的对话", "avatar": {"text": "A"}, "action": {"id": "open-n2", "push": {"state": "{\"note\":\"n2\"}"}}},
+        {"type": "row", "key": "n3", "title": "白板截图", "thumbnail": {"url": "https://notes.example.com/t/n3.png", "aspect": "wide"}}
+      ],
+      "more": {"action": {"id": "more"}}
+    },
+    {
+      "title": "详情",
+      "items": [
+        {"type": "markdown", "key": "body", "text": "## 结论\n\n- 下周一上线\n- 风险：**接口限流**，见 [说明](https://notes.example.com/doc/1)\n\n```\nretry: 3\n```"},
+        {"type": "table", "caption": "本周的数", "columns": [{"title": "日期"}, {"title": "条数", "align": "end"}],
+         "rows": [["11-01", "12"], ["11-02", "8"]]},
+        {"type": "empty", "title": "还没有附件", "detail": "拖一个文件进来", "icon": "folder",
+         "button": {"title": "上传", "action": {"id": "upload"}}},
+        {"type": "loading", "title": "正在同步"}
+      ]
+    }
+  ]
+}

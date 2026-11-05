@@ -161,6 +161,54 @@ type Contributes struct {
 	Prompts         []PromptItem         `json:"prompts,omitempty"`
 	Themes          []ThemeItem          `json:"themes,omitempty"`
 	TriageTemplates []TriageTemplateItem `json:"triage_templates,omitempty"`
+	// Extra keys stay at this object's level on the wire; they cannot replace declared fields.
+	AdditionalProperties map[string]json.RawMessage `json:"-"`
+}
+
+func (v *Contributes) UnmarshalJSON(data []byte) error {
+	var extra map[string]json.RawMessage
+	if err := json.Unmarshal(data, &extra); err != nil {
+		return err
+	}
+	declared := map[string]json.RawMessage{}
+	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates"} {
+		if value, ok := extra[key]; ok {
+			declared[key] = value
+			delete(extra, key)
+		}
+	}
+	data, err := json.Marshal(declared)
+	if err != nil {
+		return err
+	}
+	type known Contributes
+	var fields known
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	fields.AdditionalProperties = extra
+	*v = Contributes(fields)
+	return nil
+}
+
+func (v Contributes) MarshalJSON() ([]byte, error) {
+	type known Contributes
+	data, err := json.Marshal(known(v))
+	if err != nil {
+		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil, err
+	}
+	for key, value := range v.AdditionalProperties {
+		switch key {
+		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates":
+			continue
+		}
+		fields[key] = value
+	}
+	return json.Marshal(fields)
 }
 
 // SkillItem: A skill (docs「纯声明贡献」): a directory of the package with SKILL.md, put in with the assistant's skills.

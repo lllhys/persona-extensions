@@ -1,0 +1,51 @@
+{
+  "id": "view_example",
+  "conversation": "example-conversation",
+  "version": 1,
+  "view": {
+    "title": "选择方案",
+    "fallback": "推荐 B：队列去重，半天。A：重写同步层，3 天；C：增加监控，1 小时。",
+    "sections": [
+      {
+        "items": [
+          {
+            "type": "row",
+            "key": "option-a",
+            "title": "A 重写同步层",
+            "subtitle": "3 天，风险高",
+            "action": {
+              "id": "choose-a",
+              "reply": "选 A：重写同步层"
+            }
+          },
+          {
+            "type": "row",
+            "key": "option-b",
+            "title": "B 队列去重",
+            "subtitle": "半天，推荐",
+            "badge": {
+              "text": "推荐",
+              "tone": "positive"
+            },
+            "action": {
+              "id": "choose-b",
+              "reply": "选 B：队列去重"
+            }
+          },
+          {
+            "type": "row",
+            "key": "option-c",
+            "title": "C 增加监控",
+            "subtitle": "1 小时",
+            "action": {
+              "id": "choose-c",
+              "reply": "选 C：增加监控"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "created_at": "2026-11-05T00:00:00Z",
+  "updated_at": "2026-11-05T00:00:00Z"
+}

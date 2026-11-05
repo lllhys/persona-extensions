@@ -22,6 +22,10 @@ step gofmt
 bad=$(gofmt -l . | grep -v '^dist/' || true)
 [ -z "$bad" ] || { echo "not gofmt'ed:"; echo "$bad"; exit 1; }
 
+step sdk
+go -C sdk/go vet ./...
+go -C sdk/go test -count=1 -timeout=90s ./...
+
 step vet
 go vet ./...
 

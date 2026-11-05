@@ -1,0 +1,13 @@
+{
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "link",
+          "title": "x",
+          "url": "http://example.com"
+        }
+      ]
+    }
+  ]
+}

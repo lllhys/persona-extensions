@@ -1,0 +1,15 @@
+{
+  "type": "line",
+  "title": "近 7 天睡眠",
+  "unit": "小时",
+  "points": [
+    {
+      "label": "周一",
+      "value": 6.5
+    },
+    {
+      "label": "周二",
+      "value": 7.2
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "manifest_version": 1,
+  "id": "example-gateway",
+  "name": "Example Gateway",
+  "version": "1.3.0",
+  "engines": {"extension_protocol": 1},
+  "runtime": {"command": {"linux-amd64": "bin/gateway-linux-amd64", "darwin-arm64": "bin/gateway-darwin-arm64"}},
+  "activation_events": ["on_call"],
+  "contributes": {
+    "ui": [
+      {"id": "usage", "title": "用量", "placement": "nav_page", "icon": "chart"},
+      {"id": "today", "title": "今天的用量", "placement": "widget", "families": ["small", "medium", "accessory_rectangular", "accessory_inline"], "refresh_minutes": 30, "opens": "usage"}
+    ],
+    "shortcuts": [
+      {"id": "usage_today", "title": "今天用了多少", "description": "说出今天的用量", "ui": "usage"},
+      {"id": "set_budget", "title": "设预算", "params": [
+        {"name": "amount", "title": "金额", "kind": "number", "required": true},
+        {"name": "period", "title": "周期", "kind": "choice", "choices": [{"value": "day", "title": "每天"}, {"value": "month", "title": "每月"}]}
+      ]}
+    ]
+  }
+}

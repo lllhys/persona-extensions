@@ -1,0 +1,10 @@
+{
+  "extension": "example-gateway",
+  "ui": "usage",
+  "state": "{\"range\":\"1d\"}",
+  "actions": [
+    {"id": "raise", "title": "预算加 ¥10"},
+    {"id": "note", "title": "回复", "input": {"placeholder": "说点什么"}},
+    {"id": "stop", "title": "停用这个 Key", "role": "destructive", "foreground": true}
+  ]
+}

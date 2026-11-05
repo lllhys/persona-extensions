@@ -1,0 +1,6 @@
+{
+  "widgets": [
+    {"extension": "example-gateway", "extension_name": "Example Gateway", "id": "today", "title": "今天的用量",
+     "families": ["small", "medium", "accessory_rectangular", "accessory_inline"], "refresh_minutes": 30, "opens": "usage"}
+  ]
+}

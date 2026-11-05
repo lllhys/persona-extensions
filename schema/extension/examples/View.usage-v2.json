@@ -1,0 +1,189 @@
+{
+  "title": "用量",
+  "state": "range=7d",
+  "refresh_after": 600,
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "segmented",
+          "name": "range",
+          "value": "7d",
+          "action": {
+            "id": "range"
+          },
+          "choices": [
+            {
+              "value": "1d",
+              "title": "今天"
+            },
+            {
+              "value": "7d",
+              "title": "7 天"
+            },
+            {
+              "value": "30d",
+              "title": "30 天"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "概况",
+      "items": [
+        {
+          "type": "stat_grid",
+          "stats": [
+            {
+              "label": "tokens",
+              "value": "17.0M",
+              "detail": "+12% 比上周",
+              "tone": "caution"
+            },
+            {
+              "label": "费用",
+              "value": "¥36.20"
+            },
+            {
+              "label": "缓存命中",
+              "value": "62%",
+              "tone": "positive"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "按天",
+      "footer": "按你的时区分天。",
+      "items": [
+        {
+          "type": "chart",
+          "kind": "bar",
+          "unit": "M tokens",
+          "stacked": true,
+          "series": [
+            {
+              "name": "输入",
+              "points": [
+                {
+                  "label": "10-29",
+                  "value": 1.8,
+                  "display": "1.8M"
+                },
+                {
+                  "label": "10-30",
+                  "value": 2.4,
+                  "display": "2.4M"
+                },
+                {
+                  "label": "10-31",
+                  "value": 0.9,
+                  "display": "0.9M"
+                },
+                {
+                  "label": "11-01",
+                  "value": 0.6,
+                  "display": "0.6M"
+                },
+                {
+                  "label": "11-02",
+                  "value": 3.1,
+                  "display": "3.1M"
+                },
+                {
+                  "label": "11-03",
+                  "value": 2.7,
+                  "display": "2.7M"
+                },
+                {
+                  "label": "11-04",
+                  "value": 1.2,
+                  "display": "1.2M"
+                }
+              ]
+            },
+            {
+              "name": "输出",
+              "tone": "positive",
+              "points": [
+                {
+                  "label": "10-29",
+                  "value": 0.4
+                },
+                {
+                  "label": "10-30",
+                  "value": 0.7
+                },
+                {
+                  "label": "10-31",
+                  "value": 0.2
+                },
+                {
+                  "label": "11-01",
+                  "value": 0.1
+                },
+                {
+                  "label": "11-02",
+                  "value": 0.9
+                },
+                {
+                  "label": "11-03",
+                  "value": 0.8
+                },
+                {
+                  "label": "11-04",
+                  "value": 0.3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "chart",
+          "kind": "line",
+          "title": "费用",
+          "unit": "元",
+          "detail": "按北京时间分天",
+          "series": [
+            {
+              "name": "费用",
+              "tone": "caution",
+              "points": [
+                {
+                  "label": "10-29",
+                  "value": 3.1
+                },
+                {
+                  "label": "10-30",
+                  "value": 5.2
+                },
+                {
+                  "label": "10-31",
+                  "value": 2.0
+                },
+                {
+                  "label": "11-01",
+                  "value": 1.1
+                },
+                {
+                  "label": "11-02",
+                  "value": 8.3
+                },
+                {
+                  "label": "11-03",
+                  "value": 7.6
+                },
+                {
+                  "label": "11-04",
+                  "value": 3.5
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

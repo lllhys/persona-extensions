@@ -1,0 +1,16 @@
+{
+  "contribution": "gpu",
+  "state": "",
+  "placement": "machine_section",
+  "size": "full",
+  "ui_version": 2,
+  "tz": "Asia/Shanghai",
+  "locale": "zh-Hans-CN",
+  "platform": "ios",
+  "machine": {
+    "id": "m1",
+    "name": "workstation",
+    "os": "linux",
+    "online": true
+  }
+}

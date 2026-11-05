@@ -1,0 +1,12 @@
+{
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "button",
+          "title": "go"
+        }
+      ]
+    }
+  ]
+}

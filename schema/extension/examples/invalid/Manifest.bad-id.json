@@ -1,0 +1,13 @@
+{
+  "manifest_version": 1,
+  "id": "-x",
+  "name": "X",
+  "version": "1.0.0",
+  "contributes": {
+    "voice": [
+      {
+        "id": "v"
+      }
+    ]
+  }
+}

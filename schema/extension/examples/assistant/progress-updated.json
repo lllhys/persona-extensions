@@ -1,0 +1,53 @@
+{
+  "title": "发布进度",
+  "fallback": "发布完成：构建、测试和部署全部完成。完成 3／3 步。",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "progress",
+          "key": "overall",
+          "label": "发布",
+          "ratio": 1,
+          "detail": "完成 3／3 步",
+          "tone": "positive"
+        },
+        {
+          "type": "stat_grid",
+          "key": "counts",
+          "stats": [
+            {
+              "label": "已完成",
+              "value": "3"
+            },
+            {
+              "label": "剩余",
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "key": "build",
+          "title": "构建",
+          "value": "已完成",
+          "icon": "check"
+        },
+        {
+          "type": "row",
+          "key": "tests",
+          "title": "测试",
+          "value": "已完成",
+          "icon": "check"
+        },
+        {
+          "type": "row",
+          "key": "deploy",
+          "title": "部署",
+          "value": "已完成",
+          "icon": "check"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "title": "Example Gateway",
+  "state": "page=1",
+  "sections": [
+    {
+      "title": "账户",
+      "footer": "每小时更新一次。",
+      "items": [
+        {
+          "type": "text",
+          "text": "这个网关的用量和设置。"
+        },
+        {
+          "type": "text",
+          "text": "key-…3f2a",
+          "style": "code"
+        },
+        {
+          "type": "metric",
+          "label": "本月",
+          "value": "¥128.40",
+          "detail": "预算 ¥500",
+          "tone": "positive"
+        },
+        {
+          "type": "progress",
+          "label": "预算",
+          "ratio": 0.26,
+          "detail": "26%",
+          "tone": "caution"
+        },
+        {
+          "type": "divider"
+        },
+        {
+          "type": "row",
+          "title": "model-large",
+          "subtitle": "1,021 次",
+          "value": "12.4M",
+          "badge": {
+            "text": "常用",
+            "tone": "neutral"
+          },
+          "action": {
+            "id": "open:model-large"
+          }
+        },
+        {
+          "type": "link",
+          "title": "控制台",
+          "url": "https://gateway.example.com/console"
+        }
+      ]
+    },
+    {
+      "title": "设置",
+      "items": [
+        {
+          "type": "field",
+          "name": "note",
+          "label": "备注",
+          "kind": "text",
+          "placeholder": "写点什么"
+        },
+        {
+          "type": "field",
+          "name": "token",
+          "label": "Token",
+          "kind": "secret"
+        },
+        {
+          "type": "field",
+          "name": "limit",
+          "label": "上限",
+          "kind": "number",
+          "value": "500"
+        },
+        {
+          "type": "field",
+          "name": "auto",
+          "label": "自动续费",
+          "kind": "toggle",
+          "value": "true"
+        },
+        {
+          "type": "field",
+          "name": "plan",
+          "label": "套餐",
+          "kind": "choice",
+          "value": "team",
+          "choices": [
+            {
+              "value": "solo",
+              "title": "个人"
+            },
+            {
+              "value": "team",
+              "title": "团队"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "title": "保存",
+          "action": {
+            "id": "save",
+            "submit": true
+          }
+        },
+        {
+          "type": "button",
+          "title": "重置",
+          "role": "destructive",
+          "action": {
+            "id": "reset",
+            "confirm": "确定重置吗？"
+          }
+        }
+      ]
+    }
+  ]
+}

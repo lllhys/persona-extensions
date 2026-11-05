@@ -1,0 +1,79 @@
+{
+  "manifest_version": 1,
+  "id": "example-notes",
+  "name": "Example Notes",
+  "version": "1.2.0",
+  "description": "把 Example Notes 的笔记同步进知识库，并给助手一个搜索工具。",
+  "publisher": "example",
+  "homepage": "https://example.com/persona-extension",
+  "engines": {
+    "persona": ">=202611050000",
+    "extension_protocol": 1
+  },
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/example-notes-linux-amd64",
+      "darwin-arm64": "bin/example-notes-darwin-arm64"
+    },
+    "args": [
+      "serve"
+    ]
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "examplenotes",
+        "name": "Example Notes",
+        "capabilities": [
+          "status",
+          "tools",
+          "archive",
+          "login"
+        ],
+        "hosts": [
+          "notes.example.com"
+        ],
+        "poll_seconds": 600
+      }
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "base_url": {
+        "type": "string",
+        "title": "服务地址",
+        "format": "uri",
+        "default": "https://notes.example.com"
+      },
+      "folders": {
+        "type": "array",
+        "title": "同步哪些文件夹",
+        "items": {
+          "type": "string"
+        }
+      },
+      "include_shared": {
+        "type": "boolean",
+        "title": "包括别人共享给我的",
+        "default": false
+      }
+    },
+    "required": [
+      "base_url"
+    ]
+  },
+  "secrets": [
+    {
+      "name": "api_key",
+      "title": "API Key",
+      "description": "在 Example Notes 的设置 › 开发者里生成",
+      "required": true
+    }
+  ],
+  "permissions": {
+    "network": [
+      "notes.example.com"
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "type": "stacked_bar",
+  "title": "今天的热量分配",
+  "subtitle": "推荐全天摄入",
+  "total": {
+    "value": 2250,
+    "unit": "kcal"
+  },
+  "segments": [
+    {
+      "label": "早餐",
+      "value": 555,
+      "note": "已吃"
+    },
+    {
+      "label": "午餐",
+      "value": 900
+    }
+  ],
+  "rest": {
+    "label": "弹性空间",
+    "value": 45
+  }
+}

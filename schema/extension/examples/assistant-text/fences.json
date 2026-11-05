@@ -1,0 +1,56 @@
+[
+  {
+    "name": "standard",
+    "text": "结论\n```persona-view\n{\"fallback\": \"示例卡片\", \"sections\": []}\n```\n",
+    "indexes": [
+      0
+    ],
+    "complete": [
+      true
+    ]
+  },
+  {
+    "name": "invalid-counts",
+    "text": "```persona-view\ninvalid\n```\n```persona-view\n{\"fallback\": \"示例卡片\", \"sections\": []}\n```\n",
+    "indexes": [
+      0,
+      1
+    ],
+    "complete": [
+      true,
+      true
+    ]
+  },
+  {
+    "name": "outer-example",
+    "text": "````markdown\n```persona-view\n{\"fallback\": \"示例卡片\", \"sections\": []}\n```\n````\n",
+    "indexes": [],
+    "complete": []
+  },
+  {
+    "name": "tilde-crlf",
+    "text": "~~~persona-view\r\n{\"fallback\": \"示例卡片\", \"sections\": []}\r\n~~~\r\n",
+    "indexes": [
+      0
+    ],
+    "complete": [
+      true
+    ]
+  },
+  {
+    "name": "cr-case-fold",
+    "text": "结论\r```PERSONA-VIEW\r{\"fallback\": \"示例卡片\", \"sections\": []}\r```\r",
+    "indexes": [0],
+    "complete": [true]
+  },
+  {
+    "name": "partial",
+    "text": "```persona-view\n{\"fallback\": \"示例卡片\", \"sections\": []}",
+    "indexes": [
+      0
+    ],
+    "complete": [
+      false
+    ]
+  }
+]

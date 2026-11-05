@@ -1,0 +1,74 @@
+{
+  "title": "方案对比",
+  "fallback": "方案 A：3 天，改动大；方案 B：半天，改动小，推荐。可查看详细依据。",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "table",
+          "columns": [
+            {
+              "title": "方案"
+            },
+            {
+              "title": "耗时"
+            },
+            {
+              "title": "风险"
+            },
+            {
+              "title": "建议"
+            }
+          ],
+          "rows": [
+            [
+              "A",
+              "3 天",
+              "高",
+              "长期考虑"
+            ],
+            [
+              "B",
+              "半天",
+              "低",
+              "优先选择"
+            ]
+          ]
+        },
+        {
+          "type": "button",
+          "title": "详细依据",
+          "action": {
+            "id": "details",
+            "push": {
+              "page": "details"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "pages": {
+    "details": {
+      "title": "详细依据",
+      "sections": [
+        {
+          "items": [
+            {
+              "type": "markdown",
+              "text": "**推荐 B**：先给队列增加去重，减少重复处理，保留之后重构的空间。"
+            },
+            {
+              "type": "button",
+              "title": "返回",
+              "action": {
+                "id": "back",
+                "pop": true
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

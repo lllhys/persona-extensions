@@ -1,0 +1,17 @@
+{
+  "contribution": "detail",
+  "state": "",
+  "placement": "inbox_item",
+  "size": "full",
+  "ui_version": 2,
+  "item": {
+    "id": "examplenotes:n1",
+    "title": "周会纪要",
+    "summary": "三件事要跟进",
+    "tier": "action",
+    "done": false,
+    "meta": null,
+    "count": 3,
+    "started_at": "2026-11-04T08:00:00Z"
+  }
+}

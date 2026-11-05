@@ -1,0 +1,12 @@
+{
+  "card": {
+    "type": "line",
+    "points": [
+      {
+        "label": "周一",
+        "value": 6.5
+      }
+    ]
+  },
+  "view": null
+}

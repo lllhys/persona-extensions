@@ -1,0 +1,21 @@
+{
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "segmented",
+          "name": "r",
+          "value": "a",
+          "action": {
+            "id": "r"
+          },
+          "choices": [
+            {
+              "value": "a"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

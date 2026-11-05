@@ -1,0 +1,13 @@
+{
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "progress",
+          "label": "a",
+          "ratio": 1.5
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "view": {
+    "sections": [
+      {"title": "今天", "items": [
+        {"type": "metric", "label": "用量", "value": "1.2M", "detail": "+12% 比昨天", "tone": "caution"},
+        {"type": "stat_grid", "stats": [{"label": "费用", "value": "¥3.20"}, {"label": "7 天", "value": "8.4M"}]}
+      ]}
+    ]
+  },
+  "expires_at": "2026-11-05T08:30:00Z"
+}

@@ -1,0 +1,15 @@
+{
+  "view": {
+    "sections": [
+      {
+        "items": [
+          {
+            "type": "text",
+            "text": "完成"
+          }
+        ]
+      }
+    ]
+  },
+  "open_url": "https://gateway.example.com/receipt"
+}

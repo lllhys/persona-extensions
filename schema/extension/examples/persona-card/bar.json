@@ -1,0 +1,49 @@
+{
+  "card": {
+    "type": "bar",
+    "subtitle": "每天的步数",
+    "points": [
+      {
+        "label": "11-01",
+        "value": 12034
+      },
+      {
+        "label": "11-02",
+        "value": 8000
+      }
+    ]
+  },
+  "view": {
+    "sections": [
+      {
+        "items": [
+          {
+            "type": "text",
+            "text": "每天的步数",
+            "style": "secondary"
+          },
+          {
+            "type": "chart",
+            "kind": "bar",
+            "series": [
+              {
+                "points": [
+                  {
+                    "label": "11-01",
+                    "value": 12034,
+                    "display": "12,034"
+                  },
+                  {
+                    "label": "11-02",
+                    "value": 8000,
+                    "display": "8,000"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

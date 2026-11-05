@@ -1,0 +1,115 @@
+{
+  "card": {
+    "type": "stacked_bar",
+    "unit": "分钟",
+    "segments": [
+      {
+        "label": "会议",
+        "value": 120
+      },
+      {
+        "label": "编码",
+        "value": 240
+      },
+      {
+        "label": "阅读",
+        "value": 45
+      },
+      {
+        "label": "运动",
+        "value": 30
+      },
+      {
+        "label": "其他事",
+        "value": 15
+      }
+    ]
+  },
+  "view": {
+    "sections": [
+      {
+        "items": [
+          {
+            "type": "metric",
+            "label": "合计",
+            "value": "450 分钟"
+          },
+          {
+            "type": "chart",
+            "kind": "bar",
+            "series": [
+              {
+                "name": "会议",
+                "points": [
+                  {
+                    "label": "合计",
+                    "value": 120,
+                    "display": "120 分钟"
+                  }
+                ]
+              },
+              {
+                "name": "编码",
+                "points": [
+                  {
+                    "label": "合计",
+                    "value": 240,
+                    "display": "240 分钟"
+                  }
+                ]
+              },
+              {
+                "name": "阅读",
+                "points": [
+                  {
+                    "label": "合计",
+                    "value": 45,
+                    "display": "45 分钟"
+                  }
+                ]
+              },
+              {
+                "name": "其他",
+                "tone": "neutral",
+                "points": [
+                  {
+                    "label": "合计",
+                    "value": 45,
+                    "display": "45 分钟"
+                  }
+                ]
+              }
+            ],
+            "unit": "分钟",
+            "stacked": true
+          },
+          {
+            "type": "row",
+            "value": "120 分钟",
+            "title": "会议"
+          },
+          {
+            "type": "row",
+            "value": "240 分钟",
+            "title": "编码"
+          },
+          {
+            "type": "row",
+            "value": "45 分钟",
+            "title": "阅读"
+          },
+          {
+            "type": "row",
+            "value": "30 分钟",
+            "title": "运动"
+          },
+          {
+            "type": "row",
+            "value": "15 分钟",
+            "title": "其他事"
+          }
+        ]
+      }
+    ]
+  }
+}

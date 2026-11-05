@@ -1,0 +1,14 @@
+{
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "metric",
+          "label": "a",
+          "value": "1",
+          "tone": "red"
+        }
+      ]
+    }
+  ]
+}

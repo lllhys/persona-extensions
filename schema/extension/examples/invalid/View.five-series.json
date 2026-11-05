@@ -1,0 +1,59 @@
+{
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "chart",
+          "kind": "bar",
+          "series": [
+            {
+              "name": "0",
+              "points": [
+                {
+                  "label": "a",
+                  "value": 1
+                }
+              ]
+            },
+            {
+              "name": "1",
+              "points": [
+                {
+                  "label": "a",
+                  "value": 1
+                }
+              ]
+            },
+            {
+              "name": "2",
+              "points": [
+                {
+                  "label": "a",
+                  "value": 1
+                }
+              ]
+            },
+            {
+              "name": "3",
+              "points": [
+                {
+                  "label": "a",
+                  "value": 1
+                }
+              ]
+            },
+            {
+              "name": "4",
+              "points": [
+                {
+                  "label": "a",
+                  "value": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

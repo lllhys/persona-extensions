@@ -1,0 +1,9 @@
+{
+  "shortcuts": [
+    {"extension": "example-gateway", "extension_name": "Example Gateway", "id": "usage_today", "title": "今天用了多少", "description": "说出今天的用量", "ui": "usage"},
+    {"extension": "example-gateway", "extension_name": "Example Gateway", "id": "set_budget", "title": "设预算", "params": [
+      {"name": "amount", "title": "金额", "kind": "number", "required": true},
+      {"name": "period", "title": "周期", "kind": "choice", "choices": [{"value": "day", "title": "每天"}, {"value": "month", "title": "每月"}]}
+    ]}
+  ]
+}

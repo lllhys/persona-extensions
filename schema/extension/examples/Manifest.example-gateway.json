@@ -1,0 +1,83 @@
+{
+  "manifest_version": 1,
+  "id": "example-gateway",
+  "name": "Example Gateway",
+  "version": "0.3.0",
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "command": "bin/example-gateway"
+  },
+  "activation_events": [
+    "on_call"
+  ],
+  "contributes": {
+    "quota": [
+      {
+        "id": "example",
+        "name": "Example",
+        "hosts": [
+          "*.gateway.example.com"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "usage",
+        "title": "用量",
+        "placement": "nav_page",
+        "icon": "chart"
+      },
+      {
+        "id": "today",
+        "title": "今天的用量",
+        "placement": "overview_card",
+        "opens": "usage"
+      },
+      {
+        "id": "gpu",
+        "title": "显卡",
+        "placement": "machine_section"
+      },
+      {
+        "id": "panel",
+        "title": "网关",
+        "placement": "launcher_section",
+        "hosts": [
+          "gateway.example.com"
+        ]
+      }
+    ],
+    "providers": [
+      {
+        "id": "example",
+        "name": "Example",
+        "kind": "api",
+        "api": "messages",
+        "base_url": "https://gateway.example.com",
+        "models": [
+          {
+            "id": "model-large"
+          },
+          {
+            "id": "model-small",
+            "name": "Small"
+          }
+        ]
+      }
+    ],
+    "events": [
+      {
+        "id": "watch",
+        "subscribe": [
+          "agent.finished",
+          "agent.needs_you"
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "launcher_keys": true
+  }
+}

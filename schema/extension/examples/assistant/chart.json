@@ -1,0 +1,68 @@
+{
+  "title": "测试耗时趋势",
+  "fallback": "近三次测试耗时：第一次 8 分钟，第二次 6 分钟，第三次 5 分钟。最近一次比第一次减少 3 分钟。",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "metric",
+          "label": "最近一次",
+          "value": "5 分钟",
+          "detail": "比第一次减少 3 分钟"
+        },
+        {
+          "type": "chart",
+          "key": "duration",
+          "kind": "line",
+          "title": "测试耗时",
+          "unit": "分钟",
+          "series": [
+            {
+              "name": "测试耗时",
+              "points": [
+                {
+                  "label": "第一次",
+                  "value": 8
+                },
+                {
+                  "label": "第二次",
+                  "value": 6
+                },
+                {
+                  "label": "第三次",
+                  "value": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "columns": [
+            {
+              "title": "次数"
+            },
+            {
+              "title": "分钟",
+              "align": "end"
+            }
+          ],
+          "rows": [
+            [
+              "第一次",
+              "8"
+            ],
+            [
+              "第二次",
+              "6"
+            ],
+            [
+              "第三次",
+              "5"
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}

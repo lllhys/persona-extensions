@@ -1,0 +1,49 @@
+{
+  "protocol": 1,
+  "hub": {
+    "build": 202611050000,
+    "extension_points": {
+      "computer": 1,
+      "connectors": 2,
+      "ui": 2,
+      "voice": 1
+    },
+    "role": "center",
+    "timezone": "Asia/Shanghai",
+    "capabilities": [
+      "inbox_group"
+    ]
+  },
+  "extension": {
+    "id": "example-notes",
+    "version": "1.2.0",
+    "dir": "/srv/ext/example-notes/1.2.0",
+    "data_dir": "/srv/ext/data/example-notes"
+  },
+  "plugin": {
+    "id": "example-notes",
+    "version": "1.2.0",
+    "dir": "/srv/ext/example-notes/1.2.0",
+    "data_dir": "/srv/ext/data/example-notes"
+  },
+  "config": {
+    "base_url": "https://notes.example.com",
+    "folders": [
+      "work"
+    ],
+    "include_shared": false
+  },
+  "secrets": {
+    "api_key": "example-not-a-key"
+  },
+  "granted": {
+    "network": [
+      "notes.example.com"
+    ]
+  },
+  "active": {
+    "connectors": [
+      "examplenotes"
+    ]
+  }
+}

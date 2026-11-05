@@ -1,0 +1,4 @@
+{
+  "text": "今天用了 1.2M tokens，约 ¥3.20。",
+  "view": {"sections": [{"items": [{"type": "metric", "label": "今天", "value": "1.2M", "detail": "约 ¥3.20"}]}]}
+}

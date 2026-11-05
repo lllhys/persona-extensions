@@ -1,2 +1,5 @@
 persona ed75671c
-copied by scripts/gen/sync-sdk.sh; do not edit, copy again
+copied by scripts/gen/sync-sdk.sh
+custom-contributes backport: persona 08a782c2eeed292a051623e7031f4b0c45c71210
+regenerated with the pinned generator against the original vendored schemas; not a full SDK sync
+reproduction and input SHA256: sdk/BACKPORTS.md; do not edit generated types

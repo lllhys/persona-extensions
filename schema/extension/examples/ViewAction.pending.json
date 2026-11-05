@@ -1,0 +1,10 @@
+{
+  "key": "view_example",
+  "action": "choose-b",
+  "values": {
+    "priority": "normal"
+  },
+  "client_msg_id": "example-message",
+  "status": "pending",
+  "at": "2026-11-05T00:00:00Z"
+}

@@ -1,0 +1,53 @@
+{
+  "title": "补充任务信息",
+  "fallback": "请填写任务名称、优先级和是否通知。提交后助手继续安排。不要填写密码或密钥。",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "field",
+          "key": "task-name",
+          "name": "task",
+          "label": "任务名称",
+          "kind": "text",
+          "placeholder": "例如：整理读书笔记"
+        },
+        {
+          "type": "field",
+          "key": "priority",
+          "name": "priority",
+          "label": "优先级",
+          "kind": "choice",
+          "value": "normal",
+          "choices": [
+            {
+              "value": "normal",
+              "title": "普通"
+            },
+            {
+              "value": "high",
+              "title": "高"
+            }
+          ]
+        },
+        {
+          "type": "field",
+          "key": "notify",
+          "name": "notify",
+          "label": "完成后通知",
+          "kind": "toggle",
+          "value": "true"
+        },
+        {
+          "type": "button",
+          "title": "提交",
+          "action": {
+            "id": "submit",
+            "reply": "按这些信息安排任务",
+            "submit": true
+          }
+        }
+      ]
+    }
+  ]
+}

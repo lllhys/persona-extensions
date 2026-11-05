@@ -1,0 +1,6 @@
+{
+  "widgets": [
+    {"extension": "example-gateway", "id": "today", "family": "small"},
+    {"extension": "example-gateway", "id": "today", "family": "accessory_inline"}
+  ]
+}

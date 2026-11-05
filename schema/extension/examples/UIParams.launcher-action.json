@@ -1,0 +1,17 @@
+{
+  "contribution": "panel",
+  "state": "page=2",
+  "action": "save",
+  "values": {
+    "note": "hi",
+    "auto": "true"
+  },
+  "placement": "launcher_section",
+  "size": "full",
+  "ui_version": 1,
+  "launcher": {
+    "name": "example",
+    "base_url": "https://gateway.example.com",
+    "query_id": "q-1"
+  }
+}

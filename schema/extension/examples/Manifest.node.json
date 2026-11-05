@@ -1,0 +1,20 @@
+{
+  "manifest_version": 1,
+  "id": "example-helper",
+  "name": "Example Helper",
+  "version": "1.0.0",
+  "engines": {"plugin_protocol": 1},
+  "node": {
+    "command": {"darwin-arm64": "node/helper-mac", "linux-amd64": "node/helper-linux"},
+    "machines": "computers",
+    "http": true,
+    "keep_running": "always",
+    "secrets": ["api_key"],
+    "permissions": {"network": ["api.example.com"], "files": true}
+  },
+  "contributes": {"providers": [{"id": "example-ai", "name": "Example AI", "kind": "api", "api": "responses",
+    "base_url": "https://api.example.com/v1", "models": [{"id": "example-large"}]}]},
+  "configuration": {"type": "object", "properties": {"computers": {"type": "array", "title": "在哪些电脑上运行",
+    "items": {"type": "string", "format": "machine", "x-os": ["darwin", "linux"]}}}},
+  "secrets": [{"name": "api_key", "title": "API Key"}]
+}

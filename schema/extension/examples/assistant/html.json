@@ -1,0 +1,17 @@
+{
+  "title": "交互说明",
+  "fallback": "这是助手画的交互说明。点展开可查看细节；点继续会先在 App 中确认，再发回本对话。",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "html",
+          "key": "guide",
+          "title": "交互说明",
+          "height": 320,
+          "html": "<!doctype html><html lang=\"zh-CN\"><meta charset=\"utf-8\"><title>交互说明</title><main><h2>把细节展开看看</h2><details><summary>查看说明</summary><p>这个页面不能访问网络或读取 App 凭据。</p></details><button type=\"button\" onclick=\"persona.reply('继续讨论这个方案')\">继续讨论</button></main></html>"
+        }
+      ]
+    }
+  ]
+}

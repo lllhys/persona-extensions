@@ -1,0 +1,64 @@
+{
+  "card": {
+    "type": "line",
+    "title": "近 7 天睡眠",
+    "unit": "小时",
+    "value": 7.2,
+    "note": "平均 6.9 小时",
+    "points": [
+      {
+        "label": "周一",
+        "value": 6.5
+      },
+      {
+        "label": "周二",
+        "value": 7.2
+      },
+      {
+        "label": "周三",
+        "value": 6.9
+      }
+    ]
+  },
+  "view": {
+    "sections": [
+      {
+        "title": "近 7 天睡眠",
+        "items": [
+          {
+            "type": "metric",
+            "label": "当前",
+            "value": "7.2 小时"
+          },
+          {
+            "type": "chart",
+            "detail": "平均 6.9 小时",
+            "kind": "line",
+            "series": [
+              {
+                "points": [
+                  {
+                    "label": "周一",
+                    "value": 6.5,
+                    "display": "6.5 小时"
+                  },
+                  {
+                    "label": "周二",
+                    "value": 7.2,
+                    "display": "7.2 小时"
+                  },
+                  {
+                    "label": "周三",
+                    "value": 6.9,
+                    "display": "6.9 小时"
+                  }
+                ]
+              }
+            ],
+            "unit": "小时"
+          }
+        ]
+      }
+    ]
+  }
+}

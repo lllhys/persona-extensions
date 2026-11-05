@@ -1,0 +1,12 @@
+{
+  "protocol": 1,
+  "id": "example-notes",
+  "version": "1.2.0",
+  "contributes": {
+    "connectors": [
+      {
+        "id": "examplenotes"
+      }
+    ]
+  }
+}

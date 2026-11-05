@@ -1,0 +1,17 @@
+{
+  "manifest_version": 1,
+  "id": "example-pack",
+  "name": "Example Pack",
+  "version": "1.0.0",
+  "description": "笔记和它的模型供应商，一次装好。",
+  "extension_pack": [
+    {
+      "id": "example-notes"
+    },
+    {
+      "id": "example-models",
+      "market": "github:example/persona-extensions",
+      "version": ">=1.0.0"
+    }
+  ]
+}

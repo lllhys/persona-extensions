@@ -1,0 +1,19 @@
+{
+  "card": {
+    "type": "stat",
+    "value": 7.25
+  },
+  "view": {
+    "sections": [
+      {
+        "items": [
+          {
+            "type": "metric",
+            "label": "数值",
+            "value": "7.3"
+          }
+        ]
+      }
+    ]
+  }
+}

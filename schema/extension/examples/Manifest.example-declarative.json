@@ -1,0 +1,48 @@
+{
+  "manifest_version": 1,
+  "id": "example-kit",
+  "name": "Example Kit",
+  "version": "1.0.0",
+  "description": "只有声明：一个技能、一段助手说明、两条快捷提示、一个主题色和一份分拣规则模板。",
+  "contributes": {
+    "skills": [
+      {
+        "id": "weekly-review",
+        "dir": "skills/weekly-review"
+      }
+    ],
+    "prompts": [
+      {
+        "id": "tone",
+        "kind": "instructions",
+        "file": "assistant/tone.md"
+      },
+      {
+        "id": "summarize-today",
+        "kind": "quick",
+        "title": "今天做了什么",
+        "text": "把我今天在各台电脑上做的事按项目整理成几行。"
+      }
+    ],
+    "themes": [
+      {
+        "id": "forest",
+        "name": "森林",
+        "light": {
+          "accent": "#2E7D32",
+          "positive": "#1B5E20"
+        },
+        "dark": {
+          "accent": "#81C784"
+        }
+      }
+    ],
+    "triage_templates": [
+      {
+        "id": "quiet-groups",
+        "title": "大群只看提到我的",
+        "text": "群聊里只有提到我、或者需要我决定的消息算要处理；其余的大群消息算知道就行。"
+      }
+    ]
+  }
+}

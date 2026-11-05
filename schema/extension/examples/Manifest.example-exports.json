@@ -1,0 +1,49 @@
+{
+  "manifest_version": 1,
+  "id": "example-search",
+  "name": "Example Search",
+  "version": "2.1.0",
+  "engines": {
+    "extension_protocol": 1
+  },
+  "runtime": {
+    "command": "bin/example-search"
+  },
+  "activation_events": [
+    "on_startup"
+  ],
+  "depends": [
+    {
+      "id": "example-notes",
+      "version": ">=1.2.0 <2.0.0"
+    }
+  ],
+  "exports": {
+    "extension_points": [
+      {
+        "id": "sources",
+        "version": 1,
+        "description": "一个可以搜索的来源",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "title": {"type": "string", "title": "名字"},
+            "url": {"type": "string", "format": "uri"}
+          },
+          "required": ["id", "title"]
+        }
+      }
+    ]
+  },
+  "contributes": {
+    "ui": [
+      {
+        "id": "search",
+        "title": "搜索",
+        "placement": "nav_page",
+        "icon": "search"
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "card": {
+    "type": "stacked_bar",
+    "segments": [
+      {
+        "label": "收入",
+        "value": 100
+      },
+      {
+        "label": "支出",
+        "value": -20
+      }
+    ]
+  },
+  "view": null
+}
