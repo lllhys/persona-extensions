@@ -8,15 +8,23 @@ import (
 	"time"
 )
 
-// SocketEnv names the unix socket a plugin with runtime.http serves its HTTP on.
+// SocketEnv names the unix socket, under the name a hub sent it with before the rename (#1844).
 const SocketEnv = "PERSONA_PLUGIN_SOCKET"
 
-// Socket is where the hub wants the plugin's HTTP ("" when the manifest asks for none).
+// socketEnvNames is the socket's name under each hub generation, newest first: a current hub sends
+// PERSONA_EXTENSION_SOCKET (as sdk/go/ext's Env reads it), older ones PERSONA_PLUGIN_SOCKET, and Persona's
+// JARVIS_PLUGIN_SOCKET.
+var socketEnvNames = [3]string{"PERSONA_EXTENSION_SOCKET", SocketEnv, "JARVIS_PLUGIN_SOCKET"}
+
+// Socket is where the hub wants the plugin's HTTP ("" when the manifest asks for none). It reads the name under
+// whichever of the hub generations started the plugin, the current one first.
 func Socket() string {
-	if s := os.Getenv(SocketEnv); s != "" {
-		return s
+	for _, name := range socketEnvNames {
+		if s := os.Getenv(name); s != "" {
+			return s
+		}
 	}
-	return os.Getenv("JARVIS_PLUGIN_SOCKET")
+	return ""
 }
 
 // ServeHTTP serves h on the unix socket path until ctx ends (a stale socket file from a crash is replaced).
