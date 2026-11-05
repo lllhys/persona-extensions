@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -51,10 +52,31 @@ type cliArgs struct {
 	UpTo       int    `json:"up_to"`
 }
 
+// argNames are cliArgs' fields as the arguments name them.
+var argNames = func() map[string]bool {
+	t := reflect.TypeFor[cliArgs]()
+	out := make(map[string]bool, t.NumField())
+	for i := range t.NumField() {
+		out[t.Field(i).Tag.Get("json")] = true
+	}
+	return out
+}()
+
 func parseArgs(args json.RawMessage) (cliArgs, error) {
 	var a cliArgs
 	if len(args) == 0 {
 		return a, nil
+	}
+	// encoding/json fills a field from a key in any case ("Chat", "CHAT"), but connector_gate's rules look a
+	// field up by its exact name, so a key that is not one of cliArgs' names as written is refused.
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(args, &keys); err != nil {
+		return a, fmt.Errorf("arguments: %w", err)
+	}
+	for k := range keys {
+		if !argNames[k] {
+			return a, fmt.Errorf("arguments: unknown field %q", k)
+		}
 	}
 	dec := json.NewDecoder(strings.NewReader(string(args)))
 	dec.DisallowUnknownFields()

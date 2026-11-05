@@ -252,6 +252,20 @@ func TestCLIWriteNamesTheChatTheGateSees(t *testing.T) {
 			t.Errorf("forward to %q went through a rule that denies c2: %+v", chat, res)
 		}
 	}
+	// The gate looks a field up by its exact name; encoding/json would fill it from "Chat" or "TO" too.
+	for _, args := range []string{
+		`{"Chat":"c2","id":12,"emoji":"👍"}`,
+		`{"chat":"u1","CHAT":"c2","id":12,"emoji":"👍"}`,
+		`{"chat":"u1","ids":[11],"To":"c2"}`,
+	} {
+		name := "telegram_react"
+		if strings.Contains(args, "ids") {
+			name = "telegram_forward"
+		}
+		if res := r.Call(ctx, name, json.RawMessage(args), yes); !res.IsError {
+			t.Errorf("%s %s went through a rule that denies c2: %+v", name, args, res)
+		}
+	}
 	if got := f.written(); len(got) != 0 {
 		t.Fatalf("a denied write reached Telegram: %q", got)
 	}
