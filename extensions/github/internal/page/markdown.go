@@ -18,26 +18,26 @@ import (
 // (nwverse/persona#2951) these are what older apps get.
 
 var (
-	mdFenced    = regexp.MustCompile("(?s)(```|~~~).*?(```|~~~|$)|`[^`\n]*`")
-	mdImg       = regexp.MustCompile(`!\[([^\]]*)\]\(\s*<?([^)\s>]*)>?(?:\s+"[^"]*")?\s*\)`)
-	mdLinkFull  = regexp.MustCompile(`\[([^\]]*)\]\(\s*<?([^)\s>]*)>?(?:\s+"[^"]*")?\s*\)`)
-	mdRefDef    = regexp.MustCompile(`(?m)^ {0,3}\[([^\]\n]+)\]:\s*<?(\S+?)>?(?:\s+.*)?$`)
-	mdRefUse    = regexp.MustCompile(`\[([^\]\n]+)\]\[([^\]\n]*)\]`)
-	mdRefImg    = regexp.MustCompile(`!\[([^\]\n]*)\]\[[^\]\n]*\]`)
-	mdAuto      = regexp.MustCompile(`<([A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*)>`)
-	htmlLink    = regexp.MustCompile(`(?is)<a\s[^>]*href\s*=\s*["']([^"']*)["'][^>]*>(.*?)</a>`)
-	htmlImg     = regexp.MustCompile(`(?is)<img\s[^>]*>`)
-	htmlAlt     = regexp.MustCompile(`(?is)\balt\s*=\s*["']([^"']*)["']`)
-	htmlBreak   = regexp.MustCompile(`(?i)<br\s*/?>|</?p(\s[^>]*)?>|</?div(\s[^>]*)?>`)
-	htmlTag     = regexp.MustCompile(`</?[A-Za-z][A-Za-z0-9-]*(\s[^<>]*)?/?>`)
-	htmlComment = regexp.MustCompile(`(?s)<!--.*?-->`)
-	blankLines  = regexp.MustCompile(`\n{3,}`)
+	mdFenced   = regexp.MustCompile("(?s)(```|~~~).*?(```|~~~|$)|`[^`\n]*`")
+	mdImg      = regexp.MustCompile(`!\[([^\]]*)\]\(\s*<?([^)\s>]*)>?(?:\s+"[^"]*")?\s*\)`)
+	mdLinkFull = regexp.MustCompile(`\[([^\]]*)\]\(\s*<?([^)\s>]*)>?(?:\s+"[^"]*")?\s*\)`)
+	mdRefDef   = regexp.MustCompile(`(?m)^ {0,3}\[([^\]\n]+)\]:\s*<?(\S+?)>?(?:\s+.*)?$`)
+	mdRefUse   = regexp.MustCompile(`\[([^\]\n]+)\]\[([^\]\n]*)\]`)
+	mdRefImg   = regexp.MustCompile(`!\[([^\]\n]*)\]\[[^\]\n]*\]`)
+	mdAuto     = regexp.MustCompile(`<([A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*)>`)
+	htmlLink   = regexp.MustCompile(`(?is)<a\s[^>]*href\s*=\s*["']([^"']*)["'][^>]*>(.*?)</a>`)
+	htmlImg    = regexp.MustCompile(`(?is)<img\s[^>]*>`)
+	htmlAlt    = regexp.MustCompile(`(?is)\balt\s*=\s*["']([^"']*)["']`)
+	htmlBreak  = regexp.MustCompile(`(?i)<br\s*/?>|</?p(\s[^>]*)?>|</?div(\s[^>]*)?>`)
+	htmlTag    = regexp.MustCompile(`</?[A-Za-z][A-Za-z0-9-]*(\s[^<>]*)?/?>`)
+	blankLines = regexp.MustCompile(`\n{3,}`)
 )
 
 // cleanMarkdown holds text to the hub's Markdown: images become a link to them (or their words), relative links
 // resolve against base (a directory's https URL; "" drops them to their words), links that are not https keep only
 // their words, reference links become inline ones, HTML is taken out. Code is left as it is.
 func cleanMarkdown(text, base string) string {
+	text = dropComments(text)
 	defs := map[string]string{}
 	for _, m := range mdRefDef.FindAllStringSubmatch(text, -1) {
 		defs[strings.ToLower(m[1])] = m[2]
@@ -53,8 +53,47 @@ func cleanMarkdown(text, base string) string {
 	return strings.TrimSpace(blankLines.ReplaceAllString(out.String(), "\n\n"))
 }
 
+// dropComments takes out HTML comments outside code (GitHub shows none of them; templates leave them, code blocks in
+// them too). An unclosed one runs to the end, as GitHub draws it.
+func dropComments(text string) string {
+	var out strings.Builder
+	for {
+		i := strings.Index(text, "<!--")
+		if i < 0 {
+			out.WriteString(text)
+			return out.String()
+		}
+		if inCode(text[:i]) { // the <!-- is code: keep it, go on after it
+			out.WriteString(text[:i+4])
+			text = text[i+4:]
+			continue
+		}
+		out.WriteString(text[:i])
+		j := strings.Index(text[i:], "-->")
+		if j < 0 {
+			return out.String()
+		}
+		text = text[i+j+3:]
+	}
+}
+
+// inCode says whether the end of before is inside a fenced block or an inline code span.
+func inCode(before string) bool {
+	fences := 0
+	for _, line := range strings.Split(before, "\n") {
+		t := strings.TrimLeft(line, " ")
+		if strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~") {
+			fences++
+		}
+	}
+	if fences%2 == 1 {
+		return true
+	}
+	last := before[strings.LastIndex(before, "\n")+1:]
+	return strings.Count(last, "`")%2 == 1
+}
+
 func cleanProse(s, base string, defs map[string]string) string {
-	s = htmlComment.ReplaceAllString(s, "")
 	s = mdRefDef.ReplaceAllString(s, "")
 	s = htmlLink.ReplaceAllStringFunc(s, func(m string) string {
 		g := htmlLink.FindStringSubmatch(m)

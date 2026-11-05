@@ -365,6 +365,10 @@ func TestCleanMarkdown(t *testing.T) {
 		{"[top](#install)", "https://github.com/o/r/blob/main/", "top"},
 		{"[x](http://insecure.example)", "", "x"},
 		{"a <!-- hidden --> b", "", "a  b"},
+		{"<!--\n Thanks!\n-->\n<!--\n```\n%h\n```\n-->\n\nReal **words**", "", "Real **words**"},
+		{"```html\n<!-- kept -->\n```", "", "```html\n<!-- kept -->\n```"},
+		{"use `<!--` to start", "", "use `<!--` to start"},
+		{"before <!-- never closed", "", "before"},
 		{"`[x](javascript:y)`", "", "`[x](javascript:y)`"},
 	} {
 		got := cleanMarkdown(tc.in, tc.base)
