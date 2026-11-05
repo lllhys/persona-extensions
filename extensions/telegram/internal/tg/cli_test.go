@@ -333,3 +333,59 @@ func TestCLIWriteDuringAFloodWait(t *testing.T) {
 		t.Fatalf("a read during a flood wait: %v", err)
 	}
 }
+
+// A watcher that runs for a long time searches again and again, each search listing peers the process had not seen:
+// the seen map is capped like the sibling caches (thread.go) instead of growing for the process's lifetime. The
+// conversations a read just listed still resolve as a write's target, by id and by @username; an evicted one is
+// asked to be found again. Re-listing a conversation updates it in place, so the recent de-dup is intact.
+func TestCLISeenMapIsCapped(t *testing.T) {
+	c := &Conn{}
+	const batch = searchMost // a search page is the read that keeps introducing fresh peers
+	id := int64(1)
+	rememberPage := func() dialog {
+		ds := make([]dialog, batch)
+		for i := range ds {
+			ds[i] = dialog{Peer: peer{Kind: 'u', ID: id}, Name: "示例用户", Kind: "dm"}
+			id++
+		}
+		c.remember(ds)
+		return ds[batch-1]
+	}
+	var fresh dialog
+	for range locsMost/batch + 2 { // more than locsMost distinct peers across the run
+		fresh = rememberPage()
+	}
+	if got := len(c.box.seen); got > locsMost+batch { // past the cap the map resets, leaving at most the page in hand
+		t.Fatalf("the seen map grew to %d entries, want it capped at about %d", got, locsMost)
+	}
+	if _, err := c.target(fresh.Peer.key()); err != nil {
+		t.Fatalf("a conversation a read just listed no longer resolves: %v", err)
+	}
+	fresh.Username = "fresh_one"
+	c.remember([]dialog{fresh})
+	if _, err := c.target("@fresh_one"); err != nil {
+		t.Fatalf("the freshly listed @username no longer resolves: %v", err)
+	}
+	if _, err := c.target("u1"); err == nil { // evicted many pages ago
+		t.Fatal("an evicted conversation still resolved")
+	}
+	filled := len(c.box.seen)
+	c.remember([]dialog{{Peer: fresh.Peer, Name: "示例用户改名", Username: "fresh_one", Kind: "dm"}})
+	if len(c.box.seen) != filled {
+		t.Fatalf("re-listing a known conversation grew the map from %d to %d", filled, len(c.box.seen))
+	}
+	if d, err := c.target(fresh.Peer.key()); err != nil || d.Name != "示例用户改名" {
+		t.Fatalf("re-listing did not update the conversation in place: %+v %v", d, err)
+	}
+	// Bots, Saved Messages and broadcast channels are never a write's target, even straight from a read.
+	c.remember([]dialog{
+		{Peer: peer{Kind: 'u', ID: 901}, Name: "机器人", Kind: "dm", Bot: true},
+		{Peer: peer{Kind: 'u', ID: 902}, Name: "我", Kind: "dm", Self: true},
+		{Peer: peer{Kind: 'c', ID: 903}, Name: "频道", Kind: "group", Broadcast: true},
+	})
+	for _, chat := range []string{"u901", "u902", "c903"} {
+		if _, err := c.target(chat); err == nil {
+			t.Errorf("%s was kept though its kind is never written to", chat)
+		}
+	}
+}

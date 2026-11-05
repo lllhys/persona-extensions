@@ -348,11 +348,15 @@ func (c *Conn) cliCall(ctx context.Context, cl client, name string, args json.Ra
 	return "", fmt.Errorf("unknown tool %s", name)
 }
 
-// remember keeps conversations the CLI's reads listed, for its writes to name (target).
+// remember keeps conversations the CLI's reads listed, for its writes to name (target). Like the page caches
+// (thread.go's keepLoc), the map resets once it is past locsMost before the batch in hand is inserted: in a
+// long-lived process repeated searches would otherwise add new peers forever, each a full dialog. The reset
+// leaves at most one read page above the cap, and what the read just listed still resolves; an evicted
+// conversation degrades into target's "find it with tg chats/search" refusal.
 func (c *Conn) remember(ds []dialog) {
 	c.box.mu.Lock()
 	defer c.box.mu.Unlock()
-	if c.box.seen == nil {
+	if c.box.seen == nil || len(c.box.seen) > locsMost {
 		c.box.seen = map[string]dialog{}
 	}
 	for _, d := range ds {
