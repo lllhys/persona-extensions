@@ -3,8 +3,11 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -253,5 +256,126 @@ func TestThreadReadsAgainAfterAComment(t *testing.T) {
 	if hits["/repos/example-org/example-repo/issues/12/comments"] != 2 || hits["/repos/example-org/example-repo/pulls/12/reviews"] != 2 ||
 		hits["/repos/example-org/example-repo/issues/7/comments"] != 1 {
 		t.Fatalf("hits %v", hits)
+	}
+}
+
+// fakeLongIssue is GitHub's REST API for one made-up issue (example-org/example-repo#12) with n comments, paged 100 at
+// a time oldest first with GitHub's Link header (next, last) and ETags (a 304 without Link); it records the comment
+// pages asked for. Setting *more adds comments.
+func fakeLongIssue(t *testing.T, n int) (c *Connector, pages *[]int, more *int) {
+	pages, more = &[]int{}, new(int)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/user":
+			_, _ = w.Write([]byte(`{"login":"alice"}`))
+		case "/repos/example-org/example-repo/issues/12":
+			_, _ = w.Write([]byte(`{"title":"A long discussion","state":"open","user":{"login":"bob"},
+				"html_url":"https://github.com/example-org/example-repo/issues/12","created_at":"2026-01-01T00:00:00Z"}`))
+		case "/repos/example-org/example-repo/issues/12/events":
+			_, _ = w.Write([]byte(`[]`))
+		case "/repos/example-org/example-repo/issues/12/comments":
+			n := n + *more
+			page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			*pages = append(*pages, page)
+			tag := fmt.Sprintf(`"comments-%d-%d"`, page, min(max(n-(page-1)*100, 0), 100)) // a full page's stays
+			if r.Header.Get("If-None-Match") == tag {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+			last := max(1, (n+99)/100)
+			link := func(p int, rel string) string {
+				return fmt.Sprintf(`<%s%s?per_page=100&page=%d>; rel="%s"`, "https://api.github.com", r.URL.Path, p, rel)
+			}
+			var links []string
+			if page < last {
+				links = append(links, link(page+1, "next"), link(last, "last"))
+			}
+			if page > 1 {
+				links = append(links, link(1, "first"), link(page-1, "prev"))
+			}
+			if len(links) > 0 {
+				w.Header().Set("Link", strings.Join(links, ", "))
+			}
+			var out []map[string]any
+			for i := (page-1)*100 + 1; i <= min(page*100, n); i++ {
+				at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(i) * time.Minute)
+				out = append(out, map[string]any{"id": i, "user": map[string]any{"login": "bob"}, "body": fmt.Sprintf("comment %d", i),
+					"created_at": at, "updated_at": at})
+			}
+			if out == nil {
+				out = []map[string]any{}
+			}
+			w.Header().Set("ETag", tag)
+			_ = json.NewEncoder(w).Encode(out)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"Not Found"}`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	c = New(Config{Auth: AuthConfig{FromMachine: "mac"}}, "Mac", (&machine{tokens: []string{oldToken}}).fetch)
+	c.api = srv.URL
+	c.check(context.Background())
+	return c, pages, more
+}
+
+// GitHub lists a thread's comments oldest first: a thread with more than 500 shows its newest 500, read back from the
+// last page that page 1's Link header names; also when GitHub answers 304 for every page the next time, and when the
+// thread has grown past that last page while page 1, unchanged, answers 304.
+func TestThreadShowsTheNewestComments(t *testing.T) {
+	c, pages, more := fakeLongIssue(t, 650)
+	ctx := context.Background()
+	for _, round := range []struct {
+		more           int
+		newest, oldest string
+		pages          []int
+	}{
+		{0, "c650", "c151", []int{1, 7, 6, 5, 4, 3, 2}},
+		{0, "c650", "c151", []int{1, 7, 6, 5, 4, 3, 2}},  // every page 304
+		{70, "c720", "c221", []int{1, 7, 8, 6, 5, 4, 3}}, // page 1 304, still naming page 7 as the last
+	} {
+		*pages, *more = nil, round.more
+		var ids []string
+		for before := ""; ; {
+			page, err := c.Thread(ctx, "example-org/example-repo#12", before, connector.ThreadMost)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, m := range slices.Backward(page.Messages) {
+				if strings.HasPrefix(m.ID, "c") {
+					ids = append(ids, m.ID)
+				}
+			}
+			if page.Before == "" {
+				break
+			}
+			before = page.Before
+		}
+		if len(ids) != 500 || ids[0] != round.newest || ids[len(ids)-1] != round.oldest {
+			t.Fatalf("%+v: %d comments, newest %s, oldest %s; want the newest 500", round, len(ids), ids[0], ids[len(ids)-1])
+		}
+		if !slices.Equal(*pages, round.pages) {
+			t.Fatalf("%+v: comment pages asked for %v", round, *pages)
+		}
+		c.etags.mu.Lock()
+		for _, e := range c.etags.m {
+			e.at = time.Time{} // not fresh: the next round asks again, and GitHub answers 304 for what has not changed
+		}
+		c.etags.mu.Unlock()
+	}
+}
+
+// A thread of 500 comments or fewer is read from page 1 on, as many pages as it has.
+func TestThreadOfAFewHundredComments(t *testing.T) {
+	c, pages, _ := fakeLongIssue(t, 250)
+	page, err := c.Thread(context.Background(), "example-org/example-repo#12", "", 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newest := page.Messages[len(page.Messages)-1].ID; newest != "c250" {
+		t.Fatalf("the newest message is %s, want c250", newest)
+	}
+	if !slices.Equal(*pages, []int{1, 2, 3}) {
+		t.Fatalf("comment pages asked for %v", *pages)
 	}
 }

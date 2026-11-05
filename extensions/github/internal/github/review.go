@@ -99,7 +99,7 @@ func (c *Connector) Conversations(ctx context.Context, repo string, number int) 
 		Side     string `json:"side"`
 		CommitID string `json:"commit_id"`
 	}
-	lines, err := cachedList[raw](c, ctx, fmt.Sprintf("/repos/%s/pulls/%d/comments", repo, number))
+	lines, err := cachedListFirst[raw](c, ctx, fmt.Sprintf("/repos/%s/pulls/%d/comments", repo, number))
 	if err != nil {
 		return nil, err
 	}

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -25,7 +26,7 @@ import (
 // 304 for what has not changed, which costs nothing of the hour's requests.
 
 const (
-	threadListPages = 5                // pages of 100 read per list: a thread's newest 500 comments, reviews, events
+	threadListPages = 5                // pages of 100 kept per list: a thread's newest 500 comments, reviews, events
 	threadFresh     = 15 * time.Second // a list read this recently is not asked again (the next page of the same thread)
 	etagKeep        = 400              // answers kept for If-None-Match
 	hunkLines       = 6                // lines of the diff shown above a comment on a line
@@ -48,6 +49,7 @@ type etagCache struct {
 type etagEntry struct {
 	etag string
 	body []byte
+	link string    // the answer's Link header: a 304 and a fresh copy still say where the list's last page is
 	at   time.Time // read (or confirmed by a 304)
 	used time.Time
 }
@@ -55,6 +57,12 @@ type etagEntry struct {
 // cachedGet reads path into out like Get, asking with If-None-Match for what it read before and not asking at all
 // within threadFresh.
 func (c *Connector) cachedGet(ctx context.Context, path string, out any) error {
+	_, err := c.cachedGetLink(ctx, path, out)
+	return err
+}
+
+// cachedGetLink is cachedGet that also answers the Link header of the answer it used.
+func (c *Connector) cachedGetLink(ctx context.Context, path string, out any) (string, error) {
 	e := &c.etags
 	e.mu.Lock()
 	if e.m == nil {
@@ -65,9 +73,9 @@ func (c *Connector) cachedGet(ctx context.Context, path string, out any) error {
 	if old != nil {
 		old.used = time.Now()
 		if time.Since(old.at) < threadFresh {
-			body := old.body
+			body, link := old.body, old.link
 			e.mu.Unlock()
-			return decodeBody(path, body, out)
+			return link, decodeBody(path, body, out)
 		}
 		hdr = http.Header{"If-None-Match": {old.etag}}
 	}
@@ -75,14 +83,18 @@ func (c *Connector) cachedGet(ctx context.Context, path string, out any) error {
 	var body []byte
 	code, h, err := c.request(ctx, http.MethodGet, path, hdr, nil, &body)
 	if err != nil {
-		return err
+		return "", err
 	}
+	link := h.Get("Link")
 	e.mu.Lock()
 	if code == http.StatusNotModified && old != nil {
 		old.at = time.Now()
-		body = old.body
+		if link == "" { // a 304 may still say the list has grown: page 1's body is the same, its last page is not
+			link = old.link
+		}
+		body, old.link = old.body, link
 	} else if tag := h.Get("ETag"); tag != "" {
-		e.m[path] = &etagEntry{etag: tag, body: body, at: time.Now(), used: time.Now()}
+		e.m[path] = &etagEntry{etag: tag, body: body, link: link, at: time.Now(), used: time.Now()}
 		if len(e.m) > etagKeep {
 			oldest := ""
 			for k, v := range e.m {
@@ -94,7 +106,7 @@ func (c *Connector) cachedGet(ctx context.Context, path string, out any) error {
 		}
 	}
 	e.mu.Unlock()
-	return decodeBody(path, body, out)
+	return link, decodeBody(path, body, out)
 }
 
 // forget drops what is kept for repo's PR / issue number: a comment was just posted, the page reads it again.
@@ -118,16 +130,62 @@ func decodeBody(path string, body []byte, out any) error {
 	return nil
 }
 
-// cachedList reads up to threadListPages pages of a list of 100.
+// cachedList reads the newest threadListPages*100 items of a list GitHub pages 100 at a time, oldest first (a
+// thread's comments, events, reviews). Page 1 says in its Link header which page is the last: a longer list is read
+// back from there. A list of threadListPages pages or fewer costs what reading it from the start does.
 func cachedList[T any](c *Connector, ctx context.Context, path string) ([]T, error) {
-	var all []T
+	return readList[T](c, ctx, path, true)
+}
+
+// cachedListFirst reads the first threadListPages*100 items of such a list: the review page's comments on lines,
+// whose replies need the first comment of their conversation (GitHub answers no reply to a reply).
+func cachedListFirst[T any](c *Connector, ctx context.Context, path string) ([]T, error) {
+	return readList[T](c, ctx, path, false)
+}
+
+func readList[T any](c *Connector, ctx context.Context, path string, newest bool) ([]T, error) {
 	sep := "?"
 	if strings.Contains(path, "?") {
 		sep = "&"
 	}
-	for page := 1; page <= threadListPages; page++ {
+	read := func(page int) ([]T, string, error) {
 		var batch []T
-		if err := c.cachedGet(ctx, fmt.Sprintf("%s%sper_page=100&page=%d", path, sep, page), &batch); err != nil {
+		link, err := c.cachedGetLink(ctx, fmt.Sprintf("%s%sper_page=100&page=%d", path, sep, page), &batch)
+		return batch, link, err
+	}
+	all, link, err := read(1)
+	if err != nil || len(all) < 100 {
+		return all, err
+	}
+	if last := lastPage(link); newest && last > threadListPages {
+		// From the last page on while the pages are full (page 1 kept from before may name a last page the list has
+		// grown past), then back from the one before it.
+		var tail []T
+		for page := last; page < last+threadListPages; page++ {
+			batch, _, err := read(page)
+			if err != nil {
+				return nil, err
+			}
+			tail = append(tail, batch...)
+			if len(batch) < 100 {
+				break
+			}
+		}
+		for page := last - 1; page > 1 && len(tail) < threadListPages*100; page-- {
+			batch, _, err := read(page)
+			if err != nil {
+				return nil, err
+			}
+			tail = append(batch, tail...)
+		}
+		if len(tail) < threadListPages*100 { // read back to page 2: page 1 belongs too
+			tail = append(all, tail...)
+		}
+		return tail[max(0, len(tail)-threadListPages*100):], nil
+	}
+	for page := 2; page <= threadListPages; page++ {
+		batch, _, err := read(page)
+		if err != nil {
 			return nil, err
 		}
 		all = append(all, batch...)
@@ -136,6 +194,22 @@ func cachedList[T any](c *Connector, ctx context.Context, path string) ([]T, err
 		}
 	}
 	return all, nil
+}
+
+var linkLast = regexp.MustCompile(`<([^>]+)>;\s*rel="last"`)
+
+// lastPage is the page number of the last page a list answer's Link header names (0 when it names none).
+func lastPage(link string) int {
+	m := linkLast.FindStringSubmatch(link)
+	if m == nil {
+		return 0
+	}
+	u, err := url.Parse(m[1])
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(u.Query().Get("page"))
+	return n
 }
 
 type person struct {
