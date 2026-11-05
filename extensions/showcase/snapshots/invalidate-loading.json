@@ -1,0 +1,26 @@
+{
+  "title": "invalidate",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "text",
+          "text": "点「要数据」：扩展先回加载中，3 秒后发 ui.invalidate，正在显示这一页的 App 自己重画，不用下拉刷新。",
+          "style": "secondary"
+        },
+        {
+          "type": "loading",
+          "title": "数据在路上"
+        },
+        {
+          "type": "button",
+          "title": "要数据",
+          "action": {
+            "id": "ask"
+          }
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"invalidate\"}"
+}

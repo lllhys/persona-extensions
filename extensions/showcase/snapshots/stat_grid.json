@@ -1,0 +1,180 @@
+{
+  "title": "并排的数",
+  "sections": [
+    {
+      "title": "1 个",
+      "items": [
+        {
+          "type": "stat_grid",
+          "stats": [
+            {
+              "label": "今天",
+              "value": "1.2M",
+              "detail": "+12% 比昨天",
+              "tone": "caution"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "2 个",
+      "items": [
+        {
+          "type": "stat_grid",
+          "stats": [
+            {
+              "label": "今天",
+              "value": "1.2M",
+              "detail": "+12% 比昨天",
+              "tone": "caution"
+            },
+            {
+              "label": "近 7 天",
+              "value": "8.4M"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "3 个",
+      "items": [
+        {
+          "type": "stat_grid",
+          "stats": [
+            {
+              "label": "今天",
+              "value": "1.2M",
+              "detail": "+12% 比昨天",
+              "tone": "caution"
+            },
+            {
+              "label": "近 7 天",
+              "value": "8.4M"
+            },
+            {
+              "label": "费用",
+              "value": "¥36.20",
+              "detail": "预算内",
+              "tone": "positive"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "4 个",
+      "items": [
+        {
+          "type": "stat_grid",
+          "stats": [
+            {
+              "label": "今天",
+              "value": "1.2M",
+              "detail": "+12% 比昨天",
+              "tone": "caution"
+            },
+            {
+              "label": "近 7 天",
+              "value": "8.4M"
+            },
+            {
+              "label": "费用",
+              "value": "¥36.20",
+              "detail": "预算内",
+              "tone": "positive"
+            },
+            {
+              "label": "错误",
+              "value": "3",
+              "detail": "比昨天多",
+              "tone": "danger"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "5 个",
+      "items": [
+        {
+          "type": "stat_grid",
+          "stats": [
+            {
+              "label": "今天",
+              "value": "1.2M",
+              "detail": "+12% 比昨天",
+              "tone": "caution"
+            },
+            {
+              "label": "近 7 天",
+              "value": "8.4M"
+            },
+            {
+              "label": "费用",
+              "value": "¥36.20",
+              "detail": "预算内",
+              "tone": "positive"
+            },
+            {
+              "label": "错误",
+              "value": "3",
+              "detail": "比昨天多",
+              "tone": "danger"
+            },
+            {
+              "label": "请求",
+              "value": "12,034",
+              "detail": "平稳",
+              "tone": "neutral"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "6 个",
+      "items": [
+        {
+          "type": "stat_grid",
+          "stats": [
+            {
+              "label": "今天",
+              "value": "1.2M",
+              "detail": "+12% 比昨天",
+              "tone": "caution"
+            },
+            {
+              "label": "近 7 天",
+              "value": "8.4M"
+            },
+            {
+              "label": "费用",
+              "value": "¥36.20",
+              "detail": "预算内",
+              "tone": "positive"
+            },
+            {
+              "label": "错误",
+              "value": "3",
+              "detail": "比昨天多",
+              "tone": "danger"
+            },
+            {
+              "label": "请求",
+              "value": "12,034",
+              "detail": "平稳",
+              "tone": "neutral"
+            },
+            {
+              "label": "很长的标签长长长长长长长长长长",
+              "value": "999,999,999"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"stat_grid\"}"
+}

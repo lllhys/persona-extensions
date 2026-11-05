@@ -1,0 +1,20 @@
+{
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "metric",
+          "label": "页面",
+          "value": "17",
+          "detail": "组件展示",
+          "tone": "positive"
+        },
+        {
+          "type": "progress",
+          "label": "完成",
+          "ratio": 0.72
+        }
+      ]
+    }
+  ]
+}

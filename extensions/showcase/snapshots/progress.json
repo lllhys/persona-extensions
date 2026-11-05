@@ -1,0 +1,52 @@
+{
+  "title": "进度",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "progress",
+          "label": "0",
+          "detail": "还没开始",
+          "ratio": 0
+        },
+        {
+          "type": "progress",
+          "label": "一部分",
+          "detail": "30%",
+          "ratio": 0.3
+        },
+        {
+          "type": "progress",
+          "label": "满",
+          "detail": "100%",
+          "ratio": 1
+        },
+        {
+          "type": "progress",
+          "label": "语气 neutral",
+          "tone": "neutral",
+          "ratio": 0.75
+        },
+        {
+          "type": "progress",
+          "label": "语气 positive",
+          "tone": "positive",
+          "ratio": 0.75
+        },
+        {
+          "type": "progress",
+          "label": "语气 caution",
+          "tone": "caution",
+          "ratio": 0.75
+        },
+        {
+          "type": "progress",
+          "label": "语气 danger",
+          "tone": "danger",
+          "ratio": 0.75
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"progress\"}"
+}

@@ -1,0 +1,49 @@
+{
+  "title": "数字",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "metric",
+          "label": "没有语气",
+          "value": "1,234"
+        },
+        {
+          "type": "metric",
+          "label": "语气 neutral",
+          "value": "¥36.20",
+          "detail": "比昨天 +12%",
+          "tone": "neutral"
+        },
+        {
+          "type": "metric",
+          "label": "语气 positive",
+          "value": "¥36.20",
+          "detail": "比昨天 +12%",
+          "tone": "positive"
+        },
+        {
+          "type": "metric",
+          "label": "语气 caution",
+          "value": "¥36.20",
+          "detail": "比昨天 +12%",
+          "tone": "caution"
+        },
+        {
+          "type": "metric",
+          "label": "语气 danger",
+          "value": "¥36.20",
+          "detail": "比昨天 +12%",
+          "tone": "danger"
+        },
+        {
+          "type": "metric",
+          "label": "很长的标签：长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长",
+          "value": "999999999999999999999999",
+          "detail": "这是一段很长的文字，用来看换行和截断：各端应当在一行放不下时换行，而标题、按钮这"
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"metric\"}"
+}

@@ -1,0 +1,39 @@
+{
+  "title": "示例条目 03",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "markdown",
+          "key": "note",
+          "text": "**示例条目 03**\n\n第 3 条的备注。"
+        },
+        {
+          "type": "row",
+          "key": "kind",
+          "value": "邮件",
+          "title": "种类",
+          "icon": "mail"
+        },
+        {
+          "type": "row",
+          "key": "done",
+          "value": "没有",
+          "title": "完成"
+        },
+        {
+          "type": "button",
+          "title": "编辑",
+          "action": {
+            "id": "edit:3",
+            "push": {
+              "state": "{\"p\":\"edit\",\"id\":\"3\"}",
+              "title": "编辑"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"detail\",\"id\":\"3\"}"
+}

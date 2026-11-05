@@ -2,3 +2,6 @@ dist/
 __pycache__/
 # `go build` inside an extension's directory leaves the program there under the extension's id.
 /extensions/*/linuxdo
+/extensions/*/showcase
+# personad extension test / dev build the program where the manifest says (bin/…).
+/extensions/*/bin/
