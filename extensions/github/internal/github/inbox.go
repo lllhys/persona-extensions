@@ -125,13 +125,13 @@ func (c *Connector) applyNotifications(ctx context.Context, ns []notification, n
 	}
 	unread := map[string]bool{}
 	moved := false
-	o := c.options()
+	o, f := c.options(), c.inboxFilter()
 	for _, n := range ns {
 		if o.muted(n.Repository.FullName) {
 			continue
 		}
 		kind, label := classify(n)
-		if kind == "" {
+		if kind == "" || !f.lets(n.Repository.FullName, kind) {
 			continue
 		}
 		thread := threadOf(n)

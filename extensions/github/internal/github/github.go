@@ -122,6 +122,7 @@ type Connector struct {
 
 	// Running as an extension (extension.go): the user's triage rules, and how a computer's gh login is asked for.
 	rules    string
+	filter   InboxFilter // filter.go: the repositories and kinds the inbox takes
 	hubFetch func(ctx context.Context, machine, host string) (string, error)
 }
 

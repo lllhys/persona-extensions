@@ -19,6 +19,12 @@ Switching the extension on turns on what the hub already did before (the connect
   - `ci_failed`: a failing GitHub Actions run of yours, followed up until the branch is green, merged or deleted.
 
   Each item carries a fallback tier from the connector's rules: a review request is "needs you", a bot's comment is "FYI", and a person's ordinary comment falls back to "FYI". Items therefore never wait for a triage model. Your own rules (`triage_rules`) win over the inbox's global rules. Muted repositories, which CI failures to flag and which branches to ignore are connector options. You change them in the app (Settings → Connectors → GitHub), and the hub hands them to the extension.
+
+  What comes in at all is yours to choose (nwverse/persona#3178):
+  - The connector's 进收件箱 switch turns GitHub's inbox off as a whole. It is the hub's own switch (Settings → Connectors → GitHub; web and Android also show it on the extension's page).
+  - The `inbox` settings name the repositories (only these, or all but these; `owner/*` stands for an owner's every repository) and the kinds that never come in.
+
+  A notification they leave out is passed over before anything about it is read: it makes no inbox item, so nothing is pushed for it. A change applies to what comes after it (the hub restarts the extension, which reads the notifications again). Items already in the inbox are neither removed nor changed, and the extension no longer updates them. The page and the assistant's tools still read every repository.
 - **Knowledge base.** PRs and issues you are involved in (`involves:@me`) are archived with their comments and reviews as conversations `github-<owner>-<repo>-<number>`. The first run looks back 30 days.
 - **Assistant tools.** These read without asking: `github_search`, `github_read`, `github_diff`, `github_checks`. `github_comment` and `github_review` are writes. They go through the hub's gate and are confirmed on the phone by default. Replying from an inbox item is the user's own send.
 - **Thread page.** An inbox item opens as the PR's or issue's page in the app: comments, reviews, line comments with their diff, timeline events and failed checks with the end of their logs.
@@ -73,6 +79,9 @@ Limits of declarative views:
 | Setting | Meaning |
 | --- | --- |
 | `triage_rules` | Your own rules for sorting GitHub's inbox items, in your words; empty uses the inbox's global rules. |
+| `inbox.repos` | Only these repositories come into the inbox: `owner/name` or `owner/*`, any case. Empty takes every repository. |
+| `inbox.exclude_repos` | These repositories never come in, after `inbox.repos`; same patterns. |
+| `inbox.skip_kinds` | These kinds never come in (`review_requested`, `mention`, `team_mention`, `assign`, `author`, `ci_failed`). To rank a kind lower without leaving it out, write it in `triage_rules`; to flag fewer CI failures, pick the connector's CI option. |
 | `host` | GitHub's host, `github.com` by default. GitHub Enterprise is not finished: only `github.com` works today. |
 | `proxy` | An `http://[user:pass@]host:port` proxy for everything sent to GitHub (sign-in, API, CI logs). A malformed value fails every request rather than going direct. Empty uses the environment's proxy, or goes direct. A hub that had `github.proxy` / `github.auth.host` in its own configuration moves them here when the extension takes over. |
 

@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "github",
   "name": "GitHub",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "GitHub 进 Persona：收件箱里是请你 review、@ 你、指派给你、你的 PR / issue 有了新评论或 review、CI 失败；和你有关的 PR、issue 归档进知识库；助手能搜、读 PR / issue、看改动和 CI，评论和 review 先在手机上确认。登录用你某台电脑上的 gh 登录或设备码登录，token 加密存在 hub 的数据库里。侧边栏的「GitHub」页：待你 review 的 PR、你的 PR 和 CI、指派 / 提到你的、通知和关注的动态、你的仓库（浏览代码、分支、README），PR 的改动文件、逐文件 diff 和行内评论、全部评论、CI 日志摘要，在这一页上评论、review、合并（先预览、确认后才发）。",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/github",
@@ -49,6 +49,46 @@
         "title": "分拣规则",
         "maxLength": 4000,
         "description": "GitHub的条目按什么分「需要你 / 知悉即可 / 噪音」，用你自己的话写；填了就只用它、不用收件箱的全局规则（只管GitHub）。一般不在这里改：和助手说（比如「机器人的 PR 都算噪音」），它来改。写 \\n 换行；空着用全局规则"
+      },
+      "inbox": {
+        "type": "object",
+        "title": "收件箱",
+        "description": "哪些 GitHub 通知进收件箱。改了以后只影响之后新来的：已经在收件箱里的条目不删、不改；不进收件箱的也不会推送。GitHub 页面、助手的 GitHub 工具照常能看所有仓库。整个 GitHub 都不进收件箱：关掉 GitHub 连接器的「进收件箱」（这一页上，或 设置 › 连接器 › GitHub）",
+        "properties": {
+          "repos": {
+            "type": "array",
+            "title": "只收这些仓库",
+            "description": "写 owner/name，或 owner/* 表示这个人或组织的全部仓库，不分大小写。空着收全部仓库",
+            "maxItems": 200,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[A-Za-z0-9_.*?-]+/[A-Za-z0-9_.*?-]+$", "maxLength": 200}
+          },
+          "exclude_repos": {
+            "type": "array",
+            "title": "不收这些仓库",
+            "description": "写法同上（owner/name 或 owner/*），在「只收这些仓库」之后再排除",
+            "maxItems": 200,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[A-Za-z0-9_.*?-]+/[A-Za-z0-9_.*?-]+$", "maxLength": 200}
+          },
+          "skip_kinds": {
+            "type": "array",
+            "title": "不收这些类型",
+            "description": "选中的类型不进收件箱。只想让它们排得低一点、不挡掉，写在上面的分拣规则里（比如「@ 团队的都算知悉」）；CI 失败只想少收一些（只看默认分支、只看自己的 PR），在 设置 › 连接器 › GitHub 的「CI 失败」里选",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "oneOf": [
+                {"const": "review_requested", "title": "请你 review"},
+                {"const": "mention", "title": "@我"},
+                {"const": "team_mention", "title": "@了你的团队"},
+                {"const": "assign", "title": "分配给你"},
+                {"const": "author", "title": "你的 PR / issue 有新动静"},
+                {"const": "ci_failed", "title": "CI 失败"}
+              ]
+            }
+          }
+        }
       },
       "host": {
         "type": "string",

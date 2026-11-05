@@ -17,6 +17,8 @@ type Settings struct {
 	Proxy string `json:"proxy,omitempty"`
 	// TriageRules are the user's own rules for GitHub's inbox items (pluginkit.TriageRules reads them).
 	TriageRules string `json:"triage_rules,omitempty"`
+	// Inbox: the repositories and kinds that come into the inbox (filter.go).
+	Inbox InboxFilter `json:"inbox,omitempty"`
 }
 
 // Config is the connector's configuration for s.

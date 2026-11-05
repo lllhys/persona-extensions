@@ -115,7 +115,7 @@ func (a *app) build(init serve.Init, secrets connector.Secrets) (connector.Conne
 			return nil, fmt.Errorf("config: %w", err)
 		}
 	}
-	c := github.New(s.Config(), "", nil).WithRules(pluginkit.TriageRules(init.Config))
+	c := github.New(s.Config(), "", nil).WithRules(pluginkit.TriageRules(init.Config)).WithFilter(s.Inbox)
 	c.UseSecrets(secrets)
 	if init.GhToken != nil {
 		c.UseHub(func(ctx context.Context, machine, host string) (string, error) {
