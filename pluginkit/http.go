@@ -3,7 +3,6 @@ package pluginkit
 import (
 	"context"
 	"errors"
-	"net"
 	"net/http"
 	"os"
 	"time"
@@ -23,7 +22,7 @@ func Socket() string {
 // ServeHTTP serves h on the unix socket path until ctx ends (a stale socket file from a crash is replaced).
 func ServeHTTP(ctx context.Context, path string, h http.Handler) error {
 	_ = os.Remove(path)
-	ln, err := net.Listen("unix", path)
+	ln, err := listenUnix(path)
 	if err != nil {
 		return err
 	}
