@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// The hook's entry in a Claude config directory's settings.json: one PermissionRequest group with matcher Bash and
+// The hook's entry in a Claude config directory's settings.json: one PermissionRequest group with matcher hookMatcher and
 // our hook alone in it. Hooks of every tool add up in that file, so the edit touches nothing else: other keys and
 // other hooks keep their order and values (only the layout is normalised, through a JSON encoder, in the file's
 // own indent), and our entry is told apart by the tag at the end of its command. A copy of the file is kept before
@@ -43,7 +43,7 @@ func settingsPath(dir string) string {
 // installHook puts the entry with cmd into the settings file at path (created when missing), replacing ours from
 // before; changed says whether the file was written.
 func installHook(path, cmd string) (changed bool, err error) {
-	want, err := marshalPlain(map[string]any{"matcher": "Bash", "hooks": []any{map[string]any{"type": "command", "command": cmd, "timeout": hookTimeout}}})
+	want, err := marshalPlain(map[string]any{"matcher": hookMatcher, "hooks": []any{map[string]any{"type": "command", "command": cmd, "timeout": hookTimeout}}})
 	if err != nil {
 		return false, err
 	}

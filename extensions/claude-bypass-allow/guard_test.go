@@ -1,0 +1,169 @@
+package main
+
+import (
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestPersonOnly(t *testing.T) {
+	stays := []string{
+		// deletion
+		"rm -f a/*", "cd view && rm -rf \"$t\"", "/bin/rm x", "'rm' -r d", "for d in *; do rmdir $d; done", "unlink f",
+		"shred -u key", "find . -name '*.tmp' -delete", "git clean -fdx", "git rm -r --cached x", "git branch -D topic",
+		"git tag -d v1", "git stash drop", "git stash clear", "git worktree remove ../wt", "rsync -a --delete src/ dst/",
+		"docker rm -f c1", "docker system prune -a", "kubectl delete pod p", "gh repo delete me/r --yes",
+		"gh pr merge 3 --squash --delete-branch", "gh api -X DELETE repos/o/r/git/refs/heads/x",
+		`psql -c "DROP TABLE users"`, `sqlite3 db 'delete from t'`, "x=$(rm -rf y)", "echo a | xargs rm", "sudo rm -rf /var/x",
+		// overwriting data
+		"dd if=/dev/zero of=/dev/sda", "mkfs.ext4 /dev/sdb1", "truncate -s 0 log", "git reset --hard origin/main",
+		"git checkout -- src/a.go", "git checkout -f main", "git checkout .", "git restore src/", "git switch --discard-changes x",
+		// forced push
+		"git push --force", "git push -f origin main", "git push --force-with-lease", "git -C repo push origin +main",
+		"git push origin :old", "git push --delete origin x", "git push --mirror", "cd r && git  push  -f",
+		// permission changes, local and online
+		"chmod 777 x", "chown me f", "sudo usermod -aG docker me", "setfacl -m u:x:r f", "passwd",
+		"gh secret set TOKEN < t", "gh repo edit --visibility public", "gh api -X PUT repos/o/r/collaborators/u",
+		"gh api repos/o/r/branches/main/protection -X DELETE", "gh api repos/o/r/collaborators/u -f permission=admin",
+		"gh ssh-key add k.pub", "aws iam attach-user-policy --user-name u", "gcloud projects add-iam-policy-binding p",
+		"kubectl create rolebinding rb --role=r", "az role assignment create",
+		// from the review: online visibility, global flags, cloud and SQL deletions, overwrites, nested commands
+		"gh api -X PATCH repos/o/r -f visibility=public", "gh api graphql -f query='mutation{updateRepository(x)}'",
+		"aws --profile prod iam attach-role-policy --role-name r", "az --subscription s role assignment create",
+		"aws s3api put-bucket-policy --bucket b", "psql -c 'TRUNCATE users'", "psql -c 'GRANT ALL ON t TO u'",
+		"aws s3 rm s3://b/x --recursive", "aws s3 rb s3://b --force", "aws dynamodb delete-table --table-name t",
+		"gcloud compute instances delete i", "az group delete -n g", "terraform destroy", "docker compose down -v",
+		": > data.db", "echo {} > settings.json", "mv build/out.db data/prod.db", "cp -f a b", "tee config.json",
+		"bash -c 'rm -rf x'", "sh -c \"git push --force\"", "find . -name x -exec rm {} +", "git branch -M main",
+		// from the second review
+		`git commit -m "$(rm -rf ~/data)"`, "git commit -m \"`rm -rf x`\"", "find . | xargs -t rm -f", "sudo -b rm -rf /var/lib/app",
+		"ls &> data.db", "ls 1> data.db", "aws s3 sync ./out s3://b --delete", "gh api -X PATCH repos/o/r --field=visibility=public",
+		"ssh host 'rm -rf /srv/x'", "bash <<EOF\nrm -rf x\nEOF", "psql <<SQL\nDROP TABLE t;\nSQL",
+		// third review
+		"rsync -a --del src/ dst/", "npx rimraf dist", "sed -i 's/a/b/' config.yaml", "sed --in-place=.bak s/a/b/ f",
+		"ln -sf /dev/null ~/.bash_history", "install -m 600 key ~/.ssh/id",
+	}
+	for _, c := range stays {
+		if personOnly(c) == "" {
+			t.Errorf("%q should stay with a person", c)
+		}
+	}
+	goes := []string{
+		"ls -la", "cd view && ls sub/*", "go test ./...", "git status", "git push", "git push origin feat/x",
+		"git push -u origin feat/x", "git checkout -b feat/x", "git checkout main", "git switch feat/x", "git branch -a",
+		"git reset HEAD~1", "git stash list", "git stash push -m x", "git fetch --prune", "git log --format=%H",
+		"gh pr create --title t", "gh pr merge 3 --squash", "gh api repos/o/r/pulls", "gh api repos/o/r/collaborators",
+		"gh issue create -t x -b y", "make build", "mkdir -p a/b", "cp a b", "rsync -a src/ dst/",
+		"python3 -c 'print(1)'", "curl -s https://example.com", "docker ps", "kubectl get pods", "npm run format",
+		"grep -rn armed .", "cat firmware.bin | head", "echo hello >> out.txt", "make 2>&1 | tail", "ls > /dev/null",
+		"git commit -m 'drop rm wrapper'", "git commit -m 'Fix dd parsing'", "gh pr create --title x --body 'We delete the old cache'",
+		"cd /tmp/rm && ls", "kubectl get rolebinding -A", "aws s3 ls", "terraform plan", "docker compose down",
+		"bash -c 'go test ./...'", "find . -name '*.go'",
+		"git commit -m 'Map a -> b'", "python3 -c 'print(1 if 2 > 1 else 0)'", "awk '$3 > 100' data.csv", "grep -n '<div>' index.html",
+		"cat docs/grant.md", "grep -rn truncate src/", "git mv old new", "find . -name '*.go' -exec grep -l x {} +",
+		"go build | tee /tmp/build.log", "go test > /tmp/test.log 2>&1", "cat > /tmp/x.json <<EOF\n{\"rm\": 1}\nEOF",
+		"cat <<'EOF' | python3 -\nimport os; print('rm -rf would be bad')\nEOF", "git log --format='%h > %s'", "echo ok 2>/dev/null",
+		"command -v rm", "sed -n 1,20p f", "sed 's/a/b/' f", "ln -s a b", "npx prettier --check .",
+	}
+	for _, c := range goes {
+		if why := personOnly(c); why != "" {
+			t.Errorf("%q: %s, should go through", c, why)
+		}
+	}
+}
+
+func TestHookOtherTools(t *testing.T) {
+	e := newEnv(t)
+	now := time.Now()
+	for _, c := range []struct {
+		tool  string
+		input map[string]any
+	}{
+		{"Read", map[string]any{"file_path": "/etc/hosts"}},
+		{"Glob", map[string]any{"pattern": "**/*.go", "path": "/srv"}},
+		{"Grep", map[string]any{"pattern": "TODO", "path": "/srv"}},
+		{"LS", map[string]any{"path": "/srv"}},
+		{"NotebookRead", map[string]any{"notebook_path": "/srv/a.ipynb"}},
+		{"Agent", map[string]any{"description": "look around", "prompt": "…", "subagent_type": "Explore"}},
+		{"Task", map[string]any{"description": "look around", "prompt": "…"}},
+	} {
+		req := request(e, "bypassPermissions", c.tool, "")
+		req["tool_input"] = c.input
+		if got := e.hook(t, req, now); strings.TrimSpace(got) != allowOutput {
+			t.Errorf("%s in bypass mode: %q", c.tool, got)
+		}
+		req["permission_mode"] = "auto"
+		if got := e.hook(t, req, now); got != "" {
+			t.Errorf("%s in auto mode: %q", c.tool, got)
+		}
+	}
+	got := readAudit(e.data, 1)
+	if len(got) != 1 || got[0].Tool != "Task" || got[0].Command != "Task look around" {
+		t.Errorf("audit of a non-Bash call: %+v", got)
+	}
+	read := readAudit(e.data, 7)[6]
+	if read.Tool != "Read" || read.Command != "Read /etc/hosts" {
+		t.Errorf("audit of Read: %+v", read)
+	}
+}
+
+func TestHookLeavesDestructiveBash(t *testing.T) {
+	e := newEnv(t)
+	for _, cmd := range []string{"cd view && rm -f sub/*", "git push --force", "chmod -R 777 .", "git reset --hard"} {
+		if got := e.hook(t, request(e, "bypassPermissions", "Bash", cmd), time.Now()); got != "" {
+			t.Errorf("%q: answered %q, should stay with a person", cmd, got)
+		}
+	}
+	if n := len(readAudit(e.data, 10)); n != 0 {
+		t.Errorf("%d audit entries for refusals", n)
+	}
+}
+
+func TestHookLeavesRulesForOtherTools(t *testing.T) {
+	e := newEnv(t)
+	now := time.Now()
+	writeJSON(t, e.config+"/settings.json", `{"permissions":{"ask":["Read(./secrets/**)"],"deny":["Task(Explore)"]}}`)
+	read := request(e, "bypassPermissions", "Read", "")
+	read["tool_input"] = map[string]any{"file_path": "/srv/notes.md"}
+	if got := e.hook(t, read, now); got != "" {
+		t.Errorf("an ask rule for Read: every Read stays with Claude Code, got %q", got)
+	}
+	agent := request(e, "bypassPermissions", "Agent", "")
+	agent["tool_input"] = map[string]any{"description": "x", "prompt": "y"}
+	if got := e.hook(t, agent, now); got != "" {
+		t.Errorf("a deny rule for Task covers Agent: %q", got)
+	}
+	grep := request(e, "bypassPermissions", "Grep", "")
+	grep["tool_input"] = map[string]any{"pattern": "x"}
+	if got := e.hook(t, grep, now); got != "" {
+		t.Errorf("a Read rule covers Grep too: %q", got)
+	}
+	free := newEnv(t)
+	grep["cwd"] = free.project
+	if got := free.hook(t, grep, now); got == "" {
+		t.Error("no rule is about Grep: should be allowed")
+	}
+	if got := e.hook(t, request(e, "bypassPermissions", "Bash", "ls"), now); got == "" {
+		t.Error("no rule is about Bash: should be allowed")
+	}
+}
+
+func TestMatcher(t *testing.T) {
+	if hookMatcher != "Bash|Read|Glob|Grep|LS|NotebookRead|Agent|Task" {
+		t.Errorf("matcher %q", hookMatcher)
+	}
+	for _, r := range []struct {
+		rule, tool string
+		match      bool
+	}{
+		{"Read", "Read", true}, {"Read(~/x)", "Read", true}, {"Task", "Agent", true}, {"Agent(Explore)", "Task", true},
+		{"Read(~/.ssh/**)", "Grep", true}, {"Read(~/.ssh/**)", "Glob", true}, {"Read", "LS", true},
+		{"Read", "NotebookRead", true}, {"Grep", "Read", false},
+		{"Write(./x)", "Read", false}, {"Bash(git push:*)", "Read", false}, {"mcp__x", "Agent", false},
+	} {
+		got := matchingRule([]string{r.rule}, r.tool, "") != ""
+		if got != r.match {
+			t.Errorf("%s for %s: %v", r.rule, r.tool, got)
+		}
+	}
+}

@@ -17,11 +17,14 @@ import (
 // and answers allow only when every one of these holds; otherwise it prints nothing, so Claude Code (and any other
 // hook) decides as if it were not there:
 //
-//   - the session's permission mode is bypassPermissions, and the tool is Bash;
+//   - the session's permission mode is bypassPermissions, and the tool is one of allowedTools (Bash, the read-only
+//     tools and Agent): never one that writes files, publishes, or comes from an MCP server;
+//   - for Bash, the command is not one that stays with a person (guard.go): deletion, overwriting data, a forced
+//     push, a permission change;
 //   - the node program is running (its heartbeat file is fresh): an extension that was switched off, stopped or
 //     uninstalled without the chance to remove the entry allows nothing;
-//   - no ask or deny rule for Bash that the hook can read could match the command (rules.go): those prompts are the
-//     user's own and stay.
+//   - no ask or deny rule of the user's that the hook can read could be about the call (rules.go): those prompts are
+//     the user's own and stay.
 //
 // It never fails the call: a hook that cannot read its input or write its log stays silent.
 
@@ -33,15 +36,56 @@ const (
 
 // hookInput is the part of Claude Code's PermissionRequest input the hook reads.
 type hookInput struct {
-	HookEventName  string `json:"hook_event_name"`
-	SessionID      string `json:"session_id"`
-	Cwd            string `json:"cwd"`
-	PermissionMode string `json:"permission_mode"`
-	ToolName       string `json:"tool_name"`
-	AgentID        string `json:"agent_id"`
-	ToolInput      struct {
-		Command string `json:"command"`
-	} `json:"tool_input"`
+	HookEventName  string    `json:"hook_event_name"`
+	SessionID      string    `json:"session_id"`
+	Cwd            string    `json:"cwd"`
+	PermissionMode string    `json:"permission_mode"`
+	ToolName       string    `json:"tool_name"`
+	AgentID        string    `json:"agent_id"`
+	ToolInput      toolInput `json:"tool_input"`
+}
+
+// toolInput is what the hook reads of each allowed tool's input.
+type toolInput struct {
+	Command      string `json:"command"`       // Bash
+	FilePath     string `json:"file_path"`     // Read
+	NotebookPath string `json:"notebook_path"` // NotebookRead
+	Path         string `json:"path"`          // Glob, Grep, LS
+	Pattern      string `json:"pattern"`       // Glob, Grep
+	Description  string `json:"description"`   // Agent, Task
+	SubagentType string `json:"subagent_type"` // Agent, Task
+}
+
+// allowedTools are the tools the hook may answer for: Bash, the tools that only read, and starting a subagent (whose
+// own calls come to the hook again, one by one). Write, Edit, MultiEdit, NotebookEdit, Workflow, MCP tools and every
+// other tool are left to Claude Code.
+var allowedTools = []string{"Bash", "Read", "Glob", "Grep", "LS", "NotebookRead", "Agent", "Task"}
+
+// hookMatcher is the entry's matcher: allowedTools, so Claude Code runs the hook for nothing else.
+var hookMatcher = strings.Join(allowedTools, "|")
+
+func isAllowedTool(name string) bool {
+	for _, t := range allowedTools {
+		if t == name {
+			return true
+		}
+	}
+	return false
+}
+
+// summary is the call in one line for the audit log: Bash's command, or the tool and what it is about.
+func (req hookInput) summary() string {
+	in := req.ToolInput
+	if req.ToolName == "Bash" {
+		return in.Command
+	}
+	var parts []string
+	for _, s := range []string{in.SubagentType, in.Description, in.FilePath, in.NotebookPath, in.Pattern, in.Path} {
+		if s = strings.TrimSpace(s); s != "" {
+			parts = append(parts, s)
+		}
+	}
+	return strings.TrimSpace(req.ToolName + " " + strings.Join(parts, " "))
 }
 
 // hookArgs are the flags the entry passes: where its files are.
@@ -66,9 +110,10 @@ func runHook(a hookArgs, in io.Reader, out io.Writer, now time.Time) {
 	if why := refuse(a, req, now); why != "" {
 		return
 	}
+	call := req.summary()
 	appendAudit(filepath.Join(a.Data, auditFile), auditEntry{
-		At: now.UTC().Format(time.RFC3339), Session: req.SessionID, Agent: req.AgentID, Cwd: req.Cwd,
-		Command: redact(req.ToolInput.Command), Length: utf8.RuneCountInString(req.ToolInput.Command), ConfigDir: a.ConfigDir,
+		At: now.UTC().Format(time.RFC3339), Session: req.SessionID, Agent: req.AgentID, Cwd: req.Cwd, Tool: req.ToolName,
+		Command: redact(call), Length: utf8.RuneCountInString(call), ConfigDir: a.ConfigDir,
 	})
 	tellNode(raw)
 	_, _ = io.WriteString(out, allowOutput+"\n")
@@ -117,14 +162,19 @@ func refuse(a hookArgs, req hookInput, now time.Time) string {
 		return "not a PermissionRequest"
 	case req.PermissionMode != "bypassPermissions":
 		return "not bypassPermissions"
-	case req.ToolName != "Bash":
-		return "not Bash"
-	case strings.TrimSpace(req.ToolInput.Command) == "":
+	case !isAllowedTool(req.ToolName):
+		return "not a tool the hook answers for: " + req.ToolName
+	case req.ToolName == "Bash" && strings.TrimSpace(req.ToolInput.Command) == "":
 		return "no command"
 	case a.Data == "" || !alive(filepath.Join(a.Data, heartbeatFile), now):
 		return "the node program is not running"
 	}
-	if r := matchingRule(userRules(a.ConfigDir, req.Cwd), req.ToolInput.Command); r != "" {
+	if req.ToolName == "Bash" {
+		if why := personOnly(req.ToolInput.Command); why != "" {
+			return "only a person approves this: " + why
+		}
+	}
+	if r := matchingRule(userRules(a.ConfigDir, req.Cwd), req.ToolName, req.ToolInput.Command); r != "" {
 		return "a rule of the user's: " + r
 	}
 	return ""
@@ -150,8 +200,9 @@ type auditEntry struct {
 	Session   string `json:"session_id"`
 	Agent     string `json:"agent_id,omitempty"`
 	Cwd       string `json:"cwd,omitempty"`
-	Command   string `json:"command"` // redacted and cut
-	Length    int    `json:"length"`  // of the whole command, in characters
+	Tool      string `json:"tool,omitempty"` // empty in entries from before 0.2.0: Bash
+	Command   string `json:"command"`        // the call in one line (summary), redacted and cut
+	Length    int    `json:"length"`         // of the whole line, in characters
 	ConfigDir string `json:"config_dir,omitempty"`
 }
 

@@ -79,10 +79,10 @@ func writeJSON(t *testing.T, path, s string) {
 	}
 }
 
-func TestHookAllowsOnlyBashInBypass(t *testing.T) {
+func TestHookAllowsOnlyItsToolsInBypass(t *testing.T) {
 	e := newEnv(t)
 	now := time.Now()
-	cmd := "cd view && rm -f sub/*; ls"
+	cmd := "cd view && ls sub/*; make"
 	if got := e.hook(t, request(e, "bypassPermissions", "Bash", cmd), now); strings.TrimSpace(got) != allowOutput {
 		t.Fatalf("bypass + Bash: %q", got)
 	}
@@ -92,7 +92,11 @@ func TestHookAllowsOnlyBashInBypass(t *testing.T) {
 		{"auto mode", "auto", "Bash"},
 		{"plan mode", "plan", "Bash"},
 		{"no mode", "", "Bash"},
-		{"another tool", "bypassPermissions", "Write"},
+		{"Write", "bypassPermissions", "Write"},
+		{"Edit", "bypassPermissions", "Edit"},
+		{"NotebookEdit", "bypassPermissions", "NotebookEdit"},
+		{"Workflow", "bypassPermissions", "Workflow"},
+		{"WebFetch", "bypassPermissions", "WebFetch"},
 		{"an MCP tool", "bypassPermissions", "mcp__x__run"},
 	} {
 		if got := e.hook(t, request(e, c.mode, c.tool, cmd), now); got != "" {
@@ -114,7 +118,7 @@ func TestHookAllowsOnlyBashInBypass(t *testing.T) {
 
 func TestHookNeedsTheNodeProgram(t *testing.T) {
 	e := newEnv(t)
-	req := request(e, "bypassPermissions", "Bash", "rm -rf \"$t\"")
+	req := request(e, "bypassPermissions", "Bash", "ls \"$t\"")
 	if got := e.hook(t, req, time.Now().Add(heartbeatFresh+time.Second)); got != "" {
 		t.Errorf("stale heartbeat: %q", got)
 	}
@@ -136,13 +140,13 @@ func TestHookLeavesTheUsersRules(t *testing.T) {
 			t.Errorf("%q matches a rule of the user's, but the hook answered %q", cmd, got)
 		}
 	}
-	if got := e.hook(t, request(e, "bypassPermissions", "Bash", "cd view && rm -f sub/*"), now); got == "" {
+	if got := e.hook(t, request(e, "bypassPermissions", "Bash", "cd view && ls sub/*"), now); got == "" {
 		t.Error("a command no rule is about: should be allowed")
 	}
 
 	all := newEnv(t)
 	writeJSON(t, filepath.Join(all.project, ".claude", "settings.json"), `{"permissions":{"ask":["Bash"]}}`)
-	if got := all.hook(t, request(all, "bypassPermissions", "Bash", "rm -f a/*"), now); got != "" {
+	if got := all.hook(t, request(all, "bypassPermissions", "Bash", "ls a/*"), now); got != "" {
 		t.Errorf("ask: [Bash] covers every command: %q", got)
 	}
 }
@@ -195,7 +199,7 @@ func TestMatchingRule(t *testing.T) {
 		{"cd view && rm -f sub/*", ""},
 		{"echo 'git' && push", ""},
 	} {
-		if got := matchingRule(rules, c.cmd); got != c.rule {
+		if got := matchingRule(rules, "Bash", c.cmd); got != c.rule {
 			t.Errorf("matchingRule(%q) = %q, want %q", c.cmd, got, c.rule)
 		}
 	}
@@ -238,7 +242,7 @@ func TestRedact(t *testing.T) {
 
 func TestAuditEntry(t *testing.T) {
 	e := newEnv(t)
-	req := request(e, "bypassPermissions", "Bash", "TOKEN=abcdefgh12345678 rm -rf \"$t\"")
+	req := request(e, "bypassPermissions", "Bash", "TOKEN=abcdefgh12345678 make -C \"$t\"")
 	req["agent_id"] = "a1b2"
 	e.hook(t, req, time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC))
 	got := readAudit(e.data, 10)
@@ -246,7 +250,7 @@ func TestAuditEntry(t *testing.T) {
 		t.Fatalf("%d entries", len(got))
 	}
 	a := got[0]
-	if a.At != "2026-11-05T10:00:00Z" || a.Agent != "a1b2" || a.Cwd != e.project || a.ConfigDir != e.config || strings.Contains(a.Command, "abcdefgh12345678") || a.Length != 34 {
+	if a.At != "2026-11-05T10:00:00Z" || a.Agent != "a1b2" || a.Cwd != e.project || a.ConfigDir != e.config || strings.Contains(a.Command, "abcdefgh12345678") || a.Length != 35 {
 		t.Errorf("entry: %+v", a)
 	}
 	raw, _ := os.ReadFile(filepath.Join(e.data, auditFile))
@@ -490,8 +494,8 @@ func TestHookTellsTheNode(t *testing.T) {
 		}
 	}()
 	e := newEnv(t)
-	e.hook(t, request(e, "default", "Bash", "rm -f a/*"), time.Now())
-	req := request(e, "bypassPermissions", "Bash", "cd view && rm -f sub/*")
+	e.hook(t, request(e, "default", "Bash", "ls a/*"), time.Now())
+	req := request(e, "bypassPermissions", "Bash", "cd view && ls sub/*")
 	if out := e.hook(t, req, time.Now()); out == "" {
 		t.Fatal("not allowed")
 	}
@@ -522,7 +526,7 @@ func TestHookWithoutANode(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	e := newEnv(t)
 	start := time.Now()
-	if out := e.hook(t, request(e, "bypassPermissions", "Bash", "rm -f a/*"), time.Now()); out == "" || time.Since(start) > nodeWait {
+	if out := e.hook(t, request(e, "bypassPermissions", "Bash", "ls a/*"), time.Now()); out == "" || time.Since(start) > nodeWait {
 		t.Fatalf("no node: %q after %v", out, time.Since(start))
 	}
 }
