@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -68,7 +70,44 @@ func runHook(a hookArgs, in io.Reader, out io.Writer, now time.Time) {
 		At: now.UTC().Format(time.RFC3339), Session: req.SessionID, Agent: req.AgentID, Cwd: req.Cwd,
 		Command: redact(req.ToolInput.Command), Length: utf8.RuneCountInString(req.ToolInput.Command), ConfigDir: a.ConfigDir,
 	})
+	tellNode(raw)
 	_, _ = io.WriteString(out, allowOutput+"\n")
+}
+
+// nodeSockets are where Persona's node listens for its hooks on this computer (node.sock in its home directory, the
+// old name's first when both are the same directory).
+func nodeSockets() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	return []string{filepath.Join(home, ".persona", "node.sock"), filepath.Join(home, ".jarvis", "node.sock")}
+}
+
+// nodeWait is the most tellNode waits for the node.
+const nodeWait = 500 * time.Millisecond
+
+// tellNode tells Persona's node that this call is answered (hook.decided, nwverse/persona#2648), with the input
+// Claude Code gave this hook, which is what Persona's own hook got too: the node then shows no card on the phone for
+// it, or withdraws the one it showed. A node that is not there, or too old to know hook.decided, changes nothing.
+func tellNode(input []byte) {
+	line, err := json.Marshal(map[string]any{"kind": "hook.decided", "input": json.RawMessage(input)})
+	if err != nil {
+		return
+	}
+	for _, path := range nodeSockets() {
+		c, err := net.DialTimeout("unix", path, nodeWait)
+		if err != nil {
+			continue
+		}
+		_ = c.SetDeadline(time.Now().Add(nodeWait))
+		_, err = c.Write(append(line, '\n'))
+		if err == nil {
+			_, _ = bufio.NewReader(c).ReadBytes('\n')
+		}
+		c.Close()
+		return
+	}
 }
 
 // refuse says why the hook leaves req to Claude Code ("" lets it allow).

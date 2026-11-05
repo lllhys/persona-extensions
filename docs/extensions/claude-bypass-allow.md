@@ -29,6 +29,10 @@ The hook cannot see rules passed on the command line (`--settings`, `--allowedTo
 
 The hook also answers safety checks that are not removals, such as Claude Code's isolated-peer-machine and read-block checks, but only when they are raised by a Bash call. A bypass-mode session has already accepted running arbitrary Bash; this extension removes the remaining interruptions for Bash only.
 
+## Persona's own approval card
+
+In a session that Persona started, Persona's hook also receives each `PermissionRequest` and puts a card on your phone. Claude Code does not stop that hook when another hook allows the call, so the card would stay up and the agent would be shown as waiting for you even though the command already ran. After each allow, this hook therefore tells Persona's node on that computer through its socket (`~/.persona/node.sock`, kind `hook.decided`, with the same request input). A node that knows `hook.decided` (nwverse/persona#2648) then shows no card, or withdraws the card it already showed. On an older node, the card stays until it is answered or times out; the command runs either way.
+
 ## Settings and switches
 
 | Setting | Meaning |

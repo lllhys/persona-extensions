@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -420,5 +422,68 @@ func TestPage(t *testing.T) {
 	v, _ := empty.render(context.Background(), r)
 	if len(v.Sections) != 1 || v.Sections[0].Items[0].Type != wire.ComponentEmpty {
 		t.Errorf("no machine: %+v", v)
+	}
+}
+
+// An allow tells Persona's node (hook.decided) with the input Claude Code gave the hook; a refusal tells it nothing.
+func TestHookTellsTheNode(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".persona"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("unix", filepath.Join(home, ".persona", "node.sock"))
+	if err != nil {
+		t.Skip("no unix socket here:", err)
+	}
+	defer ln.Close()
+	got := make(chan []byte, 4)
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			line, _ := bufio.NewReader(c).ReadBytes('\n')
+			_, _ = c.Write([]byte("{\"ok\":true}\n"))
+			c.Close()
+			got <- line
+		}
+	}()
+	e := newEnv(t)
+	e.hook(t, request(e, "default", "Bash", "rm -f a/*"), time.Now())
+	req := request(e, "bypassPermissions", "Bash", "cd view && rm -f sub/*")
+	if out := e.hook(t, req, time.Now()); out == "" {
+		t.Fatal("not allowed")
+	}
+	select {
+	case line := <-got:
+		var m struct {
+			Kind  string          `json:"kind"`
+			Input json.RawMessage `json:"input"`
+		}
+		if err := json.Unmarshal(line, &m); err != nil || m.Kind != "hook.decided" {
+			t.Fatalf("%s", line)
+		}
+		want, _ := json.Marshal(req)
+		if !bytes.Equal(m.Input, want) {
+			t.Fatalf("the input as Claude Code gave it:\n%s\n%s", m.Input, want)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the node heard nothing")
+	}
+	select {
+	case line := <-got:
+		t.Fatalf("a refusal told the node: %s", line)
+	default:
+	}
+}
+
+func TestHookWithoutANode(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	e := newEnv(t)
+	start := time.Now()
+	if out := e.hook(t, request(e, "bypassPermissions", "Bash", "rm -f a/*"), time.Now()); out == "" || time.Since(start) > nodeWait {
+		t.Fatalf("no node: %q after %v", out, time.Since(start))
 	}
 }

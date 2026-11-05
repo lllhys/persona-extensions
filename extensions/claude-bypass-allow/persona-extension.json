@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "claude-bypass-allow",
   "name": "Bypass 自动允许",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Claude Code 开着 bypassPermissions（--dangerously-skip-permissions）时，有些 Bash 命令（如 cd 之后 rm 一个 glob、rm 的目标是变量）仍会弹确认框，无人值守的 Agent 就卡在「在等你」。在你选的电脑上给 Claude Code 装一个 PermissionRequest hook：只在会话是 bypass 模式、工具是 Bash 时自动允许，不覆盖你自己配的 ask / deny 规则，每次自动允许都记一条（命令截断、去掉密钥）。别的模式照常问你。",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/claude-bypass-allow",
