@@ -15,7 +15,8 @@ import (
 
 // The knowledge base's reading (connector.Archive): one cursor for the account, which holds, for each conversation,
 // the newest message it archived. Every round lists the conversations and reads the ones with something newer; a
-// conversation read the first time goes back firstDays, at most firstMax messages (the user's choice, 2026-11-03).
+// conversation read the first time goes back firstDays, at most firstMax messages (the user's choice, 2026-11-03). One
+// read since the cursor also takes at most firstMax, the oldest: the rest comes in the next call.
 var (
 	firstDays    = 30 * 24 * time.Hour
 	firstMax     = 500
@@ -96,7 +97,14 @@ func (c *Conn) Changes(ctx context.Context, cursor string, limit int) ([]connect
 		for _, m := range msgs {
 			top = max(top, m.ID)
 		}
-		cur.Seen[key] = max(top, d.Top)
+		if seen > 0 && len(msgs) >= firstMax {
+			// More came since the last round than one read takes: the cursor goes only as far as what was read, and
+			// the next call goes on from there (#78).
+			cur.Seen[key] = top
+			more = true
+		} else {
+			cur.Seen[key] = max(top, d.Top)
+		}
 		if len(msgs) > 0 {
 			batches = append(batches, connector.ChatBatch{Chat: kb.SourceChat{ID: key, Name: d.Name, Kind: d.Kind, UpdatedAt: d.TopAt},
 				Messages: sourceMessages(msgs)})

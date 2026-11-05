@@ -236,8 +236,10 @@ func (c *fakeClient) History(ctx context.Context, d dialog, minID int, since tim
 			out = append(out, m)
 		}
 	}
-	if len(out) > max { // the newest max
+	if len(out) > max && minID == 0 { // a first read: the newest max
 		out = out[len(out)-max:]
+	} else if len(out) > max { // after minID: the oldest max
+		out = out[:max]
 	}
 	return out, nil
 }

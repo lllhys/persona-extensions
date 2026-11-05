@@ -3,11 +3,16 @@ package telegram
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gotd/td/bin"
+	"github.com/gotd/td/telegram"
+	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	"github.com/nwverse/persona-extensions/extensions/telegram/internal/connector"
 )
@@ -197,5 +202,94 @@ func TestWatchKicks(t *testing.T) {
 	case s := <-got:
 		t.Fatalf("a burst kicked more than once: %s", s)
 	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+// offlineGotd is the real gotdClient on a gotd client whose every request is answered locally by answer (a
+// middleware that never calls the network).
+func offlineGotd(answer func(input bin.Encoder, output bin.Decoder) error) *gotdClient {
+	cl := telegram.NewClient(1, "example", telegram.Options{Middlewares: []telegram.Middleware{
+		telegram.MiddlewareFunc(func(tg.Invoker) telegram.InvokeFunc {
+			return func(_ context.Context, input bin.Encoder, output bin.Decoder) error { return answer(input, output) }
+		})}})
+	return &gotdClient{c: cl, done: make(chan struct{})}
+}
+
+// A busy group gets more than firstMax messages between two rounds (the hub was off for a day): a round archives the
+// oldest firstMax after the cursor and moves it only that far, says there is more, and the next round goes on from
+// there. Nothing in between is skipped (#78).
+func TestArchiveCatchUp(t *testing.T) {
+	const seen, top = 1000, 1700 // 700 new messages since the last round
+	now := time.Now()
+	chat := &tg.Chat{ID: 9, Title: "示例群", ParticipantsCount: 3}
+	user := &tg.User{ID: 7, AccessHash: 77, FirstName: "示例"}
+	msg := func(id int) tg.MessageClass {
+		return &tg.Message{ID: id, PeerID: &tg.PeerChat{ChatID: 9}, FromID: &tg.PeerUser{UserID: 7},
+			Date: int(now.Add(-time.Duration(top-id) * time.Second).Unix()), Message: fmt.Sprintf("示例消息 %d", id)}
+	}
+	gc := offlineGotd(func(input bin.Encoder, output bin.Decoder) error {
+		switch r := input.(type) {
+		case *tg.MessagesGetDialogsRequest:
+			res := &tg.MessagesDialogs{Users: []tg.UserClass{user}, Chats: []tg.ChatClass{chat}}
+			if r.FolderID == 0 {
+				res.Dialogs = []tg.DialogClass{&tg.Dialog{Peer: &tg.PeerChat{ChatID: 9}, TopMessage: top}}
+				res.Messages = []tg.MessageClass{msg(top)}
+			}
+			output.(*tg.MessagesDialogsBox).Dialogs = res
+		case *tg.MessagesGetHistoryRequest: // like Telegram: newest first, above MinID, Limit from below OffsetID moved by AddOffset
+			var all []int
+			for id := top; id > r.MinID; id-- {
+				all = append(all, id)
+			}
+			from := 0
+			if r.OffsetID != 0 {
+				for from < len(all) && all[from] >= r.OffsetID {
+					from++
+				}
+			}
+			from = min(max(from+r.AddOffset, 0), len(all))
+			var ms []tg.MessageClass
+			for _, id := range all[from:min(from+r.Limit, len(all))] {
+				ms = append(ms, msg(id))
+			}
+			output.(*tg.MessagesMessagesBox).Messages = &tg.MessagesMessagesSlice{Count: len(all), Messages: ms,
+				Users: []tg.UserClass{user}, Chats: []tg.ChatClass{chat}}
+		default:
+			return fmt.Errorf("unexpected %T", input)
+		}
+		return nil
+	})
+	c := newConn(&memSecrets{}, nil)
+	c.cl = gc
+	got := map[int]bool{}
+	cursor := fmt.Sprintf(`{"seen":{"g9":%d}}`, seen)
+	for round, want := range []struct {
+		first, last int
+		more        bool
+	}{{1001, 1500, true}, {1501, 1700, false}} {
+		batches, next, more, err := c.Changes(context.Background(), cursor, 20)
+		if err != nil || len(batches) != 1 {
+			t.Fatalf("round %d: %d batches, %v", round, len(batches), err)
+		}
+		ms := batches[0].Messages
+		if ms[0].ID != strconv.Itoa(want.first) || ms[len(ms)-1].ID != strconv.Itoa(want.last) || len(ms) != want.last-want.first+1 {
+			t.Fatalf("round %d: %d messages %s..%s, want %d..%d", round, len(ms), ms[0].ID, ms[len(ms)-1].ID, want.first, want.last)
+		}
+		if more != want.more {
+			t.Fatalf("round %d: more=%v", round, more)
+		}
+		for _, m := range ms {
+			id, _ := strconv.Atoi(m.ID)
+			got[id] = true
+		}
+		var cur archiveCursor
+		_ = json.Unmarshal([]byte(next), &cur)
+		if cur.Seen["g9"] != want.last {
+			t.Fatalf("round %d: cursor %s, want %d", round, next, want.last)
+		}
+		cursor = next
+	}
+	if len(got) != top-seen {
+		t.Fatalf("archived %d of %d new messages", len(got), top-seen)
 	}
 }
