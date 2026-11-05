@@ -22,7 +22,9 @@ for extra in skills assistant; do
   [ -d "$src/$extra" ] && cp -R "$src/$extra" "$out/"
 done
 # A declarative extension (no runtime: skills, prompts, themes, a pack…) has no program to build.
-python3 -c 'import json,sys;[print(k, v) for k, v in json.load(open(sys.argv[1])).get("runtime", {}).get("command", {}).items()]' "$manifest" |
+# -I: with -c, Python would otherwise put the cwd (repo root, an untrusted PR tree in CI) first on sys.path,
+# letting a planted json.py shadow the stdlib module. The snippet uses only stdlib json/sys and an explicit argv path.
+python3 -I -c 'import json,sys;[print(k, v) for k, v in json.load(open(sys.argv[1])).get("runtime", {}).get("command", {}).items()]' "$manifest" |
 while read -r plat path; do
   GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "$out/$path" "./$src"
 done
