@@ -638,6 +638,72 @@ func TestChunks(t *testing.T) {
 	}
 }
 
+// An over-cap cache is pruned on the next read: answers past their per-kind TTL go (lists listFor,
+// topics topicFor), then the oldest answers, so sustained topic reads cannot grow it past the cap.
+func TestCachePrunedToCap(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(srv.Close)
+	s := newSite(srv.URL)
+
+	now := time.Now()
+	// Per-kind TTL at the cap boundary: the stale list goes (past listFor), the same-aged topic stays
+	// (inside topicFor), and that one deletion is enough — the oldest young answer is not touched.
+	for i := 0; i < 198; i++ {
+		path := fmt.Sprintf("/list-%d.rss", i)
+		if i%2 == 0 {
+			path = fmt.Sprintf("/t/topic/%d.json", i)
+		}
+		s.cache[path] = cached{[]byte("x"), now.Add(-time.Duration(198-i) * time.Second)}
+	}
+	s.cache["/expired.rss"] = cached{[]byte("l"), now.Add(-listFor - time.Minute)}
+	s.cache["/t/topic/900.json"] = cached{[]byte("t"), now.Add(-listFor - time.Minute)}
+	if _, err := s.get(context.Background(), "/one-more.rss", 0); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.cache) != 200 { // cacheKeep
+		t.Fatalf("after the TTL prune: %d entries, want 200", len(s.cache))
+	}
+	if _, ok := s.cache["/expired.rss"]; ok {
+		t.Error("a list past listFor was not pruned")
+	}
+	if _, ok := s.cache["/t/topic/900.json"]; !ok {
+		t.Error("a topic still inside topicFor was pruned with the list TTL")
+	}
+	if _, ok := s.cache["/t/topic/0.json"]; !ok {
+		t.Error("the oldest young answer was evicted although the TTL prune sufficed")
+	}
+
+	// Hard cap with everything fresh: 210 young answers plus the one just read, nothing is past a TTL,
+	// so the 11 oldest topics make room and younger answers (incl. the new one) stay.
+	for k := range s.cache {
+		delete(s.cache, k)
+	}
+	for i := 0; i < 110; i++ {
+		s.cache[fmt.Sprintf("/t/topic/%d.json", i)] = cached{[]byte("t"), now.Add(-time.Duration(210-i) * time.Second)}
+	}
+	for i := 0; i < 100; i++ {
+		s.cache[fmt.Sprintf("/list-%d.rss", i)] = cached{[]byte("l"), now.Add(-time.Duration(100-i) * time.Second)}
+	}
+	if _, err := s.get(context.Background(), "/fresh.rss", 0); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.cache) != 200 {
+		t.Fatalf("cache grew to %d, want 200", len(s.cache))
+	}
+	for _, gone := range []string{"/t/topic/0.json", "/t/topic/10.json"} {
+		if _, ok := s.cache[gone]; ok {
+			t.Errorf("old answer %s survived eviction", gone)
+		}
+	}
+	for _, kept := range []string{"/t/topic/11.json", "/list-99.rss", "/fresh.rss"} {
+		if _, ok := s.cache[kept]; !ok {
+			t.Errorf("young answer %s was evicted", kept)
+		}
+	}
+}
+
 // An app with UI version 2 picks the list with a segmented control; the choice comes back in the values.
 func TestPageV2(t *testing.T) {
 	f := newFakeSite(t)
