@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -68,7 +69,11 @@ func (c *Conn) Call(ctx context.Context, name string, args json.RawMessage) (str
 		Query      string `json:"query"`
 	}
 	if len(args) > 0 {
-		if err := json.Unmarshal(args, &a); err != nil {
+		// The tools' schemas say additionalProperties: false, so an argument the schema does not name is an
+		// error, not a silently ignored one (as the unlisted CLI's parseArgs already does).
+		dec := json.NewDecoder(bytes.NewReader(args))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&a); err != nil {
 			return "", fmt.Errorf("arguments: %w", err)
 		}
 	}

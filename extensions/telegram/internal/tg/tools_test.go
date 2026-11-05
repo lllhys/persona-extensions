@@ -80,6 +80,45 @@ func TestTools(t *testing.T) {
 	}
 }
 
+// The read tools' schemas say additionalProperties: false, so an argument none of them names is refused instead
+// of being silently ignored (a misspelt limit must not fall back to the default).
+func TestToolsRejectUnknownFields(t *testing.T) {
+	c, _, ctx := archiveAccount(t)
+	call := func(name, args string) error {
+		_, err := c.Call(ctx, name, json.RawMessage(args))
+		return err
+	}
+	for _, tc := range []struct {
+		name, args string
+	}{
+		{"telegram_chats", `{"unread_only":true,"silent":true}`},
+		{"telegram_chats", `{"limt":5}`},
+		{"telegram_messages", `{"chat":"u1","silent":true}`},
+		{"telegram_search", `{"query":"x","limt":5}`},
+	} {
+		err := call(tc.name, tc.args)
+		if err == nil || !strings.Contains(err.Error(), "unknown field") {
+			t.Errorf("%s %s took an unknown field: %v", tc.name, tc.args, err)
+		}
+	}
+	// No arguments and the fields the schemas name are still accepted.
+	if err := call("telegram_chats", ""); err != nil {
+		t.Fatalf("no arguments: %v", err)
+	}
+	if err := call("telegram_chats", `{}`); err != nil {
+		t.Fatalf("empty object: %v", err)
+	}
+	if err := call("telegram_chats", `{"limit":1,"unread_only":false}`); err != nil {
+		t.Fatalf("chats fields: %v", err)
+	}
+	if err := call("telegram_messages", `{"chat":"u1","limit":1,"before":0}`); err != nil {
+		t.Fatalf("messages fields: %v", err)
+	}
+	if err := call("telegram_search", `{"query":"示例","chat":"c2","limit":1}`); err != nil {
+		t.Fatalf("search fields: %v", err)
+	}
+}
+
 // Before the hub knows the user's zone the tools show UTC and say so, not the machine's zone.
 func TestToolTimesWithoutTheUserZone(t *testing.T) {
 	at := time.Date(2026, 1, 2, 3, 4, 0, 0, time.FixedZone("UTC+8", 8*3600))
