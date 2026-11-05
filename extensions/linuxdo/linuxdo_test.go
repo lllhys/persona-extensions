@@ -475,6 +475,33 @@ func TestSiteFailures(t *testing.T) {
 		t.Fatalf("status after a good read: %+v", s)
 	}
 
+	// A plain 403/404 on a list feed is an ordinary fetch failure, not a deleted topic: the generic
+	// HTTP error reaches the caller, the connector goes to "error", and a cached copy still stands in.
+	for _, code := range []int{http.StatusForbidden, http.StatusNotFound} {
+		f.status, f.body = code, "blocked"
+		want := fmt.Sprintf("HTTP %d", code)
+		if _, err := p.site.fetch(context.Background(), "/hot.rss"); err == nil || errors.Is(err, errNoTopic) || !strings.Contains(err.Error(), want) {
+			t.Fatalf("a plain %d on /hot.rss read as a missing topic: %v", code, err)
+		}
+		if _, err := p.hot(context.Background(), "latest", false); err == nil || errors.Is(err, errNoTopic) || !strings.Contains(err.Error(), want) {
+			t.Fatalf("an uncached list under %d: %v", code, err)
+		}
+		if s, _ := p.cStatus(context.Background(), nil, nil); s.(connectorStatus).State != "error" {
+			t.Fatalf("status after %d: %+v", code, s)
+		}
+		if ts, err := p.hot(context.Background(), "hot", true); err != nil || len(ts) != 5 {
+			t.Fatalf("the cached list should stand in for %d: %v (%d topics)", code, err, len(ts))
+		}
+	}
+
+	// The same statuses on a topic path still read as "this topic is gone".
+	for _, code := range []int{http.StatusForbidden, http.StatusNotFound} {
+		f.status = code
+		if _, err := p.site.fetch(context.Background(), "/t/topic/9999.json"); !errors.Is(err, errNoTopic) {
+			t.Fatalf("a topic under %d: %v", code, err)
+		}
+	}
+
 	// A 429 pauses every read, and an older copy stands in meanwhile.
 	f.status, f.body = http.StatusTooManyRequests, "slow down"
 	if _, err := p.hot(context.Background(), "hot", true); err != nil {

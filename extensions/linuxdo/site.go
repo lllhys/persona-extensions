@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -125,7 +126,11 @@ func (s *site) fetch(ctx context.Context, path string) ([]byte, error) {
 	case challenge:
 		return nil, errChallenged
 	case res.StatusCode == http.StatusNotFound, res.StatusCode == http.StatusForbidden:
-		return nil, errNoTopic
+		// Only a topic read means "this topic is gone"; the same status on a list feed is an ordinary fetch failure.
+		if strings.HasPrefix(path, "/t/") {
+			return nil, errNoTopic
+		}
+		return nil, fmt.Errorf("LINUX DO：HTTP %d", res.StatusCode)
 	case res.StatusCode != http.StatusOK:
 		return nil, fmt.Errorf("LINUX DO：HTTP %d", res.StatusCode)
 	}
