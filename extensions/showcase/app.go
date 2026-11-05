@@ -160,6 +160,7 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 	case "more":
 		s.Shown = shown(s) + pageSize
 	case "back":
+		// On old apps the detail and edit states carry the list's Q, Kind and Shown, so the list is redrawn as left.
 		s.P, s.ID = "list", ""
 	case "save":
 		return a.save(r, s)

@@ -67,8 +67,14 @@ func (a *app) list(r *ext.UIRequest, s state) *wire.View {
 	}
 	rows := make([]wire.Component, 0, n+2)
 	for _, it := range all[:n] {
+		ds := state{P: "detail", ID: it.ID}
+		if r.UIVersion < 3 {
+			// An old app draws the detail in place of the list: carry the list's search, filter and page so its
+			// 回到列表 button redraws this same list. v3 keeps the list in its native stack and needs none of it.
+			ds.Q, ds.Kind, ds.Shown = s.Q, s.Kind, s.Shown
+		}
 		row := wire.Component{Type: wire.ComponentRow, Key: "item-" + it.ID, Title: it.Title, Subtitle: kindTitle(it.Kind),
-			Icon: it.Kind, Action: ext.Open("detail:"+it.ID, "", state{P: "detail", ID: it.ID}, it.Title)}
+			Icon: it.Kind, Action: ext.Open("detail:"+it.ID, "", ds, it.Title)}
 		if it.Done {
 			row.Badge = &wire.Badge{Text: "完成", Tone: wire.TonePositive}
 		}
@@ -128,8 +134,13 @@ func (a *app) detail(r *ext.UIRequest, s state) *wire.View {
 		wire.Component{Type: wire.ComponentMarkdown, Key: "note", Text: "**" + it.Title + "**\n\n" + it.Note},
 		wire.Component{Type: wire.ComponentRow, Key: "kind", Title: "种类", Value: kindTitle(it.Kind), Icon: it.Kind},
 		wire.Component{Type: wire.ComponentRow, Key: "done", Title: "完成", Value: done},
-		wire.Component{Type: wire.ComponentButton, Title: "编辑", Action: ext.Open("edit:"+it.ID, "", state{P: "edit", ID: it.ID}, "编辑")},
 	)
+	es := state{P: "edit", ID: it.ID}
+	if r.UIVersion < 3 {
+		// On old apps the edit is also drawn in place, so its 回到列表 button needs the list context as well.
+		es.Q, es.Kind, es.Shown = s.Q, s.Kind, s.Shown
+	}
+	c = append(c, wire.Component{Type: wire.ComponentButton, Title: "编辑", Action: ext.Open("edit:"+it.ID, "", es, "编辑")})
 	if r.UIVersion < 3 {
 		c = append(c, wire.Component{Type: wire.ComponentButton, Title: "回到列表", Action: &wire.Action{ID: "back"}})
 	}

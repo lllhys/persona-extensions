@@ -222,6 +222,123 @@ func TestEditBack(t *testing.T) {
 	}
 }
 
+// TestOldAppListContext: before UI version 3 pages are drawn in place, so the detail and edit pushes carry the
+// list's search, filter and loaded page; 回到列表 then redraws the list the user left, as native pop does on v3.
+func TestOldAppListContext(t *testing.T) {
+	a := newApp()
+	ctx := context.Background()
+	was := state{P: "list", Q: "示例", Kind: "doc", Shown: 40}
+
+	lv, _ := a.render(ctx, req(pageUI, wire.SizeFull, 2, &was))
+	row := lv.Sections[1].Items[0] // sections: the old-app tools, the list, the return-to-catalog button
+	if row.Action == nil || row.Action.Push == nil {
+		t.Fatal("a list row opens its detail")
+	}
+	var ds state
+	if err := json.Unmarshal([]byte(row.Action.Push.State), &ds); err != nil {
+		t.Fatal(err)
+	}
+	if ds.Q != was.Q || ds.Kind != was.Kind || ds.Shown != was.Shown {
+		t.Fatalf("the detail push carries %+v, want the list's context %+v", ds, was)
+	}
+
+	// The detail drawn in place keeps the context both in its view state and in the edit's push.
+	r := req(pageUI, wire.SizeFull, 2, nil)
+	r.State = row.Action.Push.State
+	dv, _ := a.render(ctx, r)
+	var held state
+	if err := json.Unmarshal([]byte(dv.State), &held); err != nil {
+		t.Fatal(err)
+	}
+	if held.Q != was.Q || held.Kind != was.Kind || held.Shown != was.Shown {
+		t.Fatalf("the in-place detail holds %+v, want the list's context %+v", held, was)
+	}
+	var editPush *wire.Push
+	for _, c := range dv.Sections[0].Items {
+		if c.Type == wire.ComponentButton && c.Action != nil && c.Action.Push != nil {
+			editPush = c.Action.Push
+		}
+	}
+	if editPush == nil {
+		t.Fatal("the detail's 编辑 opens the form")
+	}
+	var es state
+	if err := json.Unmarshal([]byte(editPush.State), &es); err != nil {
+		t.Fatal(err)
+	}
+	if es.Q != was.Q || es.Kind != was.Kind || es.Shown != was.Shown {
+		t.Fatalf("the edit push carries %+v, want the list's context %+v", es, was)
+	}
+
+	// Back from the detail, and back from the edit, each redraws the list exactly where it was left.
+	for _, from := range []string{row.Action.Push.State, editPush.State} {
+		r.State, r.Action = from, "back"
+		if _, err := a.action(ctx, r); err != nil {
+			t.Fatal(err)
+		}
+		var back state
+		if err := json.Unmarshal([]byte(r.State), &back); err != nil {
+			t.Fatal(err)
+		}
+		if back.P != "list" || back.ID != "" || back.Q != was.Q || back.Kind != was.Kind || back.Shown != was.Shown {
+			t.Fatalf("back lands on %+v, want the list with its context", back)
+		}
+		r.Action = ""
+		again, _ := a.render(ctx, r)
+		tools, listSec := again.Sections[0].Items, again.Sections[1].Items
+		if tools[0].Value != was.Q {
+			t.Fatalf("the redrawn list's search box is %q, want %q", tools[0].Value, was.Q)
+		}
+		if tools[1].Value != was.Kind {
+			t.Fatalf("the redrawn list's kind choice is %q, want %q", tools[1].Value, was.Kind)
+		}
+		rows, more := 0, false
+		for _, c := range listSec {
+			switch {
+			case c.Type == wire.ComponentRow:
+				rows++
+			case c.Type == wire.ComponentButton && c.Title == "加载更多":
+				more = true
+			}
+		}
+		if rows != 20 || more { // 20 of the 60 items are 文档; Shown 40 clamps to 20, so there is no second page
+			t.Fatalf("the redrawn doc-filtered list shows %d rows and a load-more button %v", rows, more)
+		}
+	}
+
+	// A search matching all 60 with 40 loaded keeps its loaded page and load-more button after the round trip.
+	full := state{P: "list", Q: "示例", Shown: 40}
+	fv, _ := a.render(ctx, req(pageUI, wire.SizeFull, 2, &full))
+	r.State, r.Action = fv.Sections[1].Items[0].Action.Push.State, "back"
+	if _, err := a.action(ctx, r); err != nil {
+		t.Fatal(err)
+	}
+	r.Action = ""
+	again, _ := a.render(ctx, r)
+	rows, more := 0, false
+	for _, c := range again.Sections[1].Items {
+		switch {
+		case c.Type == wire.ComponentRow:
+			rows++
+		case c.Type == wire.ComponentButton && c.Title == "加载更多":
+			more = true
+		}
+	}
+	if rows != 40 || !more {
+		t.Fatalf("the redrawn list shows %d rows and a load-more button %v, want 40 and one", rows, more)
+	}
+
+	// v3 keeps using the native stack: its pushes carry no list context, so v3 views are unchanged.
+	v3, _ := a.render(ctx, req(pageUI, wire.SizeFull, 3, &full))
+	var vs state
+	if err := json.Unmarshal([]byte(v3.Sections[0].Items[0].Action.Push.State), &vs); err != nil {
+		t.Fatal(err)
+	}
+	if vs.Q != "" || vs.Kind != "" || vs.Shown != 0 {
+		t.Fatalf("a v3 detail push carries list context %+v; the native stack already preserves the list", vs)
+	}
+}
+
 // TestListMore: load more shows 20 more, until all 60; search and filter start over.
 func TestListMore(t *testing.T) {
 	a := newApp()
