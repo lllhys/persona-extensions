@@ -5,7 +5,8 @@
 #                            and the indexes' signatures against market.pub (nwverse/persona#1848)
 #   scripts/ci.sh release <base>    then release the extensions whose version changed since the git ref <base>
 #                                   (a push to main: its "before"); a version merged but meant to wait is not released
-#   scripts/ci.sh release <id>…     then release these (CI's manual run)
+#   scripts/ci.sh release <id>…     then release these (CI's manual run; extensions/<id> too). An argument that is
+#                                   neither an extension nor a git commit fails the release, not selects them all
 # A version is released once: one that has its release already is skipped, unless the index does not have it yet.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -17,6 +18,7 @@ python3 -I scripts/test-docs.py
 
 step manifests
 scripts/manifest.py check
+python3 -I scripts/test-manifest.py
 
 step gofmt
 bad=$(gofmt -l . | grep -v '^dist/' || true)
@@ -51,16 +53,10 @@ scripts/sign-index.py verify
 if [ "${1:-}" = release ]; then
   shift
   step release
-  ids=()
-  for a in "$@"; do
-    if [ -d "extensions/$a" ]; then
-      ids+=("$a")
-    else
-      while read -r id; do [ -z "$id" ] || ids+=("$id"); done < <(scripts/manifest.py changed "$a")
-    fi
-  done
-  [ "${#ids[@]}" -gt 0 ] || echo "nothing to release"
-  for id in "${ids[@]}"; do
+  # Captured, not read from a process substitution: an argument that is neither an id nor a git commit stops here.
+  ids=$(scripts/manifest.py selected "$@")
+  [ -n "$ids" ] || echo "nothing to release"
+  for id in $ids; do
     tag="$id-v$(scripts/manifest.py version "$id")"
     if gh release view "$tag" >/dev/null 2>&1; then
       if scripts/index.py has "$id" "$tag"; then

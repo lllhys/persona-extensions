@@ -8,6 +8,8 @@
   scripts/manifest.py check           every manifest is sound (what CI runs): id, version, tags, no retired files,
                                       the files it references are in its package, its pack members are here
   scripts/manifest.py changed <ref>   the extensions whose version is not what it was at <ref> (new ones too)
+  scripts/manifest.py selected <id or ref>…   what scripts/ci.sh release releases: each id (also as extensions/<id>),
+                                      and what changed since each git ref; anything else fails
 """
 import json, os, posixpath, re, subprocess, sys
 
@@ -33,7 +35,8 @@ def path(id):
 
 
 def load(id):
-    return json.load(open(path(id)))
+    with open(path(id)) as f:
+        return json.load(f)
 
 
 def tags(id):
@@ -60,6 +63,36 @@ def version_at(ref, id):
         if r.returncode == 0:
             return json.loads(r.stdout).get("version")
     return None
+
+
+def is_commit(ref):
+    r = subprocess.run(["git", "-C", ROOT, "rev-parse", "--verify", "--quiet", "--end-of-options", ref + "^{commit}"],
+                       capture_output=True)
+    return r.returncode == 0
+
+
+def changed(ref):
+    """The extensions whose version is not what it was at ref. A ref git doesn't have fails: version_at could not tell
+    it from one where no extension was there yet, and every extension would count as new."""
+    if not is_commit(ref):
+        sys.exit("%r is not a git commit here" % ref)
+    return [id for id in ids() if version_at(ref, id) != load(id)["version"]]
+
+
+def selected(args):
+    """The extensions to release for scripts/ci.sh release's arguments: an id as scripts/release.sh takes it, or a git
+    ref to release what changed since. A misspelled id must fail, not pass for a ref and select every extension."""
+    out = []
+    for a in args:
+        id = a.rstrip("/")
+        id = id[len("extensions/"):] if id.startswith("extensions/") else id
+        if id in ids():
+            out.append(id)
+        elif is_commit(a):
+            out += changed(a)
+        else:
+            sys.exit("%r is not an extension in extensions/ nor a git commit" % a)
+    return out
 
 
 def referenced(m):
@@ -151,7 +184,9 @@ if __name__ == "__main__":
     elif cmd == "ids":
         print("\n".join(ids()))
     elif cmd == "changed":
-        print("\n".join(id for id in ids() if version_at(sys.argv[2], id) != load(id)["version"]))
+        print("\n".join(changed(sys.argv[2])))
+    elif cmd == "selected":
+        print("\n".join(selected(sys.argv[2:])))
     elif cmd == "check":
         sys.exit(0 if check() else 1)
     else:
