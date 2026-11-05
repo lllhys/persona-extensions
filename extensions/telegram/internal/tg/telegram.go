@@ -269,6 +269,18 @@ func (c *Conn) Run(ctx context.Context) {
 			}
 			continue
 		}
+		// Connecting can take as long as Telegram is out of reach: until then the status is not the one from before
+		// there were credentials ("还没填…", which would have the user enter them and sign in again). A connection
+		// that dropped keeps its ok meanwhile.
+		c.mu.Lock()
+		if c.status.State != connector.StateOK {
+			why := "正在连 Telegram"
+			if len(st.Session) > 0 {
+				why += "（用存着的登录）"
+			}
+			c.status = connector.Status{State: connector.StateError, Via: st.via(), Error: why}
+		}
+		c.mu.Unlock()
 		cctx, stop := context.WithCancel(ctx)
 		cl, err := c.dial(cctx, creds{st.APIID, st.APIHash}, sessionOf{c}, c.gate, c.updated)
 		if err != nil {

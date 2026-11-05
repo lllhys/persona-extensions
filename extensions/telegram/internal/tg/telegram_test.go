@@ -592,6 +592,36 @@ func TestRestoredSession(t *testing.T) {
 	}
 }
 
+// A stored sign-in that is still connecting (Telegram out of reach, which can take as long as the network does) says
+// so: not that the API credentials are missing, which would have the user enter them again and sign in again.
+func TestConnectingWithAStoredSignIn(t *testing.T) {
+	raw, _ := json.Marshal(stored{APIID: 1234567, APIHash: exampleHash, Session: []byte("example session")})
+	dialing := make(chan struct{})
+	dial := func(ctx context.Context, _ creds, _ sessionStore, _ *gate, _ func()) (client, error) {
+		select {
+		case dialing <- struct{}{}:
+		default:
+		}
+		<-ctx.Done() // never connects
+		return nil, ctx.Err()
+	}
+	quickPace(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	c := newConn(&memSecrets{data: raw}, dial)
+	done := make(chan struct{})
+	go func() { defer close(done); c.Run(ctx) }()
+	t.Cleanup(func() { cancel(); <-done })
+	select {
+	case <-dialing:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not connect")
+	}
+	st := c.Status(ctx)
+	if st.State == connector.StateOK || !strings.Contains(st.Error, "正在连 Telegram") || !strings.HasSuffix(st.Via, "cd9f") {
+		t.Fatalf("status while connecting: %+v", st)
+	}
+}
+
 // Signing out ends the session at Telegram and forgets the credentials and the session; signing in starts at the
 // credentials again.
 func TestLogout(t *testing.T) {
