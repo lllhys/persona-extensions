@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -46,6 +47,34 @@ func fakeAPI(t *testing.T) (*Connector, *[]string) {
 	var seen []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = append(seen, r.URL.RequestURI())
+		// PR 13 has 1001 changed files: ten full pages of 100 plus file #1001 alone on page 11.
+		if r.URL.Path == "/repos/example-org/example-repo/pulls/13/files" {
+			page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			if page < 1 || page > 11 {
+				w.WriteHeader(http.StatusNotFound) // a tripwire: the loop must never page past the short last page
+				return
+			}
+			n := 100
+			if page == 11 {
+				n = 1
+			}
+			var b strings.Builder
+			b.WriteByte('[')
+			for i := 0; i < n; i++ {
+				num := (page-1)*100 + i + 1
+				if i > 0 {
+					b.WriteByte(',')
+				}
+				if num == 1001 {
+					b.WriteString(`{"filename":"src/file1001.go","status":"added","additions":1,"deletions":0,"patch":"@@ -0,0 +1 @@\n+file1001"}`)
+				} else {
+					fmt.Fprintf(&b, `{"filename":"src/file%04d.go","status":"modified","additions":1,"deletions":0,"patch":"@@ -1 +1 @@\n-old\n+new"}`, num)
+				}
+			}
+			b.WriteByte(']')
+			_, _ = w.Write([]byte(b.String()))
+			return
+		}
 		body, ok := routes[r.URL.Path]
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
@@ -145,6 +174,41 @@ func TestDiff(t *testing.T) {
 	if _, err := c.Call(context.Background(), "github_diff", json.RawMessage(`{"repo":"example-org/example-repo","number":12,"path":"nope"}`)); err == nil {
 		t.Error("a file the PR does not change")
 	}
+
+	// A PR with 1001 files pages past the old ten-page cap: the summary totals include file #1001.
+	big, bigSeen := fakeAPI(t)
+	out = call(t, big, "github_diff", `{"repo":"example-org/example-repo","number":13}`)
+	mustContain(t, out, "1001 files changed, +1001 −0", "added src/file1001.go +1 −0")
+	if pages := filePages(*bigSeen, 13); pages != 11 {
+		t.Errorf("the 1001-file summary fetched %d pages, want 11", pages)
+	}
+
+	// A path lookup for a file past #1000 reaches page 11 and returns its patch, not "not among the files".
+	later, laterSeen := fakeAPI(t)
+	out = call(t, later, "github_diff", `{"repo":"example-org/example-repo","number":13,"path":"src/file1001.go"}`)
+	mustContain(t, out, "src/file1001.go (added, +1 −0)", "+file1001")
+	if pages := filePages(*laterSeen, 13); pages != 11 {
+		t.Errorf("the file #1001 lookup fetched %d pages, want 11", pages)
+	}
+
+	// A short first page still stops after one request.
+	small, smallSeen := fakeAPI(t)
+	call(t, small, "github_diff", `{"repo":"example-org/example-repo","number":12}`)
+	if pages := filePages(*smallSeen, 12); pages != 1 {
+		t.Errorf("a one-page PR fetched %d pages, want 1", pages)
+	}
+}
+
+// filePages counts the paged files requests the fake API saw for a pull request.
+func filePages(seen []string, number int) int {
+	prefix := fmt.Sprintf("/repos/example-org/example-repo/pulls/%d/files?", number)
+	n := 0
+	for _, u := range seen {
+		if strings.HasPrefix(u, prefix) {
+			n++
+		}
+	}
+	return n
 }
 
 func TestChecksWithTheEndOfAFailedLog(t *testing.T) {

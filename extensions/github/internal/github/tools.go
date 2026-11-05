@@ -317,7 +317,7 @@ func (c *Connector) diff(ctx context.Context, repo string, number int, path stri
 		Previous  string `json:"previous_filename"`
 	}
 	var files []file
-	for page := 1; page <= 10; page++ { // GitHub lists at most 3000 files
+	for page := 1; (page-1)*100 < filesMost; page++ { // GitHub lists at most filesMost files
 		var batch []file
 		if _, err := c.Get(ctx, fmt.Sprintf("/repos/%s/pulls/%d/files?per_page=100&page=%d", repo, number, page), &batch); err != nil {
 			return "", err
