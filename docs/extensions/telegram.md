@@ -107,6 +107,6 @@ From the repository root:
 go test ./extensions/telegram/...
 ```
 
-Tests use a fake Telegram client and synthetic fixtures, not a real account. [plugin_test.go](../../extensions/telegram/plugin_test.go) compares the manifest with the program's advertised capabilities, checks that both manifest names are equivalent, and runs the official SDK's `exttest` conformance checks (handshake, error codes and exiting when the hub disconnects).
+Tests use a fake Telegram client and synthetic fixtures, not a real account. [plugin_test.go](../../extensions/telegram/plugin_test.go) reads `persona-extension.json`, compares it with the program's advertised capabilities, and runs the official SDK's `exttest` conformance checks (handshake, error codes and exiting when the hub disconnects). The package carries both manifest names because [scripts/package.sh](../../scripts/package.sh) writes `persona-extension.json` and copies it to `persona-plugin.json`; the legacy name is never committed (see [Compatibility](../reference.md#compatibility)).
 
 The [serve adapter](../../extensions/telegram/internal/serve/serve.go) dispatches `connector.*` methods. `connector.secrets.*` and `connector.changed` use the official Go SDK to call the hub. See [protocol reference](../reference.md#process-protocol-and-views).
