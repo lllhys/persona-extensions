@@ -19,7 +19,7 @@ import (
 )
 
 const id = "larkagentx"
-const version = "0.1.2"
+const version = "0.1.3"
 const sendAction = "larkagentx_send_text"
 
 //go:embed persona-extension.json
@@ -126,6 +126,7 @@ type connector struct {
 	factory              func(context.Context, []string) (bridge, error)
 	b                    bridge
 	state                string
+	loggedOut            bool
 	rules                string
 	loginMethod          string
 	qr                   string
@@ -193,27 +194,71 @@ func (c *connector) signal() {
 
 func (c *connector) run() {
 	defer func() { c.op.Lock(); c.detach(); c.op.Unlock() }()
-	c.op.Lock()
-	var res struct {
-		Data []byte `json:"data"`
-	}
-	err := c.secret(c.ctx, "load", &res, nil)
-	c.mu.Lock()
-	if err != nil {
-		c.state = "error"
-	} else if len(res.Data) > 0 {
-		if json.Unmarshal(res.Data, &c.data) != nil {
-			c.data = stored{}
-			c.state = "error"
-		} else if len(c.argv) > 0 && len(c.chats) > 0 && len(c.senders) > 0 && len(c.data.Session) > 0 {
-			c.state = "error"
-		}
-	}
-	c.mu.Unlock()
-	c.op.Unlock()
 	wait := 2 * time.Second
+	loaded := false
 	for c.ctx.Err() == nil {
 		c.op.Lock()
+		if !loaded {
+			c.mu.Lock()
+			haveBridge, haveSession := c.b != nil, len(c.data.Session) > 0
+			c.mu.Unlock()
+			switch {
+			case haveSession:
+				// A session was adopted interactively while loads were failing;
+				// the in-memory state is already authoritative.
+				loaded = true
+			case !haveBridge:
+				var res struct {
+					Data []byte `json:"data"`
+				}
+				err := c.secret(c.ctx, "load", &res, nil)
+				c.mu.Lock()
+				configured := len(c.argv) > 0 && len(c.chats) > 0 && len(c.senders) > 0
+				switch {
+				case err != nil:
+					// Keep loaded=false and retry on the next loop tick with the
+					// 2-60s backoff, so a transient load failure cannot strand a
+					// valid stored session behind interactive re-login.
+					if c.loggedOut {
+						c.state = "not_signed_in"
+					} else {
+						c.state = "error"
+					}
+				case len(res.Data) == 0:
+					loaded = true
+					if configured {
+						c.state = "not_signed_in"
+					} else {
+						c.state = "not_configured"
+					}
+				default:
+					loaded = true
+					if c.loggedOut {
+						// Logout is authoritative for this process even if a
+						// retried load still surfaces the pre-delete blob;
+						// only a fresh interactive login re-arms a session.
+						c.data = stored{}
+						if configured {
+							c.state = "not_signed_in"
+						} else {
+							c.state = "not_configured"
+						}
+					} else if json.Unmarshal(res.Data, &c.data) != nil {
+						c.data = stored{}
+						c.state = "error"
+					} else if !configured || len(c.data.Session) == 0 {
+						if configured {
+							c.state = "not_signed_in"
+						} else {
+							c.state = "not_configured"
+						}
+					} else {
+						c.state = "error"
+					}
+				}
+				c.mu.Unlock()
+			}
+		}
 		c.mu.Lock()
 		can := c.b == nil && len(c.data.Session) > 0 && c.state != "not_signed_in" && c.state != "not_configured"
 		c.mu.Unlock()
@@ -455,6 +500,9 @@ func (c *connector) adopt(ctx context.Context, session json.RawMessage) error {
 		c.setError(err)
 		return err
 	}
+	c.mu.Lock()
+	c.loggedOut = false
+	c.mu.Unlock()
 	c.signal()
 	return nil
 }

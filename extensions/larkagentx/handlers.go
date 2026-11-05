@@ -122,6 +122,7 @@ func (c *connector) handle(ctx context.Context, method string, raw json.RawMessa
 		c.mu.Lock()
 		c.data = stored{}
 		c.state = "not_signed_in"
+		c.loggedOut = true
 		c.mu.Unlock()
 		c.changed()
 		if err := c.secret(ctx, "delete", nil, nil); err != nil {
