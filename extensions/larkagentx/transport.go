@@ -11,7 +11,14 @@ import (
 	"time"
 )
 
-const frameLimit = 1 << 20
+// frameLimit is the maximum JSON frame size in bytes, matching LIMIT in
+// bridge.py. frameScanLimit leaves room for a frame of exactly frameLimit
+// bytes plus its trailing newline: bufio.Scanner fails with ErrTooLong once
+// the token plus its separator cannot fit in the buffer.
+const (
+	frameLimit     = 1 << 20
+	frameScanLimit = frameLimit + 64*1024
+)
 
 type bridgeEvent struct {
 	Event   string  `json:"event"`
@@ -74,7 +81,7 @@ func startBridge(ctx context.Context, argv []string) (bridge, error) {
 func (b *processBridge) read(out io.Reader) {
 	defer func() { b.Close(); _ = b.cmd.Wait(); close(b.done) }()
 	sc := bufio.NewScanner(out)
-	sc.Buffer(make([]byte, 4096), frameLimit)
+	sc.Buffer(make([]byte, 4096), frameScanLimit)
 	for sc.Scan() {
 		var r bridgeReply
 		if json.Unmarshal(sc.Bytes(), &r) != nil {
@@ -112,7 +119,7 @@ func (b *processBridge) Call(ctx context.Context, method string, params, out any
 	ch := make(chan bridgeReply, 1)
 	b.pending[id] = ch
 	raw, err := json.Marshal(map[string]any{"id": id, "method": method, "params": params})
-	if err == nil && len(raw) >= frameLimit {
+	if err == nil && len(raw) > frameLimit {
 		err = errors.New("frame too large")
 	}
 	b.mu.Unlock()

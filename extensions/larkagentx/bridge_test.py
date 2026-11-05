@@ -416,6 +416,15 @@ class CompanionTests(unittest.IsolatedAsyncioTestCase):
                          ['invalid_params', 'invalid_params', 'unknown_method'])
         self.events.clear()
         reader = asyncio.StreamReader(limit=bridge.LIMIT)
+        prefix = b'{"id":3,"method":"synthetic.unknown","params":{"z":"'
+        frame = prefix + b'x' * (bridge.LIMIT - len(prefix) - len(b'"}}')) + b'"}}'
+        self.assertEqual(len(frame), bridge.LIMIT)
+        reader.feed_data(frame + b'\n')
+        reader.feed_eof()
+        await bridge.serve(self.bridge, reader)
+        self.assertEqual(self.events, [{'id': 3, 'error': {'code': 'unknown_method'}}])
+        self.events.clear()
+        reader = asyncio.StreamReader(limit=bridge.LIMIT)
         reader.feed_data(b'x' * (bridge.LIMIT + 1) + b'\n')
         reader.feed_eof()
         await bridge.serve(self.bridge, reader)

@@ -20,17 +20,38 @@ func TestCompanionProcessHelper(t *testing.T) {
 		time.Sleep(time.Minute)
 		os.Exit(0)
 	}
+	if mode == "oversize" {
+		// One byte more than the scanner's max token size: read() must
+		// fail ErrTooLong and close the bridge (fail closed).
+		fmt.Fprintf(os.Stdout, "%s\n", strings.Repeat("x", frameScanLimit+1))
+		os.Exit(0)
+	}
 	fmt.Fprintln(os.Stderr, "synthetic-secret-must-not-be-forwarded")
 	sc := bufio.NewScanner(os.Stdin)
+	sc.Buffer(make([]byte, 4096), frameScanLimit)
 	for sc.Scan() {
 		var req struct {
-			ID     int    `json:"id"`
-			Method string `json:"method"`
+			ID     int             `json:"id"`
+			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
 		}
 		_ = json.Unmarshal(sc.Bytes(), &req)
 		if req.Method == "fail" {
 			fmt.Printf("{\"id\":%d,\"error\":{\"code\":\"synthetic-private-exception\"}}\n", req.ID)
 			continue
+		}
+		if req.Method == "frame.echo" {
+			var p struct {
+				Size int `json:"size"`
+			}
+			_ = json.Unmarshal(req.Params, &p)
+			if p.Size > 0 {
+				prefix := fmt.Appendf(nil, `{"id":%d,"result":{"pad":"`, req.ID)
+				suffix := []byte(`"}}`)
+				filler := []byte(strings.Repeat("x", p.Size-len(prefix)-len(suffix)))
+				fmt.Fprintf(os.Stdout, "%s%s%s\n", prefix, filler, suffix)
+				continue
+			}
 		}
 		if req.Method == "event" {
 			fmt.Println(`{"event":"message","message":{"id":"message-test","chat":"chat-test","sender":"sender-test","text":"Synthetic event"}}`)
@@ -92,4 +113,90 @@ func TestBlockedCompanionHasBoundedTimeout(t *testing.T) {
 	case <-time.After(7 * time.Second):
 		t.Fatal("stalled child did not stop")
 	}
+}
+
+// TestFrameLimitBoundary mirrors the Python companion rule (bridge.py:
+// len(frame) > LIMIT rejects): a JSON payload of exactly frameLimit bytes
+// must pass in both directions, one byte more must be rejected. Everything
+// runs over a synthetic in-process re-exec, no network.
+func TestFrameLimitBoundary(t *testing.T) {
+	t.Setenv("PERSONA_LARKAGENTX_TEST_HELPER", "normal")
+	start := func(t *testing.T) bridge {
+		t.Helper()
+		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(cancel)
+		b, err := startBridge(ctx, []string{os.Args[0], "-test.run=^TestCompanionProcessHelper$"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(b.Close)
+		return b
+	}
+
+	t.Run("outbound exact limit is sent and over limit is rejected", func(t *testing.T) {
+		b := start(t)
+		// A fresh bridge assigns id 1; map keys marshal in the same order
+		// Call uses, so this measures the exact wire size of the request.
+		measure, err := json.Marshal(map[string]any{
+			"id": 1, "method": "frame.echo", "params": map[string]string{"z": ""},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		exact := map[string]string{"z": strings.Repeat("x", frameLimit-len(measure))}
+		if raw, _ := json.Marshal(map[string]any{
+			"id": 1, "method": "frame.echo", "params": exact,
+		}); len(raw) != frameLimit {
+			t.Fatalf("synthetic frame is %d bytes, want %d", len(raw), frameLimit)
+		}
+		var ok struct {
+			State string `json:"state"`
+		}
+		if err = b.Call(context.Background(), "frame.echo", exact, &ok); err != nil || ok.State != "ok" {
+			t.Fatal("exact-limit frame was not sent", err, ok)
+		}
+		over := map[string]string{"z": strings.Repeat("x", frameLimit-len(measure)+1)}
+		if raw, _ := json.Marshal(map[string]any{
+			"id": 2, "method": "frame.echo", "params": over,
+		}); len(raw) != frameLimit+1 {
+			t.Fatalf("synthetic frame is %d bytes, want %d", len(raw), frameLimit+1)
+		}
+		if err = b.Call(context.Background(), "frame.echo", over, nil); err == nil {
+			t.Fatal("frame one byte over the limit was accepted")
+		}
+		// The rejected frame must not have killed the bridge.
+		if err = b.Call(context.Background(), "session.ping", nil, &ok); err != nil || ok.State != "ok" {
+			t.Fatal("bridge did not survive an over-limit frame", err)
+		}
+	})
+
+	t.Run("inbound exact limit is scanned", func(t *testing.T) {
+		b := start(t) // fresh bridge, first request gets id 1
+		var reply struct {
+			Pad string `json:"pad"`
+		}
+		if err := b.Call(context.Background(), "frame.echo", map[string]int{"size": frameLimit}, &reply); err != nil {
+			t.Fatal("exact-limit inbound frame broke the scanner", err)
+		}
+		prefix, suffix := `{"id":1,"result":{"pad":"`, `"}}`
+		if strings.Trim(reply.Pad, "x") != "" || len(prefix)+len(reply.Pad)+len(suffix) != frameLimit {
+			t.Fatalf("inbound reply was not a %d-byte frame", frameLimit)
+		}
+	})
+
+	t.Run("inbound beyond scanner limit closes the bridge", func(t *testing.T) {
+		t.Setenv("PERSONA_LARKAGENTX_TEST_HELPER", "oversize")
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		b, err := startBridge(ctx, []string{os.Args[0], "-test.run=^TestCompanionProcessHelper$"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer b.Close()
+		select {
+		case <-b.Done():
+		case <-time.After(7 * time.Second):
+			t.Fatal("oversized inbound frame did not stop the reader")
+		}
+	})
 }

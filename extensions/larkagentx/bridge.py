@@ -432,11 +432,15 @@ async def serve(bridge, reader):
             raw = await reader.readline()
             if not raw:
                 break
-            if len(raw) > LIMIT:
+            # readline keeps the trailing newline; size the JSON frame itself
+            # so that a payload of exactly LIMIT bytes is accepted, matching
+            # the Go transport.
+            frame = raw[:-1] if raw.endswith(b'\n') else raw
+            if len(frame) > LIMIT:
                 bridge.emit({'id': None, 'error': {'code': 'invalid_params'}})
                 break
             try:
-                request = json.loads(raw.decode('utf-8'), parse_constant=lambda _: None)
+                request = json.loads(frame.decode('utf-8'), parse_constant=lambda _: None)
             except (ValueError, UnicodeError, RecursionError):
                 bridge.emit({'id': None, 'error': {'code': 'invalid_params'}})
                 continue
