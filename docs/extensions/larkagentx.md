@@ -46,7 +46,7 @@ First review the licensing and service-policy boundary above. Use an explicitly 
    personad extension install file:/absolute/path/to/larkagentx-0.1.0.tar.gz
    ```
 
-   CI is disabled for this delivery, so merging does not itself publish a market Release. Local package installation works; a future market release needs the usual release/index-signing workflow.
+   This delivery uses local verification and does not include manual market publication. A merged version can trigger release automation if its jobs start and pass. Until a signed Release/index entry is available, install the local package; a manual market release uses the normal release/index-signing workflow.
 
 2. On the companion, create a private virtual environment and manually install the upstream checkout at the reviewed revision. Follow upstream's installation documentation after obtaining permission. Do not vendor that checkout into this repository or a redistributed Persona package. `python -I` disables user-site packages; install upstream **in the same virtual environment** used for the companion command.
 
