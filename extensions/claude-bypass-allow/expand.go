@@ -4,6 +4,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -19,11 +20,15 @@ const (
 )
 
 // braceMax is how many words braceExpand makes of one word at most, and braceWork how many characters it writes
-// in all: past them, the rest are not made (the first words, which hold the program, are made first).
+// in all. Past them it stops, and when the word has a letter, puts braceTooLarge among the words: that stays with a
+// person.
 const (
 	braceMax  = 4096
 	braceWork = 1 << 20
 )
+
+// braceTooLarge is the word braceExpand puts in place of the words it did not make.
+const braceTooLarge = "\uE003{…}"
 
 // braceExpand is the words the shell makes of w by brace expansion: r{m,} is rm and r, {rm,-rf,x} is rm, -rf and x,
 // {q..s}m is qm, rm and sm. Braces without a comma or a range ({}, {x}) are kept as they are. A word that expansion
@@ -35,17 +40,18 @@ func braceExpand(w string) []string {
 	var out []string
 	work := braceWork
 	expandInto([]rune(w), &out, &work)
-	kept := out[:0]
-	for _, x := range out {
-		if x != "" {
-			kept = append(kept, restoreBraces(x))
-		}
+	for i := range out {
+		out[i] = restoreBraces(out[i])
 	}
-	return kept
+	if work <= 0 && strings.ContainsFunc(w, unicode.IsLetter) {
+		out = append(out, braceTooLarge) // the words not made could spell a program; {1..100000} cannot
+	}
+	return out
 }
 
 func expandInto(rs []rune, out *[]string, work *int) {
 	if len(*out) >= braceMax || *work <= 0 {
+		*work = 0 // out of room: braceExpand marks the word
 		return
 	}
 	*work -= len(rs) + 1
@@ -95,6 +101,7 @@ func expandInto(rs []rune, out *[]string, work *int) {
 		}
 		for _, p := range parts {
 			if len(*out) >= braceMax || *work <= 0 {
+				*work = 0
 				return
 			}
 			w := make([]rune, 0, len(rs)-(end-i+1)+len(p))
@@ -103,7 +110,9 @@ func expandInto(rs []rune, out *[]string, work *int) {
 		}
 		return
 	}
-	*out = append(*out, string(rs))
+	if len(rs) > 0 { // the shell drops a word expansion leaves empty
+		*out = append(*out, string(rs))
+	}
 }
 
 // braceRange is the words of a sequence expression's inside (a..e, 1..10, 1..10..2), nil when it is not one.

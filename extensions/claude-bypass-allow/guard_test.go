@@ -101,6 +101,7 @@ func TestPersonOnly(t *testing.T) {
 		"/usr/bin/su?o rm -rf v", "ba?h -c 'rm -rf v'", "bash -c $'rm -rf v'", "cd x && /bin/r? -rf v",
 		// from the review: a word expansion leaves empty is dropped, and a # in a word after $(…) is not a comment
 		"{,rm} -rf v", "{,} rm -rf v", "{,rm,-rf,v}", "{,rm}{,} -rf v", "{,/usr/bin/rm} -rf v", "{{rm,-rf},x}",
+		"{" + strings.Repeat(",", 5000) + "rm} -rf v", "echo " + strings.Repeat("{a,b}", 20) + "; rm -rf v",
 		"echo $(true)#y; rm -rf v", "echo `true`#y; rm -rf v", "echo $(x)#c && rm -rf v", "x$(echo hi)#z; rm -rf v",
 	}
 	for _, c := range stays {
@@ -144,6 +145,7 @@ func TestPersonOnly(t *testing.T) {
 		"echo $'hello\n'", "[ -f x ] && echo y", "find . -exec grep x {} \\;", "{ echo a; echo b; } | wc -l",
 		"echo '{rm,x}'", "jq '.a | {b,c}' f.json", "cp -r src/{a,b} dst/", "echo x # rm -rf y", "ls *", "./*.sh",
 		"echo {1..3}", "printf '%s\n' {a..e}", "go test ./... -run 'Test{A,B}'",
+		"for i in {1..10000}; do echo $i; done", "seq 1 {1..5000}",
 		"echo {,a}", "ls *.{go,md}", "awk -F, '{print $1}' f.csv", "echo a#b", "echo x #c; # rm -rf v", "(cd x) # rm -rf v",
 		// benign forms for command runners and git subcommands still go through
 		"env FOO=1 go test ./...", "flock /tmp/l make", "trap - EXIT", "trap 'echo done' EXIT",

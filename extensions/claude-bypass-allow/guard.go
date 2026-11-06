@@ -562,6 +562,9 @@ func segmentPersonOnly(words []string, depth int) string {
 		if first && strings.Contains(w, "=") && !strings.HasPrefix(w, "-") {
 			continue
 		}
+		if w == braceTooLarge {
+			return "unclear: a brace expansion too large to read"
+		}
 		program := first || wrapped
 		first = false
 		name := path.Base(w)
