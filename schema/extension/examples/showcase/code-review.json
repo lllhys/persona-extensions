@@ -1,0 +1,151 @@
+{
+  "title": "#42 Retry uploads when the network drops",
+  "layout": "split",
+  "tabs": {
+    "name": "tab",
+    "value": "files",
+    "items": [
+      {"value": "overview", "title": "概览"},
+      {"value": "files", "title": "改动", "badge": "3"},
+      {"value": "commits", "title": "提交", "badge": "2"},
+      {"value": "checks", "title": "检查"}
+    ],
+    "action": {"id": "tab"}
+  },
+  "state": "{\"repo\":\"example/app\",\"number\":42}",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "header",
+          "key": "head",
+          "title": "Retry uploads when the network drops",
+          "subtitle": "example/app #42",
+          "badges": [{"text": "开放", "tone": "positive"}, {"text": "需要审阅", "tone": "caution"}],
+          "facts": [
+            {"label": "作者", "value": "alice", "icon": "person"},
+            {"label": "分支", "value": "feat/retry → main", "icon": "branch"},
+            {"label": "改动", "value": "+18 −4 · 3 个文件", "icon": "code"},
+            {"label": "更新", "value": "2 小时前", "icon": "clock"}
+          ],
+          "avatar": {"text": "A"}
+        }
+      ]
+    },
+    {
+      "title": "文件",
+      "pane": "side",
+      "items": [
+        {
+          "type": "file_tree",
+          "key": "files",
+          "selected": "src/upload/retry.go",
+          "entries": [
+            {"path": "src/upload/retry.go", "status": "added", "additions": 12, "comments": 1},
+            {"path": "src/upload/client.go", "status": "modified", "additions": 5, "deletions": 3},
+            {"path": "docs/upload.md", "status": "modified", "additions": 1, "deletions": 1}
+          ],
+          "action": {"id": "open_file"}
+        }
+      ]
+    },
+    {
+      "items": [
+        {
+          "type": "diff",
+          "key": "diff:src/upload/retry.go",
+          "path": "src/upload/retry.go",
+          "status": "added",
+          "language": "go",
+          "additions": 12,
+          "hunks": [
+            {
+              "header": "@@ -0,0 +1,12 @@",
+              "old_start": 0,
+              "new_start": 1,
+              "lines": [
+                "+package upload",
+                "+",
+                "+import \"time\"",
+                "+",
+                "+// Retry calls f until it succeeds or attempts run out.",
+                "+func Retry(attempts int, f func() error) error {",
+                "+\tvar err error",
+                "+\tfor i := 0; i < attempts; i++ {",
+                "+\t\tif err = f(); err == nil {",
+                "+\t\t\treturn nil",
+                "+\t\t}",
+                "+\t\ttime.Sleep(time.Duration(i) * time.Second)"
+              ]
+            }
+          ],
+          "threads": [
+            {
+              "id": "t1",
+              "side": "new",
+              "line": 12,
+              "comments": [
+                {"id": "c1", "author": "bob", "avatar": {"text": "B"}, "at": "2026-11-05T08:00:00Z", "body": "Should this back off **exponentially**? `1 << i` maybe."},
+                {"id": "c2", "author": "alice", "avatar": {"text": "A"}, "at": "2026-11-05T09:30:00Z", "body": "Good call, will change."}
+              ],
+              "reply": {"id": "reply", "values": {"thread": "t1"}}
+            }
+          ],
+          "comment": {"id": "inline_comment"}
+        },
+        {
+          "type": "diff",
+          "key": "diff:src/upload/client.go",
+          "path": "src/upload/client.go",
+          "status": "modified",
+          "language": "go",
+          "additions": 5,
+          "deletions": 3,
+          "hunks": [
+            {
+              "header": "@@ -20,7 +20,9 @@ func (c *Client) Upload(ctx context.Context, f File) error {",
+              "old_start": 20,
+              "new_start": 20,
+              "lines": [
+                " \treq, err := c.request(ctx, f)",
+                " \tif err != nil {",
+                " \t\treturn err",
+                " \t}",
+                "-\tresp, err := c.http.Do(req)",
+                "-\tif err != nil {",
+                "-\t\treturn err",
+                "+\tvar resp *http.Response",
+                "+\terr = Retry(3, func() error {",
+                "+\t\tresp, err = c.http.Do(req)",
+                "+\t\treturn err",
+                "+\t})",
+                "+\tif err != nil {",
+                " \t}"
+              ]
+            },
+            {
+              "old_start": 58,
+              "new_start": 60,
+              "lines": [
+                " \treturn nil",
+                " }"
+              ]
+            }
+          ],
+          "expand": {"id": "expand"},
+          "comment": {"id": "inline_comment"}
+        },
+        {
+          "type": "diff",
+          "key": "diff:docs/upload.md",
+          "path": "docs/upload.md",
+          "status": "modified",
+          "additions": 1,
+          "deletions": 1,
+          "collapsed": true,
+          "load": {"id": "load_diff"}
+        }
+      ]
+    }
+  ]
+}

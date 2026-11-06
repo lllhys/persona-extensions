@@ -1,0 +1,11 @@
+{
+  "contribution": "examplechat",
+  "message": {
+    "id": "msg_example_12",
+    "text": "What is in this picture?",
+    "images": [{"mime": "image/png", "data": "iVBORw0KGgo="}],
+    "quote": "The example build is green again.",
+    "reply_to": "msg_example_11",
+    "unsupported": ["A voice message"]
+  }
+}

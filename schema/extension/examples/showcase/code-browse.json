@@ -1,0 +1,66 @@
+{
+  "title": "example/app",
+  "layout": "split",
+  "tabs": {
+    "name": "tab",
+    "value": "code",
+    "items": [
+      {"value": "code", "title": "代码"},
+      {"value": "prs", "title": "合并请求", "badge": "4"},
+      {"value": "commits", "title": "提交"}
+    ],
+    "action": {"id": "tab"}
+  },
+  "filter": {
+    "name": "ref",
+    "title": "分支",
+    "value": "main",
+    "choices": [{"value": "main"}, {"value": "feat/retry"}, {"value": "release/1.2"}],
+    "action": {"id": "ref"}
+  },
+  "sections": [
+    {
+      "pane": "side",
+      "items": [
+        {
+          "type": "file_tree",
+          "key": "tree",
+          "selected": "src/upload/retry.go",
+          "entries": [
+            {"path": "docs", "kind": "dir"},
+            {"path": "src", "kind": "dir"},
+            {"path": "src/upload", "kind": "dir"},
+            {"path": "src/upload/client.go"},
+            {"path": "src/upload/retry.go"},
+            {"path": "README.md"},
+            {"path": "go.mod"}
+          ],
+          "action": {"id": "open_file"},
+          "expand": {"id": "open_dir"}
+        }
+      ]
+    },
+    {
+      "items": [
+        {
+          "type": "breadcrumb",
+          "key": "path",
+          "crumbs": [
+            {"title": "example/app", "action": {"id": "open_dir", "values": {"path": ""}}},
+            {"title": "src", "action": {"id": "open_dir", "values": {"path": "src"}}},
+            {"title": "upload", "action": {"id": "open_dir", "values": {"path": "src/upload"}}},
+            {"title": "retry.go"}
+          ]
+        },
+        {
+          "type": "code",
+          "key": "file",
+          "path": "src/upload/retry.go",
+          "language": "go",
+          "text": "package upload\n\nimport \"time\"\n\n// Retry calls f until it succeeds or attempts run out.\nfunc Retry(attempts int, f func() error) error {\n\tvar err error\n\tfor i := 0; i < attempts; i++ {\n\t\tif err = f(); err == nil {\n\t\t\treturn nil\n\t\t}\n\t\ttime.Sleep(time.Duration(1<<i) * time.Second)\n\t}\n\treturn err\n}\n",
+          "highlight": {"start": 6, "end": 6}
+        }
+      ]
+    }
+  ]
+}

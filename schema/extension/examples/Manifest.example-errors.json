@@ -1,0 +1,14 @@
+{
+  "manifest_version": 1,
+  "id": "example-errors",
+  "name": "Example Errors",
+  "version": "1.0.0",
+  "description": "Forwards the hub's and the devices' error and crash reports to an error tracker.",
+  "engines": {"persona": ">=202611060000", "extension_protocol": 1},
+  "runtime": {"command": {"linux-amd64": "bin/example-errors-linux-amd64", "darwin-arm64": "bin/example-errors-darwin-arm64"}},
+  "activation_events": ["on_startup"],
+  "contributes": {"error_reports": [{"id": "tracker"}, {"id": "apps", "sources": ["web", "android", "ios"]}]},
+  "configuration": {"type": "object", "properties": {"environment": {"type": "string", "title": "Environment", "default": "production"}}},
+  "secrets": [{"name": "dsn", "title": "DSN", "required": true}],
+  "permissions": {"network": ["*.errors.example.com"], "error_reports": true}
+}

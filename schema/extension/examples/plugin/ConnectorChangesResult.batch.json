@@ -1,0 +1,26 @@
+{
+  "batches": [
+    {
+      "chat": {"id": "group_example_1", "name": "Example group", "kind": "group", "updated_at": "2026-11-04T08:26:00Z"},
+      "messages": [
+        {
+          "id": "6",
+          "sender_id": "user_example_a",
+          "sender_name": "Example A",
+          "type": "TEXT",
+          "text": "@you please look at this example document",
+          "at": "2026-11-04T08:26:00Z",
+          "media": ["file:6:example.pdf"],
+          "sender_handles": [{"kind": "examplechat", "value": "user_example_a"}]
+        }
+      ]
+    },
+    {
+      "source": "examplefeed",
+      "chat": {"id": "post_example_1", "name": "An example post", "kind": "group"},
+      "messages": [{"id": "c1", "sender_name": "Example B", "text": "Nice example.", "at": "2026-11-04T09:00:00Z"}]
+    }
+  ],
+  "next": "cursor-7",
+  "more": true
+}

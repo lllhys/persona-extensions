@@ -1,0 +1,40 @@
+{
+  "title": "按钮",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "button",
+          "title": "普通按钮",
+          "action": {
+            "id": "toast"
+          }
+        },
+        {
+          "type": "button",
+          "title": "危险按钮（先确认）",
+          "action": {
+            "id": "delete",
+            "confirm": "真的要删掉吗？这只是展示，不会删任何东西。"
+          },
+          "role": "destructive"
+        },
+        {
+          "type": "button",
+          "title": "打开一个网址",
+          "action": {
+            "id": "open-url"
+          }
+        },
+        {
+          "type": "button",
+          "title": "很长的按钮文字也只占一行：长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长",
+          "action": {
+            "id": "toast"
+          }
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"button\"}"
+}

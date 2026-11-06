@@ -10,6 +10,7 @@
     },
     "role": "center",
     "timezone": "Asia/Shanghai",
+    "locale": "en",
     "capabilities": [
       "inbox_group"
     ]

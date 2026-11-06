@@ -1,0 +1,18 @@
+{
+  "protocol": 1,
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "version": 2,
+  "base_version": 1,
+  "operations": [
+    {
+      "op": "replace",
+      "key": "counter",
+      "item": {
+        "type": "html",
+        "key": "counter",
+        "html": "not allowed"
+      }
+    }
+  ]
+}

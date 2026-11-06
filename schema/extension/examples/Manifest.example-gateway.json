@@ -10,7 +10,7 @@
     "command": "bin/example-gateway"
   },
   "activation_events": [
-    "on_call"
+    "on_startup"
   ],
   "contributes": {
     "quota": [

@@ -1,0 +1,7 @@
+{
+  "chats": {
+    "at_me": [{"name": "Example group", "unread": 2, "preview": "@you please look at this"}],
+    "other": [{"name": "Example B", "unread": 1}]
+  },
+  "meetings": [{"start": "2026-11-04T14:00:00Z", "end": "2026-11-04T14:30:00Z", "title": "Example meeting"}]
+}

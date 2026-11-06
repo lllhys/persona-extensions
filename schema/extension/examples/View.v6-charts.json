@@ -1,0 +1,35 @@
+{
+  "title": "行情",
+  "sections": [
+    {
+      "items": [
+        {"type": "chart", "key": "k", "kind": "candlestick", "title": "日 K", "unit": "元", "rising": "red", "series": [{"points": [
+          {"label": "11-02", "value": 10.2, "open": 10.0, "high": 10.5, "low": 9.8, "close": 10.2, "volume": 120000},
+          {"label": "11-03", "value": 10.1, "open": 10.2, "high": 10.4, "low": 10.0, "close": 10.1, "volume": 98000},
+          {"label": "11-04", "value": 10.6, "open": 10.1, "high": 10.8, "low": 10.1, "close": 10.6, "volume": 150000}
+        ]}]},
+        {"type": "chart", "key": "area", "kind": "area", "stacked": true, "title": "用电", "unit": "kWh", "series": [
+          {"name": "空调", "color": "blue", "points": [{"label": "一", "value": 3}, {"label": "二", "value": 4}, {"label": "三", "value": 2}]},
+          {"name": "热水器", "color": "orange", "points": [{"label": "一", "value": 1}, {"label": "二", "value": 1.5}, {"label": "三", "value": 1}]}
+        ]},
+        {"type": "chart", "key": "donut", "kind": "donut", "center": "¥12,400", "title": "持仓", "series": [{"points": [
+          {"label": "股票", "value": 7400, "display": "¥7,400"}, {"label": "基金", "value": 3000}, {"label": "现金", "value": 2000}
+        ]}]},
+        {"type": "chart", "key": "pie", "kind": "pie", "title": "来源", "series": [{"points": [
+          {"label": "太阳能", "value": 40}, {"label": "电网", "value": 60}
+        ]}]}
+      ]
+    },
+    {
+      "title": "自选",
+      "items": [
+        {"type": "row", "key": "s1", "title": "示例科技", "subtitle": "000001", "value": "10.60", "badge": {"text": "+4.95%", "color": "red"},
+          "spark": {"values": [10.0, 10.2, 10.1, 10.6], "color": "red"}},
+        {"type": "stat_grid", "key": "idx", "stats": [
+          {"label": "指数 A", "value": "3,200", "detail": "+0.8%", "tone": "positive", "spark": {"values": [3170, 3185, 3200], "tone": "positive"}},
+          {"label": "指数 B", "value": "10,100", "spark": {"values": [10200, 10150, 10100]}}
+        ]}
+      ]
+    }
+  ]
+}

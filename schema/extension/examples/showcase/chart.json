@@ -1,0 +1,263 @@
+{
+  "title": "图表",
+  "sections": [
+    {
+      "title": "柱状",
+      "items": [
+        {
+          "type": "chart",
+          "detail": "两个系列并排",
+          "title": "近 7 天",
+          "kind": "bar",
+          "series": [
+            {
+              "name": "输入",
+              "points": [
+                {
+                  "label": "10-30",
+                  "value": 1200000
+                },
+                {
+                  "label": "10-31",
+                  "value": 800000
+                },
+                {
+                  "label": "11-01",
+                  "value": 1500000
+                },
+                {
+                  "label": "11-02",
+                  "value": 900000
+                },
+                {
+                  "label": "11-03",
+                  "value": 2100000
+                },
+                {
+                  "label": "11-04",
+                  "value": 1700000
+                },
+                {
+                  "label": "11-05",
+                  "value": 600000
+                }
+              ]
+            },
+            {
+              "name": "输出",
+              "points": [
+                {
+                  "label": "10-30",
+                  "value": 300000
+                },
+                {
+                  "label": "10-31",
+                  "value": 250000
+                },
+                {
+                  "label": "11-01",
+                  "value": 410000
+                },
+                {
+                  "label": "11-02",
+                  "value": 200000
+                },
+                {
+                  "label": "11-03",
+                  "value": 520000
+                },
+                {
+                  "label": "11-04",
+                  "value": 380000
+                },
+                {
+                  "label": "11-05",
+                  "value": 150000
+                }
+              ]
+            }
+          ],
+          "unit": "tokens"
+        }
+      ]
+    },
+    {
+      "title": "叠起来",
+      "items": [
+        {
+          "type": "chart",
+          "title": "近 7 天",
+          "kind": "bar",
+          "series": [
+            {
+              "name": "输入",
+              "points": [
+                {
+                  "label": "10-30",
+                  "value": 1200000
+                },
+                {
+                  "label": "10-31",
+                  "value": 800000
+                },
+                {
+                  "label": "11-01",
+                  "value": 1500000
+                },
+                {
+                  "label": "11-02",
+                  "value": 900000
+                },
+                {
+                  "label": "11-03",
+                  "value": 2100000
+                },
+                {
+                  "label": "11-04",
+                  "value": 1700000
+                },
+                {
+                  "label": "11-05",
+                  "value": 600000
+                }
+              ]
+            },
+            {
+              "name": "输出",
+              "points": [
+                {
+                  "label": "10-30",
+                  "value": 300000
+                },
+                {
+                  "label": "10-31",
+                  "value": 250000
+                },
+                {
+                  "label": "11-01",
+                  "value": 410000
+                },
+                {
+                  "label": "11-02",
+                  "value": 200000
+                },
+                {
+                  "label": "11-03",
+                  "value": 520000
+                },
+                {
+                  "label": "11-04",
+                  "value": 380000
+                },
+                {
+                  "label": "11-05",
+                  "value": 150000
+                }
+              ]
+            }
+          ],
+          "unit": "tokens",
+          "stacked": true
+        }
+      ]
+    },
+    {
+      "title": "折线",
+      "items": [
+        {
+          "type": "chart",
+          "detail": "一个系列、display 写法",
+          "title": "费用",
+          "kind": "line",
+          "series": [
+            {
+              "points": [
+                {
+                  "label": "10-30",
+                  "value": 1.2,
+                  "display": "¥1.20"
+                },
+                {
+                  "label": "10-31",
+                  "value": 0.8,
+                  "display": "¥0.80"
+                },
+                {
+                  "label": "11-01",
+                  "value": 2.4,
+                  "display": "¥2.40"
+                },
+                {
+                  "label": "11-02",
+                  "value": 1.6,
+                  "display": "¥1.60"
+                },
+                {
+                  "label": "11-03",
+                  "value": 3.1,
+                  "display": "¥3.10"
+                },
+                {
+                  "label": "11-04",
+                  "value": 2.2,
+                  "display": "¥2.20"
+                },
+                {
+                  "label": "11-05",
+                  "value": 0.5,
+                  "display": "¥0.50"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "有负数、有语气",
+      "items": [
+        {
+          "type": "chart",
+          "kind": "bar",
+          "series": [
+            {
+              "name": "差额",
+              "tone": "danger",
+              "points": [
+                {
+                  "label": "10-30",
+                  "value": 5
+                },
+                {
+                  "label": "10-31",
+                  "value": -3
+                },
+                {
+                  "label": "11-01",
+                  "value": 2
+                },
+                {
+                  "label": "11-02",
+                  "value": -8
+                },
+                {
+                  "label": "11-03",
+                  "value": 4
+                },
+                {
+                  "label": "11-04",
+                  "value": 0
+                },
+                {
+                  "label": "11-05",
+                  "value": -1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"chart\"}"
+}

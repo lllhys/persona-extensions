@@ -1,0 +1,26 @@
+{
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "stat_grid",
+          "stats": [
+            {
+              "label": "组件",
+              "value": "15"
+            },
+            {
+              "label": "页面",
+              "value": "17"
+            },
+            {
+              "label": "状态",
+              "value": "正常",
+              "tone": "positive"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

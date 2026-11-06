@@ -1,0 +1,21 @@
+{
+  "thread": "primary.group_example_1",
+  "kind": "mention",
+  "label": "Mentioned",
+  "title": "Example group",
+  "sender": "Example A",
+  "preview": "@you please look at this example document",
+  "context": "Example A (08:21): Hello, today's example meeting moves to the afternoon.\nExample A (08:26): @you please look at this example document",
+  "at": "2026-11-04T08:26:00Z",
+  "last": "6",
+  "url": "https://chat.example.com/chats/group_example_1",
+  "reply_to": "Example group (everyone in it)",
+  "can_reply": true,
+  "tier": "action",
+  "why": "Rule: someone @-mentions you",
+  "tags": [
+    {"key": "chat", "value": "primary.group_example_1", "name": "Example group"},
+    {"key": "sender", "value": "user_example_a", "name": "Example A"}
+  ],
+  "extra": {"rule_tier": "action"}
+}

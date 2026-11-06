@@ -1,0 +1,28 @@
+{
+  "title": "前门",
+  "sections": [
+    {
+      "items": [
+        {"type": "text", "text": "摄像头", "style": "title"},
+        {"type": "image", "key": "cam", "src": {"ref": "camera.front_door", "width": 1920, "height": 1080}, "alt": "前门摄像头的画面", "caption": "刚刚", "aspect": "wide"},
+        {"type": "image", "key": "map", "src": {"ref": "vacuum.map"}, "alt": "扫地机的地图", "aspect": "square", "fit": "fit", "no_zoom": true},
+        {"type": "image", "key": "photo", "src": {"url": "https://example.com/photo.jpg"}, "alt": "一张照片", "aspect": "auto"}
+      ]
+    },
+    {
+      "title": "家人",
+      "items": [
+        {"type": "text", "text": "最近到家", "style": "headline"},
+        {"type": "row", "key": "a", "title": "小明", "subtitle": "18:02 到家", "avatar": {"ref": "person.a", "text": "明"}, "badge": {"text": "在家", "color": "green"}},
+        {"type": "row", "key": "b", "title": "快递", "thumbnail": {"ref": "camera.front_door.snapshot", "aspect": "wide"}, "badge": {"text": "门口", "color": "amber"}},
+        {"type": "row", "key": "c", "title": "车库", "icon": "car", "icon_color": "blue", "value": "已关"}
+      ]
+    },
+    {
+      "items": [
+        {"type": "metric", "key": "power", "label": "今日用电", "value": "12.4 kWh", "icon": "bolt", "icon_color": "yellow", "spark": {"values": [0.4, 0.6, 1.2, 0.9, 1.6, 2.1], "fill": true}},
+        {"type": "empty", "key": "none", "title": "没有新的动态", "icon": "shield", "icon_color": "teal"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "manifest_version": 1,
+  "id": "example-cli",
+  "name": "Example CLI",
+  "version": "1.0.0",
+  "description": "An extension built on a command line it installs itself, signed in with a device code.",
+  "engines": {"persona": ">=202611060000", "extension_protocol": 1},
+  "runtime": {"command": {"linux-amd64": "bin/example-cli-linux-amd64", "darwin-arm64": "bin/example-cli-darwin-arm64"}},
+  "activation_events": ["on_startup"],
+  "contributes": {"ui": [{"id": "login", "title": "登录", "placement": "extension_page"}]},
+  "tools": [
+    {
+      "name": "node",
+      "title": "Node.js",
+      "version": "22.23.4",
+      "check": {"args": ["--version"], "min_version": "18.0.0"},
+      "archive": {
+        "linux-amd64": {"url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-x64.tar.gz", "sha256": "b8492284c76a54baf58d61668dd0e41ee0fc98adabf9503d30f05d08f55b4406", "path": "node-v22.23.4-linux-x64/bin/node"},
+        "darwin-arm64": {"url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-darwin-arm64.tar.gz", "sha256": "c9e1dbc748b33ed2d14f42445191ecaf14c56259c7a9a26d0042c49ec2b66428", "path": "node-v22.23.4-darwin-arm64/bin/node",
+                         "mirrors": ["https://cdn.npmmirror.com/binaries/node/v22.23.4/node-v22.23.4-darwin-arm64.tar.gz"]}
+      }
+    },
+    {
+      "name": "example-cli",
+      "version": "2.3.4",
+      "requires": ["node"],
+      "check": {"min_version": "2.0.0"},
+      "npm": {"package": "@example/example-cli", "version": "2.3.4", "registry": "https://registry.example.com", "integrity": "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==", "bin": "example-cli"}
+    }
+  ],
+  "auth": {"title": "示例账号", "description": "用示例账号扫码确认", "page": "login"}
+}

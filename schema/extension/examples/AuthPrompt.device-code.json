@@ -1,0 +1,1 @@
+{"step": "wait", "kind": "device_code", "url": "https://login.example.com/device", "user_code": "ABCD-1234", "interval": 5, "expires_at": "2026-11-06T10:00:00Z"}

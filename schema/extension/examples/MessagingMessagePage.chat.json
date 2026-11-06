@@ -1,0 +1,279 @@
+{
+  "account": "1",
+  "has_older": true,
+  "older_cursor": "199",
+  "messages": [
+    {
+      "id": "m200",
+      "position": "200",
+      "created_at": "2026-11-05T02:00:00Z",
+      "sender": {
+        "id": "u1",
+        "name": "李雷",
+        "avatar": "media/avatar-u1"
+      },
+      "mine": false,
+      "text": "周五下午三点评审，带上新图标",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "周五下午三点评审，",
+          "marks": [
+            "bold"
+          ]
+        },
+        {
+          "kind": "mention",
+          "text": "@Lucy",
+          "user_id": "u2"
+        },
+        {
+          "kind": "text",
+          "text": "带上新图标"
+        },
+        {
+          "kind": "emoji",
+          "key": "thumbsup",
+          "text": "[赞]"
+        }
+      ],
+      "reactions": [
+        {
+          "key": "thumbsup",
+          "count": 2,
+          "mine": true,
+          "users": [
+            "我",
+            "Lucy"
+          ]
+        }
+      ],
+      "decorations": [
+        {
+          "text": "勇攀高峰 · 已解码",
+          "icon": "shield"
+        }
+      ],
+      "thread": {
+        "count": 3
+      },
+      "actions": [
+        {
+          "id": "summarize",
+          "title": "总结"
+        }
+      ]
+    },
+    {
+      "id": "m201",
+      "position": "201",
+      "sender": {
+        "name": "Lucy Wang"
+      },
+      "mine": false,
+      "text": "[图片] 图标.png",
+      "parts": [
+        {
+          "kind": "image",
+          "media": "media/img-1?w=640",
+          "width": 640,
+          "height": 480
+        },
+        {
+          "kind": "file",
+          "name": "图标.sketch",
+          "media": "messages/m201/media/f1",
+          "size": 2048000,
+          "ext": "sketch"
+        }
+      ],
+      "reply_to": {
+        "id": "m200",
+        "sender_name": "李雷",
+        "summary": "周五下午三点评审，带上新图标"
+      }
+    },
+    {
+      "id": "m202",
+      "position": "202",
+      "sender": {
+        "name": "我"
+      },
+      "mine": true,
+      "client_id": "0b6d3c1e-7f2a-4a55-9d8e-2c1a4f5b6e7d",
+      "text": "加密消息",
+      "private": true,
+      "private_text": "稍后确认",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "会议室改到 3 楼"
+        }
+      ],
+      "decorations": [
+        {
+          "text": "加密消息",
+          "icon": "lock"
+        }
+      ]
+    },
+    {
+      "id": "m203",
+      "position": "203",
+      "sender": {
+        "name": "系统",
+        "kind": "system"
+      },
+      "mine": false,
+      "text": "李雷 撤回了一条消息",
+      "parts": [
+        {
+          "kind": "system",
+          "text": "李雷 撤回了一条消息"
+        }
+      ]
+    },
+    {
+      "id": "m204",
+      "position": "204",
+      "sender": {
+        "name": "审批机器人",
+        "kind": "bot"
+      },
+      "mine": false,
+      "text": "请假申请",
+      "parts": [
+        {
+          "kind": "card",
+          "text": "请假申请",
+          "view": {
+            "sections": [
+              {
+                "title": "请假申请",
+                "items": [
+                  {
+                    "type": "row",
+                    "title": "申请人",
+                    "value": "李雷"
+                  },
+                  {
+                    "type": "button",
+                    "title": "同意",
+                    "action": {
+                      "id": "approve"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "m205",
+      "position": "205",
+      "sender": {
+        "name": "Lucy Wang"
+      },
+      "mine": false,
+      "edited": true,
+      "recalled": true,
+      "text": "原定会议室 A",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "原定会议室 A"
+        }
+      ],
+      "edit_history": [
+        {
+          "edited_at": "2026-11-05T01:00:00Z",
+          "text": "会议室 B",
+          "parts": [
+            {
+              "kind": "text",
+              "text": "会议室 B"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m206",
+      "position": "206",
+      "sender": {
+        "name": "李雷"
+      },
+      "mine": false,
+      "text": "[合并转发] 聊天记录",
+      "parts": [
+        {
+          "kind": "forward",
+          "title": "李雷和 Lucy 的聊天记录",
+          "count": 12,
+          "previews": [
+            {
+              "sender_name": "李雷",
+              "text": "先看图标"
+            }
+          ]
+        },
+        {
+          "kind": "share",
+          "title": "设计评审群",
+          "subtitle": "群名片",
+          "fields": [
+            {
+              "label": "成员",
+              "value": "12 人"
+            }
+          ]
+        },
+        {
+          "kind": "video",
+          "media": "media/v1",
+          "duration_ms": 6000,
+          "poster": {
+            "media": "media/v1-poster",
+            "width": 640,
+            "height": 360
+          }
+        },
+        {
+          "kind": "audio",
+          "media": "media/a1",
+          "duration_ms": 3000
+        },
+        {
+          "kind": "sticker",
+          "media": "media/s1",
+          "width": 120,
+          "height": 120
+        },
+        {
+          "kind": "link",
+          "text": "文档",
+          "url": "https://example.feishu.cn/docx/abc"
+        },
+        {
+          "kind": "code",
+          "text": "print(1)",
+          "language": "python"
+        },
+        {
+          "kind": "divider"
+        },
+        {
+          "kind": "text",
+          "text": "第一项",
+          "block": "list_item",
+          "list": {
+            "ordered": true,
+            "start": 1
+          }
+        }
+      ]
+    }
+  ]
+}

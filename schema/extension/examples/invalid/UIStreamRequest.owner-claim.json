@@ -1,0 +1,8 @@
+{
+  "request": "close",
+  "protocol": 1,
+  "request_id": "request-a",
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "owner": "someone-else"
+}

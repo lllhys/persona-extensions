@@ -1,0 +1,30 @@
+{
+  "account": "1",
+  "next_cursor": "c2",
+  "conversations": [
+    {
+      "id": "7123",
+      "name": "设计评审",
+      "kind": "group",
+      "unread": 3,
+      "mentioned": true,
+      "preview": "@你 新版图标放在这里了",
+      "preview_sender": "Lucy Wang",
+      "updated_at": "2026-11-05T02:00:00Z",
+      "read_position": "199",
+      "mention_position": "202"
+    },
+    {
+      "id": "7124",
+      "name": "韩梅梅",
+      "avatar": "media/avatar-u_hmm",
+      "kind": "direct",
+      "unread": 0,
+      "muted": true,
+      "pinned": true,
+      "preview": "新包发你了",
+      "preview_mine": true,
+      "updated_at": "2026-11-05T01:00:00Z"
+    }
+  ]
+}

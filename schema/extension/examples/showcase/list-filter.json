@@ -1,0 +1,343 @@
+{
+  "title": "列表",
+  "sections": [
+    {
+      "title": "20 条，显示 20 条",
+      "items": [
+        {
+          "type": "row",
+          "key": "item-2",
+          "title": "示例条目 02",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:2",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"2\"}",
+              "title": "示例条目 02"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-5",
+          "title": "示例条目 05",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:5",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"5\"}",
+              "title": "示例条目 05"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-8",
+          "title": "示例条目 08",
+          "subtitle": "聊天",
+          "badge": {
+            "text": "完成",
+            "tone": "positive"
+          },
+          "action": {
+            "id": "detail:8",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"8\"}",
+              "title": "示例条目 08"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-11",
+          "title": "示例条目 11",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:11",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"11\"}",
+              "title": "示例条目 11"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-14",
+          "title": "示例条目 14",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:14",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"14\"}",
+              "title": "示例条目 14"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-17",
+          "title": "示例条目 17",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:17",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"17\"}",
+              "title": "示例条目 17"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-20",
+          "title": "示例条目 20",
+          "subtitle": "聊天",
+          "badge": {
+            "text": "完成",
+            "tone": "positive"
+          },
+          "action": {
+            "id": "detail:20",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"20\"}",
+              "title": "示例条目 20"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-23",
+          "title": "示例条目 23",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:23",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"23\"}",
+              "title": "示例条目 23"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-26",
+          "title": "示例条目 26",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:26",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"26\"}",
+              "title": "示例条目 26"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-29",
+          "title": "示例条目 29",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:29",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"29\"}",
+              "title": "示例条目 29"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-32",
+          "title": "示例条目 32",
+          "subtitle": "聊天",
+          "badge": {
+            "text": "完成",
+            "tone": "positive"
+          },
+          "action": {
+            "id": "detail:32",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"32\"}",
+              "title": "示例条目 32"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-35",
+          "title": "示例条目 35",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:35",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"35\"}",
+              "title": "示例条目 35"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-38",
+          "title": "示例条目 38",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:38",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"38\"}",
+              "title": "示例条目 38"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-41",
+          "title": "示例条目 41",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:41",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"41\"}",
+              "title": "示例条目 41"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-44",
+          "title": "示例条目 44",
+          "subtitle": "聊天",
+          "badge": {
+            "text": "完成",
+            "tone": "positive"
+          },
+          "action": {
+            "id": "detail:44",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"44\"}",
+              "title": "示例条目 44"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-47",
+          "title": "示例条目 47",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:47",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"47\"}",
+              "title": "示例条目 47"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-50",
+          "title": "示例条目 50",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:50",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"50\"}",
+              "title": "示例条目 50"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-53",
+          "title": "示例条目 53",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:53",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"53\"}",
+              "title": "示例条目 53"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-56",
+          "title": "示例条目 56",
+          "subtitle": "聊天",
+          "badge": {
+            "text": "完成",
+            "tone": "positive"
+          },
+          "action": {
+            "id": "detail:56",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"56\"}",
+              "title": "示例条目 56"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-59",
+          "title": "示例条目 59",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:59",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"59\"}",
+              "title": "示例条目 59"
+            }
+          },
+          "icon": "chat"
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"list\",\"kind\":\"chat\"}",
+  "search": {
+    "placeholder": "条目名",
+    "action": {
+      "id": "search"
+    }
+  },
+  "filter": {
+    "name": "kind",
+    "title": "种类",
+    "choices": [
+      {
+        "value": "all",
+        "title": "全部"
+      },
+      {
+        "value": "doc",
+        "title": "文档"
+      },
+      {
+        "value": "chat",
+        "title": "聊天"
+      },
+      {
+        "value": "mail",
+        "title": "邮件"
+      }
+    ],
+    "value": "chat",
+    "action": {
+      "id": "kind"
+    }
+  }
+}

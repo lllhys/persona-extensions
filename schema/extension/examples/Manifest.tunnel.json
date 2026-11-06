@@ -1,0 +1,34 @@
+{
+  "manifest_version": 1,
+  "id": "example-tunnel",
+  "name": "Example Tunnel",
+  "version": "1.0.0",
+  "description": "只有声明：手机连不上 hub 的地址时，经 App 内置的隧道核心连到 hub 在内网里的地址。",
+  "contributes": {
+    "tunnels": [
+      {
+        "id": "office",
+        "name": "公司内网隧道"
+      }
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "target_host": {
+        "type": "string",
+        "title": "hub 的内网地址"
+      },
+      "target_port": {
+        "type": "integer",
+        "title": "hub 的 HTTP 端口",
+        "default": 18660,
+        "minimum": 1,
+        "maximum": 65535
+      }
+    },
+    "required": [
+      "target_host"
+    ]
+  }
+}

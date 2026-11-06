@@ -1,0 +1,18 @@
+{
+  "error": "请先解锁密钥库",
+  "code": "input_required",
+  "view": {
+    "sections": [
+      {
+        "items": [
+          {
+            "type": "field",
+            "name": "password",
+            "label": "密钥库密码",
+            "kind": "secret"
+          }
+        ]
+      }
+    ]
+  }
+}

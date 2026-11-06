@@ -1,0 +1,7 @@
+{
+  "step": "scan",
+  "kind": "qr",
+  "url": "https://chat.example.com/login/qr/example-token",
+  "interval": 2,
+  "hint": "Scan it with Example Chat on your phone."
+}

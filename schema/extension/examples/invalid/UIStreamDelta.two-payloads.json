@@ -1,0 +1,20 @@
+{
+  "protocol": 1,
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "version": 2,
+  "base_version": 1,
+  "operations": [
+    {
+      "op": "replace",
+      "key": "main",
+      "section": {
+        "key": "main",
+        "items": []
+      },
+      "view": {
+        "sections": []
+      }
+    }
+  ]
+}

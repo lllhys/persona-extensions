@@ -1,0 +1,79 @@
+{
+  "title": "#42 Retry uploads when the network drops",
+  "tabs": {
+    "name": "tab",
+    "value": "overview",
+    "items": [
+      {"value": "overview", "title": "概览"},
+      {"value": "files", "title": "改动", "badge": "3"},
+      {"value": "commits", "title": "提交", "badge": "2"},
+      {"value": "checks", "title": "检查"}
+    ],
+    "action": {"id": "tab"}
+  },
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "header",
+          "key": "head",
+          "title": "Retry uploads when the network drops",
+          "subtitle": "example/app #42",
+          "badges": [{"text": "开放", "tone": "positive"}, {"text": "需要审阅", "tone": "caution"}],
+          "facts": [
+            {"label": "作者", "value": "alice", "icon": "person"},
+            {"label": "分支", "value": "feat/retry → main", "icon": "branch"},
+            {"label": "改动", "value": "+18 −4 · 3 个文件", "icon": "code"},
+            {"label": "更新", "value": "2 小时前", "icon": "clock"}
+          ],
+          "avatar": {"text": "A"}
+        }
+      ]
+    },
+    {
+      "title": "描述",
+      "items": [
+        {
+          "type": "markdown",
+          "key": "description",
+          "text": "Uploads failed for good when the network dropped for a moment. This retries them **three times**, waiting longer each time.\n\n- [x] Retry in `Client.Upload`\n- [x] Document it\n- [ ] Exponential back-off\n\n| Case | Before | After |\n| --- | --- | --- |\n| Wi-Fi drops 1 s | fails | uploads |\n| Offline | fails | fails after 3 tries |"
+        }
+      ]
+    },
+    {
+      "title": "详情",
+      "items": [
+        {"type": "row", "key": "reviewers", "title": "审阅人", "value": "bob, carol", "icon": "person"},
+        {"type": "row", "key": "labels", "title": "标签", "value": "network", "icon": "tag"},
+        {"type": "row", "key": "checks", "title": "检查", "value": "3 / 4 通过", "icon": "check", "badge": {"text": "运行中", "tone": "caution"},
+          "action": {"id": "tab", "values": {"tab": "checks"}}}
+      ]
+    },
+    {
+      "title": "讨论",
+      "items": [
+        {
+          "type": "comment_thread",
+          "key": "discussion",
+          "comments": [
+            {"id": "c1", "author": "alice", "avatar": {"text": "A"}, "at": "2026-11-05T06:00:00Z", "body": "Ready for a look. The retry is in its own file so it can be reused."},
+            {"id": "e1", "author": "alice", "at": "2026-11-05T06:10:00Z", "body": "推送了 2 个提交", "event": true},
+            {"id": "c2", "author": "bob", "avatar": {"text": "B"}, "at": "2026-11-05T08:00:00Z", "body": "Looks good overall, one note inline.", "badge": {"text": "请求修改", "tone": "danger"}},
+            {"id": "c3", "author": "carol", "avatar": {"text": "C"}, "at": "2026-11-05T09:00:00Z", "body": "LGTM", "badge": {"text": "已批准", "tone": "positive"}}
+          ]
+        },
+        {
+          "type": "composer",
+          "key": "review",
+          "name": "body",
+          "placeholder": "写评论（支持 Markdown）",
+          "buttons": [
+            {"title": "评论", "action": {"id": "comment"}},
+            {"title": "批准", "tone": "positive", "action": {"id": "approve", "confirm": "批准这个合并请求？"}},
+            {"title": "请求修改", "tone": "danger", "action": {"id": "request_changes"}}
+          ]
+        }
+      ]
+    }
+  ]
+}

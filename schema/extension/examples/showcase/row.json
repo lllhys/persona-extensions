@@ -1,0 +1,144 @@
+{
+  "title": "行",
+  "sections": [
+    {
+      "title": "文字",
+      "items": [
+        {
+          "type": "row",
+          "key": "plain",
+          "title": "只有标题"
+        },
+        {
+          "type": "row",
+          "key": "sub",
+          "title": "标题",
+          "subtitle": "副标题：一行说明"
+        },
+        {
+          "type": "row",
+          "key": "value",
+          "value": "42 条",
+          "title": "带值"
+        },
+        {
+          "type": "row",
+          "key": "long",
+          "value": "很长的值",
+          "title": "很长的标题：这是一段很长的文字，用来看换行和截断：各端应当在一行放不下时换行，而标题、按钮这类单行的地方截断。这",
+          "subtitle": "这是一段很长的文字，用来看换行和截断：各端应当在一行放不下时换行，而标题、按钮这类单行的地方截断。这"
+        },
+        {
+          "type": "row",
+          "key": "tap",
+          "title": "点一下（回一句提示）",
+          "subtitle": "有动作的行",
+          "action": {
+            "id": "toast"
+          }
+        }
+      ]
+    },
+    {
+      "title": "角标",
+      "items": [
+        {
+          "type": "row",
+          "key": "badge-neutral",
+          "title": "角标 neutral",
+          "badge": {
+            "text": "neutral",
+            "tone": "neutral"
+          }
+        },
+        {
+          "type": "row",
+          "key": "badge-positive",
+          "title": "角标 positive",
+          "badge": {
+            "text": "positive",
+            "tone": "positive"
+          }
+        },
+        {
+          "type": "row",
+          "key": "badge-caution",
+          "title": "角标 caution",
+          "badge": {
+            "text": "caution",
+            "tone": "caution"
+          }
+        },
+        {
+          "type": "row",
+          "key": "badge-danger",
+          "title": "角标 danger",
+          "badge": {
+            "text": "danger",
+            "tone": "danger"
+          }
+        }
+      ]
+    },
+    {
+      "title": "图标、头像、缩略图",
+      "items": [
+        {
+          "type": "row",
+          "key": "icon",
+          "title": "图标 star",
+          "icon": "star"
+        },
+        {
+          "type": "row",
+          "key": "avatar-text",
+          "title": "首字母头像",
+          "subtitle": "avatar.text",
+          "avatar": {
+            "text": "Al"
+          }
+        },
+        {
+          "type": "row",
+          "key": "avatar-url",
+          "title": "图片头像",
+          "subtitle": "avatar.url（加载不了画首字母）",
+          "avatar": {
+            "url": "https://avatars.githubusercontent.com/u/9919?s=96",
+            "text": "G"
+          }
+        },
+        {
+          "type": "row",
+          "key": "thumb-square",
+          "title": "方形缩略图",
+          "subtitle": "thumbnail square",
+          "thumbnail": {
+            "url": "https://picsum.photos/seed/persona-showcase-1/160",
+            "aspect": "square"
+          }
+        },
+        {
+          "type": "row",
+          "key": "thumb-wide",
+          "title": "宽缩略图",
+          "subtitle": "thumbnail wide",
+          "thumbnail": {
+            "url": "https://picsum.photos/seed/persona-showcase-2/320/180",
+            "aspect": "wide"
+          }
+        },
+        {
+          "type": "row",
+          "key": "thumb-broken",
+          "title": "加载不了的缩略图",
+          "subtitle": "画占位",
+          "thumbnail": {
+            "url": "https://example.invalid/none.png"
+          }
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"row\"}"
+}

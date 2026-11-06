@@ -1,0 +1,4 @@
+{
+  "assign": [{"message": "m7", "event": "examplechat:primary.group_example_1#m3"}],
+  "new": [{"key": "ticket", "messages": ["m8"], "rule_tier": "fyi", "title": "Example ticket closed"}]
+}

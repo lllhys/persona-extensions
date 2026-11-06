@@ -1,0 +1,10 @@
+{
+  "id": "m1",
+  "position": "1.5",
+  "sender": {
+    "name": "x"
+  },
+  "mine": false,
+  "text": "",
+  "parts": []
+}

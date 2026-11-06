@@ -1,0 +1,8 @@
+{
+  "protocol": 1,
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "version": 9007199254740992,
+  "base_version": 1,
+  "operations": []
+}

@@ -1,0 +1,10 @@
+{
+  "contribution": "examplechat",
+  "target": {"chat": "chat_example_1", "reply_to": 3},
+  "text": "Thanks, the example build is green again.",
+  "summary": "Auto-reply in Example chat",
+  "session_id": "conv_example_1",
+  "machine_id": "machine_example_1",
+  "message_ref": "msg_example_9",
+  "setting": "auto_reply"
+}

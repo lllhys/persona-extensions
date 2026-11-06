@@ -1,0 +1,30 @@
+{
+  "title": "家",
+  "sections": [
+    {
+      "items": [
+        {"type": "carousel", "key": "cams", "title": "摄像头", "width": "wide", "tiles": [
+          {"key": "cam.front", "title": "前门", "subtitle": "刚刚", "image": {"ref": "camera.front_door"}, "action": {"id": "open_camera", "values": {"camera": "front"}}},
+          {"key": "cam.yard", "title": "院子", "image": {"url": "https://example.com/yard.jpg"}}
+        ]},
+        {"type": "carousel", "key": "scenes", "width": "narrow", "tiles": [
+          {"key": "scene.home", "title": "回家", "icon": "home", "color": "green", "active": true, "action": {"id": "scene", "values": {"scene": "home"}}},
+          {"key": "scene.sleep", "title": "睡觉", "icon": "moon", "color": "indigo", "action": {"id": "scene", "values": {"scene": "sleep"}}}
+        ]}
+      ]
+    },
+    {
+      "title": "房间",
+      "items": [
+        {"type": "grid", "key": "rooms", "max_columns": 2, "tiles": [
+          {"key": "room.living", "title": "客厅", "subtitle": "3 盏灯开着", "value": "24 °C", "icon": "sofa", "color": "blue", "active": true,
+            "control": {"kind": "switch", "name": "room.living", "on": true, "action": {"id": "room_power", "values": {"room": "living"}}},
+            "action": {"id": "open_room", "push": {"state": "living", "title": "客厅"}},
+            "actions": [{"title": "全部关闭", "icon": "power", "action": {"id": "room_off", "values": {"room": "living"}}}]},
+          {"key": "room.bed", "title": "卧室", "value": "22 °C", "icon": "light", "color": "purple", "badge": {"text": "1", "tone": "caution"},
+            "spark": {"values": [21, 21.5, 22]}}
+        ]}
+      ]
+    }
+  ]
+}

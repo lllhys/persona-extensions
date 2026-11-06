@@ -1,0 +1,66 @@
+{
+  "id": "lark",
+  "name": "飞书",
+  "icon": "chat",
+  "capabilities": [
+    "accounts",
+    "pinned",
+    "mentions",
+    "attachments",
+    "attachment_replies",
+    "threads",
+    "topics",
+    "reactions",
+    "read_receipts",
+    "chat_pins",
+    "profiles",
+    "url_previews",
+    "documents",
+    "doc_comments",
+    "posts",
+    "edit_history",
+    "translation"
+  ],
+  "composer_modes": [
+    {
+      "id": "sealed",
+      "title": "加密消息",
+      "icon": "lock",
+      "attachments": false,
+      "mentions": false,
+      "prepare": true
+    },
+    {
+      "id": "brave_climb",
+      "title": "勇攀高峰编码",
+      "icon": "shield",
+      "description": "可还原的编码，不是加密",
+      "attachments": false,
+      "mentions": false
+    }
+  ],
+  "settings_ui": "display",
+  "links": [
+    {
+      "hosts": [
+        "*.feishu.cn",
+        "*.larkoffice.com",
+        "*.larksuite.com"
+      ],
+      "paths": [
+        "/docx/",
+        "/wiki/"
+      ],
+      "opens": "document"
+    },
+    {
+      "hosts": [
+        "applink.feishu.cn"
+      ],
+      "paths": [
+        "/client/moments/detail"
+      ],
+      "opens": "post"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "request": "close",
+  "protocol": 1,
+  "request_id": "request-close",
+  "session": "session-a",
+  "epoch": "epoch-a"
+}

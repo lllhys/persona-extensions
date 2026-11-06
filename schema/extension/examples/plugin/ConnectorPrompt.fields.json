@@ -1,0 +1,8 @@
+{
+  "step": "key",
+  "fields": [
+    {"name": "base_url", "label": "Service URL", "placeholder": "https://chat.example.com"},
+    {"name": "app_key", "label": "Application key", "secret": true}
+  ],
+  "error": "That key was not accepted."
+}

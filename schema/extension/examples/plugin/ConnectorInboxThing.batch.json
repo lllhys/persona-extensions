@@ -1,0 +1,8 @@
+{
+  "thread": "primary.group_example_1",
+  "kind": "group",
+  "context": "id=m7 Example A (09:02): The example build is green again.\nid=m8 Example B (09:03): Thanks, closing the ticket.",
+  "last": "m8",
+  "rules": "Anything about the example build is worth knowing.",
+  "group": {"batch": "primary.group_example_1@m7", "new": ["m7", "m8"]}
+}

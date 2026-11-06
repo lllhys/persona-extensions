@@ -1,0 +1,1 @@
+{"id": "todo_example_1", "title": "Ship the release", "thread": {"channel": "feishu", "chat_id": "oc_example_1", "thread_id": "omt_example_1", "title": "Release 1.3"}, "decision": {"id": "dec_example_1", "question": "Which branch to cut from", "choice": "release-1.3", "reason": "the hotfix is already there", "source": "thread"}}

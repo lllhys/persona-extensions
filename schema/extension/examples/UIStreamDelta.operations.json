@@ -1,0 +1,72 @@
+{
+  "protocol": 1,
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "version": 2,
+  "base_version": 1,
+  "operations": [
+    {
+      "op": "replace",
+      "key": "page",
+      "view": {
+        "sections": [
+          {
+            "key": "main",
+            "items": [
+              {
+                "type": "progress",
+                "key": "counter",
+                "label": "Count",
+                "ratio": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "replace",
+      "key": "counter",
+      "item": {
+        "type": "progress",
+        "key": "counter",
+        "label": "Count",
+        "ratio": 0
+      }
+    },
+    {
+      "op": "insert",
+      "parent": "page",
+      "section": {
+        "key": "extra",
+        "items": []
+      }
+    },
+    {
+      "op": "insert",
+      "parent": "main",
+      "before": "counter",
+      "item": {
+        "type": "divider",
+        "key": "new"
+      }
+    },
+    {
+      "op": "move",
+      "key": "new",
+      "parent": "extra"
+    },
+    {
+      "op": "remove",
+      "key": "new"
+    },
+    {
+      "op": "replace",
+      "key": "main",
+      "section": {
+        "key": "main",
+        "items": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "m1",
+  "position": "1",
+  "sender": {
+    "name": "x"
+  },
+  "mine": false,
+  "text": "",
+  "parts": [
+    {
+      "kind": "html",
+      "text": "<b>x</b>"
+    }
+  ]
+}

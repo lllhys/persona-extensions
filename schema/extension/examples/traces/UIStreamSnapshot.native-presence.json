@@ -1,0 +1,33 @@
+{
+  "protocol": 1,
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "version": 1,
+  "root_key": "page",
+  "view": {
+    "title": "",
+    "state": "",
+    "refresh_after": 0,
+    "pages": {},
+    "search": {"placeholder": "", "value": "", "action": {"id": "cb.search", "submit": false, "values": {}}},
+    "sections": [
+      {
+        "key": "main",
+        "title": "",
+        "footer": "",
+        "items": [
+          {"type": "code", "key": "code", "text": "", "truncated": false},
+          {"type": "table", "key": "table", "columns": [{"title": ""}], "rows": [], "caption": ""},
+          {"type": "file_tree", "key": "files", "entries": [], "selected": ""},
+          {"type": "comment_thread", "key": "comments", "comments": [], "resolved": false, "title": ""},
+          {"type": "diff", "key": "diff", "path": "example.go", "collapsed": false, "binary": false, "additions": 0, "deletions": 0, "viewed": false, "generated": false, "similarity": 0, "hunks": [], "threads": []},
+          {"type": "row", "key": "row", "title": "Switch", "subtitle": "", "value": "", "control": {"kind": "switch", "name": "switch-value", "on": false, "disabled": false, "unit": "", "display": "", "action": {"id": "cb.switch", "confirm": "", "submit": false, "pop": false, "values": {}}}},
+          {"type": "field", "key": "field", "name": "text-value", "label": "Text", "kind": "text", "value": "", "placeholder": "", "detail": "", "choices": []},
+          {"type": "composer", "key": "composer", "name": "draft-value", "value": "", "placeholder": "", "buttons": [{"title": "Send", "action": {"id": "cb.send", "submit": false}}]},
+          {"type": "carousel", "key": "carousel", "title": "", "tiles": [{"key": "tile", "title": "Example", "subtitle": "", "value": "", "active": false, "action": {"id": "cb.tile", "confirm": "", "submit": false}}]}
+        ]
+      },
+      {"key": "other", "items": []}
+    ]
+  }
+}

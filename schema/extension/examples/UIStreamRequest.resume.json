@@ -1,0 +1,8 @@
+{
+  "request": "resume",
+  "protocol": 1,
+  "request_id": "request-resume",
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "version": 1
+}

@@ -1,0 +1,30 @@
+{
+  "title": "客厅",
+  "sections": [
+    {
+      "title": "灯",
+      "items": [
+        {"type": "row", "key": "light.main", "title": "主灯", "icon": "light", "icon_color": "amber",
+          "control": {"kind": "switch", "name": "light.main", "on": true, "action": {"id": "toggle", "values": {"entity": "light.main"}}},
+          "action": {"id": "open", "push": {"state": "light.main", "title": "主灯"}},
+          "actions": [
+            {"title": "重命名", "icon": "edit", "action": {"id": "rename", "values": {"entity": "light.main"}}},
+            {"title": "删除", "icon": "trash", "role": "destructive", "swipe": true, "action": {"id": "remove", "confirm": "删除这盏灯？", "values": {"entity": "light.main"}}}
+          ]},
+        {"type": "row", "key": "light.main.brightness", "title": "亮度",
+          "control": {"kind": "slider", "name": "brightness", "value": 60, "min": 0, "max": 100, "step": 1, "unit": "%", "action": {"id": "brightness"}}},
+        {"type": "row", "key": "light.main.kelvin", "title": "色温",
+          "control": {"kind": "slider", "name": "kelvin", "value": 4000, "min": 2700, "max": 6500, "step": 100, "display": "4000 K", "action": {"id": "kelvin"}}},
+        {"type": "row", "key": "light.desk", "title": "台灯", "subtitle": "离线",
+          "control": {"kind": "switch", "name": "light.desk", "disabled": true, "action": {"id": "toggle", "values": {"entity": "light.desk"}}}}
+      ]
+    },
+    {
+      "title": "空调",
+      "items": [
+        {"type": "row", "key": "climate.living", "title": "温度", "icon": "thermometer",
+          "control": {"kind": "stepper", "name": "temperature", "value": 22.5, "min": 16, "max": 30, "step": 0.5, "unit": "°C", "action": {"id": "temperature"}}}
+      ]
+    }
+  ]
+}

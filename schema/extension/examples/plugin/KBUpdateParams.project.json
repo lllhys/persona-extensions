@@ -1,0 +1,11 @@
+{
+  "kind": "projects",
+  "id": "example-build",
+  "pinned": "",
+  "status": "active",
+  "relevance": 0,
+  "tags": ["work", "build"],
+  "log": "The example build is green again.",
+  "source": "Example extension",
+  "chats": ["examplechat-group_example_1"]
+}

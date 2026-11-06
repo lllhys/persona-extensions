@@ -1,0 +1,32 @@
+{
+  "title": "空状态",
+  "sections": [
+    {
+      "title": "有按钮",
+      "items": [
+        {
+          "type": "empty",
+          "detail": "拖一个文件进来，或者点下面的按钮。",
+          "title": "还没有附件",
+          "icon": "folder",
+          "button": {
+            "title": "上传",
+            "action": {
+              "id": "toast"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "title": "没按钮",
+      "items": [
+        {
+          "type": "empty",
+          "title": "没有结果"
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"empty\"}"
+}

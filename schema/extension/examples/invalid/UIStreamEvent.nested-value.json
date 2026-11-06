@@ -1,0 +1,13 @@
+{
+  "protocol": 1,
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "version": 1,
+  "event_id": "event-a",
+  "key": "counter",
+  "action": "cb.example",
+  "event": "change",
+  "value": {
+    "nested": {}
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "manifest_version": 1,
+  "id": "example-todo-thread",
+  "name": "Example To-do Thread",
+  "version": "1.0.0",
+  "description": "Posts a to-do's changes and decisions into the chat thread the to-do is bound to.",
+  "engines": {"persona": ">=202611060000", "extension_protocol": 1},
+  "runtime": {"command": {"linux-amd64": "bin/example-todo-thread-linux-amd64", "darwin-arm64": "bin/example-todo-thread-darwin-arm64"}},
+  "activation_events": ["on_startup"],
+  "contributes": {"events": [{"id": "todos", "subscribe": ["todo.changed", "todo.decision"]}]},
+  "permissions": {"hub": ["todos.read"]}
+}

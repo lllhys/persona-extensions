@@ -1,0 +1,412 @@
+{
+  "title": "#42 Retry uploads when the network drops",
+  "layout": "split",
+  "tabs": {
+    "name": "tab",
+    "value": "files",
+    "items": [
+      {
+        "value": "overview",
+        "title": "概览"
+      },
+      {
+        "value": "files",
+        "title": "改动",
+        "badge": "5"
+      },
+      {
+        "value": "commits",
+        "title": "提交",
+        "badge": "2"
+      },
+      {
+        "value": "checks",
+        "title": "检查"
+      }
+    ],
+    "action": {
+      "id": "tab"
+    }
+  },
+  "state": "{\"repo\":\"example/app\",\"number\":42}",
+  "review": {
+    "count": 2,
+    "name": "body",
+    "placeholder": "写一句总结（可选）",
+    "buttons": [
+      {
+        "title": "评论",
+        "action": {
+          "id": "submit_review",
+          "values": {
+            "event": "comment"
+          }
+        }
+      },
+      {
+        "title": "请求修改",
+        "action": {
+          "id": "submit_review",
+          "values": {
+            "event": "request_changes"
+          }
+        },
+        "tone": "danger"
+      },
+      {
+        "title": "批准",
+        "action": {
+          "id": "submit_review",
+          "values": {
+            "event": "approve"
+          }
+        },
+        "tone": "positive"
+      }
+    ],
+    "discard": {
+      "id": "discard_review",
+      "confirm": "放弃这 2 条草稿？"
+    }
+  },
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "header",
+          "key": "head",
+          "title": "Retry uploads when the network drops",
+          "subtitle": "example/app #42",
+          "badges": [
+            {
+              "text": "开放",
+              "tone": "positive"
+            },
+            {
+              "text": "需要审阅",
+              "tone": "caution"
+            }
+          ],
+          "facts": [
+            {
+              "label": "作者",
+              "value": "alice",
+              "icon": "person"
+            },
+            {
+              "label": "分支",
+              "value": "feat/retry → main",
+              "icon": "branch"
+            },
+            {
+              "label": "改动",
+              "value": "+27 −9 · 5 个文件",
+              "icon": "code"
+            },
+            {
+              "label": "更新",
+              "value": "2 小时前",
+              "icon": "clock"
+            }
+          ],
+          "avatar": {
+            "text": "A"
+          }
+        }
+      ]
+    },
+    {
+      "title": "文件",
+      "pane": "side",
+      "items": [
+        {
+          "type": "file_tree",
+          "key": "files",
+          "selected": "src/upload/client.go",
+          "entries": [
+            {
+              "path": "src/upload/retry.go",
+              "status": "added",
+              "additions": 12,
+              "comments": 2,
+              "viewed": true
+            },
+            {
+              "path": "src/upload/client.go",
+              "status": "modified",
+              "additions": 6,
+              "deletions": 4,
+              "comments": 1
+            },
+            {
+              "path": "src/upload/limits.go",
+              "status": "renamed",
+              "additions": 1,
+              "deletions": 1
+            },
+            {
+              "path": "docs/upload.md",
+              "status": "modified",
+              "additions": 1,
+              "deletions": 1
+            },
+            {
+              "path": "go.sum",
+              "status": "modified",
+              "additions": 7,
+              "deletions": 3,
+              "generated": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "items": [
+        {
+          "type": "diff",
+          "key": "diff:src/upload/retry.go",
+          "path": "src/upload/retry.go",
+          "status": "added",
+          "language": "go",
+          "additions": 12,
+          "hunks": [
+            {
+              "header": "@@ -0,0 +1,12 @@",
+              "old_start": 0,
+              "new_start": 1,
+              "lines": [
+                "+package upload",
+                "+",
+                "+import \"time\"",
+                "+",
+                "+// Retry calls f until it succeeds or attempts run out.",
+                "+func Retry(attempts int, f func() error) error {",
+                "+\tvar err error",
+                "+\tfor i := 0; i < attempts; i++ {",
+                "+\t\tif err = f(); err == nil {",
+                "+\t\t\treturn nil",
+                "+\t\t}",
+                "+\t\ttime.Sleep(time.Duration(i) * time.Second)"
+              ]
+            }
+          ],
+          "threads": [
+            {
+              "id": "t1",
+              "side": "new",
+              "line": 12,
+              "comments": [
+                {
+                  "id": "c1",
+                  "author": "bob",
+                  "avatar": {
+                    "text": "B"
+                  },
+                  "at": "2026-11-05T08:00:00Z",
+                  "body": "Should this back off **exponentially**? `1 << i` maybe."
+                },
+                {
+                  "id": "c2",
+                  "author": "alice",
+                  "avatar": {
+                    "text": "A"
+                  },
+                  "at": "2026-11-05T09:30:00Z",
+                  "body": "Good call, will change."
+                }
+              ],
+              "reply": {
+                "id": "reply",
+                "values": {
+                  "thread": "t1"
+                }
+              }
+            },
+            {
+              "id": "t2",
+              "side": "new",
+              "line": 6,
+              "start_line": 5,
+              "pending": true,
+              "comments": [
+                {
+                  "id": "c3",
+                  "author": "you",
+                  "avatar": {
+                    "text": "Y"
+                  },
+                  "at": "2026-11-05T10:00:00Z",
+                  "body": "Name the error so callers can tell:\n\n```suggestion\n// Retry calls f until it succeeds or attempts run out, and returns f's last error.\nfunc Retry(attempts int, f func() error) error {\n```"
+                }
+              ]
+            }
+          ],
+          "comment": {
+            "id": "inline_comment"
+          },
+          "viewed": true,
+          "revision": "b1",
+          "mark_viewed": {
+            "id": "mark_viewed"
+          },
+          "context": {
+            "id": "context"
+          },
+          "draft": {
+            "id": "draft_comment"
+          },
+          "suggestions": true
+        },
+        {
+          "type": "diff",
+          "key": "diff:src/upload/client.go",
+          "path": "src/upload/client.go",
+          "status": "modified",
+          "language": "go",
+          "additions": 6,
+          "deletions": 4,
+          "revision": "c7",
+          "hunks": [
+            {
+              "header": "@@ -20,8 +20,10 @@ func (c *Client) Upload(ctx context.Context, f File) error {",
+              "old_start": 20,
+              "new_start": 20,
+              "lines": [
+                " \treq, err := c.request(ctx, f)",
+                " \tif err != nil {",
+                "-\t\treturn err",
+                "+\t\treturn fmt.Errorf(\"upload %s: %w\", f.Name, err)",
+                " \t}",
+                "-\tresp, err := c.http.Do(req)",
+                "-\tif err != nil {",
+                "-\t\treturn err",
+                "+\tvar resp *http.Response",
+                "+\terr = Retry(3, func() error {",
+                "+\t\tresp, err = c.http.Do(req)",
+                "+\t\treturn err",
+                "+\t})",
+                "+\tif err != nil {",
+                " \t\treturn err",
+                " \t}"
+              ]
+            },
+            {
+              "old_start": 58,
+              "new_start": 60,
+              "lines": [
+                " \treturn nil",
+                " }"
+              ]
+            }
+          ],
+          "threads": [
+            {
+              "id": "t3",
+              "side": "new",
+              "line": 21,
+              "comments": [
+                {
+                  "id": "c4",
+                  "author": "bob",
+                  "avatar": {
+                    "text": "B"
+                  },
+                  "at": "2026-11-05T08:10:00Z",
+                  "body": "Nice, the name helps."
+                }
+              ],
+              "reply": {
+                "id": "reply",
+                "values": {
+                  "thread": "t3"
+                }
+              },
+              "resolve": {
+                "id": "resolve"
+              }
+            }
+          ],
+          "context": {
+            "id": "context"
+          },
+          "mark_viewed": {
+            "id": "mark_viewed"
+          },
+          "comment": {
+            "id": "inline_comment"
+          },
+          "draft": {
+            "id": "draft_comment"
+          },
+          "suggestions": true
+        },
+        {
+          "type": "diff",
+          "key": "diff:src/upload/limits.go",
+          "path": "src/upload/limits.go",
+          "old_path": "src/limits.go",
+          "status": "renamed",
+          "similarity": 96,
+          "language": "go",
+          "additions": 1,
+          "deletions": 1,
+          "hunks": [
+            {
+              "header": "@@ -1,4 +1,4 @@",
+              "old_start": 1,
+              "new_start": 1,
+              "lines": [
+                "-package main",
+                "+package upload",
+                " ",
+                " // MaxSize is the largest file uploaded in one piece.",
+                " const MaxSize = 64 << 20"
+              ]
+            }
+          ],
+          "mark_viewed": {
+            "id": "mark_viewed"
+          },
+          "comment": {
+            "id": "inline_comment"
+          },
+          "context": {
+            "id": "context"
+          }
+        },
+        {
+          "type": "diff",
+          "key": "diff:docs/upload.md",
+          "path": "docs/upload.md",
+          "status": "modified",
+          "additions": 1,
+          "deletions": 1,
+          "collapsed": true,
+          "load": {
+            "id": "load_diff"
+          },
+          "mark_viewed": {
+            "id": "mark_viewed"
+          }
+        },
+        {
+          "type": "diff",
+          "key": "diff:go.sum",
+          "path": "go.sum",
+          "status": "modified",
+          "additions": 7,
+          "deletions": 3,
+          "generated": true,
+          "collapsed": true,
+          "load": {
+            "id": "load_diff"
+          },
+          "mark_viewed": {
+            "id": "mark_viewed"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "client_id": "0b6d3c1e-7f2a-4a55-9d8e-2c1a4f5b6e7d",
+  "text": "收到",
+  "mentions": [
+    {
+      "user_id": "u1",
+      "name": "李雷"
+    }
+  ],
+  "reply_to": "m200",
+  "thread": true,
+  "mode": "brave_climb"
+}

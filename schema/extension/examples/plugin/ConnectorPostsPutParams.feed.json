@@ -1,0 +1,23 @@
+{
+  "contribution": "examplechat",
+  "posts": [
+    {
+      "post": {
+        "id": "post_example_1",
+        "feed": "Example feed",
+        "author": "Example B",
+        "author_id": "user_example_b",
+        "categories": ["announcements"],
+        "text": "An example post about the example build.",
+        "images": 1,
+        "reactions": 4,
+        "comment_count": 1,
+        "at": "2026-11-04T08:00:00Z"
+      },
+      "comments": [{"author": "Me", "text": "Nice example.", "at": "2026-11-04T09:00:00Z"}]
+    },
+    {
+      "post": {"id": "post_example_2", "anonymous": true, "text": "Another example post.", "comment_count": 0, "at": "2026-11-04T07:00:00Z"}
+    }
+  ]
+}

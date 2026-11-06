@@ -1,0 +1,35 @@
+{
+  "chat": {
+    "id": "group_example_1",
+    "name": "Example group",
+    "kind": "group",
+    "url": "https://chat.example.com/chats/group_example_1",
+    "avatar": "avatar:group_example_1:v2",
+    "members": 3,
+    "reply": "examplechat_send"
+  },
+  "messages": [
+    {
+      "id": "5",
+      "at": "2026-11-04T08:21:00Z",
+      "sender": {"id": "user_example_a", "name": "Example A", "avatar": "avatar:user_example_a:v1"},
+      "text": "Hello, today's example meeting moves to the afternoon."
+    },
+    {
+      "id": "6",
+      "at": "2026-11-04T08:26:00Z",
+      "sender": {"id": "user_example_a", "name": "Example A"},
+      "text": "@you please look at this example document",
+      "media": [{"kind": "file", "name": "example.pdf", "mime": "application/pdf", "size": 48213}],
+      "reply_to": {"id": "5", "from": "Example A", "text": "Hello, today's example meeting moves to the afternoon."}
+    },
+    {
+      "id": "7",
+      "at": "2026-11-04T08:30:00Z",
+      "sender": {"name": "Example Chat"},
+      "event": true,
+      "text": "Example B joined the group"
+    }
+  ],
+  "before": "4"
+}

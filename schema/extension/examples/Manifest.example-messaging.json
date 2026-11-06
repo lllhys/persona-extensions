@@ -1,0 +1,101 @@
+{
+  "manifest_version": 1,
+  "id": "example-chat",
+  "name": "Example Chat",
+  "version": "0.1.0",
+  "description": "把 Example Chat 的会话接进 App 的「消息」入口。",
+  "publisher": "example",
+  "engines": {
+    "persona": ">=202611050000",
+    "extension_protocol": 1
+  },
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/example-chat-linux-amd64"
+    },
+    "args": [
+      "serve"
+    ],
+    "http": true
+  },
+  "contributes": {
+    "messaging": [
+      {
+        "id": "examplechat",
+        "name": "Chat",
+        "icon": "chat",
+        "capabilities": [
+          "accounts",
+          "pinned",
+          "mentions",
+          "attachments",
+          "attachment_replies",
+          "threads",
+          "topics",
+          "reactions",
+          "read_receipts",
+          "chat_pins",
+          "profiles",
+          "url_previews",
+          "documents",
+          "doc_comments",
+          "posts",
+          "edit_history",
+          "translation"
+        ],
+        "composer_modes": [
+          {
+            "id": "sealed",
+            "title": "加密消息",
+            "icon": "lock",
+            "attachments": false,
+            "mentions": false,
+            "prepare": true
+          },
+          {
+            "id": "brave_climb",
+            "title": "勇攀高峰编码",
+            "icon": "shield",
+            "description": "可还原的编码，不是加密",
+            "attachments": false,
+            "mentions": false
+          }
+        ],
+        "settings_ui": "display",
+        "links": [
+          {
+            "hosts": [
+              "*.feishu.cn",
+              "*.larkoffice.com",
+              "*.larksuite.com"
+            ],
+            "paths": [
+              "/docx/",
+              "/wiki/"
+            ],
+            "opens": "document"
+          },
+          {
+            "hosts": [
+              "applink.feishu.cn"
+            ],
+            "paths": [
+              "/client/moments/detail"
+            ],
+            "opens": "post"
+          }
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "display",
+        "title": "显示设置",
+        "placement": "extension_page"
+      }
+    ]
+  },
+  "activation_events": [
+    "on_startup"
+  ]
+}

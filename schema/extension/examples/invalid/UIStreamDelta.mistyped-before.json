@@ -1,0 +1,8 @@
+{
+  "protocol": 1,
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "base_version": 1,
+  "version": 2,
+  "operations": [{"op": "move", "key": "node", "parent": "main", "before": 123}]
+}

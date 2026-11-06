@@ -1,0 +1,25 @@
+{
+  "view": {
+    "title": "解锁密钥库",
+    "sections": [
+      {
+        "items": [
+          {
+            "type": "field",
+            "name": "password",
+            "label": "密钥库密码",
+            "kind": "secret"
+          },
+          {
+            "type": "button",
+            "title": "解锁",
+            "action": {
+              "id": "unlock",
+              "submit": true
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

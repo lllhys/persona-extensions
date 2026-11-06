@@ -1,0 +1,14 @@
+{
+  "title": "Markdown",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "markdown",
+          "text": "# 一级标题\n\n## 二级标题\n\n### 三级标题\n\n一段正文，有 **粗体**、*斜体*、`行内代码` 和一个 [链接](https://example.com/)。\n同一段的第二行。\n\n- 无序列表\n- 第二项，**带粗体**\n  - 嵌套的一项\n\n1. 有序列表\n2. 第二项\n3. 第三项\n\n\u003e 引用：一段别人说的话。\n\n```\nfunc main() {\n\tfmt.Println(\"代码块\")\n}\n```\n\nHTML 原样显示成文字：\u003cb\u003e不是粗体\u003c/b\u003e。\n"
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"markdown\"}"
+}

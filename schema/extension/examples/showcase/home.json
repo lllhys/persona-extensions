@@ -1,0 +1,257 @@
+{
+  "title": "组件展示",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "text",
+          "text": "扩展界面的每一种组件各一页。各端用同一份页面截图对齐（snapshots/）。",
+          "style": "secondary"
+        }
+      ]
+    },
+    {
+      "title": "组件",
+      "items": [
+        {
+          "type": "row",
+          "key": "text",
+          "title": "文字",
+          "subtitle": "四种样式、长文字",
+          "action": {
+            "id": "open:text",
+            "push": {
+              "state": "{\"p\":\"text\"}",
+              "title": "文字"
+            }
+          },
+          "icon": "doc"
+        },
+        {
+          "type": "row",
+          "key": "metric",
+          "title": "数字",
+          "subtitle": "四种语气、说明",
+          "action": {
+            "id": "open:metric",
+            "push": {
+              "state": "{\"p\":\"metric\"}",
+              "title": "数字"
+            }
+          },
+          "icon": "gauge"
+        },
+        {
+          "type": "row",
+          "key": "progress",
+          "title": "进度",
+          "subtitle": "0、一部分、满、各种语气",
+          "action": {
+            "id": "open:progress",
+            "push": {
+              "state": "{\"p\":\"progress\"}",
+              "title": "进度"
+            }
+          },
+          "icon": "gauge"
+        },
+        {
+          "type": "row",
+          "key": "row",
+          "title": "行",
+          "subtitle": "副标题、值、角标、图标 / 头像 / 缩略图、可点",
+          "action": {
+            "id": "open:row",
+            "push": {
+              "state": "{\"p\":\"row\"}",
+              "title": "行"
+            }
+          },
+          "icon": "list"
+        },
+        {
+          "type": "row",
+          "key": "button",
+          "title": "按钮",
+          "subtitle": "普通、危险、先确认",
+          "action": {
+            "id": "open:button",
+            "push": {
+              "state": "{\"p\":\"button\"}",
+              "title": "按钮"
+            }
+          },
+          "icon": "check"
+        },
+        {
+          "type": "row",
+          "key": "link",
+          "title": "链接",
+          "subtitle": "在 App 里打开",
+          "action": {
+            "id": "open:link",
+            "push": {
+              "state": "{\"p\":\"link\"}",
+              "title": "链接"
+            }
+          },
+          "icon": "link"
+        },
+        {
+          "type": "row",
+          "key": "field",
+          "title": "输入",
+          "subtitle": "五种输入、提交",
+          "action": {
+            "id": "open:field",
+            "push": {
+              "state": "{\"p\":\"field\"}",
+              "title": "输入"
+            }
+          },
+          "icon": "settings"
+        },
+        {
+          "type": "row",
+          "key": "chart",
+          "title": "图表",
+          "subtitle": "柱状、折线、叠起来、单位",
+          "action": {
+            "id": "open:chart",
+            "push": {
+              "state": "{\"p\":\"chart\"}",
+              "title": "图表"
+            }
+          },
+          "icon": "chart"
+        },
+        {
+          "type": "row",
+          "key": "stat_grid",
+          "title": "并排的数",
+          "subtitle": "1 到 6 个",
+          "action": {
+            "id": "open:stat_grid",
+            "push": {
+              "state": "{\"p\":\"stat_grid\"}",
+              "title": "并排的数"
+            }
+          },
+          "icon": "gauge"
+        },
+        {
+          "type": "row",
+          "key": "segmented",
+          "title": "分段选择",
+          "subtitle": "选了马上换",
+          "action": {
+            "id": "open:segmented",
+            "push": {
+              "state": "{\"p\":\"segmented\"}",
+              "title": "分段选择"
+            }
+          },
+          "icon": "tag"
+        },
+        {
+          "type": "row",
+          "key": "markdown",
+          "title": "Markdown",
+          "subtitle": "安全子集的全部写法",
+          "action": {
+            "id": "open:markdown",
+            "push": {
+              "state": "{\"p\":\"markdown\"}",
+              "title": "Markdown"
+            }
+          },
+          "icon": "doc"
+        },
+        {
+          "type": "row",
+          "key": "table",
+          "title": "表格",
+          "subtitle": "窄表、宽表、对齐",
+          "action": {
+            "id": "open:table",
+            "push": {
+              "state": "{\"p\":\"table\"}",
+              "title": "表格"
+            }
+          },
+          "icon": "list"
+        },
+        {
+          "type": "row",
+          "key": "empty",
+          "title": "空状态",
+          "subtitle": "有按钮、没按钮",
+          "action": {
+            "id": "open:empty",
+            "push": {
+              "state": "{\"p\":\"empty\"}",
+              "title": "空状态"
+            }
+          },
+          "icon": "folder"
+        },
+        {
+          "type": "row",
+          "key": "loading",
+          "title": "加载中",
+          "subtitle": "有字、没字",
+          "action": {
+            "id": "open:loading",
+            "push": {
+              "state": "{\"p\":\"loading\"}",
+              "title": "加载中"
+            }
+          },
+          "icon": "clock"
+        },
+        {
+          "type": "row",
+          "key": "divider",
+          "title": "分隔线",
+          "subtitle": "把一节分成几组",
+          "action": {
+            "id": "open:divider",
+            "push": {
+              "state": "{\"p\":\"divider\"}",
+              "title": "分隔线"
+            }
+          },
+          "icon": "list"
+        },
+        {
+          "type": "row",
+          "key": "list",
+          "title": "列表",
+          "subtitle": "搜索、筛选、加载更多；详情 → 编辑 → 返回",
+          "action": {
+            "id": "open:list",
+            "push": {
+              "state": "{\"p\":\"list\"}",
+              "title": "列表"
+            }
+          },
+          "icon": "search"
+        },
+        {
+          "type": "row",
+          "key": "invalidate",
+          "title": "invalidate",
+          "subtitle": "先加载中，3 秒后扩展让 App 重画",
+          "action": {
+            "id": "open:invalidate",
+            "push": {
+              "state": "{\"p\":\"invalidate\"}",
+              "title": "invalidate"
+            }
+          },
+          "icon": "bell"
+        }
+      ]
+    }
+  ]
+}

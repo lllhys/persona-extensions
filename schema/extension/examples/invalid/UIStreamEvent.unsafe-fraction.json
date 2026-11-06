@@ -1,0 +1,11 @@
+{
+  "protocol": 1,
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "version": 1,
+  "event_id": "event-a",
+  "key": "node",
+  "action": "cb.example",
+  "event": "change",
+  "value": 9007199254740991.1
+}

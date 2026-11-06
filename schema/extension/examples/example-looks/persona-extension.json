@@ -1,0 +1,50 @@
+{
+  "manifest_version": 1,
+  "id": "example-looks",
+  "name": "Example Looks",
+  "version": "1.0.0",
+  "description": "示例形象扩展：两个形象。极光带深浅色头像、SVG 和五个状态的圆点；石子只有一张头像和 SVG。",
+  "publisher": "persona",
+  "contributes": {
+    "looks": [
+      {
+        "id": "aurora",
+        "name": "极光",
+        "names": {"en": "Aurora", "ja": "オーロラ"},
+        "subtitle": "会发光的小水母",
+        "subtitles": {"en": "A glowing little jellyfish", "ja": "光る小さなクラゲ"},
+        "avatar": {
+          "sizes": {"128": "looks/aurora/avatar-128.png", "256": "looks/aurora/avatar-256.png"},
+          "svg": "looks/aurora/avatar.svg",
+          "safe": 1,
+          "dark": {
+            "sizes": {"128": "looks/aurora/avatar-dark-128.png", "256": "looks/aurora/avatar-dark-256.png"},
+            "svg": "looks/aurora/avatar-dark.svg"
+          }
+        },
+        "colors": {
+          "light": {"primary": "#5B6CFF", "secondary": "#38C6B0", "accent": "#3F4FE0", "bubble": "#3F4FE0", "bubble_text": "#FFFFFF"},
+          "dark": {"primary": "#8C98FF", "secondary": "#4FE0C8", "accent": "#8C98FF", "bubble": "#4A57D6", "bubble_text": "#FFFFFF"}
+        },
+        "dot": {
+          "size": 144,
+          "states": {
+            "idle": {"file": "looks/aurora/idle.png", "fps": 6},
+            "thinking": {"file": "looks/aurora/thinking.png", "fps": 6},
+            "working": {"file": "looks/aurora/working.png", "fps": 10},
+            "needs_you": {"file": "looks/aurora/needs_you.png", "fps": 6},
+            "offline": {"file": "looks/aurora/offline.png", "fps": 4}
+          }
+        },
+        "app_icon_fallback": "persona"
+      },
+      {
+        "id": "pebble",
+        "name": "石子",
+        "names": {"en": "Pebble", "ja": "こいし"},
+        "avatar": {"sizes": {"256": "looks/pebble/avatar-256.png"}, "svg": "looks/pebble/avatar.svg"},
+        "app_icon_fallback": "jarvis-circuit"
+      }
+    ]
+  }
+}
