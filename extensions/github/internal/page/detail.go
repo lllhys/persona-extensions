@@ -201,9 +201,9 @@ func (p *Page) overview(ctx context.Context, r *ext.UIRequest, s state, d github
 	if body == "" {
 		body = "*没有写描述*"
 	}
-	base := fmt.Sprintf("%s/%s/blob/%s/", p.c.Web(), d.Repo, cmp.Or(d.Head, "HEAD"))
+	base := blobRoot(p.c.Web(), d.Repo, cmp.Or(d.Head, "HEAD"))
 	if d.HeadRepo != "" || !d.PR {
-		base = fmt.Sprintf("%s/%s/blob/HEAD/", p.c.Web(), d.Repo)
+		base = blobRoot(p.c.Web(), d.Repo, "HEAD")
 	}
 	out = append(out, wire.Section{Title: "描述", Items: []wire.Component{markdownItem(r, "body", body, base, bodyMost)}})
 	if d.PR {

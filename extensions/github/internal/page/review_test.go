@@ -52,6 +52,8 @@ func fakeMore(w http.ResponseWriter, r *http.Request, at string) bool {
 		repoAPI + "/contents/src/lib": `[{"name":"util.go","path":"src/lib/util.go","type":"file","size":10}]`,
 		repoAPI + "/contents/src/main.go": `{"type":"file","path":"src/main.go","size":30,"encoding":"base64","content":"` + b64("package main\n\nfunc main() {}\n") +
 			`","html_url":"https://github.com/example-org/example-repo/blob/main/src/main.go"}`,
+		repoAPI + "/contents/docs/C#/guide.md": `{"type":"file","path":"docs/C#/guide.md","size":40,"encoding":"base64","content":"` +
+			b64("See [setup](setup.md), [top](/README.md) and [100%](../100%25/notes.md).\n") + `"}`,
 		repoAPI + "/readme":           `{"path":"README.md","encoding":"base64","content":"` + b64(readme) + `"}`,
 		repoAPI + "/issues/12/events": `[{"id":5,"event":"labeled","actor":{"login":"alice"},"label":{"name":"perf"},"created_at":"` + at + `"}]`,
 		repoAPI + "/pulls/12/comments": `[{"id":100,"user":{"login":"erin"},"body":"Why **3**?","path":"cache.go","line":3,"side":"RIGHT","created_at":"` + at + `"},
@@ -355,6 +357,23 @@ func TestEveryPageFitsEveryApp(t *testing.T) {
 			checked(t, v)
 		}
 	}
+}
+
+// A branch or directory name with a character a URL reserves (#, ?, %) stays part of the path in the links of a
+// Markdown file: GitHub's web paths are escaped segment by segment, as the API's are (github.escapePath).
+func TestFileLinksEscapeRefAndPath(t *testing.T) {
+	p, _ := signedIn(t)
+	s := state{V: viewFile, Repo: "example-org/example-repo", Ref: "fix/#12", Path: "docs/C#/guide.md"}
+	v, _ := p.Render(context.Background(), req(3, s, "", nil))
+	got := checked(t, v)
+	has(t, "file", got,
+		"[setup](https://github.com/example-org/example-repo/blob/fix/%2312/docs/C%23/setup.md)",
+		"[top](https://github.com/example-org/example-repo/blob/fix/%2312/README.md)",
+		"[100%](https://github.com/example-org/example-repo/blob/fix/%2312/docs/100%25/notes.md)")
+	// The directory's 在 GitHub 打开 too.
+	dir := state{V: viewRepo, Repo: "example-org/example-repo", Tab: tabCode, Ref: "fix/#12", Path: "docs/C#"}
+	v, _ = p.Render(context.Background(), req(3, dir, "", nil))
+	has(t, "dir", checked(t, v), `"url":"https://github.com/example-org/example-repo/tree/fix/%2312/docs/C%23"`)
 }
 
 // In a repository's file a /root-relative link or image resolves against the repository at the ref, not the host.

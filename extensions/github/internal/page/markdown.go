@@ -184,6 +184,21 @@ func absolute(target, base, root string) (string, bool) {
 	return u.String(), true
 }
 
+// blobRoot is a repository's blob URL at ref, ending in "/": the base a file's links resolve against. ref goes in
+// escaped segment by segment (a branch may hold #, ? or %), as the API's paths are.
+func blobRoot(web, repo, ref string) string {
+	return web + "/" + repo + "/blob/" + escapeSegments(ref) + "/"
+}
+
+// escapeSegments is p with each "/"-separated segment path-escaped.
+func escapeSegments(p string) string {
+	parts := strings.Split(p, "/")
+	for i, s := range parts {
+		parts[i] = url.PathEscape(s)
+	}
+	return strings.Join(parts, "/")
+}
+
 // markdownItem is text as a markdown component (cleaned, cut to most); an app before UI version 3 gets the text.
 func markdownItem(r *ext.UIRequest, key, text, base string, most int) wire.Component {
 	return markdownAt(r, key, text, base, "", most)
@@ -205,7 +220,7 @@ func markdownAt(r *ext.UIRequest, key, text, base, root string, most int) wire.C
 // anything else as code.
 func fileBody(r *ext.UIRequest, name, text, root string, src bool, most int) []wire.Component {
 	if isMarkdown(name) && !src {
-		return []wire.Component{markdownAt(r, "readme", text, root+parentDir(name), root, most)}
+		return []wire.Component{markdownAt(r, "readme", text, root+escapeSegments(parentDir(name)), root, most)}
 	}
 	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
 	return codeBlocks(r, "readme", language(name), lines, 1)
