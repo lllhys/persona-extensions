@@ -36,10 +36,12 @@ UI bridge and common source packaging must be integrated first. Until then the
 existing Go process, manifest and version remain unchanged; do not publish the
 source module as a working replacement or remove the Go implementation/tests.
 
-The official SDK sync currently distributes runtime sources only. Its copied
-package scripts reference development configs, scripts and fixtures not present
-in that subset. Do not patch the copied SDK; these extension-local checks avoid
-those scripts until upstream supplies distribution tooling.
+The official SDK sync includes its declared configs, scripts, typecheck fixtures
+and canonical conformance fixtures, with upstream #6123/#6137/#6140 repairs.
+Its package commands work after installing the SDK's own locked development
+dependencies. These are build-time tools, not source-runtime dependency
+resolution. Do not patch the copied SDK; use the official synchronization script.
+Runtime adoption and module-owned hooks/Renderer integration remain separate gates.
 
 A stream cancellation can wait for the other branch of a tee-backed `Response`
 in Node. Initiate cancellation without waiting on that branch before releasing

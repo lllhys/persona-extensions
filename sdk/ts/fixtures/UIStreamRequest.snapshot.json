@@ -1,0 +1,8 @@
+{
+  "request": "snapshot",
+  "protocol": 1,
+  "request_id": "request-snapshot",
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "version": 1
+}

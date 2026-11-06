@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { connect, type Contributes, type Manifest } from "./index.ts";
+import { testFixtures } from "./test-fixtures.ts";
 
-const fixture = new URL("../../../schema/extension/examples/Manifest.custom-contributions.json", import.meta.url);
+const fixture = new URL("Manifest.custom-contributions.json", testFixtures);
 
 test("generated contributions keep typed UI and arbitrary JSON keys", async () => {
   const raw = await Bun.file(fixture).json();
