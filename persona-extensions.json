@@ -289,6 +289,123 @@
     {
       "manifest": {
         "manifest_version": 1,
+        "id": "hackernews",
+        "name": "Hacker News",
+        "version": "0.1.0",
+        "description": "Hacker News 的帖子：扩展里的一页看 Top、New、Best、Ask HN 和 Show HN，点开在 App 里读正文和顶层评论（hub 去读，手机不用代理），页面文字跟随 App 的语言；助手能用工具查列表、读帖子。只读公开内容，不用账号。",
+        "publisher": "nwverse",
+        "engines": {
+          "plugin_protocol": 1
+        },
+        "runtime": {
+          "command": {
+            "linux-amd64": "bin/hackernews-linux-amd64",
+            "linux-arm64": "bin/hackernews-linux-arm64",
+            "darwin-arm64": "bin/hackernews-darwin-arm64",
+            "darwin-amd64": "bin/hackernews-darwin-amd64"
+          }
+        },
+        "contributes": {
+          "connectors": [
+            {
+              "id": "hackernews",
+              "name": "Hacker News",
+              "capabilities": [
+                "status",
+                "tools"
+              ],
+              "hosts": [
+                "news.ycombinator.com"
+              ]
+            }
+          ],
+          "ui": [
+            {
+              "id": "stories",
+              "title": "Hacker News",
+              "placement": "plugin_page"
+            }
+          ]
+        },
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "list": {
+              "type": "string",
+              "title": "打开时看",
+              "default": "top",
+              "oneOf": [
+                {
+                  "const": "top",
+                  "title": "Top"
+                },
+                {
+                  "const": "new",
+                  "title": "New"
+                },
+                {
+                  "const": "best",
+                  "title": "Best"
+                },
+                {
+                  "const": "ask",
+                  "title": "Ask HN"
+                },
+                {
+                  "const": "show",
+                  "title": "Show HN"
+                }
+              ]
+            },
+            "keywords": {
+              "type": "array",
+              "title": "关键词",
+              "description": "标题或网站域名里有其中一个才显示（不分大小写）；空着不限",
+              "items": {
+                "type": "string"
+              }
+            },
+            "exclude_keywords": {
+              "type": "array",
+              "title": "屏蔽词",
+              "description": "标题或网站域名里有其中一个就不显示",
+              "items": {
+                "type": "string"
+              }
+            },
+            "min_score": {
+              "type": "integer",
+              "title": "最低分数",
+              "description": "分数（points）低于这个的不显示；0 不限",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        },
+        "permissions": {
+          "network": [
+            "hacker-news.firebaseio.com"
+          ]
+        }
+      },
+      "tags": [
+        "社区",
+        "热门",
+        "阅读",
+        "英文",
+        "技术"
+      ],
+      "packages": [
+        {
+          "url": "release:hackernews-v0.1.0/hackernews-0.1.0.tar.gz",
+          "sha256": "cb55374cd61010c8277aa027d74501ca5038234fac935399eb44d62281bb6b84",
+          "size": 12777045
+        }
+      ]
+    },
+    {
+      "manifest": {
+        "manifest_version": 1,
         "id": "homeassistant",
         "name": "Home Assistant",
         "version": "0.2.2",
