@@ -657,7 +657,7 @@ func TestTools(t *testing.T) {
 }
 
 func TestTopicID(t *testing.T) {
-	for raw, want := range map[string]int64{`123`: 123, `"456"`: 456, `"https://linux.do/t/topic/789"`: 789, `"https://linux.do/t/some-slug/42/7"`: 42} {
+	for raw, want := range map[string]int64{`123`: 123, `"456"`: 456, `"https://linux.do/t/topic/789"`: 789, `"https://linux.do/t/some-slug/42/7"`: 42, `"https://linux.do/t/123456/7"`: 123456} {
 		if got, err := topicID(json.RawMessage(raw)); err != nil || got != want {
 			t.Errorf("%s: %d %v", raw, got, err)
 		}

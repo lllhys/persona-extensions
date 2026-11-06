@@ -96,7 +96,7 @@ func (p *plugin) cToolsCall(ctx context.Context, _ *pluginkit.Hub, raw json.RawM
 
 var topicIDRE = regexp.MustCompile(`(\d+)`)
 
-// topicID reads a topic's id from an id (a number or a string) or a link (/t/topic/123, /t/some-slug/123/4).
+// topicID reads a topic's id from an id (a number or a string) or a link (/t/topic/123, /t/some-slug/123/4, /t/123/4).
 func topicID(raw json.RawMessage) (int64, error) {
 	var s string
 	if err := json.Unmarshal(raw, &s); err != nil {

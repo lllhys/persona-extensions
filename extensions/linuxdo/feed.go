@@ -62,7 +62,8 @@ type rssDoc struct {
 }
 
 var (
-	topicLinkRE = regexp.MustCompile(`/t/(?:[^/]+/)?(\d+)`)
+	// The slug has a non-digit, so /t/123/4 (topic 123, post 4) is not read as topic 4.
+	topicLinkRE = regexp.MustCompile(`/t/(?:[^/]*[^/\d][^/]*/)?(\d+)`)
 	countsRE    = regexp.MustCompile(`(\d+)\s*(?:个帖子|posts?)\s*-\s*(\d+)\s*(?:位参与者|participants?)`)
 	tagRE       = regexp.MustCompile(`(?s)<[^>]*>`)
 	spaceRE     = regexp.MustCompile(`\s+`)
