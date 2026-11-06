@@ -99,17 +99,21 @@ func (as *alerts) load(dir string, logf func(string, ...any)) {
 	as.list, _ = readState[[]Alert](as.path, logf)
 }
 
-// saveLocked writes the list; as.mu held.
-func (as *alerts) saveLocked() error {
-	if as.path == "" {
-		return nil
+// saveLocked writes next and makes it the list once written, so a failed write leaves the list as it was; as.mu
+// held.
+func (as *alerts) saveLocked(next []Alert) error {
+	if as.path != "" {
+		raw, _ := json.MarshalIndent(next, "", "  ")
+		tmp := as.path + ".tmp"
+		if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+			return fmt.Errorf("存不下提醒：%w", err)
+		}
+		if err := os.Rename(tmp, as.path); err != nil {
+			return fmt.Errorf("存不下提醒：%w", err)
+		}
 	}
-	raw, _ := json.MarshalIndent(as.list, "", "  ")
-	tmp := as.path + ".tmp"
-	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
-		return fmt.Errorf("存不下提醒：%w", err)
-	}
-	return os.Rename(tmp, as.path)
+	as.list = next
+	return nil
 }
 
 func (as *alerts) all() []Alert {
@@ -139,8 +143,7 @@ func (as *alerts) add(a Alert) error {
 			return errors.New("已经有这条提醒了")
 		}
 	}
-	as.list = append(as.list, a)
-	return as.saveLocked()
+	return as.saveLocked(append(slices.Clone(as.list), a))
 }
 
 func (as *alerts) remove(id string) (Alert, bool, error) {
@@ -151,8 +154,7 @@ func (as *alerts) remove(id string) (Alert, bool, error) {
 		return Alert{}, false, nil
 	}
 	a := as.list[i]
-	as.list = slices.Delete(as.list, i, i+1)
-	return a, true, as.saveLocked()
+	return a, true, as.saveLocked(slices.Delete(slices.Clone(as.list), i, i+1))
 }
 
 func newAlertID() string {
@@ -230,7 +232,8 @@ func (p *plugin) checkAlerts(ctx context.Context, fresh time.Duration) {
 		met = true
 	}
 	if met {
-		if err := as.saveLocked(); err != nil {
+		// kept met in memory even when it cannot be written: the user is told now (again after a restart)
+		if err := as.saveLocked(as.list); err != nil {
 			p.logf("markets: %v", err)
 		}
 	}

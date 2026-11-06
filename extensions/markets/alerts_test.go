@@ -128,3 +128,41 @@ func collect(t *testing.T, p *plugin) []pluginkit.InboxThing[pluginkit.ThingExtr
 	}
 	return out.(map[string]any)["things"].([]pluginkit.InboxThing[pluginkit.ThingExtra])
 }
+
+// A failed write of alerts.json leaves the alerts as they were: the user is told the alert was not set (or not
+// deleted), so it must not be listed, counted or checked (or be gone) until a restart says otherwise.
+func TestAlertsUnchangedWhenTheWriteFails(t *testing.T) {
+	dir := t.TempDir()
+	p := newPlugin(t.Logf)
+	var ip pluginkit.InitParams
+	ip.Plugin.DataDir = dir
+	if err := p.configure(ip); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.alerts.add(Alert{ID: "keep", Ref: "us:AAPL", Kind: "below", Value: 100}); err != nil {
+		t.Fatal(err)
+	}
+	// every later write fails: the temporary file's path is a directory
+	if err := os.Mkdir(filepath.Join(dir, "alerts.json.tmp"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ids := func() []string {
+		var out []string
+		for _, a := range p.alerts.all() {
+			out = append(out, a.ID)
+		}
+		return out
+	}
+	if err := p.alerts.add(Alert{ID: "new", Ref: "us:MSFT", Kind: "above", Value: 900}); err == nil {
+		t.Error("add did not fail")
+	}
+	if got := ids(); len(got) != 1 || got[0] != "keep" {
+		t.Errorf("after a failed add: %v, want [keep]", got)
+	}
+	if _, ok, err := p.alerts.remove("keep"); !ok || err == nil {
+		t.Errorf("remove: ok=%v err=%v, want a failure", ok, err)
+	}
+	if got := ids(); len(got) != 1 || got[0] != "keep" {
+		t.Errorf("after a failed remove: %v, want [keep]", got)
+	}
+}
