@@ -1,0 +1,7 @@
+{
+ "source": "mail",
+ "kind": "mail",
+ "name": "deals@store-example.com",
+ "relevance": 30,
+ "id": "mail-promo"
+}

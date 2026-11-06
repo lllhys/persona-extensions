@@ -1,0 +1,6 @@
+{"type":"object","additionalProperties":false,"required":["merges","conflicts"],
+ "properties":{
+  "merges":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["keep","drop"],
+    "properties":{"keep":{"type":"string"},"drop":{"type":"array","items":{"type":"string"}},"claim":{"type":"string"}}}},
+  "conflicts":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["ids","reason"],
+    "properties":{"ids":{"type":"array","minItems":2,"items":{"type":"string"}},"reason":{"type":"string"}}}}}}

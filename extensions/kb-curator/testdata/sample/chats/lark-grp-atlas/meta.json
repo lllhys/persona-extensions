@@ -1,0 +1,24 @@
+{
+ "source": "lark",
+ "kind": "group",
+ "name": "Atlas 项目群",
+ "people": [
+  "lark-u2",
+  "lark-u3",
+  "lark-f0",
+  "lark-f1",
+  "lark-f2",
+  "lark-f3",
+  "lark-f4",
+  "lark-f5",
+  "lark-f6",
+  "lark-f7",
+  "lark-f8",
+  "lark-f9"
+ ],
+ "projects": [
+  "atlas"
+ ],
+ "relevance": 75,
+ "id": "lark-grp-atlas"
+}

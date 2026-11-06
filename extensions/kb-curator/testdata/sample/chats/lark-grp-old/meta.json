@@ -1,0 +1,13 @@
+{
+ "source": "lark",
+ "kind": "group",
+ "name": "旧报表迁移群",
+ "people": [
+  "lark-u1"
+ ],
+ "projects": [
+  "old"
+ ],
+ "relevance": 40,
+ "id": "lark-grp-old"
+}

@@ -1,0 +1,8 @@
+{
+ "source": "mail",
+ "kind": "mail",
+ "name": "Avery Lin <avery@example.org>",
+ "mine": true,
+ "relevance": 60,
+ "id": "mail-mine"
+}

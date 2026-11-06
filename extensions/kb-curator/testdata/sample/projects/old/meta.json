@@ -1,0 +1,10 @@
+{
+ "slug": "old",
+ "name": "旧报表迁移",
+ "kind": "short",
+ "status": "active",
+ "chats": [
+  "lark-grp-old"
+ ],
+ "relevance": 40
+}

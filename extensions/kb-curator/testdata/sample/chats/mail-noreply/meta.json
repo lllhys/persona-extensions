@@ -1,0 +1,7 @@
+{
+ "source": "mail",
+ "kind": "mail",
+ "name": "Contributor@shop.example.com",
+ "relevance": 20,
+ "id": "mail-noreply"
+}

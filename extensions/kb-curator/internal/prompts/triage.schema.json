@@ -1,0 +1,10 @@
+{"type":"object","additionalProperties":false,"required":["admit","category","importance","relevance","reason","evidence"],
+ "properties":{
+  "admit":{"type":"string","enum":["include","digest_only","drop"]},
+  "category":{"type":"string","enum":["personal","work_action","work_fyi","transactional","notification","marketing","newsletter","social","other"]},
+  "importance":{"type":"string","enum":["P0","P1","P2","P3"]},
+  "relevance":{"type":"integer","minimum":0,"maximum":100},
+  "reason":{"type":"string"},
+  "evidence":{"type":"array","maxItems":2,"items":{"$ref":"#/$defs/evidence"}}},
+ "$defs":{"evidence":{"type":"object","additionalProperties":false,"required":["n","quote"],
+  "properties":{"n":{"type":"integer"},"quote":{"type":"string"},"speaker":{"type":"string"}}}}}

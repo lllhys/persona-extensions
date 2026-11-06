@@ -1,0 +1,13 @@
+{
+ "name": "Sam Rivera",
+ "aliases": [
+  "Sam",
+  "萨姆"
+ ],
+ "handles": [
+  {
+   "kind": "email",
+   "value": "sam@example.com"
+  }
+ ]
+}
