@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -35,6 +36,10 @@ type Source interface {
 	Hosts() []string
 	// URL is the instrument's page on the source's website ("" when none), opened from the app.
 	URL(symbol string) string
+	// Help says how its symbols are written, with the ref prefix, for the tools ("OKX 的现货写 okx:BTC-USDT…").
+	Help() string
+	// Examples are a symbol as typed ("BTC-USDT", "600519") and a search ("BTC", "茅台"), for the page's hints.
+	Examples() (typed, search string)
 }
 
 var (
@@ -58,9 +63,22 @@ type Quote struct {
 	High, Low float64
 	// Turnover is the period's traded value in Currency.
 	Turnover float64
-	// Period names the period for the page: "24h", "今日".
+	// Period names the period for the page: "24h", "当日".
 	Period string
 	At     time.Time
+	// Decimals is how many decimals its prices are written with (2 for most stocks); 0: as many as the size needs.
+	Decimals int
+	// Idle: no trade for a while, the market being closed (or at a break, or the instrument suspended); the page says
+	// so with At. A market that never closes leaves it false.
+	Idle bool
+}
+
+// Price writes one of its prices with its decimals; "—" when unknown.
+func (q Quote) Price(f float64) string {
+	if q.Decimals > 0 && f != 0 {
+		return strconv.FormatFloat(f, 'f', q.Decimals, 64)
+	}
+	return fmtPrice(f)
 }
 
 // Change is the change over the period as a fraction, and whether it could be worked out.
@@ -155,11 +173,16 @@ func (ss sources) label(r Ref) string {
 	return r.String()
 }
 
-// markets says what the sources cover, for the page and the tools: "加密货币（OKX）".
+// markets says what the sources cover, for the page and the tools: "加密货币（OKX）、A股" (the name only when it is
+// the market).
 func (ss sources) markets() string {
 	var parts []string
 	for _, s := range ss {
-		parts = append(parts, s.Market()+"（"+s.Name()+"）")
+		if s.Market() == s.Name() {
+			parts = append(parts, s.Name())
+		} else {
+			parts = append(parts, s.Market()+"（"+s.Name()+"）")
+		}
 	}
 	return strings.Join(parts, "、")
 }

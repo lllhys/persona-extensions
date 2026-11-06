@@ -19,7 +19,7 @@ import (
 // market is adding its Source here, its hosts to the manifest's connector hosts and network permission
 // (TestManifest checks), and, when it needs a key, a secret in the manifest (docs/extensions/markets.md).
 func newSources() sources {
-	return sources{newOKX(okxBase)}
+	return append(sources{newOKX(okxBase)}, tencentSources(tencentBase)...)
 }
 
 // Config is the extension's configuration (the manifest's form).
@@ -27,6 +27,8 @@ type Config struct {
 	Watchlist []string `json:"watchlist,omitempty"`
 	Bar       string   `json:"bar,omitempty"`
 	TZ        string   `json:"tz,omitempty"`
+	// Colors is how a change is coloured: "red_up" (红涨绿跌, the default) or "green_up".
+	Colors string `json:"colors,omitempty"`
 }
 
 // defaultWatchlist is the watchlist when the configuration seeds none: the default source's symbols.
@@ -59,6 +61,22 @@ type plugin struct {
 
 func newPlugin(logf func(string, ...any)) *plugin {
 	return &plugin{logf: logf, srcs: newSources()}
+}
+
+// tone is a change's tone: with 红涨绿跌 (the default) a rise is "danger" (red) and a fall "positive" (green); with
+// green_up the other way round.
+func (p *plugin) tone(c float64) string {
+	up, down := "danger", "positive"
+	if p.cfg.Colors == "green_up" {
+		up, down = down, up
+	}
+	switch {
+	case c > 0:
+		return up
+	case c < 0:
+		return down
+	}
+	return "neutral"
 }
 
 // bar is the configured default bar when src has it, else src's nearest to 1H, else its first.
@@ -187,17 +205,34 @@ func (p *plugin) removeWatch(r Ref) (string, error) {
 }
 
 // moveWatch moves r one place up (by -1) or down (by 1).
+// moveWatch moves r by one place among the watchlist's instruments of its source (the page lists each source as a
+// group): it swaps with the nearest one of the same source before (by -1) or after (by 1).
 func (p *plugin) moveWatch(r Ref, by int) error {
 	_, err := p.setWatch(func(w []Ref) ([]Ref, string, error) {
 		i := slices.Index(w, r)
-		j := i + by
-		if i < 0 || j < 0 || j >= len(w) {
+		if i < 0 {
 			return w, "", nil
 		}
-		w[i], w[j] = w[j], w[i]
+		for j := i + by; j >= 0 && j < len(w); j += by {
+			if w[j].Source == r.Source {
+				w[i], w[j] = w[j], w[i]
+				break
+			}
+		}
 		return w, "", nil
 	})
 	return err
+}
+
+// group is the watchlist's instruments of one source, in order.
+func group(w []Ref, source string) []Ref {
+	var out []Ref
+	for _, r := range w {
+		if r.Source == source {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // note keeps how a read went, for the connector's status.

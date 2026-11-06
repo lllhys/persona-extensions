@@ -173,8 +173,8 @@ func TestWatchlistPage(t *testing.T) {
 	}
 	v := render(t, p, "", 5)
 	got := texts(v)
-	for _, want := range []string{"自选 · 3", "row BTC-USDT 24h 高 51000.00 · 低 47000.00 50000.00", "[+4.17% positive] →open:okx:BTC-USDT",
-		"[-3.33% danger] →open:okx:ETH-USDT", "NOPE-USDT 现在查不到这个代码的行情", "→add", "→refresh"} {
+	for _, want := range []string{"自选 · 3", "row BTC-USDT 高 51000.00 · 低 47000.00 50000.00", "[+4.17% danger] →open:okx:BTC-USDT",
+		"[-3.33% positive] →open:okx:ETH-USDT", "24h 涨跌按 24 小时前的价格算。点一行看 K 线", "NOPE-USDT 现在查不到这个代码的行情", "→add", "→refresh"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the page has no %q:\n%s", want, got)
 		}
@@ -227,7 +227,7 @@ func TestInstrumentPage(t *testing.T) {
 	p, _ := newTestPlugin(t, f, `{"watchlist": ["BTC-USDT", "ETH-USDT"]}`)
 	r := act(t, p, "", "open:BTC-USDT", nil)
 	got := texts(*r.View)
-	for _, want := range []string{"{最新价=50000.00 24h +4.17% positive}", "{24h 成交额=61.73M USDT", "segmented", "K 线 · 1 小时",
+	for _, want := range []string{"{最新价=50000.00 24h +4.17% danger}", "{24h 成交额=61.73M USDT", "segmented", "K 线 · 1 小时",
 		"<收盘价 60>", "<成交量 60>", "{60 根涨跌=", "→down:okx:BTC-USDT", "→remove:okx:BTC-USDT", "→back"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the page has no %q:\n%s", want, got)
