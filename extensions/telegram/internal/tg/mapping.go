@@ -489,11 +489,18 @@ func (g *gotdClient) Messages(ctx context.Context, d dialog, ids []int) ([]messa
 	msgs, e := messagesOf(res)
 	out := make([]message, 0, len(msgs))
 	for _, m := range msgs {
-		if _, empty := m.(*tg.MessageEmpty); !empty {
+		if inDialog(m, d) { // not empty, and not another chat's
 			out = append(out, messageOf(m, e))
 		}
 	}
 	return out, nil
+}
+
+// inDialog says m is in d. DMs and basic groups share one message id space per account, and messages.getMessages
+// takes bare ids, so it answers an id from whichever chat holds it.
+func inDialog(m tg.MessageClass, d dialog) bool {
+	p, _ := entities{}.peerOf(peerOfMessage(m))
+	return p.ID != 0 && p.key() == d.Peer.key()
 }
 
 func (g *gotdClient) Info(ctx context.Context, d dialog) (chatInfo, error) {

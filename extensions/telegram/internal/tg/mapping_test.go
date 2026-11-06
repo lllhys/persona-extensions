@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -154,5 +155,64 @@ func TestSearchKeepsUsernames(t *testing.T) {
 	}
 	if _, _, err := c.Describe(ctx, "telegram_send", json.RawMessage(`{"chat":"@example_group","text":"你好"}`)); err != nil {
 		t.Fatalf("a group found only by tg search: %v", err)
+	}
+}
+
+// DMs and basic groups share one message id space per account, and messages.getMessages takes bare ids: id 500
+// asked for "in" the DM u7 comes back from wherever it is. A message from another chat is not the named chat's,
+// for tg get-message as for a media ref (#214).
+func TestMessagesStayInTheNamedChat(t *testing.T) {
+	now := int(time.Now().Unix())
+	friend := &tg.User{ID: 7, AccessHash: 77, FirstName: "示例好友"}
+	other := &tg.User{ID: 8, AccessHash: 88, FirstName: "示例群友"}
+	group := &tg.Chat{ID: 9, Title: "示例群", ParticipantsCount: 3}
+	photo := &tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 3, DCID: 2, Sizes: []tg.PhotoSizeClass{&tg.PhotoSize{Type: "x", W: 800, H: 600}}}}
+	dm := &tg.Message{ID: 400, PeerID: &tg.PeerUser{UserID: 7}, FromID: &tg.PeerUser{UserID: 7}, Date: now, Message: "示例私聊"}
+	inGroup := &tg.Message{ID: 500, PeerID: &tg.PeerChat{ChatID: 9}, FromID: &tg.PeerUser{UserID: 8}, Date: now,
+		Message: "示例群消息", Media: photo}
+	byID := map[int]tg.MessageClass{400: dm, 500: inGroup}
+	gc := offlineGotd(func(input bin.Encoder, output bin.Decoder) error {
+		switch r := input.(type) {
+		case *tg.MessagesGetDialogsRequest:
+			res := &tg.MessagesDialogs{Users: []tg.UserClass{friend, other}, Chats: []tg.ChatClass{group}}
+			if r.FolderID == 0 {
+				res.Dialogs = []tg.DialogClass{&tg.Dialog{Peer: &tg.PeerUser{UserID: 7}, TopMessage: 400},
+					&tg.Dialog{Peer: &tg.PeerChat{ChatID: 9}, TopMessage: 500}}
+				res.Messages = []tg.MessageClass{dm, inGroup}
+			}
+			output.(*tg.MessagesDialogsBox).Dialogs = res
+		case *tg.MessagesGetMessagesRequest: // like Telegram: each id wherever it is among the account's DMs and groups
+			res := &tg.MessagesMessages{Users: []tg.UserClass{friend, other}, Chats: []tg.ChatClass{group}}
+			for _, in := range r.ID {
+				res.Messages = append(res.Messages, byID[in.(*tg.InputMessageID).ID])
+			}
+			output.(*tg.MessagesMessagesBox).Messages = res
+		default:
+			return fmt.Errorf("unexpected %T", input)
+		}
+		return nil
+	})
+	ctx := context.Background()
+	c := newConn(&memSecrets{}, nil)
+	if out, err := c.cliCall(ctx, gc, "telegram_get_message", json.RawMessage(`{"chat":"u7","id":500}`)); err == nil {
+		t.Fatalf("u7 #500 answered a message from g9: %s", out)
+	} else if !strings.Contains(err.Error(), "没有消息 500") {
+		t.Fatalf("u7 #500: %v", err)
+	}
+	if out, err := c.cliCall(ctx, gc, "telegram_get_message", json.RawMessage(`{"chat":"g9","id":500}`)); err != nil ||
+		!strings.Contains(out, "示例群消息") {
+		t.Fatalf("g9 #500: %s, %v", out, err)
+	}
+	if out, err := c.cliCall(ctx, gc, "telegram_get_message", json.RawMessage(`{"chat":"u7","id":400}`)); err != nil ||
+		!strings.Contains(out, "示例私聊") {
+		t.Fatalf("u7 #400: %s, %v", out, err)
+	}
+
+	u7 := dialog{Peer: peer{Kind: 'u', ID: 7, Hash: 77}, Kind: "dm"}
+	if f, err := gc.Locate(ctx, u7, 500, false); err != errMediaGone {
+		t.Fatalf("a media ref u7/500 found %+v, %v", f, err)
+	}
+	if _, err := gc.Locate(ctx, dialog{Peer: peer{Kind: 'g', ID: 9}, Kind: "group"}, 500, false); err != nil {
+		t.Fatalf("g9/500: %v", err)
 	}
 }
