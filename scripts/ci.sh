@@ -1,7 +1,8 @@
 #!/bin/bash
 # What CI runs, runnable on any machine with Go, a C compiler (the race detector), Python 3 and (for release) gh:
-#   scripts/ci.sh            the checks a pull request needs: documentation links, manifests, gofmt,
-#                            the copied SDK's vet and tests, vet, tests with the race detector, every platform builds,
+#   scripts/ci.sh            the checks a pull request needs: documentation links, the repository layout (no
+#                            package-manager file at the root), manifests, gofmt, the copied SDK's vet and tests,
+#                            every Go module's tidiness, vet and tests with the race detector, every platform builds,
 #                            indexes, and the indexes' signatures against market.pub (nwverse/persona#1848)
 #   scripts/ci.sh release <base>    then release the extensions whose version changed since the git ref <base>
 #                                   (a push to main: the last commit a release run finished for, else its "before");
@@ -17,6 +18,10 @@ step docs
 python3 -I scripts/check-docs.py
 python3 -I scripts/test-docs.py
 
+step layout
+python3 -I scripts/check-layout.py
+python3 -I scripts/test-layout.py
+
 step manifests
 scripts/manifest.py check
 python3 -I scripts/test-manifest.py
@@ -25,17 +30,25 @@ step gofmt
 bad=$(gofmt -l . | grep -v '^dist/' || true)
 [ -z "$bad" ] || { echo "not gofmt'ed:"; echo "$bad"; exit 1; }
 
-# sdk/go is a nested module, so the root vet and tests below do not reach it.
+# The copied SDK is checked as it comes from upstream; its go.mod is upstream's too, so no tidiness check.
 step sdk
 go -C sdk/go vet ./...
 go -C sdk/go test -count=1 -timeout=90s ./...
 
+# Every other module on its own: pluginkit, tools (the repository's own Go tests) and each extensions/<id>.
+modules=$(python3 -I scripts/check-layout.py modules)
+
+step tidy
+for m in $modules; do
+  go -C "$m" mod tidy -diff || { echo "$m: go.mod or go.sum is not tidy: run go -C $m mod tidy"; exit 1; }
+done
+
 step vet
-go vet ./...
+for m in $modules; do go -C "$m" vet ./...; done
 
 # -race: tests start goroutines (connection loops, watchers) next to package settings they shorten for the test.
 step test
-go test -race ./...
+for m in $modules; do go -C "$m" test -race ./...; done
 
 step companion
 python3 -I -B extensions/larkagentx/bridge_test.py

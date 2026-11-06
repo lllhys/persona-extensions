@@ -104,7 +104,7 @@ The shipped skill remains in its original language because it is runtime assista
 From the repository root:
 
 ```sh
-go test ./extensions/telegram/...
+go -C extensions/telegram test ./...
 ```
 
 Tests use a fake Telegram client and synthetic fixtures, not a real account. [plugin_test.go](../../extensions/telegram/plugin_test.go) reads `persona-extension.json`, compares it with the program's advertised capabilities, and runs the official SDK's `exttest` conformance checks (handshake, error codes and exiting when the hub disconnects). The package carries both manifest names because [scripts/package.sh](../../scripts/package.sh) writes `persona-extension.json` and copies it to `persona-plugin.json`; the legacy name is never committed (see [Compatibility](../reference.md#compatibility)).

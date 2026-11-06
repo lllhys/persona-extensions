@@ -79,7 +79,7 @@ The extension uses `plugin_page` rather than `nav_page`, like LINUX DO, so older
 From the repository root:
 
 ```sh
-go test ./extensions/v2ex
+go -C extensions/v2ex test ./...
 ```
 
 The tests use a fake site, so they never reach the real one. Coverage includes parsing and profile fields, filters, node names, merging, caching, pacing, concurrent reads, stale copies, firewall pages, cut answers, refusals, quota handling and cache bounds. It also checks the list and topic pages on UI versions 0 to 3, long topics, time zones, the page and tool time limits, both tools, connector status and errors, manifest consistency, the protocol handshake through `exttest.Check`, and an older app opening a topic and going back over the protocol.

@@ -110,7 +110,7 @@ It also calls the hub's `connector.credentials.gh_token`. A hub without it makes
 From the repository root:
 
 ```sh
-go test ./extensions/github/...
+go -C extensions/github test ./...
 ```
 
 The tests cover:

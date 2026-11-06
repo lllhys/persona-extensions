@@ -93,7 +93,7 @@ Use the [public market](../installation.md), or package locally from the reposit
 
 ```sh
 scripts/package.sh claude-bypass-allow
-go test ./extensions/claude-bypass-allow
+go -C extensions/claude-bypass-allow test ./...
 ```
 
 The tests cover the hook's decisions for each tool, the commands that stay with a person, deletions in scratch directories and the variables they use, the `allow_destructive` setting, rule matching, redaction, the audit log, editing settings.json without changing anything else, the program's install and cleanup, and the page in three languages.

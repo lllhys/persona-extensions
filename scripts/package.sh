@@ -26,7 +26,8 @@ done
 # letting a planted json.py shadow the stdlib module. The snippet uses only stdlib json/sys and an explicit argv path.
 python3 -I -c 'import json,sys;[print(k, v) for k, v in json.load(open(sys.argv[1])).get("runtime", {}).get("command", {}).items()]' "$manifest" |
 while read -r plat path; do
-  GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "$out/$path" "./$src"
+  # In the extension's own module (extensions/<id>/go.mod): there is none at the repository root.
+  GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go -C "$src" build -trimpath -ldflags "-s -w" -o "$PWD/$out/$path" .
 done
 rmdir "$out/bin" 2>/dev/null || true # nothing built: no empty bin/ in the package
 # No macOS/editor junk in the archive. COPYFILE_DISABLE/--no-xattrs only suppress AppleDouble ._* entries and
