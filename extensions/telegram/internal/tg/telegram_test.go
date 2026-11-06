@@ -440,7 +440,7 @@ func (c *fakeClient) Fetch(ctx context.Context, f *fileLoc, most int) ([]byte, e
 	}
 	b, ok := c.f.files[key]
 	if !ok {
-		return nil, errors.New("FILE_REFERENCE_EXPIRED")
+		return nil, tgerr.New(400, "FILE_REFERENCE_EXPIRED") // a location this file is not (or no longer) at
 	}
 	if c.f.fetched == nil {
 		c.f.fetched = map[string]int{}

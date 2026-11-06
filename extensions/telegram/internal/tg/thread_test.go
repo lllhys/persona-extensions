@@ -133,6 +133,38 @@ func TestThreadMedia(t *testing.T) {
 	}
 }
 
+// A picture whose file reference expired since its page was read: the message is read again for a fresh one, once.
+func TestThreadMediaExpiredReference(t *testing.T) {
+	c, f, ctx := threadAccount(t)
+	f.mu.Lock()
+	f.media["c2/12"].Full = &fileLoc{key: "photo 12 old ref", mime: "image/jpeg", dc: 3}
+	f.mu.Unlock()
+	if _, err := c.Thread(ctx, "c2", "", 30); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	f.media["c2/12"].Full = &fileLoc{key: "photo 12", mime: "image/jpeg", dc: 3} // the message read again has a fresh one
+	f.mu.Unlock()
+	if m, err := c.Media(ctx, "m.c2.12.f"); err != nil || string(m.Data) != "made-up jpeg" || requests(f, "Locate") != 1 {
+		t.Fatalf("expired reference: %q %v, %d locate(s)", m.Data, err, requests(f, "Locate"))
+	}
+	if m, err := c.Media(ctx, "m.c2.12.f"); err != nil || string(m.Data) != "made-up jpeg" || requests(f, "Locate") != 1 {
+		t.Fatalf("the fresh one is kept: %q %v, %d locate(s)", m.Data, err, requests(f, "Locate"))
+	}
+
+	// One that is still expired when read again fails after one more Fetch, not a loop.
+	f.mu.Lock()
+	f.media["c2/12"].Full = &fileLoc{key: "photo 12 gone", mime: "image/jpeg", dc: 3}
+	f.mu.Unlock()
+	c.box.mu.Lock()
+	c.box.locs = nil
+	c.box.mu.Unlock()
+	fetches := requests(f, "Fetch")
+	if _, err := c.Media(ctx, "m.c2.12.f"); err == nil || requests(f, "Fetch") != fetches+1 || requests(f, "Locate") != 2 {
+		t.Fatalf("still expired: %v, %d fetch(es), %d locate(s)", err, requests(f, "Fetch")-fetches, requests(f, "Locate"))
+	}
+}
+
 // During a flood wait the page and its pictures send nothing and say how long to wait.
 func TestThreadDuringAFloodWait(t *testing.T) {
 	c, f, ctx := threadAccount(t)
