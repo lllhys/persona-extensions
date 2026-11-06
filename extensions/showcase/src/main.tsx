@@ -5,6 +5,15 @@ import { createCard, createWidget, createShortcut, snapshot } from "./ui.tsx";
 export { createPage, createCard, createWidget, createShortcut, ShowcaseRoot } from "./ui.tsx";
 export { ShowcaseStore } from "./services.ts";
 
+// Until navigation is served, system surfaces must not advertise links to it.
+export const sourceContributions = {
+  ui: manifest.contributes.ui.filter(ui => ui.id !== "showcase").map(({ opens: _opens, ...ui }) => ui),
+  shortcuts: manifest.contributes.shortcuts.map(shortcut => {
+    const { ui: _ui, ...item } = shortcut as typeof shortcut & { ui?: string };
+    return item;
+  }),
+};
+
 /** Source-host default export. Navigation is deliberately not advertised before the manager bridge lands. */
 export function createProgram(sourceManifest?: unknown): Program {
   let language = "zh-Hans";
@@ -12,7 +21,7 @@ export function createProgram(sourceManifest?: unknown): Program {
     id: manifest.id, version: manifest.version, manifest: sourceManifest,
     init(input) {
       language = input.hub?.locale || "zh-Hans";
-      return { ui: manifest.contributes.ui.filter(ui => ui.id !== "showcase"), shortcuts: manifest.contributes.shortcuts };
+      return sourceContributions;
     },
     ui: {
       "showcase-card": { render: req => snapshot(createCard(req.locale || language)) },

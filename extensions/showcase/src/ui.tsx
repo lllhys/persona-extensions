@@ -4,8 +4,9 @@ import type { ActionOptions, Values, Node } from "@persona/extension/ui";
 import { Examples, catalog, catalogIntroduction } from "./examples.tsx";
 import { translator, type Translate } from "./locale.ts";
 import { ShowcaseStore, displayed, pageSize, itemText, kindChoices, summarize, runShortcut, type PageState } from "./services.ts";
+import type { DemoMedia } from "./media.ts";
 
-export interface PageInput { state?: PageState; language?: string; uiVersion?: number }
+export interface PageInput { state?: PageState; language?: string; uiVersion?: number; timeZone?: string; media?: Readonly<DemoMedia> }
 const encode = (state: PageState) => JSON.stringify(state);
 const listState = (state: PageState): PageState => ({ ...state, p: "list", id: undefined });
 export const days = ["10-30", "10-31", "11-01", "11-02", "11-03", "11-04", "11-05"];
@@ -21,7 +22,12 @@ export function ShowcaseRoot({ store, input }: { store: ShowcaseStore; input: Pa
   const old = (input.uiVersion ?? 3) < 3;
   const [state, setState] = useState<PageState>(() => input.state ?? {});
   const [, revision] = useState(0);
-  useEffect(() => store.subscribe(() => revision(value => value + 1)), [store]);
+  useEffect(() => {
+    const relevant = state.p === "invalidate" ? "data"
+      : ["list", "detail", "edit"].includes(state.p ?? "") ? "items" : undefined;
+    if (!relevant) return;
+    return store.subscribe(change => { if (change === relevant) revision(value => value + 1); });
+  }, [store, state.p]);
   const change = (update: Partial<PageState>) => setState(previous => ({ ...previous, ...update }));
   function open(target: PageState, title: string) {
     const push = { state: encode(target), title };
@@ -45,6 +51,7 @@ export function ShowcaseRoot({ store, input }: { store: ShowcaseStore; input: Pa
       case "more": change({ shown: displayed(state) + pageSize }); return;
       case "ask": store.ask(); return;
       case "save":
+        if (!store.find(state.id)) return { toast: t("goneDetail") };
         if (!store.save(state.id, values)) return { toast: t("emptyTitle") };
         if (old) { change({ p: "detail" }); return { toast: t("saved") }; }
         return { toast: t("saved"), pop: true };
@@ -56,10 +63,10 @@ export function ShowcaseRoot({ store, input }: { store: ShowcaseStore; input: Pa
   const title = (state.p === "detail" || state.p === "edit")
     ? item ? (state.p === "edit" ? t("editTitle", { title: itemText(item, t).title }) : itemText(item, t).title) : t("gone")
     : page?.title ?? t("s170");
-  const all = store.matching(state, t);
+  const list = state.p === "list";
+  const all = list ? store.matching(state, t) : [];
   const shown = Math.min(displayed(state), all.length);
   const listContext = old ? { q: state.q, kind: state.kind, shown: state.shown } : {};
-  const list = state.p === "list";
   return <View key="showcase-view" title={title} state={encode(state)}
     search={list && !old ? { placeholder: t("searchPlaceholder"), value: state.q || undefined, action: act("search") } : undefined}
     filter={list && !old ? { name: "kind", title: t("kind"), value: state.kind || "all", choices: kindChoices(t), action: act("kind") } : undefined}>
@@ -70,7 +77,7 @@ export function ShowcaseRoot({ store, input }: { store: ShowcaseStore; input: Pa
           action={open({ p: page.id }, page.title)} />)}
       </Section>
     </>}
-    {page && !["list", "segmented", "invalidate"].includes(page.id) && <Examples key={`examples-${page.id}`} page={page.id} t={t} act={act} />}
+    {page && !["list", "segmented", "invalidate"].includes(page.id) && <Examples key={`examples-${page.id}`} page={page.id} t={t} act={act} media={input.media} />}
     {list && <>
       {old && <Section key="list-tools">
         <Field key="list-q" name="q" label={t("search")} kind="text" value={state.q ?? ""} placeholder={t("searchPlaceholder")} />
@@ -117,7 +124,9 @@ export function ShowcaseRoot({ store, input }: { store: ShowcaseStore; input: Pa
       <Text key="ask-intro" style="secondary" text={t("askIntro")} />
       {store.asked === undefined ? <Empty key="not-asked" title={t("notAsked")} icon="bell" />
         : store.came === undefined ? <Loading key="ask-loading" title={t("onWay")} />
-        : <Metric key="ask-data" label={t("arrived")} value={new Date(store.came).toISOString().slice(11, 19)}
+        : <Metric key="ask-data" label={t("arrived")} value={new Intl.DateTimeFormat("en-GB", {
+          hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23", timeZone: input.timeZone,
+        }).format(store.came)}
           detail={t("waited", { seconds: ((store.came - store.asked) / 1000).toFixed(1) })} tone="positive" />}
       <Button key="ask" title={t("ask")} action={act("ask")} />
     </Section>}

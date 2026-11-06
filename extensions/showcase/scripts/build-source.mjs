@@ -1,7 +1,7 @@
 import { build } from "esbuild";
 import { createHash } from "node:crypto";
 import { readFile, writeFile, mkdir, rm, cp } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -23,6 +23,8 @@ const bytes = await readFile(bundle);
 if (/\b(?:require|import)\s*\(/.test(bytes.toString())) throw new Error("runtime dependency resolution is forbidden");
 const manifest = JSON.parse(await readFile(resolve(root, "persona-extension.json"), "utf8"));
 delete manifest.tags;
+const { sourceContributions } = await import(pathToFileURL(bundle).href);
+manifest.contributes = sourceContributions;
 manifest.runtime = { mode: "deno", source: { entry: "src/main.tsx", bundle: "bundle/main.mjs", sha256: createHash("sha256").update(bytes).digest("hex") } };
 await writeFile(resolve(stage, "persona-extension.json"), JSON.stringify(manifest, null, 2) + "\n");
 await cp(resolve(root, "src"), resolve(stage, "src"), { recursive: true, filter: path => !path.endsWith(".test.tsx") });

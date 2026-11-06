@@ -20,21 +20,30 @@ manager bridge and compatibility gates below have been verified.
   lifetimes use server hooks; callbacks never ship executable code to clients.
 - `src/services.ts` owns the synthetic item data, editing, latest-request-wins
   delayed data and shortcut validation. Each mounted page has its own search,
-  filter, pagination and segment state; the caller supplies its shared store.
+  filter, pagination and segment state; the caller supplies its shared store
+  and optional time zone. Pages subscribe only to their relevant service data.
 - `src/locales/` contains English, Simplified Chinese and Japanese resources.
   Synthetic default titles and notes are localized per request. Edited text
-  stays as entered. Active image examples use bundle-local PNG data, including
-  a deliberately broken image for the placeholder example. Links demonstrate
-  native in-app opening, not extension network access.
+  stays as entered. Image examples use repository-owned synthetic PNG assets
+  through credential-free HTTPS URLs, including one deliberately missing file
+  for native load-failure fallback. `scripts/make-demo-media.py` reproduces the
+  assets without dependencies. A page caller can supply actual HTTPS media URLs
+  through `PageInput.media` for an isolated acceptance environment; this is not
+  a newly invented hub media API. The defaults become fetchable when these
+  assets merge to the public repository. Native wire validation and real
+  network/image-load acceptance are separate checks. No network or secret
+  permission was added. Links retain HTTPS targets for native in-app opening,
+  not extension network access.
 - `src/legacy-snapshots/` preserves all existing APP fixtures byte-for-byte.
   Semantic tests compare every source page/system surface with those fixtures,
-  allowing only stable JSX keys, opaque action ids, serialized navigation state
-  and the synthetic image substitution. The original Go snapshot tests remain.
+  allowing only stable JSX keys, opaque action ids and the synthetic image
+  substitution. Serialized navigation state is compared after decoding. The
+  original Go snapshot tests remain.
 - `src/main.tsx` default-exports an official stdio `Program` for the shortcuts
   and system snapshot surfaces. It deliberately does **not** advertise the
   navigation page before the committed manager/component-page bridge exists.
-  The source host reads the manifest from the package; no obsolete process
-  manifest is embedded in the source bundle.
+  The source host supplies the packaged source manifest; the Program does not
+  answer the transitional process manifest as its runtime contract.
 
 ### Local verification and offline draft packaging
 
@@ -74,6 +83,12 @@ needs to supply its missing tooling or remove those development-only commands.
    per-extension store; the manager owns authorization, subscriptions, native
    push/pop, visibility and stream negotiation. Connect service disposal to
    process shutdown. Never replace host authorization with a test fixture.
+   Page factories and their Renderer must use the same bundled SDK instance:
+   element symbols are instance-specific. The protocol runner also needs a
+   verified error-identity strategy: an external `connect` currently drops the
+   bundled Program's `ExtError` codes. Resolve upstream transport hardening
+   before acceptance: a parsed `null` frame throws, and draining handlers before
+   closing unreachable pending hub calls can block shutdown indefinitely.
 2. Run the actual pinned Deno bundle through the sanctioned independently
    isolated host, manager and WebSocket/client path. Verify every navigation,
    search, filter, pagination, edit, delayed update and system surface. Obtain

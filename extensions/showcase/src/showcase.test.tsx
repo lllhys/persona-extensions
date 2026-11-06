@@ -13,10 +13,10 @@ import { createProgram } from "./main.tsx";
 const fixtures = fileURLToPath(new URL("./legacy-snapshots/", import.meta.url));
 const fixture = (name: string) => JSON.parse(readFileSync(`${fixtures}${name}.json`, "utf8"));
 const settle = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
-function mount(state: PageState = {}, store = new ShowcaseStore(), version = 3, language = "zh-Hans") {
+function mount(state: PageState = {}, store = new ShowcaseStore(), version = 3, language = "zh-Hans", timeZone = "UTC") {
   // Trusted authorization is a test fixture, never extension permission or production consent.
   const renderer = new Renderer({ authorize: () => true });
-  renderer.mount(createPage(store, { state, language, uiVersion: version }));
+  renderer.mount(createPage(store, { state, language, uiVersion: version, timeZone }));
   return renderer;
 }
 function find(renderer: Renderer, key: string): any {
@@ -34,8 +34,9 @@ async function click(renderer: Renderer, key: string, values: Record<string, str
 function normalize(value: any): any {
   if (Array.isArray(value)) return value.map(normalize);
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !["key", "state", "id"].includes(key)).map(([key, item]) => [key, normalize(item)]));
-  if (typeof value === "string" && (value.startsWith("data:image/") || value.includes("avatars.githubusercontent.com") || value.includes("picsum.photos") || value.includes("example.invalid"))) return "<synthetic-image>";
+    .filter(([key, item]) => !["key", "id"].includes(key) && !(key === "state" && item === "{}"))
+    .map(([key, item]) => [key, key === "state" ? JSON.parse(String(item)) : normalize(item)]));
+  if (typeof value === "string" && (value.startsWith("https://raw.githubusercontent.com/nwverse/persona-extensions/main/extensions/showcase/assets/") || value.includes("avatars.githubusercontent.com") || value.includes("picsum.photos") || value.includes("example.invalid"))) return "<synthetic-image>";
   return value;
 }
 const staticPages = ["text", "metric", "progress", "row", "button", "link", "field", "chart", "stat_grid", "markdown", "table", "empty", "loading", "divider"];
@@ -202,6 +203,66 @@ test("shortcut parsing preserves integer bounds, units, echo and errors", () => 
   assert.throws(() => runShortcut("run", "missing", {}), { code: "no_contribution" });
   assert.equal(createShortcut("run", "showcase-count", { n: "3", unit: "apple", loud: "true" }, "zh-Hans").text, "数到了 3 个苹果！");
 });
+test("navigation normalization preserves decoded page and item targets", () => {
+  const action = (state: string) => ({ id: "opaque", push: { state, title: "Demo" } });
+  assert.deepEqual(normalize(action('{"p":"detail","id":"3"}')), normalize(action('{"id":"3","p":"detail"}')));
+  assert.notDeepEqual(normalize(action('{"p":"detail","id":"3"}')), normalize(action('{"p":"detail","id":"4"}')));
+  assert.notDeepEqual(normalize(action('{"p":"detail","id":"3"}')), normalize(action('{"p":"edit","id":"3"}')));
+});
+test("saving a removed item does not report success or pop the editor", async () => {
+  const store = new ShowcaseStore(), renderer = mount({ p: "edit", id: "3" }, store);
+  try {
+    store.items.splice(store.items.findIndex(item => item.id === "3"), 1);
+    assert.equal(store.save("3", { title: "Discarded change" }), false);
+    assert.deepEqual(await click(renderer, "edit-save", { title: "Discarded change" }), { toast: "这一条不见了" });
+  } finally { renderer.dispose(); store.dispose(); }
+});
+test("unrelated store changes do not stale native confirmation", async () => {
+  let allow!: (value: boolean) => void;
+  const gate = new Promise<boolean>(resolve => { allow = resolve; });
+  const store = new ShowcaseStore({ now: () => 0, later: () => 1, cancel: () => {} });
+  const renderer = new Renderer({ authorize: () => gate });
+  renderer.mount(createPage(store, { state: { p: "button" }, language: "en" }));
+  try {
+    const frame = renderer.current(), action = find(renderer, "button-button-item-0-1").action;
+    const result = renderer.event({ generation: frame.generation, version: frame.version, eventId: "confirmed", key: "button-button-item-0-1", actionId: action.id, values: {} });
+    await settle();
+    store.ask(); store.save("1", { title: "Updated sample" }); await settle();
+    assert.equal(renderer.current().version, frame.version);
+    allow(true);
+    assert.deepEqual(await result, { toast: "Deleted (not really)" });
+  } finally { allow(false); renderer.dispose(); store.dispose(); }
+});
+test("subscriptions only publish changes for the relevant page data", async () => {
+  const store = new ShowcaseStore({ now: () => 0, later: () => 1, cancel: () => {} });
+  const list = mount({ p: "list" }, store), data = mount({ p: "invalidate" }, store);
+  try {
+    const listVersion = list.current().version;
+    store.ask(); await settle();
+    assert.equal(list.current().version, listVersion);
+    const dataVersion = data.current().version;
+    store.save("1", { title: "Updated sample" }); await settle();
+    assert.equal(data.current().version, dataVersion);
+    assert.equal(find(list, "item-1").title, "Updated sample");
+  } finally { list.dispose(); data.dispose(); store.dispose(); }
+});
+test("arrival time uses the requested time zone", () => {
+  const store = new ShowcaseStore();
+  store.asked = Date.UTC(2026, 10, 5, 8);
+  store.came = store.asked + 3000;
+  const renderer = mount({ p: "invalidate" }, store, 3, "en", "Asia/Shanghai");
+  try { assert.equal(find(renderer, "ask-data").value, "16:00:03"); }
+  finally { renderer.dispose(); store.dispose(); }
+});
+test("non-list pages never scan the list collection", () => {
+  const store = new ShowcaseStore();
+  store.matching = () => { throw new Error("unnecessary list scan"); };
+  for (const state of [{}, { p: "button" }, { p: "detail", id: "3" }, { p: "edit", id: "3" }, { p: "invalidate" }]) {
+    const renderer = mount(state, store);
+    renderer.dispose();
+  }
+  store.dispose();
+});
 test("official connect serves localized services/system snapshots but does not claim the pending navigation bridge", async () => {
   const answers: any[] = [], conn = connect(createProgram(), line => answers.push(JSON.parse(line)));
   async function request(method: string, params: unknown) {
@@ -211,7 +272,8 @@ test("official connect serves localized services/system snapshots but does not c
     assert.equal((await request("ping", {})).error.code, "not_initialized");
     const init = await request("initialize", { protocol: 1, extension: { id: "showcase", version: "0.1.3" }, hub: { locale: "ja", build: 1, extension_points: {} }, granted: {} });
     assert.equal(init.result.contributes.ui.length, 2);
-    assert.ok(init.result.contributes.ui.every((ui: any) => ui.id !== "showcase"));
+    assert.ok(init.result.contributes.ui.every((ui: any) => ui.id !== "showcase" && ui.opens === undefined));
+    assert.ok(init.result.contributes.shortcuts.every((shortcut: any) => shortcut.ui === undefined));
     assert.equal((await request("shortcut.run", { contribution: "showcase-echo", values: { text: "Demo" } })).result.text, "入力：Demo");
     const card = await request("ui.render", { contribution: "showcase-card", ui_version: 3, size: "compact" });
     assert.equal(card.result.sections[0].items[0].stats[0].label, "コンポーネント");

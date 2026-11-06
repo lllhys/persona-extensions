@@ -1,6 +1,7 @@
 import { Button, Chart, Divider, Empty, Field, Link, Loading, Markdown, Metric, Progress, Row, Section, StatGrid, Table, Text } from "@persona/extension/ui";
 import type { CallbackAction, ActionOptions } from "@persona/extension/ui";
 import type { Translate } from "./locale.ts";
+import { defaultMedia, type DemoMedia } from "./media.ts";
 
 export type DemoAction = (id: string, options?: ActionOptions) => CallbackAction;
 export function catalog(t: Translate) { return [
@@ -23,7 +24,7 @@ export function catalog(t: Translate) { return [
   { id: "invalidate", title: t("s167"), subtitle: t("s168"), icon: "bell" }
 ]; }
 export function catalogIntroduction(t: Translate) { return t("s169"); }
-export function Examples({ page, t, act }: { page: string; t: Translate; act: DemoAction }) {
+export function Examples({ page, t, act, media = defaultMedia }: { page: string; t: Translate; act: DemoAction; media?: Readonly<DemoMedia> }) {
   switch (page) {
 // Fixed SDK JSX vocabulary; no view-to-element adapter runs in clients.
     case "text": return <>
@@ -75,10 +76,10 @@ export function Examples({ page, t, act }: { page: string; t: Translate; act: De
       <Section key="row-section-2" title={t("s042")}>
         <Row key="row-icon" title={t("s043")} icon={"star"} />
         <Row key="row-avatar-text" title={t("s044")} subtitle={t("s045")} avatar={{ "text": t("s046") }} />
-        <Row key="row-avatar-url" title={t("s047")} subtitle={t("s048")} avatar={{ "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR4nGNYtWrV3bt3GYAYyAIAQDQJK7KNfZQAAAAASUVORK5CYII=", "text": t("s049") }} />
-        <Row key="row-thumb-square" title={t("s050")} subtitle={t("s051")} thumbnail={{ "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR4nGNYtWrV3bt3GYAYyAIAQDQJK7KNfZQAAAAASUVORK5CYII=", "aspect": "square" }} />
-        <Row key="row-thumb-wide" title={t("s052")} subtitle={t("s053")} thumbnail={{ "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR4nGNYtWrV3bt3GYAYyAIAQDQJK7KNfZQAAAAASUVORK5CYII=", "aspect": "wide" }} />
-        <Row key="row-thumb-broken" title={t("s054")} subtitle={t("s055")} thumbnail={{ "url": "data:image/png;base64,invalid" }} />
+        <Row key="row-avatar-url" title={t("s047")} subtitle={t("s048")} avatar={{ "url": media.avatar, "text": t("s049") }} />
+        <Row key="row-thumb-square" title={t("s050")} subtitle={t("s051")} thumbnail={{ "url": media.square, "aspect": "square" }} />
+        <Row key="row-thumb-wide" title={t("s052")} subtitle={t("s053")} thumbnail={{ "url": media.wide, "aspect": "wide" }} />
+        <Row key="row-thumb-broken" title={t("s054")} subtitle={t("s055")} thumbnail={{ "url": media.broken }} />
       </Section>
     </>;
     case "button": return <>

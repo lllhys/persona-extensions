@@ -27,7 +27,7 @@ export function summarize(values: Values): string {
 }
 /** Synthetic service state is shared by pages; localized defaults are resolved per request. */
 export class ShowcaseStore {
-  private listeners = new Set<() => void>();
+  private listeners = new Set<(change: "items" | "data") => void>();
   private timer: unknown;
   private generation = 0;
   private stopped = false;
@@ -37,11 +37,11 @@ export class ShowcaseStore {
     id: String(index + 1), kind: kinds[1 + index % 3], done: (index + 1) % 4 === 0,
   }));
   constructor(private readonly time: Clock = clock, readonly delay = 3000) {}
-  subscribe(listener: () => void) {
+  subscribe(listener: (change: "items" | "data") => void) {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };
   }
-  private changed() { for (const listener of this.listeners) listener(); }
+  private changed(change: "items" | "data") { for (const listener of this.listeners) listener(change); }
   find(id?: string) { return this.items.find(item => item.id === id); }
   matching(state: PageState, t: Translate) {
     return this.items.filter(item => (!state.kind || state.kind === "all" || item.kind === state.kind)
@@ -51,13 +51,12 @@ export class ShowcaseStore {
     const title = values.title?.trim();
     if (!title) return false;
     const item = this.find(id);
-    if (item) {
-      item.title = title;
-      if (values.kind) item.kind = values.kind;
-      item.note = values.note ?? "";
-      item.done = values.done === "true";
-      this.changed();
-    }
+    if (!item) return false;
+    item.title = title;
+    if (values.kind) item.kind = values.kind;
+    item.note = values.note ?? "";
+    item.done = values.done === "true";
+    this.changed("items");
     return true;
   }
   /** A superseded ask cannot deliver or notify, even if its canceled callback was already queued. */
@@ -67,12 +66,12 @@ export class ShowcaseStore {
     const generation = ++this.generation;
     this.asked = this.time.now();
     this.came = undefined;
-    this.changed();
+    this.changed("data");
     this.timer = this.time.later(() => {
       if (this.stopped || generation !== this.generation) return;
       this.timer = undefined;
       this.came = this.time.now();
-      this.changed();
+      this.changed("data");
     }, this.delay);
   }
   dispose() {

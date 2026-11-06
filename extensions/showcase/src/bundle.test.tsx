@@ -21,6 +21,9 @@ test("locked source bundle is reproducible, offline and portable without package
   const manifest = JSON.parse(readFileSync(root + ".source-dist/showcase/persona-extension.json", "utf8"));
   assert.deepEqual(manifest.runtime, { mode: "deno", source: { entry: "src/main.tsx", bundle: "bundle/main.mjs", sha256: createHash("sha256").update(first).digest("hex") } });
   assert.equal(manifest.version, "0.1.3"); assert.equal(manifest.permissions, undefined); assert.equal(manifest.tags, undefined);
+  assert.equal(manifest.contributes.ui.length, 2);
+  assert.ok(manifest.contributes.ui.every((ui: any) => ui.id !== "showcase" && ui.opens === undefined));
+  assert.ok(manifest.contributes.shortcuts.every((shortcut: any) => shortcut.ui === undefined));
   assert.doesNotMatch(first.toString(), /\b(?:require|import)\s*\(/);
   const compiled = await import(artifact);
   assert.equal(compiled.default.id, "showcase");
