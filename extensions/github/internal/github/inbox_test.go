@@ -22,11 +22,12 @@ import (
 type fakeNotifications struct {
 	mu            sync.Mutex
 	notifications string
-	prs           map[string]string // path -> JSON
-	comments      map[string]string // path -> JSON
-	notModified   bool              // answer 304 when If-Modified-Since comes
-	failPage      int               // answer this page of the notifications with a 502
-	rateLeft      string            // X-RateLimit-Remaining of 5000 (default 4000)
+	prs           map[string]string   // path -> JSON
+	comments      map[string]string   // path -> JSON
+	reviews       map[string][]string // path -> one JSON object per review, served by per_page / page
+	notModified   bool                // answer 304 when If-Modified-Since comes
+	failPage      int                 // answer this page of the notifications with a 502
+	rateLeft      string              // X-RateLimit-Remaining of 5000 (default 4000)
 	sinceSeen     []string
 	requests      []string
 	posted        []string
@@ -80,6 +81,16 @@ func (f *fakeNotifications) server(t *testing.T) *Connector {
 			_, _ = w.Write([]byte(`{}`))
 		case f.prs[r.URL.Path] != "":
 			_, _ = w.Write([]byte(f.prs[r.URL.Path]))
+		case f.reviews[r.URL.Path] != nil:
+			all := f.reviews[r.URL.Path]
+			per, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+			if per <= 0 || per > 100 {
+				per = 30
+			}
+			page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			page = max(1, page)
+			from, to := min((page-1)*per, len(all)), min(page*per, len(all))
+			_, _ = w.Write([]byte("[" + strings.Join(all[from:to], ",") + "]"))
 		case f.comments[r.URL.Path] != "":
 			_, _ = w.Write([]byte(f.comments[r.URL.Path]))
 		case strings.HasSuffix(r.URL.Path, "/comments") || strings.HasSuffix(r.URL.Path, "/reviews"):
@@ -209,6 +220,40 @@ func TestReviewRequestWithdrawnOrMerged(t *testing.T) {
 	c.poll(context.Background())
 	if th := things(t, c)["example-org/example-repo#12"]; th.Done != connector.DoneRead {
 		t.Errorf("merged: %+v", th)
+	}
+}
+
+// A busy PR has more than a page of reviews (each inline-thread reply is an empty COMMENTED one); the newest
+// is on the last page, and is the one that counts.
+func TestReviewsPastTheFirstPage(t *testing.T) {
+	var rs []string
+	for i := range 120 {
+		rs = append(rs, fmt.Sprintf(`{"user":{"login":"bob"},"state":"COMMENTED","body":"","submitted_at":"2026-11-01T%02d:%02d:00Z"}`, i/60, i%60))
+	}
+	f := &fakeNotifications{prs: map[string]string{
+		api12: strings.Replace(openPR(""), `"login":"alice"`, `"login":"me"`, 1),
+		"/repos/example-org/example-repo/issues/12": `{"comments":0}`,
+	}, comments: map[string]string{}, reviews: map[string][]string{
+		api12 + "/reviews": append(rs, `{"user":{"login":"carol"},"state":"CHANGES_REQUESTED","body":"Please split this change","submitted_at":"2026-11-02T08:59:00Z"}`),
+	}}
+	f.notifications = "[" + note("1", "author", "PullRequest", "https://api.github.com"+api12, t1) + "]"
+	c := f.server(t)
+	if _, _, err := c.poll(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if th := things(t, c)["example-org/example-repo#12"]; th.Tier != connector.TierAction || th.Sender != "carol" ||
+		th.Preview != "要求修改 Please split this change" {
+		t.Errorf("author: tier %q why %q sender %q preview %q", th.Tier, th.Why, th.Sender, th.Preview)
+	}
+
+	// My own review past the first page answers a review request.
+	f.prs[api12] = openPR("")
+	f.reviews[api12+"/reviews"] = append(rs, `{"user":{"login":"me"},"state":"APPROVED","body":"","submitted_at":"2026-11-02T08:59:00Z"}`)
+	f.notifications = "[" + note("1", "review_requested", "PullRequest", "https://api.github.com"+api12, t2) + "]"
+	c.inbox.fullAt = time.Time{}
+	c.poll(context.Background())
+	if th := things(t, c)["example-org/example-repo#12"]; th.Done != connector.DoneReplied {
+		t.Errorf("reviewed: %+v", th)
 	}
 }
 

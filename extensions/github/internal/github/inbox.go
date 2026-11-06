@@ -36,6 +36,7 @@ var (
 	notificationPages = 10                 // pages of 50 notifications read per poll (GitHub's largest page)
 	forgetAfter       = 8 * 24 * time.Hour // things kept for the hub to settle its items, like its own inboxForget
 	contextMoves      = 8                  // newest comments / reviews in a thing's context
+	reviewPages       = 10                 // pages of a PR's reviews read (100 each)
 )
 
 type notification struct {
@@ -363,9 +364,17 @@ func (c *Connector) describe(ctx context.Context, n notification, me string) (co
 	}
 	reviewed := false
 	if pr {
+		// Reviews come oldest first, with no count to jump to the last page by, and every reply in an inline thread
+		// is one: read on until a short page, so the newest review and my own are seen on a busy PR.
 		var rs []comment
-		if _, err := c.Get(ctx, fmt.Sprintf("/repos/%s/pulls/%s/reviews?per_page=100", repo, number), &rs); err != nil {
-			return t, err
+		for page := 1; page <= reviewPages; page++ {
+			var p []comment
+			if _, err := c.Get(ctx, fmt.Sprintf("/repos/%s/pulls/%s/reviews?per_page=100&page=%d", repo, number, page), &p); err != nil {
+				return t, err
+			}
+			if rs = append(rs, p...); len(p) < 100 {
+				break
+			}
 		}
 		for _, r := range rs {
 			verb := map[string]string{"APPROVED": "批准了", "CHANGES_REQUESTED": "要求修改", "COMMENTED": "评审了"}[r.State]
