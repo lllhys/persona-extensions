@@ -49,6 +49,15 @@ func TestCompanionProcessHelper(t *testing.T) {
 		_, _ = io.Copy(io.Discard, os.Stdin)
 		os.Exit(0)
 	}
+	if mode == "flood" {
+		// More events than the buffer plus the backlog can hold, with no
+		// consumer: read() must fail closed instead of queueing forever.
+		for i := 0; i < 64+backlogLimit+2; i++ {
+			fmt.Printf("{\"event\":\"message\",\"message\":{\"id\":\"flood-%05d\",\"chat\":\"chat-test\",\"sender\":\"sender-test\",\"text\":\"Flood %d\"}}\n", i, i)
+		}
+		_, _ = io.Copy(io.Discard, os.Stdin)
+		os.Exit(0)
+	}
 	fmt.Fprintln(os.Stderr, "synthetic-secret-must-not-be-forwarded")
 	sc := bufio.NewScanner(os.Stdin)
 	sc.Buffer(make([]byte, 4096), frameScanLimit)
@@ -78,6 +87,18 @@ func TestCompanionProcessHelper(t *testing.T) {
 		}
 		if req.Method == "event" {
 			fmt.Println(`{"event":"message","message":{"id":"message-test","chat":"chat-test","sender":"sender-test","text":"Synthetic event"}}`)
+		}
+		if mode == "burst-reply" {
+			// Messages that arrive while a call is in flight: bridge.py's
+			// listener writes them to stdout ahead of the reply. 70 is more
+			// than the 64-slot event buffer.
+			for i := 0; i < 70; i++ {
+				fmt.Printf("{\"event\":\"message\",\"message\":{\"id\":\"burst-%03d\",\"chat\":\"chat-test\",\"sender\":\"sender-test\",\"text\":\"Burst %d\"}}\n", i, i)
+			}
+		}
+		if mode == "burst-reply" && req.Method == "session.send" {
+			fmt.Printf("{\"id\":%d,\"result\":{\"message_id\":\"message-sent\"}}\n", req.ID)
+			continue
 		}
 		fmt.Printf("{\"id\":%d,\"result\":{\"state\":\"ok\"}}\n", req.ID)
 	}
@@ -368,5 +389,82 @@ func TestMalformedCompanionOutputMakesConnectorUnavailable(t *testing.T) {
 	}
 	if _, err = invoke(c, "actions.do", sendParams("malformed-output-test", "Synthetic text")); err == nil {
 		t.Fatal("send accepted after malformed companion output")
+	}
+}
+
+// TestReplyBehindEventBurstIsRead pins issue #250: a reply that follows
+// more events than the buffer holds must still reach Call while nobody
+// consumes Events (watch waits on c.op, which the caller holds). The events
+// are then delivered in order.
+func TestReplyBehindEventBurstIsRead(t *testing.T) {
+	t.Setenv("PERSONA_LARKAGENTX_TEST_HELPER", "burst-reply")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	b, err := startBridge(ctx, []string{os.Args[0], "-test.run=^TestCompanionProcessHelper$"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	callCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+	defer stop()
+	var result struct {
+		State string `json:"state"`
+	}
+	if err = b.Call(callCtx, "session.check", nil, &result); err != nil || result.State != "ok" {
+		t.Fatal("reply queued behind an event burst was not read", err, result)
+	}
+	for i := 0; i < 70; i++ {
+		select {
+		case ev := <-b.Events():
+			if want := fmt.Sprintf("Burst %d", i); ev.Message.Text != want {
+				t.Fatalf("event %d is %q, want %q", i, ev.Message.Text, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("event %d was lost", i)
+		}
+	}
+}
+
+// TestInboundBurstDuringSendDoesNotDeadlock is #250 through the connector:
+// a confirmed send whose reply follows 70 allowlisted messages completes,
+// and every message reaches the inbox.
+func TestInboundBurstDuringSendDoesNotDeadlock(t *testing.T) {
+	t.Setenv("PERSONA_LARKAGENTX_TEST_HELPER", "burst-reply")
+	c, _, _ := fixture(t)
+	c.argv = []string{os.Args[0], "-test.run=^TestCompanionProcessHelper$"}
+	c.factory = startBridge
+	c.op.Lock()
+	c.detach()
+	if _, err := c.create(); err != nil {
+		c.op.Unlock()
+		t.Fatal(err)
+	}
+	c.op.Unlock()
+	start := time.Now()
+	if _, err := invoke(c, "actions.do", sendParams("burst-send-test", "Synthetic text")); err != nil {
+		t.Fatalf("send failed after %s: %v", time.Since(start).Round(time.Second), err)
+	}
+	waitFor(t, 5*time.Second, func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return len(c.data.Seen) == 70
+	}, "not every message of the burst was recorded")
+}
+
+// TestEventBacklogOverflowFailsClosed bounds the #250 FIFO: once
+// backlogLimit events wait behind a full buffer, the bridge closes.
+func TestEventBacklogOverflowFailsClosed(t *testing.T) {
+	t.Setenv("PERSONA_LARKAGENTX_TEST_HELPER", "flood")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	b, err := startBridge(ctx, []string{os.Args[0], "-test.run=^TestCompanionProcessHelper$"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	select {
+	case <-b.Done():
+	case <-time.After(7 * time.Second):
+		t.Fatal("bridge kept queueing past the backlog limit")
 	}
 }
