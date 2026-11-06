@@ -26,8 +26,8 @@ Before UI version 3, list controls use fields and buttons; the SDK converts push
 Run from this repository's root:
 
 ```sh
-go test ./extensions/showcase -run TestSnapshots -update   # Regenerate snapshots after a view change.
-go test ./extensions/showcase                             # Validate views, snapshots and component coverage.
+go -C extensions/showcase test ./... -run TestSnapshots -update   # Regenerate snapshots after a view change.
+go -C extensions/showcase test ./...                             # Validate views, snapshots and component coverage.
 ```
 
 Review snapshot diffs after a behavioral change. Coordinate updating the host/client copy of `snapshots/` through its own workflow so screenshot inputs remain aligned. Do not update snapshots merely to translate documentation; their localized content is runtime/test data.

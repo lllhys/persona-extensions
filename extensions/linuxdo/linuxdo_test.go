@@ -347,6 +347,10 @@ func TestPostText(t *testing.T) {
 	if sg[2].Text != "[链接] https://example.com/post" {
 		t.Errorf("onebox: %q", sg[2].Text)
 	}
+	// A previewed link is unescaped once: &amp;reg= stays &reg=, not ®=.
+	if got := plainText(`<aside class="onebox" data-onebox-src="https://example.com/s?q=go&amp;reg=cn&amp;lt=1&amp;param=x"><article>x</article></aside>`); got != "[链接] https://example.com/s?q=go&reg=cn&lt=1&param=x" {
+		t.Errorf("onebox link unescaped twice: %q", got)
+	}
 	// A cooked table's cells stay apart: closing td/th are line breaks too.
 	if table := postText(`<table><tr><th>甲</th><td>一</td><td>二</td></tr></table>`); len(table) != 1 || table[0].Text != "甲\n一\n二" {
 		t.Fatalf("table cells ran together: %+v", table)

@@ -1,6 +1,6 @@
-// Package extensions holds the checks every extension's manifest gets, whether or not the extension has a program
+// Package manifests holds the checks every extension's manifest gets, whether or not the extension has a program
 // and tests of its own: each extensions/<id>/persona-extension.json against the SDK's Manifest schema.
-package extensions
+package manifests
 
 import (
 	"encoding/json"
@@ -14,7 +14,7 @@ import (
 // TestManifests validates every manifest as committed (with its market tags) and as packages and indexes carry it
 // (without them, scripts/manifest.py packaged): the schema allows no field it does not know, at any depth.
 func TestManifests(t *testing.T) {
-	paths, err := filepath.Glob(filepath.Join("*", "persona-extension.json"))
+	paths, err := filepath.Glob(filepath.Join("..", "..", "extensions", "*", "persona-extension.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +22,7 @@ func TestManifests(t *testing.T) {
 		t.Fatal("no extensions/*/persona-extension.json")
 	}
 	for _, p := range paths {
-		t.Run(filepath.Dir(p), func(t *testing.T) {
+		t.Run(filepath.Base(filepath.Dir(p)), func(t *testing.T) {
 			raw, err := os.ReadFile(p)
 			if err != nil {
 				t.Fatal(err)

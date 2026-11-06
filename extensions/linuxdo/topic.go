@@ -146,7 +146,8 @@ func postText(cooked string) []segment {
 	s := dropRE.ReplaceAllString(cooked, "")
 	s = oneboxRE.ReplaceAllStringFunc(s, func(m string) string {
 		if sub := srcRE.FindStringSubmatch(m); sub != nil && sub[1] != "" {
-			return "\n[链接] " + html.UnescapeString(sub[1]) + "\n"
+			// Still escaped: prose unescapes it once with the rest of the text (a quoted attribute has no raw '<').
+			return "\n[链接] " + sub[1] + "\n"
 		}
 		return "\n[链接预览]\n"
 	})

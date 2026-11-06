@@ -52,7 +52,7 @@ The extension keeps `plugin_page` rather than adding `nav_page`: older hubs do n
 From the repository root:
 
 ```sh
-go test ./extensions/linuxdo
+go -C extensions/linuxdo test ./...
 ```
 
 Coverage includes RSS parsing and filtering; body-to-text conversion (lists, code, images, emoji, avatars, link previews and quotes); popular-reply ordering; list switching, unfiltered views, topic navigation, refresh, caching, missing topics and long-topic truncation. It also checks firewall responses, `429`, stale-cache fallback, connector status/tools, ids/links, manifest consistency, protocol handshake, `ui.render`, `ui.action`, `no_contribution`, `unknown_method`, segmented controls and user time zones.

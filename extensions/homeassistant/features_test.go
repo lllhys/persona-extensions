@@ -1032,3 +1032,99 @@ func TestWSAuth(t *testing.T) {
 		t.Fatalf("devices %v %v", devs, err)
 	}
 }
+
+// ---- the page, with the registry ----
+
+// TestPageDevices: the page on a home like the user's, where a ceiling light's device also has an auxiliary light
+// switch and a power-on default (config) switch. The overview names what is on and leaves the settings out; the area
+// is a row per device, the settings folded into it; a light and a plug switch from their rows; the open light shows
+// its device's settings folded; 动态 and 自动化 work, with no automations at all too.
+func TestPageDevices(t *testing.T) {
+	r := newRichHA(t)
+	a := richApp(t, r, Config{})
+
+	v, _ := a.render(context.Background(), req(nil, "", nil))
+	got := check(t, v)
+	contains(t, got, "row 客厅|客厅灯、吸顶灯、插座 等 4 个开着 · 27.5°|", "[4 开着 positive]")
+	if strings.Contains(got, "辅光") || strings.Contains(got, "通电默认") {
+		t.Errorf("a device's settings counted as on:\n%s", got)
+	}
+
+	res, st := act(t, a, pageState{}, "area:living", nil)
+	got = texts(res.View)
+	contains(t, got, "## 灯 · 2", "row 吸顶灯|另有 2 项|", "→do:light.ceiling|turn_off", "row 客厅灯|亮度 50%|",
+		"## 开关 · 1", "row 插座||", "→do:switch.living_plug|turn_off", "## 播放器 · 1", "row 小爱音箱||", "→open:"+speaker,
+		"还有 1 个离线的")
+	for _, no := range []string{"辅光", "通电默认", "藏起来的开关", "客厅温度", "空调风模式"} {
+		if strings.Contains(got, no) {
+			t.Errorf("%s has a row of its own:\n%s", no, got)
+		}
+	}
+	act(t, a, st, "do:switch.living_plug|turn_off", nil)
+	if f(r).lastCall() != "switch.turn_off [switch.living_plug] {}" {
+		t.Fatalf("the plug's row: %q", f(r).lastCall())
+	}
+
+	// the light opened: its device's settings folded into one row, unfolded on a tap
+	res, st = act(t, a, st, "open:light.ceiling", nil)
+	got = texts(res.View)
+	contains(t, got, "breadcrumb ||||| /家→home /客厅→back /吸顶灯", "row 「吸顶灯」的设置和其他项 · 2|吸顶灯 辅光开关、吸顶灯 厂商自定义 通电默认状态|", "→sub")
+	res, _ = act(t, a, st, "sub", nil)
+	contains(t, texts(res.View), "## 「吸顶灯」的设置和其他项 · 2", "row 吸顶灯 厂商自定义 通电默认状态|设置 · 开关|", "→open:switch.ceiling_power_default", "收起")
+
+	// 动态: the last two hours, newest first, a noisy sensor one row, hidden areas left out
+	now := time.Now().UTC()
+	at := func(m int) string { return now.Add(-time.Duration(m) * time.Minute).Format(time.RFC3339) }
+	rows := []string{
+		`{"when":"` + at(30) + `","name":"客厅吸顶灯","state":"on","entity_id":"light.ceiling","context_entity_id":"automation.night","context_name":"夜灯"}`,
+		`{"when":"` + at(5) + `","name":"厨房漏水","state":"on","entity_id":"binary_sensor.leak"}`,
+		`{"when":"` + at(3) + `","name":"别处的灯","state":"on","entity_id":"light.other_home"}`,
+	}
+	for i := range 12 {
+		rows = append(rows, fmt.Sprintf(`{"when":"%s","name":"客厅温度","state":"%d","entity_id":"sensor.living_temp"}`, at(60-i*4), 20+i))
+	}
+	r.logbook = "[" + strings.Join(rows, ",") + "]"
+	res, st = act(t, a, pageState{}, "tab", map[string]string{"tab": "log"})
+	got = texts(res.View)
+	contains(t, got, `[tabs tab="log"`, "## 最近 2 小时", "row 厨房漏水 → 有水|", "· 厨房|", "→open:binary_sensor.leak",
+		"row 客厅吸顶灯 → 开|", "· 客厅 · 由自动化「夜灯」|", "row 客厅温度 变化了 12 次|", "最后是31 °C")
+	if strings.Contains(got, "别处") || strings.Index(got, "厨房漏水") > strings.Index(got, "客厅吸顶灯") || res.View.Search != nil {
+		t.Errorf("hidden, out of order, or a search box:\n%s", got)
+	}
+	if res, back := act(t, a, st, "open:binary_sensor.leak", nil); !strings.Contains(texts(res.View), "/动态→back") || back.Tab != "log" {
+		t.Errorf("from 动态:\n%s", texts(res.View))
+	}
+	r.logbook = "[]"
+	res, _ = act(t, a, st, "refresh", nil)
+	contains(t, texts(res.View), "empty 最近 2 小时家里没有变化")
+
+	// 自动化: none yet (the user's home), then an automation, a script and a scene
+	res, st = act(t, a, pageState{}, "tab:auto", nil)
+	contains(t, texts(res.View), "empty 还没有自动化、脚本和场景")
+	r.mu.Lock()
+	for _, s := range []State{
+		{EntityID: "automation.night", State: "on", Attributes: map[string]any{"friendly_name": "夜灯", "id": "1", "last_triggered": at(30)}},
+		{EntityID: "script.movie", State: "off", Attributes: map[string]any{"friendly_name": "看电影"}},
+		{EntityID: "scene.relax", State: at(90), Attributes: map[string]any{"friendly_name": "放松"}},
+	} {
+		r.state[s.EntityID] = s
+	}
+	r.mu.Unlock()
+	res, st = act(t, a, st, "refresh", nil)
+	got = texts(res.View)
+	contains(t, got, "## 自动化 · 1", "row 夜灯|上次 ", "[开着 positive] →open:automation.night", "## 脚本 · 1",
+		"→do:script.movie|turn_on (confirm 运行脚本「看电影」？)", "## 场景 · 1", "→do:scene.relax|turn_on (confirm 执行场景「放松」？)")
+	act(t, a, st, "do:script.movie|turn_on", nil)
+	if f(r).lastCall() != "script.turn_on [script.movie] {}" {
+		t.Fatalf("script: %q", f(r).lastCall())
+	}
+	res, st = act(t, a, st, "open:automation.night", nil)
+	contains(t, texts(res.View), "/自动化→back", "button 停用||||| →svc:turn_off (confirm 停用「夜灯」？)", "→svc:trigger (confirm 触发一次「夜灯」？)")
+	act(t, a, st, "svc:trigger", nil)
+	if f(r).lastCall() != "automation.trigger [automation.night] {}" {
+		t.Fatalf("trigger: %q", f(r).lastCall())
+	}
+	if _, home := act(t, a, st, "tab", map[string]string{"tab": "home"}); home.Tab != "" || home.Entity != "" {
+		t.Errorf("back home: %+v", home)
+	}
+}

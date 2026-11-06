@@ -42,7 +42,11 @@ func TestAlerts(t *testing.T) {
 
 	// the form on the instrument page
 	r := act(t, p, "", "open:cn:600519.SH", nil)
-	if got := texts(*r.View); !strings.Contains(got, "## 价格提醒") || !strings.Contains(got, "→alert:cn:600519.SH") {
+	if got := texts(*r.View); !strings.Contains(got, "## 价格提醒") || strings.Contains(got, "→alert:") || !strings.Contains(got, "→form") {
+		t.Fatalf("the form is not behind 新建提醒:\n%s", got)
+	}
+	r = act(t, p, r.View.State, "form", nil)
+	if got := texts(*r.View); !strings.Contains(got, "→alert:cn:600519.SH") {
 		t.Fatalf("no alert form:\n%s", got)
 	}
 	st := r.View.State

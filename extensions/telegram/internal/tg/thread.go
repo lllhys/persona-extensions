@@ -272,11 +272,24 @@ func (c *Conn) Media(ctx context.Context, ref string) (connector.Media, error) {
 }
 
 func (c *Conn) media(ctx context.Context, cl client, ref string) (connector.Media, error) {
+	c.box.mu.Lock()
+	kept := c.box.locs[ref] != nil
+	c.box.mu.Unlock()
 	f, err := c.locate(ctx, cl, ref)
 	if err != nil {
 		return connector.Media{}, err
 	}
 	data, err := cl.Fetch(ctx, f, connector.MediaMost)
+	if kept && strings.HasPrefix(ref, "m.") && isError(err, "FILE_REFERENCE_EXPIRED", "FILE_REFERENCE_INVALID") {
+		// The file reference kept from its page expired: the message read again has a fresh one.
+		c.box.mu.Lock()
+		delete(c.box.locs, ref)
+		c.box.mu.Unlock()
+		if f, err = c.locate(ctx, cl, ref); err != nil {
+			return connector.Media{}, err
+		}
+		data, err = cl.Fetch(ctx, f, connector.MediaMost)
+	}
 	if err != nil {
 		return connector.Media{}, c.writeError(err)
 	}

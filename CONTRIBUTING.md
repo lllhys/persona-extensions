@@ -9,7 +9,7 @@
 - Preserve localized UI text, runtime messages, assistant prompts and skills, and language-sensitive test fixtures unless a change explicitly targets those behaviors. A runtime `SKILL.md` is shipped to the assistant, not merely a contributor guide.
 - The [SDK copy](sdk/VERSION) and generated wire types/schemas follow the upstream sync process; do not hand-edit them to clean up wording. See [SDK ownership](docs/reference.md#sdk-ownership).
 
-This is a public repository. Contributions must use public services and protocols and must not depend on company accounts, private networks or internal tools. Do not include private repository references, internal domains or IP addresses, real personal/company messages, names, accounts, credentials or key identifiers in source, documentation, fixtures or commit messages. Use synthetic data and placeholders. If material cannot be safely published, keep it out of this repository until its publication scope is resolved.
+This is a public repository: contributions use public services and protocols only, and nothing that leaks company-internal data or personal data may be committed. [CLAUDE.md](CLAUDE.md) spells out the rule and where such extensions go instead.
 
 ## Workflow
 

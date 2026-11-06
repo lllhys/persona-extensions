@@ -108,6 +108,9 @@ func texts(v pluginkit.View) string {
 		fmt.Fprintf(&b, "## %s | %s\n", s.Title, s.Footer)
 		for _, it := range s.Items {
 			fmt.Fprintf(&b, "%s %s %s %s %s %s", it.Type, it.Title, it.Subtitle, it.Value, it.Text, it.Label)
+			if it.Detail != "" || it.Tone != "" {
+				fmt.Fprintf(&b, " (%s %s)", it.Detail, it.Tone)
+			}
 			if it.Badge != nil {
 				fmt.Fprintf(&b, " [%s %s]", it.Badge.Text, it.Badge.Tone)
 			}
@@ -176,7 +179,7 @@ func TestWatchlistPage(t *testing.T) {
 	got := texts(v)
 	for _, want := range []string{"自选 · 3", "row BTC-USDT +2000.00 · 成交 6172.50万 USDT 50000.00", "[+4.17% danger] →open:okx:BTC-USDT",
 		"row ETH-USDT -100.00 · ", "[-3.33% positive] →open:okx:ETH-USDT", "24h 涨跌按 24 小时前的价格算。点一行看 K 线",
-		"NOPE-USDT 现在查不到这个代码的行情", "segmented   order   →sort", "→refresh"} {
+		"NOPE-USDT 现在查不到这个代码的行情", "row 排序 · 自选顺序", "→opts", "→refresh"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the page has no %q:\n%s", want, got)
 		}
@@ -236,7 +239,7 @@ func TestInstrumentPage(t *testing.T) {
 	p, _ := newTestPlugin(t, f, `{"watchlist": ["BTC-USDT", "ETH-USDT"]}`)
 	r := act(t, p, "", "open:BTC-USDT", nil)
 	got := texts(*r.View)
-	for _, want := range []string{"{最新价=50000.00 24h +4.17% danger}", "{24h 成交额=61.73M USDT", "segmented", "K 线 · 1 小时",
+	for _, want := range []string{"metric   50000.00  最新价 (24h +4.17% danger)", "{24h 成交额=61.73M USDT", "segmented", "K 线 · 1 小时",
 		"<收盘价 60>", "<成交量 60>", "{60 根涨跌=", "→down:okx:BTC-USDT", "→remove:okx:BTC-USDT", "→back"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the page has no %q:\n%s", want, got)
@@ -685,5 +688,69 @@ func TestUIContributions(t *testing.T) {
 	raw, _ := json.Marshal(map[string]any{"contribution": "nope", "ui_version": 5})
 	if _, err := h["ui.render"](context.Background(), nil, raw); err == nil {
 		t.Error("an unknown contribution is drawn")
+	}
+}
+
+func TestPageFlow(t *testing.T) {
+	f := newFakeOKX(t)
+	p, _ := newTestPlugin(t, f, `{"watchlist": ["BTC-USDT", "ETH-USDT"]}`)
+
+	// alerts on the rows: one close to its price (50000 now, 50400 within 1%), one met
+	met := time.Date(2026, 11, 6, 9, 30, 0, 0, time.UTC)
+	for _, a := range []Alert{{ID: "a1", Ref: "okx:BTC-USDT", Kind: "above", Value: 50400},
+		{ID: "a2", Ref: "okx:ETH-USDT", Kind: "below", Value: 2950, Met: &met, Price: 2940},
+		{ID: "a3", Ref: "okx:BTC-USDT", Kind: "above", Value: 60000}} { // far: not marked
+		if err := p.alerts.add(a); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := texts(render(t, p, "", 5))
+	for _, want := range []string{"row BTC-USDT 快到提醒：涨到 50400.00 · +2000.00", "row ETH-USDT 提醒到了：跌到 2950.00 · -100.00",
+		"[-3.33% · 提醒到了 positive] →open:okx:ETH-USDT", "[+4.17% danger] →open:okx:BTC-USDT"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the list has no %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "涨到 60000.00 ·") {
+		t.Errorf("a far alert marked:\n%s", got)
+	}
+
+	// a result not in the watchlist is added from the results, which stay
+	r := act(t, p, "", "search", map[string]string{"q": "btc"})
+	got = texts(*r.View)
+	if !strings.Contains(got, "button 加入自选 · BTC-USDC     →add:okx:BTC-USDC") || strings.Contains(got, "→add:okx:BTC-USDT\n") {
+		t.Fatalf("add buttons:\n%s", got)
+	}
+	r = act(t, p, r.View.State, "add:okx:BTC-USDC", nil)
+	got = texts(*r.View)
+	if r.Toast != "已加入 BTC-USDC" || !strings.Contains(got, "搜索「btc」") || strings.Contains(got, "→add:okx:BTC-USDC\n") ||
+		!slices.Contains(refStrings(p.watchlist()), "okx:BTC-USDC") {
+		t.Fatalf("added from the results (%q):\n%s", r.Toast, got)
+	}
+
+	// the instrument page: first the way back and the price, then the K line; the rest below it
+	r = act(t, p, "", "open:okx:BTC-USDT", nil)
+	v := *r.View
+	if first := v.Sections[0].Items; len(first) != 2 || first[0].Action.ID != "back" || first[1].Type != "metric" {
+		t.Fatalf("first section:\n%s", texts(v))
+	}
+	var titles []string
+	for _, s := range v.Sections {
+		titles = append(titles, s.Title)
+	}
+	if !slices.Equal(titles, []string{"", "K 线 · 1 小时", "详情", "价格提醒 · 2", "自选"}) {
+		t.Errorf("sections %q", titles)
+	}
+	if k := v.Sections[1].Items; k[0].Type != "segmented" || len(k[0].Choices) != 5 || k[1].Type != "chart" || k[1].Kind != "line" {
+		t.Errorf("the bars and the price line first: %+v", k[:2])
+	}
+	// 新建提醒 opens the form; setting one closes it
+	r = act(t, p, v.State, "form", nil)
+	if got := texts(*r.View); !strings.Contains(got, "→alert:okx:BTC-USDT") || !strings.Contains(got, "button 取消") {
+		t.Fatalf("form:\n%s", got)
+	}
+	r = act(t, p, r.View.State, "alert:okx:BTC-USDT", map[string]string{"alert_kind": "below", "alert_value": "40000"})
+	if got := texts(*r.View); !strings.HasPrefix(r.Toast, "已设提醒") || strings.Contains(got, "→alert:") || !strings.Contains(got, "价格提醒 · 3") {
+		t.Fatalf("after setting (%q):\n%s", r.Toast, got)
 	}
 }
