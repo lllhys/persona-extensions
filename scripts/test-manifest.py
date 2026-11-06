@@ -253,5 +253,69 @@ class CliGitFailureTests(unittest.TestCase):
         self.assertIn('simulated blob read failure', r.stderr)
 
 
+class BaseTests(unittest.TestCase):
+    """manifest.base(<last release run>, <before>) is where a push's release diffs from: a run dropped while it waited
+    (GitHub keeps one waiting run per concurrency group) released nothing, so the next one diffs from what was
+    released last, not from its own push."""
+
+    def setUp(self):
+        self.old_root = manifest.ROOT
+        self.dir = tempfile.mkdtemp()
+        manifest.ROOT = self.dir
+        self.git('init', '-q', '-b', 'main')
+
+    def tearDown(self):
+        manifest.ROOT = self.old_root
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def git(self, *args):
+        return subprocess.run(['git', '-C', self.dir, '-c', 'user.name=test', '-c', 'user.email=test@example.com', *args],
+                              capture_output=True, text=True, check=True).stdout.strip()
+
+    def put(self, id, version):
+        d = pathlib.Path(self.dir, 'extensions', id)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / manifest.NEW).write_text('{"id": "%s", "version": "%s"}\n' % (id, version))
+
+    def commit(self, message='change'):
+        self.git('add', '-A')
+        self.git('commit', '-q', '--allow-empty', '-m', message)
+        return self.git('rev-parse', 'HEAD')
+
+    def test_last_release_run_first_then_before(self):
+        self.put('alpha', '1.0.0')
+        released = self.commit()
+        self.put('alpha', '1.0.1')  # a push whose run was dropped while it waited
+        dropped = self.commit()
+        self.put('beta', '0.1.0')
+        self.commit()
+        self.assertEqual(manifest.base(released, dropped), released)
+        self.assertEqual(manifest.changed(manifest.base(released, dropped)), ['alpha', 'beta'])
+        # No release run finished yet, or the commit it names is not behind HEAD: the push's own before.
+        self.assertEqual(manifest.base('', dropped), dropped)
+        self.assertEqual(manifest.base('f' * 40, dropped), dropped)
+        # Nothing usable (the all-zero before of a new branch): "", so CI runs the checks only.
+        self.assertEqual(manifest.base('', '0' * 40), '')
+
+    def test_last_released_is_the_newest_index_commit(self):
+        self.put('alpha', '1.0.0')
+        first = self.commit()
+        self.assertEqual(manifest.last_released(), '')
+        self.commit('market: index after %s' % first[:7])
+        self.put('alpha', '1.0.1')
+        self.commit()
+        self.assertEqual(manifest.last_released(), first)
+        self.assertEqual(manifest.changed(manifest.base(manifest.last_released(), 'HEAD~1')), ['alpha'])
+
+    def test_a_commit_not_behind_head_is_not_a_base(self):
+        self.put('alpha', '1.0.0')
+        first = self.commit()
+        self.git('checkout', '-q', '-b', 'side')
+        self.put('alpha', '2.0.0')
+        side = self.commit()
+        self.git('checkout', '-q', 'main')
+        self.assertEqual(manifest.base(side, first), first)
+
+
 if __name__ == '__main__':
     unittest.main()

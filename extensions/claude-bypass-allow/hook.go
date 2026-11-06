@@ -20,7 +20,8 @@ import (
 //   - the session's permission mode is bypassPermissions, and the tool is one of allowedTools (Bash, the read-only
 //     tools and Agent): never one that writes files, publishes, or comes from an MCP server;
 //   - for Bash, the command is not one that stays with a person (guard.go): deletion, overwriting data, a forced
-//     push, a permission change;
+//     push, a permission change. A deletion or overwrite whose targets are all scratch (scratch.go) goes through,
+//     and with the allow_destructive setting every deletion and overwrite does;
 //   - the node program is running (its heartbeat file is fresh): an extension that was switched off, stopped or
 //     uninstalled without the chance to remove the entry allows nothing;
 //   - no ask or deny rule of the user's that the hook can read could be about the call (rules.go): those prompts are
@@ -107,13 +108,15 @@ func runHook(a hookArgs, in io.Reader, out io.Writer, now time.Time) {
 	if json.Unmarshal(raw, &req) != nil {
 		return
 	}
-	if why := refuse(a, req, now); why != "" {
+	why, notes := refuse(a, req, now)
+	if why != "" {
 		return
 	}
 	call := req.summary()
 	appendAudit(filepath.Join(a.Data, auditFile), auditEntry{
 		At: now.UTC().Format(time.RFC3339), Session: req.SessionID, Agent: req.AgentID, Cwd: req.Cwd, Tool: req.ToolName,
 		Command: redact(call), Length: utf8.RuneCountInString(call), ConfigDir: a.ConfigDir,
+		Note: redact(strings.Join(notes, "; ")),
 	})
 	tellNode(raw)
 	_, _ = io.WriteString(out, allowOutput+"\n")
@@ -155,8 +158,21 @@ func tellNode(input []byte) {
 	}
 }
 
-// refuse says why the hook leaves req to Claude Code ("" lets it allow).
-func refuse(a hookArgs, req hookInput, now time.Time) string {
+// refuse says why the hook leaves req to Claude Code ("" lets it allow), and for an allowed Bash command, the
+// deletions and overwrites in it that went through and why (scratch targets, or the setting).
+func refuse(a hookArgs, req hookInput, now time.Time) (string, []string) {
+	why := refuseWhy(a, req, now)
+	if why != "" || req.ToolName != "Bash" {
+		return why, nil
+	}
+	g := newGuard(req.Cwd, readOptions(a.Data).AllowDestructive)
+	if why := g.personOnly(req.ToolInput.Command); why != "" {
+		return "only a person approves this: " + why, nil
+	}
+	return "", g.notes
+}
+
+func refuseWhy(a hookArgs, req hookInput, now time.Time) string {
 	switch {
 	case req.HookEventName != "" && req.HookEventName != "PermissionRequest":
 		return "not a PermissionRequest"
@@ -168,11 +184,6 @@ func refuse(a hookArgs, req hookInput, now time.Time) string {
 		return "no command"
 	case a.Data == "" || !alive(filepath.Join(a.Data, heartbeatFile), now):
 		return "the node program is not running"
-	}
-	if req.ToolName == "Bash" {
-		if why := personOnly(req.ToolInput.Command); why != "" {
-			return "only a person approves this: " + why
-		}
 	}
 	if r := matchingRule(userRules(a.ConfigDir, req.Cwd), req.ToolName, req.ToolInput.Command); r != "" {
 		return "a rule of the user's: " + r
@@ -204,6 +215,28 @@ type auditEntry struct {
 	Command   string `json:"command"`        // the call in one line (summary), redacted and cut
 	Length    int    `json:"length"`         // of the whole line, in characters
 	ConfigDir string `json:"config_dir,omitempty"`
+	Note      string `json:"note,omitempty"` // the deletions and overwrites that went through, and why
+}
+
+// The node program's options for the hook, from the extension's settings: in optionsFile in its data directory,
+// written each time it starts (it restarts when the settings change). A file that is missing or unreadable is the
+// defaults.
+const optionsFile = "options.json"
+
+type options struct {
+	AllowDestructive bool `json:"allow_destructive"`
+}
+
+func readOptions(data string) options {
+	var o options
+	if data == "" {
+		return o
+	}
+	b, err := os.ReadFile(filepath.Join(data, optionsFile))
+	if err != nil || json.Unmarshal(b, &o) != nil {
+		return options{}
+	}
+	return o
 }
 
 func appendAudit(path string, e auditEntry) {

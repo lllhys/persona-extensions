@@ -20,6 +20,7 @@ import (
 func dialGotd(ctx context.Context, c creds, store sessionStore, g *gate, updated func()) (client, error) {
 	cl := telegram.NewClient(c.id, c.hash, telegram.Options{
 		SessionStorage: gotdSession{store},
+		Resolver:       resolver(), // through HTTPS_PROXY when there is one (proxy.go)
 		Middlewares:    []telegram.Middleware{gated(g)},
 		Logger:         traceLog{},
 		OnTransfer:     timedTransfer,

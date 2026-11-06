@@ -20,8 +20,9 @@ import (
 
 // config is the extension's settings, as the hub sends them.
 type config struct {
-	Machines   []string `json:"machines"`
-	ConfigDirs []string `json:"config_dirs"`
+	Machines         []string `json:"machines"`
+	ConfigDirs       []string `json:"config_dirs"`
+	AllowDestructive bool     `json:"allow_destructive"`
 }
 
 func (c config) dirs() []string {
@@ -100,6 +101,13 @@ func (n *node) init(ctx context.Context, in *ext.Init, _ *ext.Hub) (map[string]a
 			bin = real
 		}
 		n.bin = bin
+	}
+	opts, err := json.Marshal(options{AllowDestructive: c.AllowDestructive})
+	if err != nil {
+		return nil, err
+	}
+	if err := writeFileAtomic(filepath.Join(n.data, optionsFile), opts); err != nil {
+		return nil, err // the hook must not read an old setting
 	}
 	n.beat()
 	n.mu.Lock()
@@ -208,4 +216,13 @@ func expand(d string) (string, error) {
 func isDir(p string) bool {
 	st, err := os.Stat(p)
 	return err == nil && st.IsDir()
+}
+
+// writeFileAtomic replaces path with b (mode 0600) so that a reader sees the old file or the new one.
+func writeFileAtomic(path string, b []byte) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }

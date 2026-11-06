@@ -123,6 +123,9 @@ func machineSection(t text, loc *time.Location, machine string, st status, err e
 		if e.Agent != "" {
 			meta = append(meta, t.subagent)
 		}
+		if e.Note != "" {
+			meta = append(meta, e.Note)
+		}
 		s.Items = append(s.Items, wire.Component{Type: wire.ComponentRow, Title: e.Command, Subtitle: strings.Join(meta, " · ")})
 	}
 	s.Footer = fmt.Sprintf(t.recent, len(st.Recent))
@@ -150,7 +153,7 @@ func texts(locale string) text {
 			noMachinesHint: "Turn on a computer in this extension's settings: its Claude Code then gets the hook.",
 			unreachable:    "Can't reach this computer's program", offline: "Unreachable",
 			installed: "Hook installed", notInstalled: "No hook", none: "Nothing auto-allowed yet.", subagent: "subagent",
-			recent: "Newest %d, newest first", footer: "Only Bash, read-only tools and subagents in bypassPermissions sessions are allowed. Deleting, overwriting, force pushes, permission changes and your own ask and deny rules still ask. Commands are cut and secrets masked.",
+			recent: "Newest %d, newest first", footer: "Only Bash, read-only tools and subagents in bypassPermissions sessions are allowed. Deleting and overwriting go through only inside temporary and work directories, unless \"Auto-allow deleting and overwriting too\" is on. Force pushes, permission changes and your own ask and deny rules still ask. Commands are cut and secrets masked.",
 		}
 	case strings.HasPrefix(locale, "ja"):
 		return text{
@@ -158,7 +161,7 @@ func texts(locale string) text {
 			noMachinesHint: "この拡張の設定でコンピュータをオンにすると、その Claude Code に hook が入ります。",
 			unreachable:    "このコンピュータのプログラムに接続できません", offline: "接続できません",
 			installed: "hook あり", notInstalled: "hook なし", none: "まだ自動許可はありません。", subagent: "サブエージェント",
-			recent: "新しい順に %d 件", footer: "許可するのは bypassPermissions のセッションの Bash、読み取り専用ツール、サブエージェントだけです。削除・上書き・force push・権限の変更と、自分で設定した ask / deny ルールは引き続き確認されます。コマンドは切り詰め、秘密情報は伏せています。",
+			recent: "新しい順に %d 件", footer: "許可するのは bypassPermissions のセッションの Bash、読み取り専用ツール、サブエージェントだけです。削除・上書きは一時ディレクトリと作業ディレクトリの中だけ許可します（設定の「削除と上書きも自動で許可」をオンにすると全部）。force push・権限の変更と、自分で設定した ask / deny ルールは引き続き確認されます。コマンドは切り詰め、秘密情報は伏せています。",
 		}
 	}
 	return text{
@@ -166,6 +169,6 @@ func texts(locale string) text {
 		noMachinesHint: "在这个扩展的设置里打开一台电脑，那台电脑的 Claude Code 就会装上 hook。",
 		unreachable:    "连不上这台电脑上的程序", offline: "连不上",
 		installed: "已装 hook", notInstalled: "没有 hook", none: "还没有自动允许过。", subagent: "子 Agent",
-		recent: "最近 %d 条，新的在前", footer: "只放行 bypassPermissions 会话里的 Bash、只读工具和子 Agent；删除、覆盖、force push、改权限，以及你自己配的 ask / deny 规则，照常问你。命令已截断、去掉了密钥。",
+		recent: "最近 %d 条，新的在前", footer: "只放行 bypassPermissions 会话里的 Bash、只读工具和子 Agent。删除、覆盖只在目标都在临时目录、工作目录里时放行（设置里打开「删除和覆盖也自动允许」就都放行）；force push、改权限，以及你自己配的 ask / deny 规则，照常问你。命令已截断、去掉了密钥。",
 	}
 }

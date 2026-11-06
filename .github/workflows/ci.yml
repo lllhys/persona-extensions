@@ -1,6 +1,7 @@
 # Pull requests: scripts/ci.sh (manifests, gofmt, the copied SDK's vet and tests, vet, tests, every platform builds,
 # both indexes agree).
-# main: the same, then release the extensions whose version changed in the push, update both indexes and commit them.
+# main: the same, then release the extensions whose version changed since the last commit a release run finished for
+# (else since the push's "before"), update both indexes and commit them.
 # A manual run releases the extensions named (a version merged earlier and held back until now).
 # Both jobs run on GitHub-hosted ubuntu-latest (a public repository: no self-hosted runner, no runner variable).
 # When Actions can't run here, run scripts/ci.sh on your machine and say so in the pull request.
@@ -16,8 +17,10 @@ on:
         required: true
 permissions:
   contents: write
+# A pull request's new push cancels its older run. A push to main is never cancelled here: its run gets a group of
+# its own, and its release job waits in the release group below.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.event_name == 'pull_request' && format('ci-{0}', github.ref) || format('ci-{0}-{1}', github.ref, github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   check:
@@ -31,6 +34,12 @@ jobs:
       - run: scripts/ci.sh
   release:
     if: github.event_name != 'pull_request'
+    # One release at a time per branch, and a running one is never cancelled. GitHub still keeps only one waiting
+    # run per group (a newer one replaces it), so a release diffs from the last commit CI released for, not only from
+    # its own push's "before": the versions of a replaced run go out with the next one.
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -69,7 +78,11 @@ jobs:
           elif [ -z "$BEFORE" ] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ]; then
             scripts/ci.sh
           else
-            scripts/ci.sh release "$BEFORE"
+            # From the last commit CI released for, else this push's "before": a run dropped while it waited (GitHub
+            # keeps one waiting run per group) released nothing, and its versions go out with this one.
+            base=$(scripts/manifest.py base "$(scripts/manifest.py last-released)" "$BEFORE")
+            echo "diffing from ${base:-$BEFORE}"
+            scripts/ci.sh release "${base:-$BEFORE}"
           fi
       # The index's signature (nwverse/persona#1848): only with the market's key in the repository's secrets.
       # The key is given to this step only, not to the steps that run the extensions' code and tests.
@@ -88,6 +101,7 @@ jobs:
       - name: Commit the index
         env:
           BRANCH: ${{ github.ref_name }}
+          NAMED: ${{ inputs.extensions }}
         run: |
           files="persona-extensions.json persona-plugins.json persona-extensions.json.sig persona-plugins.json.sig"
           for f in $files; do
@@ -96,7 +110,14 @@ jobs:
           if git diff --cached --quiet; then exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "market: index after ${GITHUB_SHA::7}"
+          # "market: index after <sha>" marks what a push's release covered (scripts/manifest.py last-released); a
+          # manual run released only the ids named, so its commit must not look like one.
+          if [ -n "$NAMED" ]; then
+            msg="market: index for $NAMED"  # a variable, so the input is not expanded again
+            git commit -m "$msg"
+          else
+            git commit -m "market: index after ${GITHUB_SHA::7}"
+          fi
           signed() { for f in $files; do echo "$f $(git rev-parse -q --verify "HEAD:$f" || echo none)"; done; }
           want=$(signed)
           for try in 1 2 3 4 5; do
