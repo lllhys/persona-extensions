@@ -73,6 +73,9 @@ func personOnlyDepth(cmd string, depth int) string {
 		for i, w := range kept {
 			b := path.Base(w)
 			shell = shell || shells[b]
+			for _, n := range globMatches(b) {
+				shell = shell || shells[n]
+			}
 			if b == "env" {
 				for _, a := range kept[i+1:] {
 					if a == "-S" || a == "--split-string" || strings.HasPrefix(a, "-S") || strings.HasPrefix(a, "--split-string=") {
@@ -366,16 +369,18 @@ func isMessageFlag(prog, flag string) bool {
 }
 
 // scan splits cmd into the words of each simple command, as a shell would group them: quotes keep a word together
-// (and are removed), a backslash escapes the next character, and lists, pipes, subshells, groups and command
+// (and are removed; $'…' escapes are decoded), a backslash escapes the next character, an unquoted {a,b} or {a..c}
+// in a word makes several words, a comment is skipped, and lists, pipes, subshells, groups and command
 // substitutions separate. redirects are the files output is written to with >, >|, N> or &> (not >>, not >&N),
 // outside /dev/ and /tmp/.
 func scan(cmd string) (segs [][]string, redirects []string) {
 	var words []string
 	var cur strings.Builder
 	inWord, single, double := false, false, false
+	param := 0 // open ${ … } parameter expansions, whose braces are not brace expansion
 	endWord := func() {
 		if inWord {
-			words = append(words, cur.String())
+			words = append(words, braceExpand(cur.String())...)
 			cur.Reset()
 			inWord = false
 		}
@@ -409,10 +414,43 @@ func scan(cmd string) (segs [][]string, redirects []string) {
 			} else {
 				cur.WriteRune(r)
 			}
+		case r == '#' && !inWord && (i == 0 || strings.ContainsRune(" \t\r\n;&|(<>", rs[i-1])):
+			// a comment, to the end of the line: decoding $'…' must not leave a quote in it open. Not after ) or a
+			// backtick, which may close a substitution in the word the # is part of ($(x)#y)
+			for i+1 < len(rs) && rs[i+1] != '\n' {
+				i++
+			}
+		case r == '$' && i+1 < len(rs) && rs[i+1] == '\'':
+			// $'…' is a quote whose backslash escapes the shell decodes: $'\x72m' is rm
+			var text string
+			i, text = ansiQuote(rs, i+1)
+			cur.WriteString(text)
+			inWord = true
+		case r == '$' && i+1 < len(rs) && rs[i+1] == '"':
+			// $"…" is a double quote (translated by the locale): the $ is not part of the word
 		case r == '\'':
 			single, inWord = true, true
 		case r == '"':
 			double, inWord = true, true
+		case r == '{' || r == '}':
+			standalone := !inWord && (i+1 == len(rs) || strings.ContainsRune(" \t\r\n;&|()<>", rs[i+1]))
+			switch {
+			case r == '{' && i > 0 && rs[i-1] == '$' && inWord:
+				param++ // ${name…}
+				cur.WriteRune(r)
+			case r == '}' && param > 0:
+				param--
+				cur.WriteRune(r)
+			case standalone:
+				endSegment() // a { … } group: its words are a command
+			default:
+				// part of a word: brace expansion makes it several words ({rm,-rf,x} is rm -rf x)
+				cur.WriteRune(map[rune]rune{'{': braceOpen, '}': braceClose}[r])
+				inWord = true
+			}
+		case r == ',' && !single && !double:
+			cur.WriteRune(braceComma)
+			inWord = true
 		case r == '>':
 			if inWord && isDigits(cur.String()) {
 				cur.Reset()
@@ -425,7 +463,7 @@ func scan(cmd string) (segs [][]string, redirects []string) {
 			}
 		case r == '<':
 			endWord()
-		case strings.ContainsRune(";&|\n()`{}", r):
+		case strings.ContainsRune(";&|\n()`", r):
 			endSegment()
 		case r == ' ' || r == '\t' || r == '\r':
 			endWord()
@@ -524,9 +562,20 @@ func segmentPersonOnly(words []string, depth int) string {
 		if first && strings.Contains(w, "=") && !strings.HasPrefix(w, "-") {
 			continue
 		}
+		if w == braceTooLarge {
+			return "unclear: a brace expansion too large to read"
+		}
 		program := first || wrapped
 		first = false
 		name := path.Base(w)
+		if program {
+			// a globbed program (/bin/r? -rf x) is whichever known program it matches
+			for _, n := range globMatches(name) {
+				if why := segmentPersonOnly(append([]string{n}, words[i+1:]...), depth); why != "" {
+					return why
+				}
+			}
+		}
 		if name == "command" && program && i+1 < len(words) && (words[i+1] == "-v" || words[i+1] == "-V") {
 			return "" // command -v rm only looks rm up
 		}

@@ -94,6 +94,15 @@ func TestPersonOnly(t *testing.T) {
 		"git checkout --pathspec-from-file=list main", "git checkout --pathspec-fr=list main", "git checkout main --pathspec-fr list",
 		"git checkout -B feat", "git checkout -B x origin/x", "git switch -C feat", "git switch --force-create feat main",
 		"git switch --orphan new", "printf 'delete refs/heads/keep\\n' | git update-ref --stdin",
+		// the shell's expansions spell the program another way: $'…' and $"…" quotes, brace expansion, a glob
+		"$'rm' -rf v", `$"rm" -rf v`, `$'\x72m' -rf v`, `$'\162m' -rf v`, `$'\u0072m' -rf v`, "$'r'm -rf v",
+		"{rm,-rf,v}", "{rm,} -rf v", "r{m,} -rf v", "{r..r}m -rf v", "sudo {rm,-rf,v}", "git push origin {+main,dev}",
+		"/bin/r? -rf v", "/bin/r[m] -rf v", "/bin/r[!x] -rf v", "/usr/bin/r[l-n] -rf v", "r* -rf v",
+		"/usr/bin/su?o rm -rf v", "ba?h -c 'rm -rf v'", "bash -c $'rm -rf v'", "cd x && /bin/r? -rf v",
+		// from the review: a word expansion leaves empty is dropped, and a # in a word after $(…) is not a comment
+		"{,rm} -rf v", "{,} rm -rf v", "{,rm,-rf,v}", "{,rm}{,} -rf v", "{,/usr/bin/rm} -rf v", "{{rm,-rf},x}",
+		"{" + strings.Repeat(",", 5000) + "rm} -rf v", "echo " + strings.Repeat("{a,b}", 20) + "; rm -rf v",
+		"echo $(true)#y; rm -rf v", "echo `true`#y; rm -rf v", "echo $(x)#c && rm -rf v", "x$(echo hi)#z; rm -rf v",
 	}
 	for _, c := range stays {
 		if personOnly(c) == "" {
@@ -131,6 +140,13 @@ func TestPersonOnly(t *testing.T) {
 		"git checkout -b feat/x origin/main", "git checkout --orphan new main",
 		"git checkout --track origin/x", "git checkout -t origin/x", "git checkout -q main", "git checkout --detach v1",
 		"git switch -c x origin/main", "git branch --list 'feat/*'", "git tag --list", "git checkout --conflict diff3 main",
+		// braces, globs and $'…' that do not make a floor program, and a comment
+		"cat {a,b}.txt", "ls src/*.go", "echo ${HOME}", "echo ${x,,}", "mkdir -p dir/{a,b}", "git log --format='{%h}'",
+		"echo $'hello\n'", "[ -f x ] && echo y", "find . -exec grep x {} \\;", "{ echo a; echo b; } | wc -l",
+		"echo '{rm,x}'", "jq '.a | {b,c}' f.json", "cp -r src/{a,b} dst/", "echo x # rm -rf y", "ls *", "./*.sh",
+		"echo {1..3}", "printf '%s\n' {a..e}", "go test ./... -run 'Test{A,B}'",
+		"for i in {1..10000}; do echo $i; done", "seq 1 {1..5000}",
+		"echo {,a}", "ls *.{go,md}", "awk -F, '{print $1}' f.csv", "echo a#b", "echo x #c; # rm -rf v", "(cd x) # rm -rf v",
 		// benign forms for command runners and git subcommands still go through
 		"env FOO=1 go test ./...", "flock /tmp/l make", "trap - EXIT", "trap 'echo done' EXIT",
 		"git rebase -i HEAD~3", "git rebase --exec 'go test ./...' HEAD~2", "git bisect run go test ./...",
@@ -236,6 +252,25 @@ func TestMatcher(t *testing.T) {
 		got := matchingRule([]string{r.rule}, r.tool, "") != ""
 		if got != r.match {
 			t.Errorf("%s for %s: %v", r.rule, r.tool, got)
+		}
+	}
+}
+
+// TestBraceExpandBounded: a long or deeply nested brace word is read in bounded time, and its first words still are.
+func TestBraceExpandBounded(t *testing.T) {
+	for _, c := range []string{
+		strings.Repeat("{", 50000) + strings.Repeat("}", 50000),
+		strings.Repeat("A", 50000) + "{1..4096}",
+		strings.Repeat("{a,b}", 30),
+		"{rm,x} -rf " + strings.Repeat("{a,b}", 30),
+	} {
+		start := time.Now()
+		why := personOnly(c)
+		if d := time.Since(start); d > 2*time.Second {
+			t.Errorf("%.20q…: %v", c, d)
+		}
+		if strings.HasPrefix(c, "{rm") && why == "" {
+			t.Errorf("%.20q… should stay with a person", c)
 		}
 	}
 }
