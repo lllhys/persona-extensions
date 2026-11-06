@@ -81,13 +81,40 @@ jobs:
           scripts/sign-index.py && scripts/sign-index.py verify
       # Staged first, so signatures that were not there before (an index whose entries were removed by hand, and its
       # stale .sig with them) are committed too.
+      # Packaging takes long enough that another merge often lands on main meanwhile (runs 42076093722, 42078092272:
+      # "fetch first"), so the commit is rebased onto the branch as it is now, a few times if it keeps moving. The index
+      # files must come out of the rebase byte for byte as signed; a conflict (an index changed on main meanwhile) fails
+      # the job, and a manual run for that id (scripts/ci.sh release <id>) then puts the released version in.
       - name: Commit the index
+        env:
+          BRANCH: ${{ github.ref_name }}
         run: |
-          for f in persona-extensions.json persona-plugins.json persona-extensions.json.sig persona-plugins.json.sig; do
+          files="persona-extensions.json persona-plugins.json persona-extensions.json.sig persona-plugins.json.sig"
+          for f in $files; do
             if [ -e "$f" ]; then git add "$f"; fi
           done
           if git diff --cached --quiet; then exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "market: index after ${GITHUB_SHA::7}"
-          git push
+          signed() { for f in $files; do echo "$f $(git rev-parse -q --verify "HEAD:$f" || echo none)"; done; }
+          want=$(signed)
+          for try in 1 2 3 4 5; do
+            git fetch origin "$BRANCH"
+            if ! git rebase FETCH_HEAD; then
+              git rebase --abort || true
+              echo "::error::the index commit does not rebase onto origin/$BRANCH (the index changed there meanwhile)"
+              exit 1
+            fi
+            if [ "$(signed)" != "$want" ]; then
+              echo "::error::after the rebase the index files are not the ones signed"
+              exit 1
+            fi
+            scripts/index.py check
+            scripts/sign-index.py verify
+            if git push origin "HEAD:$BRANCH"; then exit 0; fi
+            echo "push $try rejected; main moved, rebasing again"
+            sleep $((try * 5))
+          done
+          echo "::error::the index commit was not pushed after 5 tries"
+          exit 1
