@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nwverse/persona-extensions/extensions/github/internal/connector"
 	"github.com/nwverse/persona-extensions/extensions/github/internal/github"
@@ -237,5 +238,23 @@ func TestLinesAround(t *testing.T) {
 	}
 	if got = linesAround("a", lines[:10], "3", "5"); got.Start != 1 || len(got.Lines) != 10 {
 		t.Fatalf("a small file whole: %+v", got)
+	}
+}
+
+func TestCodeOfLongLine(t *testing.T) {
+	long := strings.Repeat("é", 100000) // 200,000 bytes on one line, like a minified bundle
+	for pg := 1; pg <= 3; pg++ {
+		c := codeOf(state{Repo: "example-org/example-repo", Path: "app.min.js", Page: pg}, github.File{Text: long + "\n"})
+		if c.Text == "" || len(c.Text) > 190000 || !utf8.ValidString(c.Text) || !c.Truncated || c.Load != nil {
+			t.Fatalf("page %d: one long line: %d bytes, valid %v, truncated %v, load %v", pg, len(c.Text), utf8.ValidString(c.Text), c.Truncated, c.Load != nil)
+		}
+	}
+	c := codeOf(state{Repo: "example-org/example-repo", Path: "app.js"}, github.File{Text: "a\n" + long + "\nb\n"})
+	if c.Text != "a" || !c.Truncated || c.Load != nil {
+		t.Fatalf("a long second line: %q, truncated %v, load %v", clip(c.Text, 20), c.Truncated, c.Load != nil)
+	}
+	c = codeOf(state{Repo: "example-org/example-repo", Path: "main.go"}, github.File{Text: strings.Repeat("x\n", 5000)})
+	if strings.Count(c.Text, "\n") != filePage*5-1 || !c.Truncated || c.Load == nil {
+		t.Fatalf("a long file: %d lines, truncated %v, load %v", strings.Count(c.Text, "\n")+1, c.Truncated, c.Load != nil)
 	}
 }

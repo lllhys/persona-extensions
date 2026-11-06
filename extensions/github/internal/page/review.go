@@ -288,16 +288,28 @@ func (p *Page) diffPage(ctx context.Context, r *ext.UIRequest, s state) *wire.Vi
 
 // codeOf is a file as a code component: as much as fits, the rest with 加载更多 (more), lines linked on GitHub.
 func codeOf(s state, f github.File) wire.Component {
+	const most = 190000 // bytes, so never more characters either
 	lines := strings.Split(strings.TrimRight(f.Text, "\n"), "\n")
-	shown := min(len(lines), s.page()*filePage*5)
+	want := min(len(lines), s.page()*filePage*5)
+	shown, size := 0, -1
+	for shown < want && size+1+len(lines[shown]) <= most {
+		size += 1 + len(lines[shown])
+		shown++
+	}
 	text := strings.Join(lines[:shown], "\n")
-	for len(text) > 190000 || utf8.RuneCountInString(text) > 190000 {
-		shown /= 2
-		text = strings.Join(lines[:shown], "\n")
+	if shown == 0 { // one line over the cap (a minified bundle): its start, cut on a rune boundary
+		n := most
+		for n > 0 && !utf8.RuneStart(lines[0][n]) {
+			n--
+		}
+		text = lines[0][:n]
 	}
 	c := wire.Component{Type: wire.ComponentCode, Key: "code:" + clip(s.Path, 120), Path: clip(s.Path, 4096), Language: language(s.Path), Text: text, StartLine: 1}
 	if shown < len(lines) {
-		c.Truncated, c.Load = true, &wire.Action{ID: "more"}
+		c.Truncated = true
+	}
+	if shown == want && want < len(lines) { // stopped by the page, not the cap: every page starts at line 1
+		c.Load = &wire.Action{ID: "more"}
 	}
 	if u, ok := httpsURL(f.HTMLURL); ok {
 		c.LineURL = u + "#L{start}-L{end}"
