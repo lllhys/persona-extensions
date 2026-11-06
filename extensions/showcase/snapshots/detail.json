@@ -12,8 +12,8 @@
           "type": "row",
           "key": "kind",
           "value": "邮件",
-          "title": "种类",
-          "icon": "mail"
+          "icon": "mail",
+          "title": "种类"
         },
         {
           "type": "row",

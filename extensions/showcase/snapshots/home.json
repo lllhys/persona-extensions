@@ -16,6 +16,7 @@
         {
           "type": "row",
           "key": "text",
+          "icon": "doc",
           "title": "文字",
           "subtitle": "四种样式、长文字",
           "action": {
@@ -24,12 +25,12 @@
               "state": "{\"p\":\"text\"}",
               "title": "文字"
             }
-          },
-          "icon": "doc"
+          }
         },
         {
           "type": "row",
           "key": "metric",
+          "icon": "gauge",
           "title": "数字",
           "subtitle": "四种语气、说明",
           "action": {
@@ -38,12 +39,12 @@
               "state": "{\"p\":\"metric\"}",
               "title": "数字"
             }
-          },
-          "icon": "gauge"
+          }
         },
         {
           "type": "row",
           "key": "progress",
+          "icon": "gauge",
           "title": "进度",
           "subtitle": "0、一部分、满、各种语气",
           "action": {
@@ -52,12 +53,12 @@
               "state": "{\"p\":\"progress\"}",
               "title": "进度"
             }
-          },
-          "icon": "gauge"
+          }
         },
         {
           "type": "row",
           "key": "row",
+          "icon": "list",
           "title": "行",
           "subtitle": "副标题、值、角标、图标 / 头像 / 缩略图、可点",
           "action": {
@@ -66,12 +67,12 @@
               "state": "{\"p\":\"row\"}",
               "title": "行"
             }
-          },
-          "icon": "list"
+          }
         },
         {
           "type": "row",
           "key": "button",
+          "icon": "check",
           "title": "按钮",
           "subtitle": "普通、危险、先确认",
           "action": {
@@ -80,12 +81,12 @@
               "state": "{\"p\":\"button\"}",
               "title": "按钮"
             }
-          },
-          "icon": "check"
+          }
         },
         {
           "type": "row",
           "key": "link",
+          "icon": "link",
           "title": "链接",
           "subtitle": "在 App 里打开",
           "action": {
@@ -94,12 +95,12 @@
               "state": "{\"p\":\"link\"}",
               "title": "链接"
             }
-          },
-          "icon": "link"
+          }
         },
         {
           "type": "row",
           "key": "field",
+          "icon": "settings",
           "title": "输入",
           "subtitle": "五种输入、提交",
           "action": {
@@ -108,12 +109,12 @@
               "state": "{\"p\":\"field\"}",
               "title": "输入"
             }
-          },
-          "icon": "settings"
+          }
         },
         {
           "type": "row",
           "key": "chart",
+          "icon": "chart",
           "title": "图表",
           "subtitle": "柱状、折线、叠起来、单位",
           "action": {
@@ -122,12 +123,12 @@
               "state": "{\"p\":\"chart\"}",
               "title": "图表"
             }
-          },
-          "icon": "chart"
+          }
         },
         {
           "type": "row",
           "key": "stat_grid",
+          "icon": "gauge",
           "title": "并排的数",
           "subtitle": "1 到 6 个",
           "action": {
@@ -136,12 +137,12 @@
               "state": "{\"p\":\"stat_grid\"}",
               "title": "并排的数"
             }
-          },
-          "icon": "gauge"
+          }
         },
         {
           "type": "row",
           "key": "segmented",
+          "icon": "tag",
           "title": "分段选择",
           "subtitle": "选了马上换",
           "action": {
@@ -150,12 +151,12 @@
               "state": "{\"p\":\"segmented\"}",
               "title": "分段选择"
             }
-          },
-          "icon": "tag"
+          }
         },
         {
           "type": "row",
           "key": "markdown",
+          "icon": "doc",
           "title": "Markdown",
           "subtitle": "安全子集的全部写法",
           "action": {
@@ -164,12 +165,12 @@
               "state": "{\"p\":\"markdown\"}",
               "title": "Markdown"
             }
-          },
-          "icon": "doc"
+          }
         },
         {
           "type": "row",
           "key": "table",
+          "icon": "list",
           "title": "表格",
           "subtitle": "窄表、宽表、对齐",
           "action": {
@@ -178,12 +179,12 @@
               "state": "{\"p\":\"table\"}",
               "title": "表格"
             }
-          },
-          "icon": "list"
+          }
         },
         {
           "type": "row",
           "key": "empty",
+          "icon": "folder",
           "title": "空状态",
           "subtitle": "有按钮、没按钮",
           "action": {
@@ -192,12 +193,12 @@
               "state": "{\"p\":\"empty\"}",
               "title": "空状态"
             }
-          },
-          "icon": "folder"
+          }
         },
         {
           "type": "row",
           "key": "loading",
+          "icon": "clock",
           "title": "加载中",
           "subtitle": "有字、没字",
           "action": {
@@ -206,12 +207,12 @@
               "state": "{\"p\":\"loading\"}",
               "title": "加载中"
             }
-          },
-          "icon": "clock"
+          }
         },
         {
           "type": "row",
           "key": "divider",
+          "icon": "list",
           "title": "分隔线",
           "subtitle": "把一节分成几组",
           "action": {
@@ -220,12 +221,12 @@
               "state": "{\"p\":\"divider\"}",
               "title": "分隔线"
             }
-          },
-          "icon": "list"
+          }
         },
         {
           "type": "row",
           "key": "list",
+          "icon": "search",
           "title": "列表",
           "subtitle": "搜索、筛选、加载更多；详情 → 编辑 → 返回",
           "action": {
@@ -234,12 +235,12 @@
               "state": "{\"p\":\"list\"}",
               "title": "列表"
             }
-          },
-          "icon": "search"
+          }
         },
         {
           "type": "row",
           "key": "invalidate",
+          "icon": "bell",
           "title": "invalidate",
           "subtitle": "先加载中，3 秒后扩展让 App 重画",
           "action": {
@@ -248,8 +249,7 @@
               "state": "{\"p\":\"invalidate\"}",
               "title": "invalidate"
             }
-          },
-          "icon": "bell"
+          }
         }
       ]
     }

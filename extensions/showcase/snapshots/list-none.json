@@ -6,8 +6,8 @@
       "items": [
         {
           "type": "empty",
-          "title": "没有找到「没有这一条」",
-          "icon": "search"
+          "icon": "search",
+          "title": "没有找到「没有这一条」"
         }
       ]
     }

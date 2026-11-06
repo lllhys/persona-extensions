@@ -7,6 +7,7 @@
         {
           "type": "row",
           "key": "item-1",
+          "icon": "doc",
           "title": "示例条目 01",
           "subtitle": "文档",
           "action": {
@@ -15,12 +16,12 @@
               "state": "{\"p\":\"detail\",\"id\":\"1\"}",
               "title": "示例条目 01"
             }
-          },
-          "icon": "doc"
+          }
         },
         {
           "type": "row",
           "key": "item-10",
+          "icon": "doc",
           "title": "示例条目 10",
           "subtitle": "文档",
           "action": {
@@ -29,12 +30,12 @@
               "state": "{\"p\":\"detail\",\"id\":\"10\"}",
               "title": "示例条目 10"
             }
-          },
-          "icon": "doc"
+          }
         },
         {
           "type": "row",
           "key": "item-11",
+          "icon": "chat",
           "title": "示例条目 11",
           "subtitle": "聊天",
           "action": {
@@ -43,12 +44,12 @@
               "state": "{\"p\":\"detail\",\"id\":\"11\"}",
               "title": "示例条目 11"
             }
-          },
-          "icon": "chat"
+          }
         },
         {
           "type": "row",
           "key": "item-12",
+          "icon": "mail",
           "title": "示例条目 12",
           "subtitle": "邮件",
           "badge": {
@@ -61,12 +62,12 @@
               "state": "{\"p\":\"detail\",\"id\":\"12\"}",
               "title": "示例条目 12"
             }
-          },
-          "icon": "mail"
+          }
         },
         {
           "type": "row",
           "key": "item-13",
+          "icon": "doc",
           "title": "示例条目 13",
           "subtitle": "文档",
           "action": {
@@ -75,12 +76,12 @@
               "state": "{\"p\":\"detail\",\"id\":\"13\"}",
               "title": "示例条目 13"
             }
-          },
-          "icon": "doc"
+          }
         },
         {
           "type": "row",
           "key": "item-14",
+          "icon": "chat",
           "title": "示例条目 14",
           "subtitle": "聊天",
           "action": {
@@ -89,12 +90,12 @@
               "state": "{\"p\":\"detail\",\"id\":\"14\"}",
               "title": "示例条目 14"
             }
-          },
-          "icon": "chat"
+          }
         },
         {
           "type": "row",
           "key": "item-15",
+          "icon": "mail",
           "title": "示例条目 15",
           "subtitle": "邮件",
           "action": {
@@ -103,12 +104,12 @@
               "state": "{\"p\":\"detail\",\"id\":\"15\"}",
               "title": "示例条目 15"
             }
-          },
-          "icon": "mail"
+          }
         },
         {
           "type": "row",
           "key": "item-16",
+          "icon": "doc",
           "title": "示例条目 16",
           "subtitle": "文档",
           "badge": {
@@ -121,12 +122,12 @@
               "state": "{\"p\":\"detail\",\"id\":\"16\"}",
               "title": "示例条目 16"
             }
-          },
-          "icon": "doc"
+          }
         },
         {
           "type": "row",
           "key": "item-17",
+          "icon": "chat",
           "title": "示例条目 17",
           "subtitle": "聊天",
           "action": {
@@ -135,12 +136,12 @@
               "state": "{\"p\":\"detail\",\"id\":\"17\"}",
               "title": "示例条目 17"
             }
-          },
-          "icon": "chat"
+          }
         },
         {
           "type": "row",
           "key": "item-18",
+          "icon": "mail",
           "title": "示例条目 18",
           "subtitle": "邮件",
           "action": {
@@ -149,12 +150,12 @@
               "state": "{\"p\":\"detail\",\"id\":\"18\"}",
               "title": "示例条目 18"
             }
-          },
-          "icon": "mail"
+          }
         },
         {
           "type": "row",
           "key": "item-19",
+          "icon": "doc",
           "title": "示例条目 19",
           "subtitle": "文档",
           "action": {
@@ -163,12 +164,12 @@
               "state": "{\"p\":\"detail\",\"id\":\"19\"}",
               "title": "示例条目 19"
             }
-          },
-          "icon": "doc"
+          }
         },
         {
           "type": "row",
           "key": "item-21",
+          "icon": "mail",
           "title": "示例条目 21",
           "subtitle": "邮件",
           "action": {
@@ -177,12 +178,12 @@
               "state": "{\"p\":\"detail\",\"id\":\"21\"}",
               "title": "示例条目 21"
             }
-          },
-          "icon": "mail"
+          }
         },
         {
           "type": "row",
           "key": "item-31",
+          "icon": "doc",
           "title": "示例条目 31",
           "subtitle": "文档",
           "action": {
@@ -191,12 +192,12 @@
               "state": "{\"p\":\"detail\",\"id\":\"31\"}",
               "title": "示例条目 31"
             }
-          },
-          "icon": "doc"
+          }
         },
         {
           "type": "row",
           "key": "item-41",
+          "icon": "chat",
           "title": "示例条目 41",
           "subtitle": "聊天",
           "action": {
@@ -205,12 +206,12 @@
               "state": "{\"p\":\"detail\",\"id\":\"41\"}",
               "title": "示例条目 41"
             }
-          },
-          "icon": "chat"
+          }
         },
         {
           "type": "row",
           "key": "item-51",
+          "icon": "mail",
           "title": "示例条目 51",
           "subtitle": "邮件",
           "action": {
@@ -219,8 +220,7 @@
               "state": "{\"p\":\"detail\",\"id\":\"51\"}",
               "title": "示例条目 51"
             }
-          },
-          "icon": "mail"
+          }
         }
       ]
     }

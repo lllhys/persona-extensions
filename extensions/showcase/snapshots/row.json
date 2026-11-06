@@ -86,8 +86,8 @@
         {
           "type": "row",
           "key": "icon",
-          "title": "图标 star",
-          "icon": "star"
+          "icon": "star",
+          "title": "图标 star"
         },
         {
           "type": "row",

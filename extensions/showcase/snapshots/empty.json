@@ -7,8 +7,8 @@
         {
           "type": "empty",
           "detail": "拖一个文件进来，或者点下面的按钮。",
-          "title": "还没有附件",
           "icon": "folder",
+          "title": "还没有附件",
           "button": {
             "title": "上传",
             "action": {

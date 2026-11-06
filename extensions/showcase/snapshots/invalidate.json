@@ -10,8 +10,8 @@
         },
         {
           "type": "empty",
-          "title": "还没要过数据",
-          "icon": "bell"
+          "icon": "bell",
+          "title": "还没要过数据"
         },
         {
           "type": "button",
