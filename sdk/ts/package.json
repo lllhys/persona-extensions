@@ -1,0 +1,23 @@
+{
+  "name": "@persona/extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Persona extension SDK: legacy Bun process protocol and transport-independent server-native JSX UI.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./wire": "./src/wire.ts",
+    "./ui": "./src/ui.ts",
+    "./jsx-runtime": "./src/jsx-runtime.ts",
+    "./jsx-dev-runtime": "./src/jsx-dev-runtime.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "test:portable": "bun run scripts/check-portable.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.ui.json && tsc -p tsconfig.ui.json --jsx react-jsxdev && bun run scripts/check-negative-types.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.2",
+    "typescript": "5.9.3"
+  }
+}
