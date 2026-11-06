@@ -93,7 +93,10 @@ describe("callback identity and deterministic replay", () => {
     const retry = session.event({ ...event, values: { a: "1", b: "2" } });
     expect(retry).toBe(result); await expect(retry).rejects.toThrow("write failed");
     expect(writes).toBe(1); expect(authorizations).toBe(1);
-    await expect(session.event({ ...event, eventId: "overflow" })).rejects.toThrow("limit"); session.dispose();
+    await expect(session.event({ ...event, eventId: "overflow" })).rejects.toThrow("stale");
+    await expect(session.event(request(session, "new-revision"))).rejects.toThrow("write failed");
+    await expect(session.event(event)).rejects.toThrow("stale");
+    expect(writes).toBe(2); session.dispose();
   });
 
   test("authorization is mandatory for unconfirmed callbacks and saved metadata is immutable", async () => {
@@ -145,7 +148,7 @@ describe("callback identity and deterministic replay", () => {
     const pending = deferred<void>(); let active!: AbortSignal;
     const hidden = mount(<View key="root"><Section key="main"><Button key="press" title="fixture" action={callback(async (_, context) => { active = context.signal; await pending.promise; })} /></Section></View>, allow);
     const old = request(hidden); const promise = hidden.event(old); await settle(); hidden.suspend(); expect(active.aborted).toBe(true);
-    hidden.resume(); expect(button(hidden).action.id).not.toBe(old.actionId);
+    hidden.resume(); expect(button(hidden).action.id).toBe(old.actionId);
     await expect(hidden.event(request(hidden))).rejects.toThrow("already running");
     pending.resolve(); await promise; hidden.dispose();
   });

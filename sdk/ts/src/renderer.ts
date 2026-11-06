@@ -4,7 +4,7 @@ import { withHooks, type EffectHook, type FetchAdapter, type HookOwner, type Ins
 
 /** Mounted sections require stable keys even though legacy snapshot sections permit none. */
 export type KeyedView = Omit<Wire.View, "sections"> & { sections: (Wire.Section & { key: string })[] };
-export interface Snapshot { readonly generation: string; readonly version: number; readonly rootKey: string; readonly view: KeyedView }
+export interface Snapshot extends Readonly<Wire.UIPageSnapshot> { readonly view: KeyedView }
 export interface UIEvent {
   generation: string;
   version: number;
@@ -22,6 +22,8 @@ export interface RendererOptions {
   schedule?: (task: () => void) => void;
   onRender?: (snapshot: Snapshot) => void;
   onError?: (error: unknown) => void;
+  /** Host process bridge bounds/detaches presentation results before storing replay promises. */
+  transformResult?: (result: unknown) => unknown;
   /** Required for every callback. Check saved metadata and trusted consent, never client approval. */
   authorize: (action: Readonly<Wire.Action>, event: Readonly<UIEvent>, signal: AbortSignal) => boolean | Promise<boolean>;
   limits?: { nodes?: number; depth?: number; events?: number; callbacks?: number; props?: number; hooks?: number; pendingEffects?: number; frameBytes?: number };
@@ -75,6 +77,7 @@ export class Renderer implements HookOwner {
   private instances = new Map<string, Instance>();
   private nativeNodes = new Map<string, string>();
   private registrations = new Map<string, Registration>();
+  private callbackIDs = new Map<string, string>(); // identities only survive suspend; closures do not
   private receipts = new Map<string, Receipt>();
   private activeEvents = new Map<AbortController, string>();
   private errors: unknown[] = [];
@@ -116,7 +119,7 @@ export class Renderer implements HookOwner {
       nativeNodes.set(path, id);
       return id;
     };
-    const previousActions = new Map([...this.registrations.entries()].map(([id, registration]) => [registration.identity, id]));
+    const previousActions = this.callbackIDs;
     let nodeCount = 0;
     let propCount = 0;
     let traversalCount = 0;
@@ -238,6 +241,7 @@ export class Renderer implements HookOwner {
       const roots = resolve(this.tree, "", 0);
       if (roots.length !== 1 || roots[0].kind !== "view") throw new Error("one native View root is required");
       const snapshot: Snapshot = { generation: this.generation, version: (this.snapshot?.version ?? 0) + 1, rootKey: roots[0].key, view: roots[0].value };
+      if (!Number.isSafeInteger(snapshot.version) || snapshot.version > 9007199254740991) throw new Error("rotate UI generation before revision exhaustion");
       if (encoder.encode(JSON.stringify(snapshot)).byteLength > this.limits.frameBytes) throw new Error("UI frame limit exceeded");
       for (const [path, instance] of this.instances) if (!visited.has(path)) { this.remove(instance); this.instances.delete(path); }
       for (const [controller, id] of this.activeEvents) if (!registrations.has(id)) controller.abort();
@@ -245,6 +249,7 @@ export class Renderer implements HookOwner {
         if (hook.kind === "effect" && hook.changed) hook.stop?.();
       }
       this.registrations = registrations;
+      this.callbackIDs = new Map([...registrations].map(([id, registration]) => [registration.identity, id]));
       this.nativeNodes = nativeNodes;
       const published = this.snapshot = freeze(snapshot);
       try { this.options.onRender?.(published); } catch (error) { this.report(error); }
@@ -322,7 +327,8 @@ export class Renderer implements HookOwner {
   private cancelEvents(): void { for (const controller of this.activeEvents.keys()) controller.abort(); }
   /** Only accepts saved callbacks. The manager first authenticates owner/extension/contribution/session.
    * Identical accepted retries replay their original promise, even after a render advances the version.
-   * Receipt exhaustion fails closed until a new session; it never evicts a receipt and repeats a write.
+   * Every invoked/ambiguous callback consumes a native revision. Bounded receipts
+   * can then be evicted safely: their old revisions never execute again.
    */
   event(event: UIEvent): Promise<unknown> {
     try {
@@ -339,12 +345,16 @@ export class Renderer implements HookOwner {
       const receipt = this.receipts.get(saved.eventId);
       if (receipt) { if (receipt.fingerprint !== fingerprint) throw new Error("event ID collision: body mismatch"); return receipt.result; }
       if (saved.version !== this.snapshot.version) throw new Error("stale UI event version");
+      if (this.snapshot.version >= 9007199254740991) throw new Error("rotate UI generation before revision exhaustion");
       const registration = this.registrations.get(saved.actionId);
       if (!registration || registration.key !== saved.key) throw new Error("unknown or stale callback");
       if (this.activeEvents.size) throw new Error("UI event already running");
-      if (this.receipts.size >= this.limits.events) throw new Error("UI event limit exceeded: reopen session");
+      // Old receipts can be evicted safely: every invoked callback consumes a native
+      // revision even when it throws or changes no UI. An old body then fails stale.
+      while (this.receipts.size >= this.limits.events) this.receipts.delete(this.receipts.keys().next().value!);
       const controller = new AbortController();
       this.activeEvents.set(controller, saved.actionId);
+      let invoked = false;
       const result = Promise.resolve().then(async () => {
         if (controller.signal.aborted) throw new Error("stale UI event");
         const allowed = await this.options.authorize(registration.action, saved, controller.signal);
@@ -357,8 +367,21 @@ export class Renderer implements HookOwner {
           // Native schema semantics: saved action-carried values win over submitted values.
           values = freeze({ ...values, ...registration.action.values });
         }
-        return registration.callback.invoke(values, { signal: controller.signal });
-      }).finally(() => { this.activeEvents.delete(controller); });
+        invoked = true;
+        const value = await registration.callback.invoke(values, { signal: controller.signal });
+        return this.options.transformResult ? this.options.transformResult(value) : value;
+      }).finally(() => {
+        if (invoked && this.snapshot && this.snapshot.version >= 9007199254740991) this.dispose();
+        if (invoked && this.snapshot && !this.disposed) {
+          // Rendering may already have advanced several times while awaiting the
+          // callback. Consume one more revision; the manager coalesces wire frames.
+          this.snapshot = freeze({ ...this.snapshot, version: this.snapshot.version + 1 });
+          if (!this.suspended) {
+            try { this.options.onRender?.(this.snapshot); } catch (error) { this.report(error); }
+          }
+        }
+        this.activeEvents.delete(controller);
+      });
       this.receipts.set(saved.eventId, { fingerprint, result });
       return result;
     } catch (error) { return Promise.reject(error); }
@@ -417,6 +440,7 @@ export class Renderer implements HookOwner {
     for (const instance of this.instances.values()) this.remove(instance);
     this.instances.clear();
     this.nativeNodes.clear();
+    this.callbackIDs.clear();
     this.registrations.clear();
     this.receipts.clear();
     this.tree = undefined;

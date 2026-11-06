@@ -6,6 +6,8 @@
 //   main({ id: "example", version: "1.0.0", ui: { home: { render: () => ({ sections: [] }) } } });
 
 import type * as wire from "./wire.ts";
+import { PageBridge, isComponentPage, componentSnapshot, type ComponentPage } from "./page-bridge.ts";
+export { componentPage } from "./page-bridge.ts";
 
 export type * from "./wire.ts";
 export { COMPONENT_TYPES, ERROR_CODES, TONES } from "./wire.ts";
@@ -71,7 +73,7 @@ export interface Program {
   /** Handlers by namespace ("connector", "quota", "event", …). */
   namespaces?: Record<string, Handler>;
   /** Pages by ui contribution id (widgets too: placement widget, drawn per family; see isWidget). */
-  ui?: Record<string, Page>;
+  ui?: Record<string, Page | ComponentPage>;
   /** Shortcuts by contribution id: shortcut.run goes to them (docs/extensions.md "System-level places"). */
   shortcuts?: Record<string, (req: ShortcutRequest) => wire.ShortcutResult | void | Promise<wire.ShortcutResult | void>>;
   /** If set, served on the hub's socket (runtime.http in the manifest) by main(). */
@@ -212,6 +214,7 @@ function answer(id: unknown, out: { result: unknown } | { error: { message: stri
 /** One side of the protocol: feed it lines, it writes answers with write. Returned for tests and other transports. */
 export function connect(prog: Program, write: Write) {
   const hub = new Hub(write);
+  const pageBridge = new PageBridge(prog.ui ?? {}, hub);
   let initialized = false;
   let contributes: Record<string, unknown> | undefined;
   const inflight = new Set<Promise<unknown>>();
@@ -248,6 +251,8 @@ export function connect(prog: Program, write: Write) {
     if (!initialized && initializing) await initializing.catch(() => {});
     if (!initialized) throw new ExtError("not initialized", "not_initialized");
     if (method === "ping") return {};
+    if (method === "ui.page.supported") return { contributions: Object.entries(prog.ui ?? {}).filter(([, page]) => isComponentPage(page)).map(([id]) => id) };
+    if (method.startsWith("ui.page.")) return pageBridge.call(method.slice(8), params ?? {});
     const dot = method.indexOf(".");
     if (dot < 0) throw unknownMethod(method);
     const ns = method.slice(0, dot);
@@ -288,6 +293,10 @@ export function connect(prog: Program, write: Write) {
   async function draw(req: UIRequest, contribution: string, state: string) {
     const page = prog.ui?.[contribution];
     if (!page) throw noContribution(contribution);
+    if (isComponentPage(page)) {
+      if (req.placement === "widget") return componentSnapshot(page, {...req,contribution,state});
+      throw new ExtError("component pages require an owner-bound host session", "unsupported");
+    }
     const v = await page.render({ ...req, contribution, state, action: undefined, values: undefined });
     if (older(req)) forOlder(v, contribution);
     return v;
@@ -299,6 +308,7 @@ export function connect(prog: Program, write: Write) {
     if (!page) throw noContribution(params.contribution);
     const req: UIRequest = { ...params, hub };
     if (method === "render") return draw(req, req.contribution, req.state ?? "");
+    if (isComponentPage(page)) throw new ExtError("component pages require an owner-bound host session", "unsupported");
     if (older(req) && req.action?.startsWith(PUSH_PREFIX)) {
       const push = pushes.get(req.action);
       return { view: await draw(req, push?.ui || req.contribution, push ? push.state ?? "" : req.state ?? "") };
@@ -355,14 +365,15 @@ export function connect(prog: Program, write: Write) {
     line,
     /** Waits for the answers to the requests already read, without closing the hub or stopping input. */
     drain: () => Promise.all([...inflight]),
-    /** Closes outbound hub calls/events only; accepted inbound requests can still run and write answers. */
-    close: () => hub.close(),
-    /** After the final input frame, stops accepting lines and closes outbound hub calls before draining answers.
+    /** Closes outbound hub calls/events and UI work; accepted service requests can still answer. */
+    close: () => { pageBridge.close(); hub.close(); },
+    /** After the final input frame, stops input and UI work, closes outbound calls, then drains accepted answers.
      * Repeated calls return the same promise. Keep the writer open until it settles, then flush/close it yourself.
-     * This does not cancel arbitrary handler work or wait for event handlers; runners must bound those separately. */
+     * Arbitrary service handlers and event work still require an external deadline. */
     shutdown: () => {
       if (!shuttingDown) {
         accepting = false;
+        pageBridge.close();
         hub.close();
         shuttingDown = Promise.all([...inflight]);
       }
@@ -374,7 +385,7 @@ export function connect(prog: Program, write: Write) {
 /** What the hub gives a program in its environment, under the names of any hub. */
 export function env() {
   const get = (name: string) =>
-    process.env[`PERSONA_EXTENSION_${name}`] || process.env[`PERSONA_PLUGIN_${name}`] || process.env[`JARVIS_PLUGIN_${name}`] || "";
+    process.env[`PERSONA_EXTENSION_${name}`] || process.env[`PERSONA_PLUGIN_${name}`] || "";
   const json = (s: string) => {
     try {
       return s ? JSON.parse(s) : undefined;
@@ -390,8 +401,8 @@ export function env() {
     /** For a program that does not speak the protocol (rpc: none); otherwise initialize has it. */
     config: json(get("CONFIG")),
     secrets: json(get("SECRETS")) as Record<string, string> | undefined,
-    hubURL: process.env.PERSONA_HUB_URL || process.env.JARVIS_HUB_URL || "",
-    hubToken: process.env.PERSONA_HUB_TOKEN || process.env.JARVIS_HUB_TOKEN || "",
+    hubURL: process.env.PERSONA_HUB_URL || "",
+    hubToken: process.env.PERSONA_HUB_TOKEN || "",
   };
 }
 

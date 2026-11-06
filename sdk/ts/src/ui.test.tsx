@@ -184,7 +184,7 @@ describe("server callback registry", () => {
     await settle(); expect(calls).toBe(1);
     await expect(session.event({ ...request, eventId: "another" })).rejects.toThrow("already running");
     work.resolve(); await pending;
-    await expect(session.event({ ...request, eventId: "another" })).rejects.toThrow("limit");
+    await expect(session.event({ ...request, eventId: "another" })).rejects.toThrow("stale");
     expect(session.event(request)).toBe(pending); session.dispose();
   });
 

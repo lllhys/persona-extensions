@@ -166,12 +166,28 @@ export interface Engines {
 }
 
 export interface Runtime {
-  command: unknown;
+  /**
+   * Default process preserves executable packages. deno requires a self-contained source bundle and verified
+   * independent Linux isolation.
+   */
+  mode?: string;
+  source?: SourceRuntime;
+  command?: unknown;
   args?: string[];
   env?: Record<string, string>;
   rpc?: string;
   http?: boolean;
   resources?: Resources;
+}
+
+/**
+ * entry is offline build input only; bundle is the signed self-contained artifact, verified again on each start. No
+ * runtime dependency resolution.
+ */
+export interface SourceRuntime {
+  entry: string;
+  bundle: string;
+  sha256: string;
 }
 
 /**
@@ -347,8 +363,8 @@ export interface ThemeItem {
 /**
  * A look every app draws itself: Mochi (the default), Visor, Circuit.
  */
-export type BuiltinLook = "persona" | "jarvis" | "jarvis-circuit" | (string & {});
-export const BUILTIN_LOOKS = ["persona", "jarvis", "jarvis-circuit"] as const;
+export type BuiltinLook = "persona" | "persona-visor" | "persona-circuit" | (string & {});
+export const BUILTIN_LOOKS = ["persona", "persona-visor", "persona-circuit"] as const;
 
 /**
  * A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub
@@ -596,12 +612,12 @@ export interface AssistantItem {
  * or an interpreter.
  */
 export interface MCPServerItem {
-  /** The server's name for the assistant; not jarvis or persona. */
+  /** The server's name for the assistant; not persona or persona. */
   id: string;
   /** Looked up on PATH, then in ~/bin. */
   command: string;
   /**
-   * A PERSONA_ variable (JARVIS_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false to
+   * A PERSONA_ variable (PERSONA_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false to
    * leave the server out.
    */
   env?: string;
@@ -2088,7 +2104,7 @@ export interface Action {
    */
   reply?: string;
   /**
-   * Assistant only: an https URL or a validated persona/jarvis session, task, kb or file target, opened inside the
+   * Assistant only: an https URL or a validated persona/persona session, task, kb or file target, opened inside the
    * app.
    */
   open?: string;
@@ -4440,6 +4456,93 @@ export interface TodoDecisionEvent {
 }
 
 /**
+ * error.code of model.complete besides permission_denied (data {scope: "models"}): invalid_params; assistant_offline
+ * (the manager is away: try again); model_unavailable (nothing to call for this extension: the user picks a model for
+ * it in Settings › Model configuration); model_paused (the connection is held for quota or load, nothing was sent;
+ * data ModelPause: try again after until); model_failed (the upstream refused or failed the request); timeout (past
+ * timeout_seconds); invalid_output (with json_schema, the reply was still not JSON matching it after one more try;
+ * data ModelInvalidOutput).
+ */
+export type ModelErrorCode = "invalid_params" | "assistant_offline" | "model_unavailable" | "model_paused" | "model_failed" | "timeout" | "invalid_output" | (string & {});
+export const MODEL_ERROR_CODES = ["invalid_params", "assistant_offline", "model_unavailable", "model_paused", "model_failed", "timeout", "invalid_output"] as const;
+
+/**
+ * One turn of the conversation: the user's, or the model's earlier answer.
+ */
+export interface ModelMessage {
+  role: ModelRole;
+  content: string;
+}
+
+export type ModelRole = "user" | "assistant" | (string & {});
+export const MODEL_ROLES = ["user", "assistant"] as const;
+
+/**
+ * model.complete (models): one answer to a conversation that starts and ends with the user's turn, the turns
+ * alternating.
+ */
+export interface ModelCompleteParams {
+  /** The system prompt. */
+  system?: string;
+  messages: ModelMessage[];
+  /** Room for the answer; 0 is 4096. Connections speaking the Responses API are sent none. */
+  max_tokens?: number;
+  /**
+   * A JSON Schema the answer must match: the hub asks for JSON matching it, checks the reply (type, enum, const,
+   * properties, required, additionalProperties, items, prefixItems, lengths, bounds, allOf / anyOf / oneOf, local
+   * $ref) and asks once more when it does not match; the result's json has the decoded value. At most 64 KiB.
+   */
+  json_schema?: unknown;
+  /** Bounds the whole call, a second try included; 0 is 120. */
+  timeout_seconds?: number;
+  /** What the call is for (daily, weekly…): it goes in the hub's log line with the usage. */
+  label?: string;
+}
+
+/**
+ * What the call spent, every request of it together (a second try for json_schema included), as the upstream counted
+ * it.
+ */
+export interface ModelUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  requests: number;
+}
+
+export interface ModelCompleteResult {
+  /** The answer as the model wrote it. */
+  text: string;
+  /** With json_schema: the answer decoded, matching it. */
+  json?: unknown;
+  /** The model that answered. */
+  model: string;
+  /** end_turn, or max_tokens when the answer was cut off. */
+  stop_reason: string;
+  usage: ModelUsage;
+}
+
+/**
+ * The data of model_paused.
+ */
+export interface ModelPause {
+  /** quota or busy. */
+  reason: string;
+  /** An RFC 3339 time. */
+  until: string;
+}
+
+/**
+ * The data of invalid_output: why the last reply did not match, the reply, and what the call spent.
+ */
+export interface ModelInvalidOutput {
+  problem: string;
+  text: string;
+  usage: ModelUsage;
+}
+
+/**
  * Bounded JSON scalar, not executable content. Strings at most 4096 code points; finite numbers in the JSON-safe
  * range.
  */
@@ -4644,6 +4747,132 @@ export interface UIStreamSnapshotRequest {
   version: number;
 }
 
+export type UIStreamClientEnvelope = {
+  type: "extension_ui_stream";
+  manager?: string;
+} & (
+  | { request: UIStreamRequest }
+);
+
+/**
+ * Bounded presentation-only subset of native ActionResult, at most 64 KiB UTF-8 JSON. Carried in the correlated event
+ * receipt and cached on replay. Clients apply it once per session/epoch/event_id, only after reaching
+ * receipt.version; never execute HTML, JavaScript or infer authorization from a result. JSX state owns view/items
+ * updates through snapshots/deltas. Manager validates push ownership and credential-free HTTPS (or its own permitted
+ * native URL).
+ */
+export interface UIStreamActionResult {
+  toast?: string;
+  open_url?: string;
+  push?: UIStreamPush;
+  pop?: boolean;
+  lines?: UIStreamFileLines;
+}
+
+/**
+ * Extension-owned native Push only: no assistant page or arbitrary target. State is additionally bounded to 16 KiB
+ * UTF-8. Not authority to invoke an action.
+ */
+export interface UIStreamPush {
+  ui?: string;
+  state?: string;
+  title?: string;
+}
+
+/**
+ * Native FileLines presentation response correlated to the saved event, not filesystem access or code execution. The
+ * complete result remains limited to 64 KiB UTF-8 JSON.
+ */
+export interface UIStreamFileLines {
+  path: string;
+  side?: DiffSide;
+  start: number;
+  lines: string[];
+  total?: number;
+}
+
+export interface UIStreamReceipt {
+  session: string;
+  epoch: string;
+  event_id: string;
+  version: number;
+  status: string;
+  result?: UIStreamActionResult;
+}
+
+export interface UIStreamFailure {
+  code: string;
+  message: string;
+}
+
+export interface UIStreamSnapshotEnvelope {
+  kind: "snapshot";
+  type: "extension_ui_stream";
+  request_id?: string;
+  manager?: string;
+  snapshot: UIStreamSnapshot;
+}
+
+export interface UIStreamDeltaEnvelope {
+  kind: "delta";
+  type: "extension_ui_stream";
+  request_id?: string;
+  manager?: string;
+  delta: UIStreamDelta;
+}
+
+export interface UIStreamReceiptEnvelope {
+  kind: "receipt";
+  type: "extension_ui_stream";
+  request_id?: string;
+  manager?: string;
+  receipt: UIStreamReceipt;
+}
+
+export interface UIStreamErrorEnvelope {
+  kind: "error";
+  type: "extension_ui_stream";
+  request_id?: string;
+  manager?: string;
+  error: UIStreamFailure;
+}
+
+export interface UIStreamClosedEnvelope {
+  kind: "closed";
+  type: "extension_ui_stream";
+  request_id?: string;
+  manager?: string;
+  session: string;
+}
+
+export type UIStreamServerEnvelope =
+  | UIStreamSnapshotEnvelope
+  | UIStreamDeltaEnvelope
+  | UIStreamReceiptEnvelope
+  | UIStreamErrorEnvelope
+  | UIStreamClosedEnvelope
+  | UIStreamSuspendedEnvelope;
+export const UISTREAM_SERVER_ENVELOPE_KINDS = ["snapshot", "delta", "receipt", "error", "closed", "suspended"] as const;
+
+export interface UIStreamSuspendedEnvelope {
+  kind: "suspended";
+  type: "extension_ui_stream";
+  request_id?: string;
+  manager?: string;
+  session: string;
+}
+
+/**
+ * Source-process native render revision, independent of manager-owned wire revisions. Validate original JSON before
+ * fitting; never trust source recipients or owners.
+ */
+export interface UIPageSnapshot {
+  generation: string;
+  version: number;
+  rootKey: string;
+  view: View;
+}
+
 /** One call or event of an extension point's protocol: who sends it, and the definitions its params and
  * its answer hold to (no result: any JSON; an event has no answer). */
 export interface Call {
@@ -4708,4 +4937,5 @@ export const CALLS: Record<string, Call> = {
   "event.kb.forgotten": { from: "hub", params: "KBForgottenEvent", event: true },
   "event.todo.changed": { from: "hub", params: "TodoChangedEvent", event: true },
   "event.todo.decision": { from: "hub", params: "TodoDecisionEvent", event: true },
+  "model.complete": { from: "program", params: "ModelCompleteParams", result: "ModelCompleteResult" },
 };
