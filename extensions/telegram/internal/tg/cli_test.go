@@ -166,6 +166,33 @@ func TestCLIReads(t *testing.T) {
 	}
 }
 
+// A chat tg search found but that is past the newest conversations messages.getDialogs lists is still read by the
+// id search gave, as writes already take it (#251).
+func TestCLIReadsAChatFoundBySearch(t *testing.T) {
+	c, f, ctx := archiveAccount(t)
+	f.mu.Lock()
+	f.dialogs = append(f.dialogs, dialog{Peer: peer{Kind: 'u', ID: 8, Hash: 88}, Name: "示例老友", Kind: "dm", Top: 31})
+	f.history["u8"] = []message{{ID: 31, FromKey: "u8", From: "示例老友", Type: "TEXT", Text: "很久以前的示例消息"}}
+	f.mu.Unlock()
+	if _, err := c.Call(ctx, "telegram_search_messages", json.RawMessage(`{"query":"很久以前"}`)); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	f.dialogs = f.dialogs[:len(f.dialogs)-1] // older than the newest listed conversations
+	f.mu.Unlock()
+	for _, read := range []struct{ name, args string }{
+		{"telegram_read_messages", `{"chat":"u8"}`},
+		{"telegram_get_message", `{"chat":"u8","id":31}`},
+	} {
+		out, err := c.Call(ctx, read.name, json.RawMessage(read.args))
+		if err != nil {
+			t.Errorf("%s %s after tg search found it: %v", read.name, read.args, err)
+		} else if !strings.Contains(string(out), "很久以前的示例消息") {
+			t.Errorf("%s %s: %s", read.name, read.args, out)
+		}
+	}
+}
+
 // The writes go through the hub's gate: the card names the conversation (only one the reads listed, by id or
 // @username, never by a name two chats could share) and has the full text; declined, nothing reaches Telegram;
 // allowed, exactly that does, with a random_id.
