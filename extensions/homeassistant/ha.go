@@ -121,6 +121,7 @@ type ha struct {
 	retry     bool // the user asked to try again (Retry, refresh): the next request goes out even after a refusal
 	reg       *Registry
 	regAt     time.Time
+	regFailAt time.Time         // the page's last failed read of the registry (pageRegistry)
 	autoCfg   map[string]string // automation config id → its config as last read (canonical JSON)
 
 	wsMu sync.Mutex

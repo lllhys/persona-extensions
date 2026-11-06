@@ -635,6 +635,9 @@ func (g *guard) scratchTargets(before, targets []string) bool {
 		if (wrappers[w] || wrappers[b]) && !scratchWrappers[b] {
 			return false // xargs, find -exec, ssh, eval…: the targets are not what they look like
 		}
+		if runners[b] {
+			return false // uv run --directory x, poetry -C x run: another directory
+		}
 		if w == "-D" || w == "-C" || strings.HasPrefix(w, "--chdir") || strings.HasPrefix(w, "-S") || strings.HasPrefix(w, "--split-string") {
 			return false // sudo -D, env -C: another directory; env -S: a command line
 		}

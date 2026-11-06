@@ -30,10 +30,20 @@ func newBox(t *testing.T) box {
 			t.Fatal(err)
 		}
 	}
-	// t.TempDir is under the real /tmp: only the box's own temporary directory counts
+	// t.TempDir is under the real temporary directory: only the box's own temporary directory counts
 	old := tmpRoots
 	tmpRoots = []string{b.tmp}
 	t.Cleanup(func() { tmpRoots = old })
+	// on macOS it is under /private/var/folders, a system directory: drop the ones the box is in, and keep where
+	// the others lead (/etc is /private/etc there)
+	oldSys := systemDirs
+	systemDirs = nil
+	for _, s := range oldSys {
+		if r := resolve(s, true); !within(root, r) {
+			systemDirs = append(systemDirs, s, r)
+		}
+	}
+	t.Cleanup(func() { systemDirs = oldSys })
 	t.Setenv("HOME", b.home)
 	t.Setenv("TMPDIR", "")
 	return b

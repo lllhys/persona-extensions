@@ -30,7 +30,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: pluginkit/go.mod
+          cache-dependency-path: "**/go.sum"
       - run: scripts/ci.sh
   release:
     if: github.event_name != 'pull_request'
@@ -49,7 +50,8 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: pluginkit/go.mod
+          cache-dependency-path: "**/go.sum"
       # scripts/release.sh uses gh; ubuntu-latest has it. Should a runner not: a fixed release of GitHub's own,
       # checked against the sha256 written here, unpacked in the job's temporary directory (no sudo, nothing kept).
       - name: gh
