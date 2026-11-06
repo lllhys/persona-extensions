@@ -221,7 +221,13 @@ export class Renderer implements HookOwner {
       if (kind === "grid" || kind === "carousel") {
         const { tiles, ...rest } = props;
         if (!Array.isArray(tiles)) throw new Error("tiles must be an array");
-        out = { ...lower(rest, key, depth + 1, new Set(), JSON.stringify([identity, kind])), tiles: tiles.map((tile) => {
+        const lowered = lower(rest, key, depth + 1, new Set(), JSON.stringify([identity, kind]));
+        // Count the array and every slot before allocation; map skips sparse holes entirely.
+        const tileCount = tiles.length;
+        if (++propCount > this.limits.props || tileCount > this.limits.props - propCount) throw new Error("UI prop limit exceeded");
+        if (tileCount > this.limits.nodes - nodeCount) throw new Error("UI node limit exceeded");
+        out = { ...lowered, tiles: Array.from({ length: tileCount }, (_, index) => {
+          const tile = tiles[index];
           const tileKey = addKey(tile?.key);
           return lower(tile, tileKey, depth + 1, new Set(), nativeIdentity(JSON.stringify([identity, kind, tileKey])));
         }) };

@@ -21,7 +21,8 @@ export interface EffectHook {
 }
 interface LatestHook { kind: "latest"; value: unknown }
 interface IntervalHook { kind: "interval"; running: boolean }
-export type Hook = StateHook | EffectHook | LatestHook | IntervalHook;
+interface FetchHook { kind: "fetch"; deps: Dependencies; identity: number }
+export type Hook = StateHook | EffectHook | LatestHook | IntervalHook | FetchHook;
 export interface Instance {
   id: string;
   type: (props: any) => Node;
@@ -101,7 +102,15 @@ export interface FetchOptions<T> {
 export function useFetch<T = unknown>(input: string | null, options: FetchOptions<T> = {}): FetchState<T> {
   if (!context) throw new Error("hooks require a mounted function component");
   const owner = context.owner;
-  const [result, setResult] = useState<FetchState<T>>({ status: "idle" });
+  const dependencies = [input, ...(options.dependencies ?? [])];
+  const [resource] = hook<FetchHook>("fetch", () => ({ kind: "fetch", deps: dependencies, identity: 0 }));
+  if (!equalDeps(resource.deps, dependencies)) { resource.deps = dependencies; resource.identity++; }
+  const identity = resource.identity;
+  const current: FetchState<T> = { status: input === null ? "idle" : "loading" };
+  const [saved, setSaved] = useState(() => ({ identity, result: current }));
+  const setResult = (result: FetchState<T>) => {
+    if (resource.identity === identity) setSaved({ identity, result });
+  };
   useEffect(async (signal) => {
     if (input === null) { setResult({ status: "idle" }); return; }
     setResult({ status: "loading" });
@@ -114,8 +123,9 @@ export function useFetch<T = unknown>(input: string | null, options: FetchOption
     } catch (error) {
       if (!signal.aborted) setResult({ status: "error", error });
     }
-  }, [input, ...(options.dependencies ?? [])]);
-  return result;
+  }, dependencies);
+  // Derive the first snapshot for a new resource; state writes and fetches remain commit effects.
+  return saved.identity === identity ? saved.result : current;
 }
 
 /** UI intervals are effects: hidden, unmounted and disposed pages have no running timer. */

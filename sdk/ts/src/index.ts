@@ -304,7 +304,13 @@ export function connect(prog: Program, write: Write) {
   function line(text: string) {
     let f: Frame;
     try {
-      f = JSON.parse(text);
+      const parsed: unknown = JSON.parse(text);
+      if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return;
+      f = parsed as Frame;
+      // Validate dispatch fields before using them, without changing legacy routing precedence.
+      if ([f.id, f.method, f.event].some(value => value != null && typeof value !== "string")) return;
+      if (f.error != null && (typeof f.error !== "object" || Array.isArray(f.error)
+        || typeof f.error.message !== "string" || (f.error.code != null && typeof f.error.code !== "string"))) return;
     } catch {
       return;
     }
@@ -322,7 +328,7 @@ export function connect(prog: Program, write: Write) {
       const dot = f.event.indexOf(".");
       const h = initialized && dot > 0 ? prog.namespaces?.[f.event.slice(0, dot)] : undefined;
       if (h) Promise.resolve().then(() => h(f.event!.slice(dot + 1), f.params ?? {})).catch(() => {});
-    } else if (f.id) {
+    } else if (f.id && (f.error != null || Object.prototype.hasOwnProperty.call(f, "result"))) {
       hub.answer(f);
     }
   }
