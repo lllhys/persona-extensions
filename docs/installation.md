@@ -49,6 +49,7 @@ Legacy protocol names and UI placements, such as `plugin_protocol` and `plugin_p
 ## Extension-specific setup
 
 - [GitHub](extensions/github.md): sign in through **Settings → Connectors → GitHub**, either by sharing a computer's `gh` login (that computer must be online and the extension uses its `gh_login` permission) or through the device flow. The hub must reach `github.com`, `api.github.com` and GitHub's avatar and CI-log hosts.
+- [Home Assistant](extensions/homeassistant.md): fill in the address and a long-lived access token in its settings; the hub must reach Home Assistant. A local package starts sandboxed and needs `personad extension sandbox homeassistant off`, see [Network and sandbox](extensions/homeassistant.md#network-and-sandbox).
 - [LINUX DO](extensions/linuxdo.md): no account; the hub must reach `linux.do`. The in-app reader fetches on the hub, while opening the original web page also requires network access on the device.
 - [V2EX](extensions/v2ex.md): no account; the hub must reach `www.v2ex.com`. The in-app reader fetches on the hub, while opening the original web page also requires network access on the device.
 - [Markets](extensions/markets.md): no account; the hub must reach `www.okx.com`, and for stocks `qt.gtimg.cn`, `smartbox.gtimg.cn`, `web.ifzq.gtimg.cn` and `ifzq.gtimg.cn`.

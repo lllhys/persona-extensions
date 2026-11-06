@@ -6,6 +6,7 @@
 
 - [Installation](installation.md): register the public market, install local packages and handle older hubs.
 - [GitHub](extensions/github.md): the inbox, knowledge-base archive, assistant tools and sign-in of the GitHub connector (moved out of the hub), and a GitHub page: what needs you, repositories and their code, and PR / issue review.
+- [Home Assistant](extensions/homeassistant.md): areas, devices, controls and history from your own Home Assistant; confirmed assistant writes, writable domains and the sandbox.
 - [LINUX DO](extensions/linuxdo.md): public topics, filtering, request limits and the app view.
 - [V2EX](extensions/v2ex.md): public hot, latest and followed-node topics, filtering, request limits and the app view.
 - [Markets](extensions/markets.md): cryptocurrency (OKX) and A-share, Hong Kong and US stock (Tencent) watchlist on the main navigation, price and volume charts, assistant tools and rate limits.
