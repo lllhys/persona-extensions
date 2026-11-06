@@ -609,7 +609,7 @@ func gitPersonOnly(args []string) string {
 	switch sub {
 	case "push":
 		for _, a := range rest {
-			if strings.HasPrefix(a, "--force") || a == "--mirror" || a == "--delete" || a == "--prune" ||
+			if strings.HasPrefix(a, "--force") || longOpt(a, "--mirror", "--delete", "--prune") ||
 				strings.HasPrefix(a, "+") || (strings.HasPrefix(a, ":") && len(a) > 1) || shortFlag(a, 'f') || shortFlag(a, 'd') {
 				return "force push: git push " + a
 			}
@@ -619,15 +619,20 @@ func gitPersonOnly(args []string) string {
 	case "restore":
 		return "overwrite: git restore"
 	case "reset":
-		if has(rest, "--hard") || has(rest, "--merge") || has(rest, "--keep") {
+		if hasLongOpt(rest, "--hard", "--merge", "--keep") {
 			return "overwrite: git reset --hard"
 		}
 	case "checkout", "switch":
-		if has(rest, "--") || has(rest, ".") || has(rest, "--force") || has(rest, "--discard-changes") || hasShort(rest, 'f') {
+		if has(rest, "--") || has(rest, ".") || hasLongOpt(rest, "--force", "--discard-changes") || hasShort(rest, 'f') ||
+			(sub == "checkout" && (hasLongOpt(rest, "--pathspec-from-file") || len(checkoutOperands(rest)) > 1)) {
+			return "overwrite: git " + sub
+		}
+		// -B and -C reset a branch that exists, as git branch -f does; git switch --orphan empties the work tree
+		if (sub == "checkout" && hasShort(rest, 'B')) || (sub == "switch" && (hasShort(rest, 'C') || hasLongOpt(rest, "--force-create", "--orphan"))) {
 			return "overwrite: git " + sub
 		}
 	case "branch", "tag":
-		if has(rest, "--delete") || has(rest, "--force") || hasShort(rest, 'd') || hasShort(rest, 'D') || hasShort(rest, 'f') || hasShort(rest, 'M') {
+		if hasLongOpt(rest, "--delete", "--delete-merged", "--force") || hasShort(rest, 'd') || hasShort(rest, 'D') || hasShort(rest, 'f') || hasShort(rest, 'M') {
 			return "deletion or overwrite: git " + sub
 		}
 	case "stash":
@@ -639,7 +644,7 @@ func gitPersonOnly(args []string) string {
 			return "deletion: git worktree remove"
 		}
 	case "update-ref":
-		if has(rest, "-d") {
+		if has(rest, "-d") || has(rest, "--stdin") { // --stdin reads delete (and update) lines
 			return "deletion: git update-ref -d"
 		}
 	case "reflog":
@@ -648,6 +653,47 @@ func gitPersonOnly(args []string) string {
 		}
 	}
 	return ""
+}
+
+// longOpt says whether a is one of the long options full, or a shortening of one: git takes any unambiguous start
+// of a long option (--har for --hard, --dele for --delete), so --x counts for every option that starts with it.
+// A value after = is not part of the name.
+func longOpt(a string, full ...string) bool {
+	name, _, _ := strings.Cut(a, "=")
+	if len(name) < 3 || !strings.HasPrefix(name, "--") {
+		return false
+	}
+	for _, f := range full {
+		if strings.HasPrefix(f, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasLongOpt(words []string, full ...string) bool {
+	for _, w := range words {
+		if longOpt(w, full...) {
+			return true
+		}
+	}
+	return false
+}
+
+// checkoutOperands are git checkout's arguments that are not options or option values: a branch or commit, and
+// then the paths to take from it (git checkout HEAD f overwrites f, as git checkout -- f does).
+func checkoutOperands(args []string) []string {
+	var out []string
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "-b" || a == "-B" || a == "--orphan" || a == "--conflict":
+			i++ // the option's value
+		case strings.HasPrefix(a, "-"):
+		default:
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // ghPersonOnly looks at what follows gh.
