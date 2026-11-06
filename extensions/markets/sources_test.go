@@ -30,6 +30,8 @@ func (stocks) Bars() []string    { return []string{"1D", "1W"} }
 func (stocks) URL(string) string { return "" }
 func (stocks) Help() string      { return "美股写 us:AAPL" }
 
+func (stocks) Examples() (string, string) { return "AAPL", "Apple" }
+
 func (stocks) Normalize(s string) (string, bool) {
 	s = strings.ToUpper(strings.TrimSpace(s))
 	if s == "" || len(s) > 5 || strings.ContainsAny(s, "-/ ") {
@@ -95,23 +97,22 @@ func TestSources(t *testing.T) {
 	// the watchlist mixes the markets, each row naming its source and its own period
 	v := render(t, p, "", 5)
 	got := texts(v)
-	for _, want := range []string{"row BTC-USDT · OKX 24h 高", "row AAPL · 美股 Example Apple · 今日 高 212 · 低 199 210",
-		"[+5.00% positive] →open:us:AAPL", "OKX、美股 公开行情", "美股写 us:AAPL。不写来源（代码前的「okx:」这种）就是 OKX 的"} {
+	// grouped by source in the sources' order, a name as the title with the symbol under it
+	if v.Sections[0].Title != "加密货币 · 1" || v.Sections[1].Title != "美股 · 1" {
+		t.Errorf("groups %q %q", v.Sections[0].Title, v.Sections[1].Title)
+	}
+	for _, want := range []string{"row BTC-USDT 高 51000.00", "row Example Apple AAPL · 高 212 · 低 199 210",
+		"[+5.00% danger] →open:us:AAPL", "OKX、美股 公开行情", "直接写代码，如 BTC-USDT、us:AAPL；不是 OKX 的，代码前写来源"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the page has no %q:\n%s", want, got)
 		}
 	}
 
-	// a search interleaves the sources
+	// a search asks every source, a group each
 	r := act(t, p, v.State, "search", map[string]string{"q": "a"})
-	var titles []string
-	for _, it := range r.View.Sections[0].Items {
-		if it.Type == "row" {
-			titles = append(titles, it.Title)
-		}
-	}
-	if len(titles) < 2 || !strings.HasSuffix(titles[1], "· 美股") {
-		t.Fatalf("search %v", titles)
+	if len(r.View.Sections) < 2 || !strings.HasPrefix(r.View.Sections[0].Title, "搜索「a」 · 加密货币 · ") ||
+		!strings.HasPrefix(r.View.Sections[1].Title, "美股 · ") || r.View.Sections[1].Items[0].Title != "Example Apple" {
+		t.Fatalf("search %s", texts(*r.View))
 	}
 
 	// a stock's page: its bars only, no link, the trading day's figures

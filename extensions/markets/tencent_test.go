@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/nwverse/persona-extensions/pluginkit"
 )
 
 // fakeTencent answers like Tencent's endpoints from the samples in testdata/tencent, recorded from the live ones:
@@ -287,5 +289,92 @@ func TestTencentInPlugin(t *testing.T) {
 	}
 	if link != "https://gu.qq.com/sh600519" {
 		t.Errorf("link %q", link)
+	}
+}
+
+func TestLayoutGroups(t *testing.T) {
+	ft, fo := newFakeTencent(t), newFakeOKX(t)
+	p := newPlugin(t.Logf)
+	p.srcs = append(sources{newOKX(fo.srv.URL)}, tencentSources(ft.hosts())...)
+	defer func(old func() time.Time) { now = old }(now)
+	// 2026-11-06 11:40 in Shanghai: A-shares and Hong Kong are trading, the US closed the day before
+	now = func() time.Time { return time.Date(2026, 11, 6, 11, 40, 0, 0, marketInfo[mCN].loc) }
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "watchlist.json"),
+		[]byte(`["us:AAPL","okx:BTC-USDT","cn:600519.SH","hk:00700","us:.DJI","cn:000001.SH","okx:ETH-USDT"]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var ip pluginkit.InitParams
+	ip.Plugin.DataDir = dir
+	if err := p.configure(ip); err != nil {
+		t.Fatal(err)
+	}
+	v := render(t, p, "", 5)
+	var titles []string
+	for _, s := range v.Sections {
+		titles = append(titles, s.Title)
+	}
+	if !slices.Equal(titles[:4], []string{"加密货币 · 2", "A股 · 2", "港股 · 1", "美股 · 2"}) {
+		t.Fatalf("groups %q", titles)
+	}
+	got := texts(v)
+	for _, want := range []string{
+		"row 贵州茅台 600519.SH · 高 1457.72 · 低 1436.00 1440.49   [-0.79% positive]",
+		"row 苹果 AAPL · 高 355.38 · 低 342.06 · 休市 · 截至 11/5 16:00 344.17",
+		"## A股 · 2 | 涨跌按上个交易日的收盘价算，时间是交易所当地的",
+		"## 美股 · 2 | 涨跌按上个交易日的收盘价算，时间是交易所当地的。点一行看 K 线"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the page has no %q:\n%s", want, got)
+		}
+	}
+	if v.Search == nil || v.Search.Placeholder != "搜代码或名称：BTC、茅台、腾讯、AAPL" {
+		t.Errorf("search box %+v", v.Search)
+	}
+	if strings.Contains(got, "腾讯控股 00700 · 高 428.60 · 低 419.60 · 休市") {
+		t.Errorf("Hong Kong is trading:\n%s", got)
+	}
+
+	// moves stay within the group: 000001.SH up passes over the others to 600519.SH
+	act(t, p, v.State, "up:cn:000001.SH", nil)
+	if got := refStrings(p.watchlist()); !slices.Equal(got, []string{"us:AAPL", "okx:BTC-USDT", "cn:000001.SH", "hk:00700", "us:.DJI", "cn:600519.SH", "okx:ETH-USDT"}) {
+		t.Errorf("moved %v", got)
+	}
+	r := act(t, p, "", "open:cn:000001.SH", nil)
+	if s := texts(*r.View); strings.Contains(s, "→up:") || !strings.Contains(s, "→down:cn:000001.SH") {
+		t.Errorf("first of its group: no up, a down:\n%s", s)
+	}
+
+	// a source that fails says so in its group; the others draw
+	ft.srv.Close()
+	got = texts(*act(t, p, "", "refresh", nil).View) // past the cache
+	if !strings.Contains(got, "row BTC-USDT") || !strings.Contains(got, "连不上腾讯行情") || !strings.Contains(got, "## 加密货币 · 2") {
+		t.Errorf("one source down:\n%s", got)
+	}
+
+	// green_up turns the tones round
+	ip.Config = []byte(`{"colors": "green_up"}`)
+	if err := p.configure(ip); err != nil {
+		t.Fatal(err)
+	}
+	if got := texts(render(t, p, "", 5)); !strings.Contains(got, "[+4.17% positive] →open:okx:BTC-USDT") {
+		t.Errorf("green_up:\n%s", got)
+	}
+}
+
+func TestDecimals(t *testing.T) {
+	for _, c := range []struct {
+		m    market
+		kind string
+		last float64
+		want string
+	}{{mCN, "股票", 1440.5, "1440.50"}, {mCN, "ETF", 4.135, "4.135"}, {mHK, "股票", 423, "423.00"}, {mHK, "股票", 0.315, "0.315"},
+		{mUS, "股票", 0.4567, "0.4567"}, {mUS, "指数", 51523.06, "51523.06"}} {
+		q := Quote{Decimals: decimals(c.m, c.kind, c.last)}
+		if got := q.Price(c.last); got != c.want {
+			t.Errorf("%v %s %v: %s, want %s", c.m, c.kind, c.last, got, c.want)
+		}
+	}
+	if got := (Quote{}).Price(3.50210); got != "3.5021" {
+		t.Errorf("auto: %s", got)
 	}
 }

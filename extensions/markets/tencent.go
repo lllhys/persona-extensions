@@ -185,6 +185,22 @@ func (s *txMarket) Market() string  { return marketInfo[s.m].name }
 func (s *txMarket) Bars() []string  { return marketInfo[s.m].bars }
 func (s *txMarket) Hosts() []string { return s.t.base.hosts() }
 
+func (s *txMarket) Examples() (string, string) {
+	switch s.m {
+	case mCN:
+		return "600519", "茅台"
+	case mHK:
+		return "00700", "腾讯"
+	}
+	return "AAPL", "AAPL"
+}
+
+// idleAfter: a quote this much older than now is from a market not trading.
+const idleAfter = 20 * time.Minute
+
+// now is the clock (a variable so a test can fix it).
+var now = time.Now
+
 func (s *txMarket) Help() string {
 	switch s.m {
 	case mCN:
@@ -350,8 +366,22 @@ func (s *txMarket) parseQuote(sym string, f []string) (Quote, bool) {
 	q.Kind = kindName(kind)
 	if t, err := time.ParseInLocation(layout, at(30), marketInfo[s.m].loc); err == nil {
 		q.At = t
+		q.Idle = now().Sub(t) > idleAfter
 	}
+	q.Decimals = decimals(s.m, q.Kind, q.Last)
 	return q, true
+}
+
+// decimals are the decimals a market writes a price with: two, three for A-share funds (their tick is 0.001) and
+// Hong Kong prices under 1, four for US prices under 1.
+func decimals(m market, kind string, last float64) int {
+	switch {
+	case m == mCN && (kind == "ETF" || kind == "基金"), m == mHK && last < 1:
+		return 3
+	case m == mUS && last < 1:
+		return 4
+	}
+	return 2
 }
 
 // kindName is how the page names Tencent's instrument type.

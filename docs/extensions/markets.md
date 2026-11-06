@@ -6,14 +6,14 @@ Market prices in Persona: a watchlist on the apps' main navigation, a search, an
 
 | Extension point | Contribution | Behavior |
 | --- | --- | --- |
-| `ui` | `watchlist`, placement `nav_page`, icon `chart` | A "行情" entry on the main navigation. The page lists the watchlist with last price, 24-hour change and range. A search box (UI version 3) finds spot pairs and perpetual swaps by coin or pair, and stocks by code, name or pinyin initials; apps before it search through the add field and a button. Open one for its figures over the period (24 hours, or the trading day), closing prices and volume over the bars its source offers, and buttons to reorder, remove or open it on OKX or 腾讯证券. |
+| `ui` | `watchlist`, placement `nav_page`, icon `chart` | A "行情" entry on the main navigation. The page lists the watchlist in a group per source (加密货币, A股, 港股, 美股; a source with nothing in the watchlist is left out), each row titled with the instrument's name when it has one, with its symbol, last price, change and range; a market that is not trading says "休市 · 截至" and the time of its last quote, in the exchange's own time. A failing source shows its error in its group while the others draw. A search box (UI version 3) finds spot pairs and perpetual swaps by coin or pair, and stocks by code, name or pinyin initials; apps before it search through the add field and a button. Open one for its figures over the period (24 hours, or the trading day), closing prices and volume over the bars its source offers, and buttons to reorder, remove or open it on OKX or 腾讯证券. |
 | `connectors` | `markets`, capabilities `status` and `tools` | `markets_quote` (the watchlist or given pairs), `markets_search` (find pairs by coin or pair) and `markets_candles` (OHLCV bars) for the assistant, across every source. |
 
 ## Sources and references
 
 Everything outside the sources (the page, the tools, the watchlist) uses only the `Source` interface in [`source.go`](../../extensions/markets/source.go): normalize a typed symbol, search, quotes, one quote, the bars offered, candles, the instrument's website and the hosts reached. Answers come in common shapes: a `Quote` (last, the price the change is against, high, low, turnover, currency, and the period's name such as `24h` or `今日`) and `Candle`s.
 
-An instrument is named by a **ref**, `source:symbol` (`okx:BTC-USDT`). The watchlist file, the page's state, action ids and the tools carry refs. A bare symbol, typed or configured, is the default (first) source's. With more than one source the page labels rows with the source's name, a search asks every source and interleaves their answers (sources rank in their own ways and currencies), and a failing source is skipped while another answers. Each source offers its own subset of the bars `15m`, `1H`, `4H`, `1D`, `1W`; the configured default bar falls back to the source's nearest.
+An instrument is named by a **ref**, `source:symbol` (`okx:BTC-USDT`). The watchlist file, the page's state, action ids and the tools carry refs. A bare symbol, typed or configured, is the default (first) source's. With more than one source the watchlist and a search's results are grouped by source in the sources' order (sources rank in their own ways and currencies, so their lists are not merged), reordering moves an instrument within its group, and a failing source is skipped while another answers. Each source offers its own subset of the bars `15m`, `1H`, `4H`, `1D`, `1W`; the configured default bar falls back to the source's nearest.
 
 ## Data, network and rate limits (OKX)
 
@@ -46,7 +46,7 @@ Symbols, typed after the source (`cn:600519`):
 | `hk` 港股 | `00700`, `HSI`; typed also `700`, `0700.HK` | HKD, or CNY for RMB counters. |
 | `us` 美股 | `AAPL`, `BRK.B`, `.DJI`, `.IXIC`, `.INX`; typed also `AAPL.OQ`, `BRK-B` | The exchange suffix Tencent needs for bars is learnt from a quote. Times are New York's. |
 
-The period is the trading day (`当日`): the change is against the previous close, and high, low and turnover are the day's. A minute bar is stamped by Tencent with its end and a weekly bar with the week's last trading day; both are shown from their start (the week's Monday). Times are each market's own (Asia/Shanghai, Asia/Hong_Kong, America/New_York) before the chart's time zone is applied.
+The period is the trading day (`当日`): the change is against the previous close, and high, low and turnover are the day's. Prices are written with two decimals (three for A-share funds and ETFs and for Hong Kong prices under 1, four for US prices under 1). A quote more than 20 minutes old is shown as the market not trading (closed, at its lunch break, or the instrument suspended). A minute bar is stamped by Tencent with its end and a weekly bar with the week's last trading day; both are shown from their start (the week's Monday). Times are each market's own (Asia/Shanghai, Asia/Hong_Kong, America/New_York) before the chart's time zone is applied.
 
 ## Configuration
 
@@ -56,6 +56,7 @@ The period is the trading day (`当日`): the change is against the previous clo
 | --- | --- |
 | `watchlist` | The initial watchlist (default `BTC-USDT`, `ETH-USDT`, `SOL-USDT`); stocks with their source, `cn:600519`, `hk:00700`, `us:AAPL`. Used only until the page first changes it; after that the watchlist lives in the extension's data directory (`watchlist.json`, at most 50 instruments). |
 | `bar` | Default bar for the instrument page and `markets_candles`: `15m`, `1H` (default), `4H` or `1D`. |
+| `colors` | How a change is coloured: `red_up` (红涨绿跌, the default) or `green_up` (绿涨红跌). The page sends a rise as tone `danger` and a fall as `positive` with `red_up`, the other way round with `green_up`. |
 | `tz` | Time zone for chart labels and tool output; empty uses the app's (the page) or the hub machine's (tools). |
 
 ## App view and compatibility

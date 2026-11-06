@@ -83,6 +83,21 @@
           }
         ]
       },
+      "colors": {
+        "type": "string",
+        "title": "涨跌颜色",
+        "default": "red_up",
+        "oneOf": [
+          {
+            "const": "red_up",
+            "title": "红涨绿跌"
+          },
+          {
+            "const": "green_up",
+            "title": "绿涨红跌"
+          }
+        ]
+      },
       "tz": {
         "type": "string",
         "title": "时区",

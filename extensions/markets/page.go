@@ -168,10 +168,17 @@ func (p *plugin) page(ctx context.Context, d draw, st pageState, open *Ref, refr
 func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh bool) pluginkit.View {
 	v := pluginkit.View{Title: "行情", State: st.encode(), RefreshAfter: refreshEvery}
 	if d.v3 {
-		v.Search = &pluginkit.Search{Placeholder: "搜代码或名称：BTC、PEPE、ETH-USDC", Value: st.Q, Action: pluginkit.UIAction{ID: "search"}}
+		var ex []string
+		for _, src := range p.srcs {
+			_, q := src.Examples()
+			if !slices.Contains(ex, q) {
+				ex = append(ex, q)
+			}
+		}
+		v.Search = &pluginkit.Search{Placeholder: "搜代码或名称：" + strings.Join(ex, "、"), Value: st.Q, Action: pluginkit.UIAction{ID: "search"}}
 	}
 	if st.Q != "" {
-		v.Sections = append(v.Sections, p.searchSection(ctx, st.Q, refresh))
+		v.Sections = append(v.Sections, p.searchSections(ctx, st.Q, refresh)...)
 		if !d.v3 {
 			v.Sections = append(v.Sections, p.addSection(false))
 		}
@@ -179,102 +186,154 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 		return v
 	}
 	watch := p.watchlist()
-	sec := pluginkit.Section{Title: fmt.Sprintf("自选 · %d", len(watch))}
 	if len(watch) == 0 {
-		sec.Items = append(sec.Items, pluginkit.Item{Type: "text", Text: "自选是空的：搜一个加进来", Style: "secondary"})
-	} else {
-		qs, err := p.quotes(ctx, watch, refresh)
+		v.Sections = append(v.Sections, pluginkit.Section{Title: "自选 · 0",
+			Items: []pluginkit.Item{{Type: "text", Text: "自选是空的：搜一个加进来", Style: "secondary"}}})
+	}
+	// one group a source, in the sources' order; a source that fails says so in its group while the others draw
+	var groups []pluginkit.Section
+	for _, src := range p.srcs {
+		refs := group(watch, src.ID())
+		if len(refs) == 0 {
+			continue
+		}
+		sec := pluginkit.Section{Title: fmt.Sprintf("%s · %d", src.Market(), len(refs))}
+		if len(p.srcs) == 1 {
+			sec.Title = fmt.Sprintf("自选 · %d", len(refs))
+		}
+		qs, err := src.Quotes(ctx, symbols(refs), freshness(quotesFor, refresh))
+		p.note(err)
 		if err != nil {
-			v.Sections = append(v.Sections, pluginkit.Section{Title: sec.Title, Items: []pluginkit.Item{
-				{Type: "text", Text: err.Error(), Style: "secondary"},
-				{Type: "button", Title: "重试", Action: &pluginkit.UIAction{ID: "refresh"}}}})
-			v.Sections = append(v.Sections, p.addSection(d.v3))
-			return v
+			sec.Items = []pluginkit.Item{{Type: "text", Text: err.Error(), Style: "secondary"},
+				{Type: "button", Title: "重试", Action: &pluginkit.UIAction{ID: "refresh"}}}
+			groups = append(groups, sec)
+			continue
 		}
 		periods := map[string]bool{}
-		for _, r := range watch {
-			it := pluginkit.Item{Type: "row", Title: p.srcs.label(r), Action: &pluginkit.UIAction{ID: "open:" + r.String()}}
-			q, ok := qs[r]
-			if !ok {
-				it.Subtitle = "现在查不到这个代码的行情"
-				it.Badge = &pluginkit.Badge{Text: "无行情", Tone: "caution"}
-				sec.Items = append(sec.Items, it)
-				continue
+		for _, r := range refs {
+			q, ok := qs[r.Symbol]
+			if ok {
+				periods[q.Period] = true
 			}
-			periods[q.Period] = true
-			it.Value = fmtPrice(q.Last)
-			it.Subtitle = q.Period + " 高 " + fmtPrice(q.High) + " · 低 " + fmtPrice(q.Low)
-			if q.Name != "" {
-				it.Subtitle = q.Name + " · " + it.Subtitle
-			}
-			if c, ok := q.Change(); ok {
-				it.Badge = &pluginkit.Badge{Text: fmtChange(c), Tone: changeTone(c)}
-			}
-			sec.Items = append(sec.Items, it)
+			sec.Items = append(sec.Items, p.quoteRow(r, q, ok, false))
 		}
-		sec.Footer = "点一行看 K 线"
-		if periods["24h"] {
-			sec.Footer = "24h 涨跌按 24 小时前的价格算。" + sec.Footer
+		switch {
+		case periods["24h"]:
+			sec.Footer = "24h 涨跌按 24 小时前的价格算"
+		case periods["当日"]:
+			sec.Footer = "涨跌按上个交易日的收盘价算，时间是交易所当地的"
 		}
+		groups = append(groups, sec)
 	}
-	v.Sections = append(v.Sections, sec, p.addSection(d.v3), p.readAt(d))
+	if n := len(groups); n > 0 {
+		groups[n-1].Footer = strings.TrimPrefix(groups[n-1].Footer+"。点一行看 K 线", "。")
+	}
+	v.Sections = append(v.Sections, groups...)
+	v.Sections = append(v.Sections, p.addSection(d.v3), p.readAt(d))
 	return v
 }
 
-// searchSection lists what matches q in every source: a row each, opening the instrument (whose page adds it to
-// the watchlist).
-func (p *plugin) searchSection(ctx context.Context, q string, refresh bool) pluginkit.Section {
-	sec := pluginkit.Section{Title: "搜索「" + q + "」"}
-	hits, err := p.search(ctx, q, searchMost, refresh)
-	if err != nil {
-		sec.Items = []pluginkit.Item{{Type: "text", Text: err.Error(), Style: "secondary"},
-			{Type: "button", Title: "重试", Action: &pluginkit.UIAction{ID: "refresh"}}}
-		return sec
+func symbols(refs []Ref) []string {
+	out := make([]string, len(refs))
+	for i, r := range refs {
+		out[i] = r.Symbol
 	}
-	watch := p.watchlist()
-	for _, h := range hits {
-		parts := []string{}
-		if h.Quote.Name != "" {
-			parts = append(parts, h.Quote.Name)
+	return out
+}
+
+// quoteRow is an instrument as a row: its name when it has one, else its symbol; the symbol (when the name is the
+// title), the period's range or that the market is not trading, and in a search its kind and turnover; the last
+// price and the change.
+func (p *plugin) quoteRow(r Ref, q Quote, ok, search bool) pluginkit.Item {
+	it := pluginkit.Item{Type: "row", Title: r.Symbol, Action: &pluginkit.UIAction{ID: "open:" + r.String()}}
+	if !ok {
+		it.Subtitle = "现在查不到这个代码的行情"
+		it.Badge = &pluginkit.Badge{Text: "无行情", Tone: "caution"}
+		return it
+	}
+	var parts []string
+	if q.Name != "" {
+		it.Title = q.Name
+		parts = append(parts, r.Symbol)
+	}
+	if search {
+		if q.Kind != "" {
+			parts = append(parts, q.Kind)
 		}
-		if h.Quote.Kind != "" {
-			parts = append(parts, h.Quote.Kind)
+		if q.Turnover > 0 {
+			parts = append(parts, q.Period+" 成交额 "+fmtCompactFloat(q.Turnover)+" "+q.Currency)
 		}
-		if h.Quote.Turnover > 0 {
-			parts = append(parts, h.Quote.Period+" 成交额 "+fmtCompactFloat(h.Quote.Turnover)+" "+h.Quote.Currency)
-		}
-		if slices.Contains(watch, h.Ref) {
+		if p.watching(r) {
 			parts = append(parts, "已在自选")
 		}
-		it := pluginkit.Item{Type: "row", Title: p.srcs.label(h.Ref), Subtitle: strings.Join(parts, " · "), Value: fmtPrice(h.Quote.Last),
-			Action: &pluginkit.UIAction{ID: "open:" + h.Ref.String()}}
-		if c, ok := h.Quote.Change(); ok {
-			it.Badge = &pluginkit.Badge{Text: fmtChange(c), Tone: changeTone(c)}
+	} else if q.High != 0 || q.Low != 0 {
+		parts = append(parts, "高 "+q.Price(q.High)+" · 低 "+q.Price(q.Low))
+	}
+	if q.Idle && !q.At.IsZero() {
+		parts = append(parts, "休市 · 截至 "+q.At.Format("1/2 15:04"))
+	}
+	it.Subtitle = strings.Join(parts, " · ")
+	it.Value = q.Price(q.Last)
+	if c, ok := q.Change(); ok {
+		it.Badge = &pluginkit.Badge{Text: fmtChange(c), Tone: p.tone(c)}
+	}
+	return it
+}
+
+// searchSections list what matches q in every source, a group a source in the sources' order (each its best
+// first): a row each, opening the instrument (whose page adds it to the watchlist).
+func (p *plugin) searchSections(ctx context.Context, q string, refresh bool) []pluginkit.Section {
+	title := "搜索「" + q + "」"
+	back := pluginkit.Item{Type: "button", Title: "返回自选", Action: &pluginkit.UIAction{ID: "clear"}}
+	hits, err := p.search(ctx, q, searchMost, refresh)
+	if err != nil {
+		return []pluginkit.Section{{Title: title, Items: []pluginkit.Item{{Type: "text", Text: err.Error(), Style: "secondary"},
+			{Type: "button", Title: "重试", Action: &pluginkit.UIAction{ID: "refresh"}}, back}}}
+	}
+	if len(hits) == 0 {
+		return []pluginkit.Section{{Title: title, Items: []pluginkit.Item{
+			{Type: "text", Text: "没有和「" + q + "」对得上的：" + p.srcs.markets(), Style: "secondary"}, back}}}
+	}
+	var out []pluginkit.Section
+	for _, src := range p.srcs {
+		var sec pluginkit.Section
+		for _, h := range hits {
+			if h.Ref.Source == src.ID() {
+				sec.Items = append(sec.Items, p.quoteRow(h.Ref, h.Quote, true, true))
+			}
 		}
-		sec.Items = append(sec.Items, it)
+		if len(sec.Items) == 0 {
+			continue
+		}
+		sec.Title = fmt.Sprintf("%s · %d", src.Market(), len(sec.Items))
+		if len(out) == 0 {
+			sec.Title = title + " · " + sec.Title
+		}
+		out = append(out, sec)
 	}
-	switch {
-	case len(hits) == 0:
-		sec.Items = append(sec.Items, pluginkit.Item{Type: "text", Text: "没有和「" + q + "」对得上的：" + p.srcs.markets(), Style: "secondary"})
-	case len(hits) == searchMost:
-		sec.Footer = fmt.Sprintf("只列最前面的 %d 个，写得再具体些能找到别的。点一行看 K 线、加入自选", searchMost)
-	default:
-		sec.Footer = "点一行看 K 线、加入自选"
+	last := &out[len(out)-1]
+	last.Footer = "点一行看 K 线、加入自选"
+	if len(hits) == searchMost {
+		last.Footer = fmt.Sprintf("只列最前面的 %d 个，写得再具体些能找到别的。", searchMost) + last.Footer
 	}
-	sec.Items = append(sec.Items, pluginkit.Item{Type: "button", Title: "返回自选", Action: &pluginkit.UIAction{ID: "clear"}})
-	return sec
+	last.Items = append(last.Items, back)
+	return out
 }
 
 // addSection is the way to add by typing: with a search box (UI version 3) a code typed in full; before it, the
 // same field also searches.
 func (p *plugin) addSection(v3 bool) pluginkit.Section {
-	var helps []string
-	for _, s := range p.srcs {
-		helps = append(helps, s.Help())
+	var ex []string
+	for i, src := range p.srcs {
+		typed, _ := src.Examples()
+		if i > 0 { // the default source's symbols need no prefix
+			typed = src.ID() + ":" + typed
+		}
+		ex = append(ex, typed)
 	}
-	hint := "直接写代码：" + strings.Join(helps, "；")
+	hint := "直接写代码，如 " + strings.Join(ex, "、")
 	if len(p.srcs) > 1 {
-		hint += "。不写来源（代码前的「" + p.srcs[0].ID() + ":」这种）就是 " + p.srcs[0].Name() + " 的"
+		hint += "；不是 " + p.srcs[0].Name() + " 的，代码前写来源"
 	}
 	sec := pluginkit.Section{Title: "添加",
 		Footer: hint,
@@ -335,11 +394,14 @@ func (p *plugin) instPage(ctx context.Context, d draw, st pageState, r Ref) plug
 	}
 
 	// the period
-	last := pluginkit.Stat{Label: "最新价", Value: fmtPrice(q.Last)}
+	last := pluginkit.Stat{Label: "最新价", Value: q.Price(q.Last)}
 	if c, ok := q.Change(); ok {
-		last.Detail, last.Tone = q.Period+" "+fmtChange(c), changeTone(c)
+		last.Detail, last.Tone = q.Period+" "+fmtChange(c), p.tone(c)
 	}
-	figures := []pluginkit.Stat{last, {Label: q.Period + " 最高", Value: fmtPrice(q.High)}, {Label: q.Period + " 最低", Value: fmtPrice(q.Low)},
+	if q.Idle && !q.At.IsZero() {
+		last.Label = "休市 · 截至 " + q.At.Format("1/2 15:04")
+	}
+	figures := []pluginkit.Stat{last, {Label: q.Period + " 最高", Value: q.Price(q.High)}, {Label: q.Period + " 最低", Value: q.Price(q.Low)},
 		{Label: q.Period + " 成交额", Value: fmtCompactFloat(q.Turnover) + " " + q.Currency}}
 	if d.v2 {
 		v.Sections = append(v.Sections, pluginkit.Section{Items: []pluginkit.Item{{Type: "stat_grid", Stats: figures}}})
@@ -379,13 +441,13 @@ func (p *plugin) instPage(ctx context.Context, d draw, st pageState, r Ref) plug
 	case len(cs) == 0:
 		kline.Items = append(kline.Items, pluginkit.Item{Type: "text", Text: src.Name() + " 没给这个周期的 K 线", Style: "secondary"})
 	default:
-		kline.Items = append(kline.Items, klineItems(cs, bar, d.loc, d.v2)...)
+		kline.Items = append(kline.Items, klineItems(cs, bar, d.loc, d.v2, q, p.tone)...)
 	}
 	v.Sections = append(v.Sections, kline)
 
 	// what to do with it
 	acts := pluginkit.Section{}
-	watch := p.watchlist()
+	watch := group(p.watchlist(), r.Source) // moved within its source's group
 	if i := slices.Index(watch, r); i >= 0 {
 		if i > 0 {
 			acts.Items = append(acts.Items, pluginkit.Item{Type: "button", Title: "上移", Action: &pluginkit.UIAction{ID: "up:" + r.String()}})
@@ -413,7 +475,8 @@ func (p *plugin) instPage(ctx context.Context, d draw, st pageState, r Ref) plug
 
 // klineItems are the period's figures, its closing prices as a line and its volume as bars; an app before UI
 // version 2 gets the figures only (the hub drops charts for it anyway).
-func klineItems(cs []Candle, bar string, loc *time.Location, v2 bool) []pluginkit.Item {
+// Prices are written with q's decimals and changes toned by tone.
+func klineItems(cs []Candle, bar string, loc *time.Location, v2 bool, q Quote, tone func(float64) string) []pluginkit.Item {
 	first, last := cs[0], cs[len(cs)-1]
 	hi, lo := first.High, first.Low
 	for _, c := range cs {
@@ -422,9 +485,9 @@ func klineItems(cs []Candle, bar string, loc *time.Location, v2 bool) []pluginki
 	span := pluginkit.Stat{Label: fmt.Sprintf("%d 根涨跌", len(cs)), Value: "—"}
 	if first.Open != 0 {
 		ch := (last.Close - first.Open) / first.Open
-		span.Value, span.Tone = fmtChange(ch), changeTone(ch)
+		span.Value, span.Tone = fmtChange(ch), tone(ch)
 	}
-	stats := []pluginkit.Stat{span, {Label: "区间最高", Value: fmtPrice(hi)}, {Label: "区间最低", Value: fmtPrice(lo)}}
+	stats := []pluginkit.Stat{span, {Label: "区间最高", Value: q.Price(hi)}, {Label: "区间最低", Value: q.Price(lo)}}
 	if !v2 {
 		var items []pluginkit.Item
 		for _, s := range stats {
@@ -438,7 +501,7 @@ func klineItems(cs []Candle, bar string, loc *time.Location, v2 bool) []pluginki
 		label := barLabel(c.At, bar, loc)
 		price.Points = append(price.Points, pluginkit.ChartPoint{Label: label, Value: c.Close,
 			// the apps take 40 characters here: the open is the previous close, so it is left out
-			Display: clip(fmt.Sprintf("收 %s 高 %s 低 %s", fmtPrice(c.Close), fmtPrice(c.High), fmtPrice(c.Low)), 40)})
+			Display: clip(fmt.Sprintf("收 %s 高 %s 低 %s", q.Price(c.Close), q.Price(c.High), q.Price(c.Low)), 40)})
 		vol.Points = append(vol.Points, pluginkit.ChartPoint{Label: label, Value: c.Vol, Display: fmtCompactFloat(c.Vol)})
 	}
 	return []pluginkit.Item{
@@ -454,16 +517,6 @@ func barLabel(at time.Time, bar string, loc *time.Location) string {
 		return at.Format("1/2")
 	}
 	return at.Format("1/2 15:04")
-}
-
-func changeTone(c float64) string {
-	switch {
-	case c > 0:
-		return "positive"
-	case c < 0:
-		return "danger"
-	}
-	return "neutral"
 }
 
 func fmtChange(c float64) string {
