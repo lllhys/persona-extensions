@@ -29,7 +29,7 @@ Every item carries `extra.rule_tier: action` as a fallback (`fallback` capabilit
 
 ## Network and sandbox
 
-The hub must reach Telegram data centers by IP over direct TCP. Persona's sandbox allows egress through an HTTP(S) proxy only, so this extension cannot run inside that sandbox.
+The hub must reach Telegram data centers by IP over TCP. When the hub's environment sets `HTTPS_PROXY` (or `https_proxy`) to an `http://` proxy and `NO_PROXY` does not exclude the data center, the connection goes through that proxy's HTTP CONNECT tunnel; otherwise it is direct. A hub that only reaches the internet through such a proxy can sign in this way. Persona's sandbox allows egress through its own HTTP(S) proxy only, so this extension cannot run inside that sandbox.
 
 Installations from the official `persona-extensions` market are unsandboxed by default. For `file:`, `dir:` or another market, disable the sandbox after installation on the hub's machine:
 
