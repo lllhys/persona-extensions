@@ -54,7 +54,8 @@ func cleanMarkdown(text, base string) string {
 }
 
 // dropComments takes out HTML comments outside code (GitHub shows none of them; templates leave them, code blocks in
-// them too). An unclosed one runs to the end, as GitHub draws it.
+// them too). An unclosed one runs to the end, as GitHub draws it. Whether a <!-- is code is read from all the text
+// kept before it, so fences before a <!-- kept as code still count.
 func dropComments(text string) string {
 	var out strings.Builder
 	for {
@@ -63,12 +64,12 @@ func dropComments(text string) string {
 			out.WriteString(text)
 			return out.String()
 		}
-		if inCode(text[:i]) { // the <!-- is code: keep it, go on after it
-			out.WriteString(text[:i+4])
+		out.WriteString(text[:i])
+		if inCode(out.String()) { // the <!-- is code: keep it, go on after it
+			out.WriteString("<!--")
 			text = text[i+4:]
 			continue
 		}
-		out.WriteString(text[:i])
 		j := strings.Index(text[i:], "-->")
 		if j < 0 {
 			return out.String()

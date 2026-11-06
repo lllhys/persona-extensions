@@ -367,6 +367,8 @@ func TestCleanMarkdown(t *testing.T) {
 		{"a <!-- hidden --> b", "", "a  b"},
 		{"<!--\n Thanks!\n-->\n<!--\n```\n%h\n```\n-->\n\nReal **words**", "", "Real **words**"},
 		{"```html\n<!-- kept -->\n```", "", "```html\n<!-- kept -->\n```"},
+		{"```html\n<!-- kept -->\n```\n\n<!-- template -->\nText", "", "```html\n<!-- kept -->\n```\n\nText"},
+		{"```html\n<!-- kept -->\n<!-- and me -->\n```\n<!-- a\n```\nb\n```\n-->", "", "```html\n<!-- kept -->\n<!-- and me -->\n```"},
 		{"use `<!--` to start", "", "use `<!--` to start"},
 		{"before <!-- never closed", "", "before"},
 		{"`[x](javascript:y)`", "", "`[x](javascript:y)`"},
