@@ -916,10 +916,19 @@ func hasShort(words []string, c byte) bool {
 	return false
 }
 
-// gitConfigPersonOnly looks at a git -c setting: an alias starting with ! runs a command in the shell.
+// gitConfigPersonOnly looks at a git -c setting. Many values are commands git runs through the shell: a ! alias,
+// core.pager, core.editor, core.sshCommand, diff.external, credential and filter helpers and more; so a value that
+// starts with ! or holds a space or a shell operator is read as a command, whatever the key.
 func gitConfigPersonOnly(cfg string, depth int) string {
-	if _, cmd, ok := strings.Cut(cfg, "=!"); ok {
+	_, val, ok := strings.Cut(cfg, "=")
+	if !ok {
+		return ""
+	}
+	if cmd, bang := strings.CutPrefix(val, "!"); bang {
 		return personOnlyDepth(cmd, depth+1)
+	}
+	if strings.ContainsAny(val, " \t\n;&|()<>") {
+		return personOnlyDepth(val, depth+1)
 	}
 	return ""
 }

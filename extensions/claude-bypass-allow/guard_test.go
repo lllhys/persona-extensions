@@ -68,6 +68,8 @@ func TestPersonOnly(t *testing.T) {
 		"git rebase -x 'rm -rf v' HEAD~1", "git rebase --exec='rm -rf v'", "git rebase --exec 'rm -rf v'",
 		"git rebase --exe='rm -rf v'", "git rebase --exe 'rm -rf v'",
 		"git -c alias.x='!rm -rf v' x",
+		"git -c core.sshCommand='rm -rf v' fetch", "git -c diff.external='rm -rf v' diff", "git -c core.pager='rm -rf v' log",
+		`git -c core.editor="sh -c 'rm -rf v'" commit --amend`, "git -c credential.helper='!rm -rf v' fetch",
 		"git bisect run rm -rf v",
 		"git submodule foreach 'rm -rf v'", "git submodule foreach --recursive 'rm -rf v'",
 		// a /tmp/ or /dev/ path that .. takes out of it is a kept file
@@ -133,6 +135,7 @@ func TestPersonOnly(t *testing.T) {
 		"env FOO=1 go test ./...", "flock /tmp/l make", "trap - EXIT", "trap 'echo done' EXIT",
 		"git rebase -i HEAD~3", "git rebase --exec 'go test ./...' HEAD~2", "git bisect run go test ./...",
 		"git submodule foreach git pull", "git -c alias.st=status st", "script -q /dev/null",
+		"git -c user.name='A B' commit -m x", "git -c core.pager='less -R' log", "git -c core.sshCommand='ssh -i k' fetch",
 	}
 	for _, c := range goes {
 		if why := personOnly(c); why != "" {
