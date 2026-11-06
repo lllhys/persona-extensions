@@ -514,7 +514,7 @@ func TestCard(t *testing.T) {
 	}
 	draw := func() (pluginkit.View, error) {
 		raw, _ := json.Marshal(map[string]any{"contribution": "card", "placement": "overview_card", "size": "compact", "ui_version": 5})
-		out, err := p.uiRender(context.Background(), nil, raw)
+		out, err := p.handlers()["ui.render"](context.Background(), nil, raw) // as the hub calls it
 		if err != nil {
 			return pluginkit.View{}, err
 		}
