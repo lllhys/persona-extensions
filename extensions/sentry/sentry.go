@@ -23,13 +23,19 @@ type DSN struct {
 	Scheme, Host, Path, PublicKey, Project string
 }
 
-// ParseDSN reads a DSN; only https is taken (a key over plain HTTP would leak).
-func ParseDSN(s string) (DSN, error) {
+// ParseDSN reads a DSN. Only https is taken unless allowHTTP (the setting allow_http, for a self-hosted instance on a
+// trusted network): over plain http the public key and the reports travel unencrypted.
+func ParseDSN(s string, allowHTTP bool) (DSN, error) {
 	u, err := url.Parse(strings.TrimSpace(s))
 	if err != nil || u.Host == "" || u.User == nil || u.User.Username() == "" {
 		return DSN{}, errors.New("the DSN is https://<public key>@<host>/<project id>")
 	}
-	if u.Scheme != "https" {
+	switch {
+	case u.Scheme == "https":
+	case u.Scheme == "http" && allowHTTP:
+	case u.Scheme == "http":
+		return DSN{}, errors.New("the DSN is http: turn on the setting allow_http to use it (the key then travels unencrypted)")
+	default:
 		return DSN{}, errors.New("the DSN must be https")
 	}
 	path := strings.TrimSuffix(u.Path, "/")

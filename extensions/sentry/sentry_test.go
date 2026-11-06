@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/sdk/go/ext"
 	"github.com/nwverse/persona/sdk/go/exttest"
 	"github.com/nwverse/persona/sdk/go/wire"
 )
@@ -22,19 +23,30 @@ func TestConformance(t *testing.T) {
 }
 
 func TestParseDSN(t *testing.T) {
-	d, err := ParseDSN("https://abc123@o1.ingest.sentry.io/42")
+	d, err := ParseDSN("https://abc123@o1.ingest.sentry.io/42", false)
 	if err != nil || d.PublicKey != "abc123" || d.Host != "o1.ingest.sentry.io" || d.Project != "42" ||
 		d.EnvelopeURL() != "https://o1.ingest.sentry.io/api/42/envelope/" || strings.Contains(d.String(), "abc123") {
 		t.Fatalf("%+v %v", d, err)
 	}
-	d, err = ParseDSN("https://key@errors.example.com/sentry/7")
+	d, err = ParseDSN("https://key@errors.example.com/sentry/7", false)
 	if err != nil || d.EnvelopeURL() != "https://errors.example.com/sentry/api/7/envelope/" {
 		t.Fatalf("a path before the project: %+v %v", d, err)
 	}
 	for _, bad := range []string{"", "http://k@o1.ingest.sentry.io/1", "https://o1.ingest.sentry.io/1", "https://k@o1.ingest.sentry.io/x"} {
-		if _, err := ParseDSN(bad); err == nil {
+		if _, err := ParseDSN(bad, false); err == nil {
 			t.Errorf("taken: %q", bad)
 		}
+	}
+	// http only with allow_http (a self-hosted instance on a trusted network)
+	if _, err := ParseDSN("http://k@errors.example.example:9000/3", false); err == nil || !strings.Contains(err.Error(), "allow_http") {
+		t.Errorf("http without allow_http: %v", err)
+	}
+	d, err = ParseDSN("http://k@errors.example.example:9000/3", true)
+	if err != nil || d.EnvelopeURL() != "http://errors.example.example:9000/api/3/envelope/" {
+		t.Fatalf("http with allow_http: %+v %v", d, err)
+	}
+	if _, err := ParseDSN("ftp://k@errors.example.example/3", true); err == nil {
+		t.Error("only http and https")
 	}
 }
 
@@ -145,7 +157,7 @@ func (f *fakeSentry) count() int { f.mu.Lock(); defer f.mu.Unlock(); return len(
 func testApp(t *testing.T, srv *httptest.Server, cfg Config) *app {
 	a := newApp(t.Logf)
 	a.client = srv.Client()
-	dsn, err := ParseDSN(strings.Replace(srv.URL, "https://", "https://pubkey@", 1) + "/42")
+	dsn, err := ParseDSN(strings.Replace(strings.Replace(srv.URL, "https://", "https://pubkey@", 1), "http://", "http://pubkey@", 1)+"/42", cfg.AllowHTTP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,5 +242,35 @@ func TestSampleRate(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if f.count() != 0 {
 		t.Fatal("sample rate 0 sends nothing")
+	}
+}
+
+// A self-hosted instance over plain http, with allow_http on: the same envelope; init refuses it with the setting off.
+func TestHTTPDSN(t *testing.T) {
+	f := &fakeSentry{}
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	a := testApp(t, srv, Config{AllowHTTP: true})
+	deliver(t, a, sample())
+	waitFor(t, func() bool { return f.count() == 1 })
+	f.mu.Lock()
+	auth := f.auth[0]
+	f.mu.Unlock()
+	if !strings.Contains(auth, "sentry_key=pubkey") {
+		t.Fatalf("auth: %s", auth)
+	}
+
+	dsn := strings.Replace(srv.URL, "http://", "http://pubkey@", 1) + "/42"
+	for _, c := range []struct {
+		cfg string
+		ok  bool
+	}{{`{}`, false}, {`{"allow_http": true}`, true}} {
+		in := &ext.Init{}
+		in.Secrets = map[string]string{"dsn": dsn}
+		in.InitializeParams.Config = json.RawMessage(c.cfg)
+		_, err := newApp(t.Logf).init(context.Background(), in, nil)
+		if (err == nil) != c.ok {
+			t.Errorf("config %s: %v", c.cfg, err)
+		}
 	}
 }

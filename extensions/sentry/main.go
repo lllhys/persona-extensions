@@ -40,6 +40,7 @@ type Config struct {
 	Environment     string   `json:"environment,omitempty"`
 	SampleRate      *float64 `json:"sample_rate,omitempty"`
 	IncludeLogLines *bool    `json:"include_log_lines,omitempty"`
+	AllowHTTP       bool     `json:"allow_http,omitempty"`
 }
 
 // app is the running extension.
@@ -83,9 +84,12 @@ func (a *app) init(ctx context.Context, in *ext.Init, _ *ext.Hub) (map[string]an
 		a.logf("sentry: no DSN, nothing is sent")
 		return nil, nil
 	}
-	dsn, err := ParseDSN(raw)
+	dsn, err := ParseDSN(raw, cfg.AllowHTTP)
 	if err != nil {
 		return nil, err
+	}
+	if dsn.Scheme == "http" {
+		a.logf("sentry: the DSN is http (allow_http is on): the key and the reports travel unencrypted")
 	}
 	a.configure(dsn, cfg)
 	a.mu.Lock()

@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "sentry",
   "name": "Sentry",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "把 Persona 各端（hub、网页、安卓、之后的 iOS / Mac）的错误和崩溃发到你的 Sentry 项目，方便持续发现和修问题。报告先经 hub 脱敏：不含消息正文、token、用户名、机器名和 IP 地址。填好 DSN 才开始上报；没有填就什么都不发。",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/blob/main/docs/extensions/sentry.md",
@@ -25,11 +25,12 @@
     "properties": {
       "environment": {"type": "string", "title": "环境", "description": "Sentry 里事件的 environment，比如 production、staging", "default": "production"},
       "sample_rate": {"type": "number", "title": "采样率", "description": "0 到 1：1 是全部发送，0.5 是随机发一半", "default": 1, "minimum": 0, "maximum": 1},
-      "include_log_lines": {"type": "boolean", "title": "包含 hub 日志里的错误行", "description": "关掉后只发异常、崩溃和 panic", "default": true}
+      "include_log_lines": {"type": "boolean", "title": "包含 hub 日志里的错误行", "description": "关掉后只发异常、崩溃和 panic", "default": true},
+      "allow_http": {"type": "boolean", "title": "允许 http 的 DSN（自建实例）", "description": "默认只接受 https。打开后也接受 http:// 的 DSN：DSN 里的公钥和每条报告都会明文传输，同一网络上的人能看到、也能用这个公钥伪造报告。只在可信的内网里接自建实例时打开", "default": false}
     }
   },
   "secrets": [
-    {"name": "dsn", "title": "DSN", "description": "Sentry 项目的 DSN：Settings › Projects › 你的项目 › Client Keys (DSN)，形如 https://<公钥>@<组织>.ingest.sentry.io/<项目号>", "required": true}
+    {"name": "dsn", "title": "DSN", "description": "Sentry 项目的 DSN：Settings › Projects › 你的项目 › Client Keys (DSN)，形如 https://<公钥>@<组织>.ingest.sentry.io/<项目号>；http:// 的要先打开「允许 http 的 DSN」", "required": true}
   ],
   "permissions": {"network": ["*.sentry.io"], "error_reports": true}
 }
