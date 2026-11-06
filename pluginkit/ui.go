@@ -101,6 +101,16 @@ type View struct {
 	State    string    `json:"state,omitempty"`
 	// RefreshAfter: the apps draw it again after this many seconds while it is on screen (30 at least; 0 never).
 	RefreshAfter int `json:"refresh_after,omitempty"`
+	// Search is a search box on top of the page (UI version 3): the app calls ui.action with its action and values
+	// {"q": the text} once the user stops typing. Leave it out for an app that draws less (UIRequest.Draws(3)).
+	Search *Search `json:"search,omitempty"`
+}
+
+// Search is a View's search box.
+type Search struct {
+	Placeholder string   `json:"placeholder,omitempty"`
+	Value       string   `json:"value,omitempty"`
+	Action      UIAction `json:"action"`
 }
 
 // Section is a group of items.

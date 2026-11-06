@@ -1,0 +1,94 @@
+{
+  "manifest_version": 1,
+  "id": "markets",
+  "name": "行情",
+  "version": "0.2.0",
+  "description": "行情（现在的来源是 OKX 公开行情接口的加密货币，不用账号；来源可以再加，如美股、A 股）：主导航上多一个「行情」，搜币、看自选的价格和 24 小时涨跌，点开看 K 线走势和成交量；助手能用工具搜交易对、查报价和 K 线。hub 去读，手机不用代理。",
+  "publisher": "nwverse",
+  "tags": ["行情", "加密货币", "OKX"],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/markets-linux-amd64",
+      "linux-arm64": "bin/markets-linux-arm64",
+      "darwin-arm64": "bin/markets-darwin-arm64",
+      "darwin-amd64": "bin/markets-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "markets",
+        "name": "行情",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "www.okx.com"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "watchlist",
+        "title": "行情",
+        "placement": "nav_page",
+        "icon": "chart"
+      }
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "watchlist": {
+        "type": "array",
+        "title": "初始自选",
+        "description": "第一次打开时的自选，OKX 的交易对，如 BTC-USDT、ETH-USDT、BTC-USDT-SWAP；只写币名（BTC）当成对 USDT。之后在「行情」页里加减",
+        "items": {
+          "type": "string"
+        }
+      },
+      "bar": {
+        "type": "string",
+        "title": "K 线默认周期",
+        "description": "来源没有这个周期时用它最接近 1 小时的",
+        "default": "1H",
+        "oneOf": [
+          {
+            "const": "15m",
+            "title": "15 分钟"
+          },
+          {
+            "const": "1H",
+            "title": "1 小时"
+          },
+          {
+            "const": "4H",
+            "title": "4 小时"
+          },
+          {
+            "const": "1D",
+            "title": "1 天"
+          },
+          {
+            "const": "1W",
+            "title": "1 周"
+          }
+        ]
+      },
+      "tz": {
+        "type": "string",
+        "title": "时区",
+        "description": "K 线横轴的时间用这个时区（如 Asia/Shanghai）；空着用 App 的"
+      }
+    }
+  },
+  "permissions": {
+    "network": [
+      "www.okx.com"
+    ]
+  }
+}
