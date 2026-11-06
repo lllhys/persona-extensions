@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
+import { testFixtures } from "./test-fixtures.ts";
 import type { UIStreamDelta, UIStreamEvent, UIStreamOperation, UIStreamRequest, UIStreamSnapshot, UIStreamValue } from "./wire.ts";
 
 // These negative assignments are compile-time checks, not runtime validation/reducer tests.
@@ -24,7 +25,7 @@ function typeChecks(): void {
 }
 void typeChecks;
 
-const examples = new URL("../../../schema/extension/examples/", import.meta.url);
+const examples = testFixtures;
 test("stream conformance fixtures preserve zeros, null and empty payloads", () => {
   const files = readdirSync(examples).filter((name) => name.startsWith("UIStream") && name.endsWith(".json"));
   expect(files.length).toBeGreaterThan(15);

@@ -13,8 +13,13 @@ export { COMPONENT_TYPES, ERROR_CODES, TONES } from "./wire.ts";
 /** The version of the process protocol this SDK speaks. */
 export const PROTOCOL = 1;
 
+// Shared by separately bundled SDK copies in one JS realm; this marks public errors, not authorization.
+const EXT_ERROR = Symbol.for("@persona/extension.ExtError");
+
 /** An error on the wire: a message for people (never a secret or a message's body), and a code the hub acts on. */
 export class ExtError extends Error {
+  readonly [EXT_ERROR] = true;
+
   constructor(
     message: string,
     readonly code?: string,
@@ -153,7 +158,7 @@ export class Hub {
     const p = this.pending.get(f.id!);
     if (!p) return;
     this.pending.delete(f.id!);
-    if (f.error) p.reject(new ExtError(f.error.message, f.error.code, f.error.data));
+    if (f.error) p.reject(new ExtError(f.error.message, f.error.code ?? undefined, f.error.data));
     else p.resolve(f.result);
   }
 
@@ -165,13 +170,22 @@ export class Hub {
   }
 }
 
-/** The error frame for what a handler threw. Only an ExtError's code goes out, so codes like ENOENT stay local. */
+/** Only SDK-branded public errors send code/data, even across bundles; native errors like ENOENT stay local. */
 function wireError(err: unknown): { message: string; code?: string; data?: unknown } {
-  if (err instanceof ExtError) {
-    return { message: err.message, ...(err.code ? { code: err.code } : {}), ...(err.data !== undefined ? { data: err.data } : {}) };
-  }
-  const message = (err as { message?: unknown } | null | undefined)?.message;
-  if (typeof message === "string") return { message };
+  const publicError = err as ExtError | null | undefined;
+  // A thrown object can have hostile getters/proxy traps; failure to read the brand is not a public error.
+  try {
+    if (publicError && typeof publicError === "object" && publicError[EXT_ERROR] === true) {
+      const { message, code, data } = publicError;
+      if (typeof message === "string" && (code === undefined || typeof code === "string")) {
+        return { message, ...(code ? { code } : {}), ...(data !== undefined ? { data } : {}) };
+      }
+    }
+  } catch {}
+  try {
+    const message = (err as { message?: unknown } | null | undefined)?.message;
+    if (typeof message === "string") return { message };
+  } catch {}
   try {
     return { message: String(err) };
   } catch {
@@ -202,6 +216,8 @@ export function connect(prog: Program, write: Write) {
   let contributes: Record<string, unknown> | undefined;
   const inflight = new Set<Promise<unknown>>();
   let initializing: Promise<void> | undefined;
+  let accepting = true;
+  let shuttingDown: Promise<unknown[]> | undefined;
 
   async function request(method: string, params: any): Promise<unknown> {
     if (method === "initialize") {
@@ -302,6 +318,7 @@ export function connect(prog: Program, write: Write) {
   }
 
   function line(text: string) {
+    if (!accepting) return;
     let f: Frame;
     try {
       const parsed: unknown = JSON.parse(text);
@@ -336,9 +353,21 @@ export function connect(prog: Program, write: Write) {
   return {
     hub,
     line,
-    /** Waits for the answers to the requests already read. */
+    /** Waits for the answers to the requests already read, without closing the hub or stopping input. */
     drain: () => Promise.all([...inflight]),
+    /** Closes outbound hub calls/events only; accepted inbound requests can still run and write answers. */
     close: () => hub.close(),
+    /** After the final input frame, stops accepting lines and closes outbound hub calls before draining answers.
+     * Repeated calls return the same promise. Keep the writer open until it settles, then flush/close it yourself.
+     * This does not cancel arbitrary handler work or wait for event handlers; runners must bound those separately. */
+    shutdown: () => {
+      if (!shuttingDown) {
+        accepting = false;
+        hub.close();
+        shuttingDown = Promise.all([...inflight]);
+      }
+      return shuttingDown;
+    },
   };
 }
 
@@ -415,10 +444,11 @@ export async function main(prog: Program) {
   // A last frame without a trailing newline is still a request (Go's bufio.Scanner returns it too).
   const last = (buf + decoder.decode()).trim();
   if (last) conn.line(last);
-  await conn.drain();
-  conn.close();
+  await conn.shutdown();
   // rpc: none (only HTTP): the hub sends nothing on stdin; serve until it stops the program.
   if (server && !spoke) return;
+  // stdout is buffered on pipes; completion of the handler's write is not completion of the actual output.
+  await new Promise<void>(resolve => process.stdout.end(resolve));
   server?.stop();
   process.exit(0);
 }

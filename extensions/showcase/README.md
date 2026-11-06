@@ -71,11 +71,12 @@ writes a draft archive under `.source-dist/`. The draft manifest follows
 modify the released manifest, indexes, signatures or any hub configuration.
 The source package does not install or download dependencies at runtime.
 
-The copied SDK is owned upstream. Its distribution currently includes scripts
-that refer to development configs, scripts and fixtures omitted by the official
-sync subset. Run the extension-local checks above, not those copied development
-scripts. Do not repair the generated SDK locally; the upstream distribution
-needs to supply its missing tooling or remove those development-only commands.
+The copied SDK is owned upstream and includes its declared development configs,
+scripts, typecheck fixtures and canonical conformance fixtures. The official
+sync now includes the fixes from upstream #6123, #6137 and #6140. Its advertised
+checks work after installing the SDK's own locked development dependencies;
+those are build-time dependencies, never source-runtime resolution. Do not
+repair the generated SDK locally; use the official synchronization script.
 
 ### Acceptance gates before a release
 
@@ -84,11 +85,10 @@ needs to supply its missing tooling or remove those development-only commands.
    push/pop, visibility and stream negotiation. Connect service disposal to
    process shutdown. Never replace host authorization with a test fixture.
    Page factories and their Renderer must use the same bundled SDK instance:
-   element symbols are instance-specific. The protocol runner also needs a
-   verified error-identity strategy: an external `connect` currently drops the
-   bundled Program's `ExtError` codes. Resolve upstream transport hardening
-   before acceptance: a parsed `null` frame throws, and draining handlers before
-   closing unreachable pending hub calls can block shutdown indefinitely.
+   element symbols and hook contexts are instance-specific. The copied SDK now
+   safely handles parsed null frames, unreachable hub calls at EOF and public
+   error identity across bundles. The source adapter must adopt the verified
+   shutdown order and preserve the module-owned Renderer during bridge mounting.
 2. Run the actual pinned Deno bundle through the sanctioned independently
    isolated host, manager and WebSocket/client path. Verify every navigation,
    search, filter, pagination, edit, delayed update and system surface. Obtain

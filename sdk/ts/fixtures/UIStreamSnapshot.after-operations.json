@@ -1,0 +1,19 @@
+{
+  "protocol": 1,
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "version": 2,
+  "root_key": "page",
+  "view": {
+    "sections": [
+      {
+        "key": "main",
+        "items": []
+      },
+      {
+        "key": "extra",
+        "items": []
+      }
+    ]
+  }
+}

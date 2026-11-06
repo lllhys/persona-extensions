@@ -1,0 +1,23 @@
+{
+  "protocol": 1,
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "version": 1,
+  "root_key": "page",
+  "view": {
+    "title": "Example",
+    "sections": [
+      {
+        "key": "main",
+        "items": [
+          {
+            "type": "progress",
+            "key": "counter",
+            "label": "Count",
+            "ratio": 0
+          }
+        ]
+      }
+    ]
+  }
+}

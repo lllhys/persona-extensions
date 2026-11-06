@@ -1,0 +1,35 @@
+{
+  "manifest_version": 1,
+  "id": "example-consumer",
+  "name": "示例贡献者",
+  "version": "1.0.0",
+  "depends": [{"id": "example-core", "version": ">=1.0.0 <2.0.0"}],
+  "contributes": {
+    "ui": [{"id": "home", "title": "示例页面", "placement": "plugin_page"}],
+    "example-core.custompoint": [{
+      "id": "first",
+      "config": {
+        "plugin": "literal plugin value",
+        "extension": "literal extension value",
+        "plugin_id": "do-not-rename",
+        "state": {"plugin_page": true, "extension_page": false},
+        "values": [0, 1.25, "2", true, false, null, {"hyphen-key": "原样保留", "a.b": []}],
+        "empty_object": {},
+        "empty_array": []
+      }
+    }],
+    "example-core.rules": [{
+      "id": "second",
+      "state": "{\"plugin\":\"example-core.custompoint\"}",
+      "nested": {"list": [{"title": "第二项", "data": [null, {"enabled": false}]}]},
+      "count": 7,
+      "label": "7"
+    }],
+    "example-core.custom_point": [{"id": "third", "raw_key": "do_not_rename"}],
+    "UI": "case-sensitive extra, not a UI list",
+    "Providers": [false, null],
+    "additionalProperties": {"plugin": "a literal key, not the storage map"},
+    "__proto__": {"polluted": true},
+    "constructor": {"prototype": {"polluted": true}}
+  }
+}

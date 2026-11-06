@@ -1,0 +1,16 @@
+{
+  "protocol": 1,
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "version": 1,
+  "event_id": "event-array",
+  "key": "counter",
+  "action": "cb.example",
+  "event": "change",
+  "value": [
+    null,
+    false,
+    0,
+    "demo"
+  ]
+}
