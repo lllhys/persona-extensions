@@ -109,7 +109,7 @@
         "manifest_version": 1,
         "id": "github",
         "name": "GitHub",
-        "version": "0.4.16",
+        "version": "0.4.17",
         "description": "GitHub 进 Persona：收件箱里是请你 review、@ 你、指派给你、你的 PR / issue 有了新评论或 review、CI 失败；和你有关的 PR、issue 归档进知识库；助手能搜、读 PR / issue、看改动和 CI，评论和 review 先在手机上确认。登录用你某台电脑上的 gh 登录或设备码登录，token 加密存在 hub 的数据库里。侧边栏的「GitHub」页：待你 review 的 PR、你的 PR 和 CI、指派 / 提到你的、通知和关注的动态、你的仓库（浏览代码、分支、README），PR 的改动文件、逐文件 diff 和行内评论、全部评论、CI 日志摘要，在这一页上评论、review、合并（先预览、确认后才发）。",
         "publisher": "nwverse",
         "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/github",
@@ -280,9 +280,9 @@
       ],
       "packages": [
         {
-          "url": "release:github-v0.4.16/github-0.4.16.tar.gz",
-          "sha256": "5e0907f374e8d2d36c958e42d46fd6817c859989147e9aab1d9db45c1008ce37",
-          "size": 13554270
+          "url": "release:github-v0.4.17/github-0.4.17.tar.gz",
+          "sha256": "b368bdcf0d72827c92f33549f7149d370531fe17e7e351bceb2aefa94d39d8d4",
+          "size": 13696114
         }
       ]
     },
@@ -411,7 +411,7 @@
         "manifest_version": 1,
         "id": "larkagentx",
         "name": "Feishu (LarkAgentX adapter)",
-        "version": "0.1.6",
+        "version": "0.1.7",
         "description": "独立的飞书个人账号适配器：用户自行在伴随机器上安装 LarkAgentX，hub 使用 Go 程序经 SSH 接入。只收双白名单内的文本消息，发送全文始终需要确认；不启动 Agent、不发已读回执，不替换现有的飞书接入。非官方协议，真实账号联调尚未验证。",
         "publisher": "nwverse",
         "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/larkagentx",
@@ -499,9 +499,9 @@
       ],
       "packages": [
         {
-          "url": "release:larkagentx-v0.1.6/larkagentx-0.1.6.tar.gz",
-          "sha256": "0d0b49c4e332aaac984791f2e97749424ccb3821b93c7b8dbb3b8b2dca451491",
-          "size": 11962585
+          "url": "release:larkagentx-v0.1.7/larkagentx-0.1.7.tar.gz",
+          "sha256": "f1fb5756635d53d9ea3f1343b10b7c1f93106692d269b761a759a009b69df3a8",
+          "size": 12050525
         }
       ]
     },
@@ -510,7 +510,7 @@
         "manifest_version": 1,
         "id": "linuxdo",
         "name": "LINUX DO",
-        "version": "0.1.11",
+        "version": "0.1.12",
         "description": "LINUX DO 社区的热门帖子：扩展里的一页按你的兴趣看热门、今日 / 本周最热和最新，点开在 App 里读正文和热门回复（hub 去读，手机不用代理）；助手能用工具查热门、读帖子。只读公开内容，不用账号。",
         "publisher": "nwverse",
         "engines": {
@@ -636,9 +636,9 @@
       ],
       "packages": [
         {
-          "url": "release:linuxdo-v0.1.11/linuxdo-0.1.11.tar.gz",
-          "sha256": "8b2ebb04ed449afddbd9cdd6f0531eaad7f657ea809919ed4fae951a5c7984a5",
-          "size": 12127972
+          "url": "release:linuxdo-v0.1.12/linuxdo-0.1.12.tar.gz",
+          "sha256": "85c274a80d49dd29c5be9dfaeeafd653d36e54a4387fc0de0b62c6f377adb376",
+          "size": 12217096
         }
       ]
     },
@@ -1174,7 +1174,7 @@
         "manifest_version": 1,
         "id": "telegram",
         "name": "Telegram",
-        "version": "0.1.21",
+        "version": "0.1.22",
         "description": "用你自己的 Telegram 账号（MTProto，hub 连 Telegram 的数据中心；hub 的环境设了 HTTPS_PROXY 时经它的 HTTP CONNECT 隧道）：App 里的 Telegram 会话，收件箱（私聊、@我），知识库归档，助手的 Telegram 工具和 tg 命令行。发消息、回复、转发、点 reaction、标为已读都先在手机上确认。登录（api_id、api_hash 和会话）加密存在 hub 的数据库里，不在扩展目录。",
         "publisher": "nwverse",
         "engines": {
@@ -1263,9 +1263,9 @@
       ],
       "packages": [
         {
-          "url": "release:telegram-v0.1.21/telegram-0.1.21.tar.gz",
-          "sha256": "08dd4f8dd4d5c6122140bfde3ed32cda799f49ad96dc104d085e874ce9219d2d",
-          "size": 22270334
+          "url": "release:telegram-v0.1.22/telegram-0.1.22.tar.gz",
+          "sha256": "e36922e663a89ab6739523b00e7feda8ac32ff554be0de154b38de10ae50afbc",
+          "size": 22350697
         }
       ]
     },
