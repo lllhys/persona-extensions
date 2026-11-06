@@ -281,7 +281,8 @@
   "permissions": {
     "hub": [
       "kb.read",
-      "kb.write"
+      "kb.write",
+      "models"
     ]
   }
 }

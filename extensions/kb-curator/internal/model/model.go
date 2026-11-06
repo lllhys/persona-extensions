@@ -46,54 +46,51 @@ type Model interface {
 	Complete(ctx context.Context, r Request) (Response, error)
 }
 
-// ErrUnavailable: the hub cannot run models for extensions (no model.complete yet, or no model set up). The
-// curator then runs only its deterministic steps.
+// ErrUnavailable: the hub cannot run a model for the extension now: a hub without model.complete (older than
+// nwverse/persona#6102), the permission not granted, nothing set up for the extension's purpose, or the connection
+// held for quota or load. The curator then runs only its deterministic steps; the wrapped message says which.
 var ErrUnavailable = errors.New("model unavailable to extensions")
 
-// Hub calls model.complete on the hub (not in the hub yet: nwverse/persona#6102). The hub resolves the extension's
-// own model purpose (plugin.<id>, Settings › Models), so the extension never holds a key.
+// Hub calls model.complete on the hub (nwverse/persona#6102, permission "models"). The hub runs it on the
+// extension's own purpose extension.<id> in Settings › Model configuration, which follows the knowledge base's model
+// until the user picks another; the extension never holds a key and does not pick the connection. There is no
+// budget and no cap: each call's usage comes back and is recorded per day and step (Metered).
 type Hub struct {
 	H         *ext.Hub
 	Extension string
 }
 
-// completeParams is model.complete as proposed upstream (nwverse/persona#6102): one purpose per extension, so the
-// tier is not sent yet (docs/interface-needs.md asks for an optional one).
-type completeParams struct {
-	System     string          `json:"system"`
-	Messages   []message       `json:"messages"`
-	MaxTokens  int             `json:"max_tokens"`
-	JSONSchema json.RawMessage `json:"json_schema,omitempty"`
-}
-
-type message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type completeResult struct {
-	Text  string `json:"text"`
-	Model string `json:"model"`
-	Usage struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
-	} `json:"usage"`
+// callTimeout bounds one call, the hub's second try for a reply that does not match the schema included.
+func callTimeout(t Tier) int {
+	if t == Medium {
+		return 600
+	}
+	return 300
 }
 
 func (h Hub) Complete(ctx context.Context, r Request) (Response, error) {
-	var out completeResult
-	err := h.H.Call(ctx, "model.complete", completeParams{
-		System:   r.System,
-		Messages: []message{{Role: "user", Content: r.User}}, MaxTokens: r.MaxTokens, JSONSchema: r.Schema,
-	}, &out)
+	out, err := h.H.ModelComplete(ctx, wire.ModelCompleteParams{
+		System: r.System, Messages: []wire.ModelMessage{{Role: wire.ModelRoleUser, Content: r.User}},
+		MaxTokens: r.MaxTokens, JSONSchema: r.Schema, TimeoutSeconds: callTimeout(r.Tier), Label: r.Step,
+	})
 	var e *ext.Error
-	if errors.As(err, &e) && (e.Code == wire.ErrorCodeUnknownMethod || e.Code == "not_configured" || e.Code == wire.ErrorCodeUnsupported) {
-		return Response{}, fmt.Errorf("%w: %s", ErrUnavailable, e.Message)
+	if errors.As(err, &e) {
+		switch e.Code {
+		case wire.ErrorCodeUnknownMethod, wire.ErrorCodeUnsupported, wire.ErrorCodePermissionDenied,
+			wire.ModelErrorCodeModelUnavailable, wire.ModelErrorCodeModelPaused, wire.ModelErrorCodeAssistantOffline:
+			return Response{}, fmt.Errorf("%w: %s", ErrUnavailable, e.Message)
+		}
 	}
 	if err != nil {
 		return Response{}, err
 	}
-	return Response{Text: out.Text, Model: out.Model, InTokens: out.Usage.InputTokens, OutTokens: out.Usage.OutputTokens}, nil
+	text := out.Text
+	if len(r.Schema) > 0 && len(out.JSON) > 0 { // the hub checked it against the schema: take the decoded value
+		text = string(out.JSON)
+	}
+	u := out.Usage
+	return Response{Text: text, Model: out.Model, InTokens: u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens,
+		OutTokens: u.OutputTokens}, nil
 }
 
 // Usage is what the calls cost in tokens, recorded per day and step for the report (there is no cap: the user

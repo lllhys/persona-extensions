@@ -7,7 +7,7 @@ The hub's own pipeline summarizes chats as they arrive. This extension is a seco
 - once a day for the day before;
 - once a week, on Monday, for the ISO week before.
 
-It keeps its own state in its data directory and touches the knowledge base only through the knowledge-base RPC (`kb.read`, `kb.write`). It needs a hub with attributed extension writes (nwverse/persona#6110). Every write it makes is either a proposal you accepted or a kind of proposal you allowed it to apply by itself.
+It keeps its own state in its data directory and touches the knowledge base only through the knowledge-base RPC (`kb.read`, `kb.write`), and calls models through the hub (`models`). It needs a hub with attributed extension writes (nwverse/persona#6110) and model calls for extensions (nwverse/persona#6102). Every write it makes is either a proposal you accepted or a kind of proposal you allowed it to apply by itself.
 
 | Extension point | Contribution | Behavior |
 | --- | --- | --- |
@@ -91,7 +91,7 @@ It keeps its own state in its data directory and touches the knowledge base only
 
 ## Model calls
 
-The curator asks the hub to run models through `model.complete`, which the hub does not have yet. Until it does, the curator runs only its deterministic steps (triage rules, health checks, reconciliation) and says so in its reports. There is no budget cap: usage is recorded per day and step and shown in the reports. Prompts live in `internal/prompts`, one file per call, with versions pinned by a golden test.
+The curator asks the hub to run models through `model.complete` (permission `models`). The hub runs each call on the curator's own model purpose in Settings › Model configuration ("知识整理" under Extensions), which follows "Information processing" until you pick another model for it; the curator never holds a key. Answers come back checked against each call's JSON schema. When the hub has no model for it (an older hub, nothing set up, the connection paused for quota), the curator runs only its deterministic steps (triage rules, health checks, reconciliation) and the report says why. There is no budget cap: usage is recorded per day and step and shown in the reports. Prompts live in `internal/prompts`, one file per call, with versions pinned by a golden test.
 
 ## Configuration
 
@@ -105,3 +105,5 @@ go -C extensions/kb-curator run . dryrun -fixture testdata/sample -from 2026-11-
 ```
 
 The dry run uses a synthetic knowledge base (`testdata/sample`) and a deterministic stub model. Its writes change only an in-memory copy, and it prints the writes it would make. Tests never use real accounts or data.
+
+To try a day on your own knowledge base with the real model, open 整理体检 (the extension's page) and use 试跑: it runs that day's daily pass with the model the hub gives the curator, on a fresh temporary state, records knowledge-base writes instead of making them, and saves nothing. The report goes to the extension's data directory (`dryruns/daily-<day>.md`) and its summary (model calls, tokens, proposals) shows on the page.

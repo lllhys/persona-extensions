@@ -473,6 +473,20 @@ func (a *app) health(ctx context.Context, r *ext.UIRequest) (*wire.View, error) 
 	v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{
 		button("现在跑一次日级（昨天）", "run-daily", ""), button("现在跑一次周级（上周）", "run-weekly", ""),
 	}})
+	a.mu.Lock()
+	trial, failed := a.lastTrial, a.lastErr
+	a.mu.Unlock()
+	items := []wire.Component{
+		{Type: wire.ComponentField, Name: "day", Label: "哪天", Kind: wire.FieldKindDate, Placeholder: "空着就是昨天"},
+		{Type: wire.ComponentButton, Title: "试跑这一天", Action: &wire.Action{ID: "trial-daily", Submit: true}},
+	}
+	if trial != "" {
+		items = append(items, secondary(trial))
+	}
+	if strings.HasPrefix(failed, "试跑") {
+		items = append(items, secondary(failed))
+	}
+	v.Sections = append(v.Sections, wire.Section{Title: "试跑", Footer: "用你给这个扩展选的模型跑一天的日级整理：不写知识库、不保存结果，报告留在扩展的数据目录 dryruns/。", Items: items})
 	return v, nil
 }
 
@@ -484,6 +498,18 @@ func (a *app) healthAction(ctx context.Context, r *ext.UIRequest) (*wire.ActionR
 		ok = a.start(context.WithoutCancel(ctx), "daily", now.AddDate(0, 0, -1).Format("2006-01-02"))
 	case "run-weekly":
 		ok = a.start(context.WithoutCancel(ctx), "weekly", curate.ISOWeek(now.AddDate(0, 0, -7).Format("2006-01-02")))
+	case "trial-daily": // a day's pass that changes nothing (dryrun_hub.go); values.day, default yesterday
+		day := strings.TrimSpace(r.Values["day"])
+		if day == "" {
+			day = now.AddDate(0, 0, -1).Format("2006-01-02")
+		}
+		if _, err := time.Parse("2006-01-02", day); err != nil {
+			return &wire.ActionResult{Toast: "日期要写成 YYYY-MM-DD"}, nil
+		}
+		if !a.startTrial(context.WithoutCancel(ctx), day) {
+			return &wire.ActionResult{Toast: "已经有一次在跑了"}, nil
+		}
+		return &wire.ActionResult{Toast: "开始试跑 " + day + "：不写知识库、不保存结果，跑完结果显示在这里"}, nil
 	}
 	if !ok {
 		return &wire.ActionResult{Toast: "已经有一次在跑了"}, nil

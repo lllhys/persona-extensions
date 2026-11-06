@@ -98,7 +98,7 @@ func (c *Curator) RunDaily(ctx context.Context, day string, dry bool) (*store.Ru
 		if err := c.digest(ctx, m, b, u, d, owner, known, run); err != nil {
 			if errors.Is(err, model.ErrUnavailable) {
 				modelDown = true
-				run.Notes = append(run.Notes, "模型不可用（hub 还没有 model.complete）：只做了分拣和确定性检查")
+				run.Notes = append(run.Notes, "模型不可用（"+modelReason(err)+"）：只做了分拣和确定性检查")
 				continue
 			}
 			run.Notes = append(run.Notes, fmt.Sprintf("%s：%v", u.Meta.Name, err))
@@ -112,7 +112,7 @@ func (c *Curator) RunDaily(ctx context.Context, day string, dry bool) (*store.Ru
 		}
 	}
 	if modelDown && !slices.ContainsFunc(run.Notes, func(n string) bool { return strings.Contains(n, "模型不可用") }) {
-		run.Notes = append(run.Notes, "模型不可用（hub 还没有 model.complete）：只做了分拣和确定性检查")
+		run.Notes = append(run.Notes, "模型不可用：只做了分拣和确定性检查")
 	}
 	// 3. Proposals that a day can already make, and the queue's upkeep.
 	c.expire()
@@ -522,4 +522,14 @@ func (c *Curator) ingestGraph(b *graph.Builder, w *verify.Window, u *Unit, out s
 			c.proposeGraphConflict(b, id)
 		}
 	}
+}
+
+// modelReason is why the model could not be called, as the hub said (model.ErrUnavailable's wrapped message).
+func modelReason(err error) string {
+	msg := strings.TrimPrefix(err.Error(), model.ErrUnavailable.Error())
+	msg = strings.TrimSpace(strings.TrimPrefix(msg, ":"))
+	if msg == "" {
+		return "hub 没有给扩展用的模型"
+	}
+	return msg
 }

@@ -19,13 +19,15 @@ import (
 )
 
 type app struct {
-	mu      sync.Mutex
-	c       *curate.Curator
-	hub     *ext.Hub
-	running string // the run in progress, if any
-	lastErr string
-	member  bool // a member hub of a group: the curator runs only on the centre
-	changed int  // kb.changed events since start
+	mu        sync.Mutex
+	c         *curate.Curator
+	hub       *ext.Hub
+	running   string // the run in progress, if any
+	lastErr   string
+	member    bool   // a member hub of a group: the curator runs only on the centre
+	changed   int    // kb.changed events since start
+	dataDir   string // the extension's data directory (trials leave their report there)
+	lastTrial string // the last trial's summary (dryrun_hub.go)
 }
 
 func newApp() *app { return &app{} }
@@ -55,6 +57,7 @@ func (a *app) init(ctx context.Context, in *ext.Init, hub *ext.Hub) (map[string]
 		loc = time.Local
 	}
 	a.hub = hub
+	a.dataDir = info.DataDir
 	a.member = in.Hub.Role == "member"
 	a.c = &curate.Curator{Src: kbsrc.Hub{H: hub}, Model: model.Hub{H: hub, Extension: info.ID}, St: st, Cfg: cfg, Loc: loc,
 		Lang: in.Hub.Locale, Extension: info.ID, Logf: func(f string, args ...any) { log.Printf(f, args...) }}
