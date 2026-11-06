@@ -320,12 +320,16 @@ func (p *Page) writeButtons(r *ext.UIRequest, s state, d github.Detail) []wire.C
 	return out
 }
 
-// filesTab is the files a PR changes, each opening its diff.
+// filesRowsMost is how many file rows filesTab draws: the hub refuses a view of more than wire.ItemsMost items, and
+// the tabs and the tail come with the rows (reviewTab stops at the same number).
+const filesRowsMost = 280
+
+// filesTab is the files a PR changes, each opening its diff; past filesRowsMost the rest are on GitHub.
 func (p *Page) filesTab(ctx context.Context, r *ext.UIRequest, s state, d github.Detail) []wire.Section {
 	var files []github.PRFile
 	more := false
 	var err error
-	for pg := 1; pg <= s.page(); pg++ {
+	for pg := 1; pg <= s.page() && len(files) < filesRowsMost; pg++ {
 		var batch []github.PRFile
 		if batch, more, err = p.c.PRFiles(ctx, d.Repo, d.Number, pg); err != nil {
 			break
@@ -334,6 +338,9 @@ func (p *Page) filesTab(ctx context.Context, r *ext.UIRequest, s state, d github
 		if !more {
 			break
 		}
+	}
+	if len(files) > filesRowsMost {
+		files, more = files[:filesRowsMost], true
 	}
 	comments := map[string]int{}
 	if convs, err := p.c.Conversations(ctx, d.Repo, d.Number); err == nil {
@@ -345,7 +352,10 @@ func (p *Page) filesTab(ctx context.Context, r *ext.UIRequest, s state, d github
 	for i, f := range files {
 		sec.Items = append(sec.Items, fileRow(r, d, f, comments[f.Path], i))
 	}
-	if more && err == nil {
+	switch {
+	case more && err == nil && len(files) >= filesRowsMost:
+		sec.Footer = fmt.Sprintf("还有 %d 个文件太多放不下，在 GitHub 上看", max(0, d.Files-len(files)))
+	case more && err == nil:
 		sec.More = &wire.More{Title: fmt.Sprintf("还有 %d 个文件", max(0, d.Files-len(files))), Action: wire.Action{ID: "more"}}
 	}
 	switch {
@@ -369,7 +379,7 @@ func fileRow(r *ext.UIRequest, d github.Detail, f github.PRFile, comments, i int
 	if comments > 0 {
 		sub = append(sub, fmt.Sprintf("%d 条评论", comments))
 	}
-	row := wire.Component{Type: wire.ComponentRow, Key: "f-" + clip(f.Path, 120), Title: clip(path.Base(f.Path), 300), Subtitle: clip(strings.Join(sub, " · "), 2000),
+	row := wire.Component{Type: wire.ComponentRow, Key: "f-" + strconv.Itoa(i), Title: clip(path.Base(f.Path), 300), Subtitle: clip(strings.Join(sub, " · "), 2000),
 		Icon: icon(r, wire.NavIconDoc), Action: ext.Open("diff:"+strconv.Itoa(i), "", state{V: viewDiff, Repo: d.Repo, Number: d.Number, Path: f.Path}, path.Base(f.Path))}
 	if fs, ok := fileStates[f.Status]; ok {
 		row.Badge = &wire.Badge{Text: fs.name, Tone: fs.tone}
