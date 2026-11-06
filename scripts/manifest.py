@@ -8,6 +8,8 @@
   scripts/manifest.py check           every manifest is sound (what CI runs): id, version, tags, no retired files,
                                       the files it references are in its package, its pack members are here
   scripts/manifest.py changed <ref>   the extensions whose version is not what it was at <ref> (new ones too)
+  scripts/manifest.py last-released   the commit CI last released for (its newest "market: index after" commit)
+  scripts/manifest.py base <ref>…     the first ref HEAD descends from: where a push's release diffs from
   scripts/manifest.py selected <id or ref>…   what scripts/ci.sh release releases: each id (also as extensions/<id>),
                                       and what changed since each git ref; anything else fails
 """
@@ -118,6 +120,34 @@ def changed(ref):
     if not is_commit(ref):
         sys.exit("%r is not a git commit here" % ref)
     return [id for id in ids() if version_at(ref, id) != load(id)["version"]]
+
+
+INDEXED = re.compile(r"^market: index after ([0-9a-f]{7,40})$")
+
+
+def last_released():
+    """The commit CI last released for: the one its newest "market: index after <sha>" commit names (the index commit
+    the release job pushes, .github/workflows/ci.yml), "" when HEAD has none."""
+    r = git("log", "--format=%s", "-n", "500", "HEAD")
+    if r.returncode != 0:
+        sys.exit("git could not read the history: %s" % (r.stderr.strip() or "git gave no error"))
+    for subject in r.stdout.splitlines():
+        m = INDEXED.match(subject.strip())
+        if m and is_commit(m.group(1)):
+            return git("rev-parse", "--verify", "--quiet", m.group(1) + "^{commit}").stdout.strip()
+    return ""
+
+
+def base(*refs):
+    """The first of refs that names a commit HEAD descends from, or "" when none does: where a push to main's release
+    diffs from. CI gives last_released(), then the push's "before": GitHub keeps one waiting run per concurrency group
+    and drops the one before it, so a push whose release was dropped while it waited is released by the next one."""
+    for ref in refs:
+        if not ref or set(ref) == {"0"}:
+            continue
+        if git("merge-base", "--is-ancestor", ref, "HEAD").returncode == 0:
+            return ref
+    return ""
 
 
 def selected(args):
@@ -265,6 +295,10 @@ if __name__ == "__main__":
         print("\n".join(ids()))
     elif cmd == "changed":
         print("\n".join(changed(sys.argv[2])))
+    elif cmd == "base":
+        print(base(*sys.argv[2:]))
+    elif cmd == "last-released":
+        print(last_released())
     elif cmd == "selected":
         print("\n".join(selected(sys.argv[2:])))
     elif cmd == "check":

@@ -20,7 +20,7 @@ Package locations use `release:<tag>/<file>` in the index. [scripts/index.py](..
 
 ## Automated releases
 
-[CI](../.github/workflows/ci.yml) runs [scripts/ci.sh](../scripts/ci.sh) for pull requests. On a push to `main`, it releases only extensions whose manifest version changed in that push, including new extensions.
+[CI](../.github/workflows/ci.yml) runs [scripts/ci.sh](../scripts/ci.sh) for pull requests. On a push to `main`, it releases the extensions whose manifest version changed since the last commit a release run finished for (or, before any, since the push's previous head), including new extensions, so versions from a run that was dropped while it waited go out with the next one.
 
 A version is released once: CI skips an existing release (and only puts it into the index when an earlier index commit was lost, #59); `scripts/release.sh` refuses to overwrite it. Do not rewrite published tags or historical commits to change documentation language.
 

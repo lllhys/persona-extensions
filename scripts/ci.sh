@@ -4,7 +4,8 @@
 #                            the copied SDK's vet and tests, vet, tests, every platform builds, indexes,
 #                            and the indexes' signatures against market.pub (nwverse/persona#1848)
 #   scripts/ci.sh release <base>    then release the extensions whose version changed since the git ref <base>
-#                                   (a push to main: its "before"); a version merged but meant to wait is not released
+#                                   (a push to main: the last commit a release run finished for, else its "before");
+#                                   a version merged but meant to wait is not released
 #   scripts/ci.sh release <id>…     then release these (CI's manual run; extensions/<id> too). An argument that is
 #                                   neither an extension nor a git commit fails the release, not selects them all
 # A version is released once: one that has its release already is skipped, unless the index does not have it yet.
