@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "linuxdo",
   "name": "LINUX DO",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "LINUX DO 社区的热门帖子：扩展里的一页按你的兴趣看热门、今日 / 本周最热和最新，点开在 App 里读正文和热门回复（hub 去读，手机不用代理）；助手能用工具查热门、读帖子。只读公开内容，不用账号。",
   "publisher": "nwverse",
   "tags": ["社区", "热门", "阅读"],
