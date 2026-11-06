@@ -74,6 +74,7 @@ func TestScratchDeletions(t *testing.T) {
 		"rmdir {tmp}/empty", "unlink {tmp}/f", "sudo rm -rf {tmp}/x", "timeout 10 rm -rf {tmp}/x", "if true; then rm -rf {tmp}/x; fi",
 		"mv {tmp}/a {tmp}/b", "mv -t {tmp}/d {tmp}/a", "cp -f {tmp}/a build/b", "echo x > build/out.json", "go test > ~/ag-work/v1/log 2>&1",
 		"tee build/x.log", "truncate -s 0 {tmp}/log", "find {tmp}/x -name '*.o' -delete", "find . -name '*.o' -delete",
+		"find . -name '*.go' -fprint {tmp}/list", "find {tmp}/x -delete -fls {tmp}/x.log",
 		"rsync -a --delete src/ {tmp}/dst/", "rm -rf {tmp}/link", "bash -c 'rm -rf {tmp}/x'",
 		"cd {tmp} && rm -rf x", "cd {tmp}/a; cd b; rm -rf c", "rm -rf ~/wt/x; echo $(date)", "sh -c 'S={tmp}/a; rm -rf $S'",
 	}
@@ -115,6 +116,9 @@ func TestScratchDeletions(t *testing.T) {
 		// what scratch never covers
 		"chmod -R 777 {tmp}/x", "rm -rf {tmp}/x && chmod 777 y", "rm -rf {tmp}/x; git push --force", "dd if=/dev/zero of={tmp}/x",
 		"sed -i s/a/b/ {tmp}/f",
+		// find writes its list into a file it names: that file is a target too
+		"find . -maxdepth 0 -fprint ~/.bashrc", "find . -fls {keep}/notes.txt", "find . -fprint0 {keep}/n",
+		"find . -fprintf {keep}/n '%p'", "find {tmp}/x -delete -fprint {keep}/notes.txt",
 	}
 	for _, c := range stays {
 		c = b.cmd(c)

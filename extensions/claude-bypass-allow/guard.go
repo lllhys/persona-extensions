@@ -808,6 +808,9 @@ func (g *guard) segmentFrom(pre, words []string, depth int) string {
 			if has(rest, "-delete") {
 				why = "deletion: find -delete"
 			}
+			if f := findOutputs(rest); f != "" {
+				why = "overwrite: find " + f
+			}
 		case "rsync":
 			if hasPrefix(rest, "--del") || has(rest, "--remove-source-files") {
 				why = "deletion: rsync --delete"

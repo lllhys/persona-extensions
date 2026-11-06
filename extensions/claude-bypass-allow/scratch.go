@@ -510,7 +510,7 @@ func targetsOf(name string, args []string) []string {
 			return nil // it removes the parents too
 		}
 	case "find":
-		return findStarts(args)
+		return findTargets(args)
 	case "rsync":
 		// only the destination is deleted in; options may follow it, so it must be the last two words
 		if len(args) < 2 || has(args, "--remove-source-files") || strings.HasPrefix(args[len(args)-1], "-") ||
@@ -583,6 +583,38 @@ func targetsOf(name string, args []string) []string {
 		}
 	}
 	return operands
+}
+
+// findOutput are the find actions that create or truncate the file named after them.
+var findOutput = map[string]bool{"-fprint": true, "-fprint0": true, "-fprintf": true, "-fls": true}
+
+// findOutputs is the first of find's -fprint, -fprint0, -fprintf and -fls in its arguments, or "".
+func findOutputs(args []string) string {
+	for _, a := range args {
+		if findOutput[a] {
+			return a
+		}
+	}
+	return ""
+}
+
+// findTargets is what find changes: its starting points when it has -delete, and each file it writes its list to.
+func findTargets(args []string) []string {
+	var out []string
+	if has(args, "-delete") {
+		if out = findStarts(args); out == nil {
+			return nil
+		}
+	}
+	for i, a := range args {
+		if findOutput[a] {
+			if i+1 >= len(args) {
+				return nil
+			}
+			out = append(out, args[i+1])
+		}
+	}
+	return out
 }
 
 // findStarts are find's starting points (find -L follows links out of them: not read).
