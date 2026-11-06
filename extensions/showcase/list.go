@@ -199,11 +199,17 @@ func (a *app) save(r *ext.UIRequest, s state) (*wire.ActionResult, error) {
 
 func (a *app) ask() {
 	a.mu.Lock()
+	a.gen++
+	g := a.gen
 	a.asked, a.came = a.now(), time.Time{}
 	after, hub := a.after, a.hub
 	a.mu.Unlock()
 	time.AfterFunc(after, func() {
 		a.mu.Lock()
+		if a.gen != g {
+			a.mu.Unlock()
+			return
+		}
 		a.came = a.now()
 		a.mu.Unlock()
 		if hub != nil {

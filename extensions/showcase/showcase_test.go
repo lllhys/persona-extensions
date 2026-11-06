@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/nwverse/persona/sdk/go/ext"
@@ -438,6 +439,48 @@ func TestInvalidate(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("the data never came")
+}
+
+// A second ask must wait for its own timer, even after the first timer fires.
+func TestAskTwice(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		a := newApp()
+		ctx := context.Background()
+		r := req(pageUI, wire.SizeFull, 3, &state{P: "invalidate"})
+		r.Action = "ask"
+		ask := func() {
+			t.Helper()
+			if _, err := a.action(ctx, r); err != nil {
+				t.Fatal(err)
+			}
+		}
+		body := func() wire.Component {
+			t.Helper()
+			v, err := a.render(ctx, r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return v.Sections[0].Items[1]
+		}
+		ask()
+		time.Sleep(2 * time.Second)
+		ask()
+		time.Sleep(time.Second) // The first ask's three-second timer fires.
+		synctest.Wait()
+		if got := body(); got.Type != wire.ComponentLoading {
+			t.Fatalf("after the first timer: %+v, want loading", got)
+		}
+		time.Sleep(2*time.Second - time.Nanosecond)
+		synctest.Wait()
+		if got := body(); got.Type != wire.ComponentLoading {
+			t.Fatalf("before the second timer: %+v, want loading", got)
+		}
+		time.Sleep(time.Nanosecond)
+		synctest.Wait()
+		if got := body(); got.Type != wire.ComponentMetric || got.Detail != "等了 3.0 秒" {
+			t.Fatalf("after the second timer: %+v, want data after the full delay", got)
+		}
+	})
 }
 
 func TestShortcuts(t *testing.T) {
