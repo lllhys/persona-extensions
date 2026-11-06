@@ -64,6 +64,12 @@ func TestPersonOnly(t *testing.T) {
 		"trap 'rm -rf v' EXIT",
 		"coproc rm -rf v", "coproc NAME { rm -rf v; }",
 		"unshare rm -rf v", "taskset 1 rm -rf v",
+		// other shells (csh and tcsh ship in macOS's /bin), and sudo -s/-i or doas -s, which start one that reads its input
+		`csh -c 'rm -rf "$d"'`, `tcsh -c 'rm -rf "$d"'`, "mksh -c 'rm -rf v'", "busybox ash -c 'rm -rf v'", "yash -c 'rm -rf v'",
+		"pwsh -c 'rm -rf v'", "tcsh <<EOF\nrm -rf \"$d\"\nEOF", "sudo -s <<EOF\nrm -rf \"$d\"\nEOF",
+		"sudo -i <<'EOF'\nrm -rf /var/x/*\nEOF", "sudo -u root -s <<EOF\nrm -rf v\nEOF", "sudo -Hi <<EOF\nrm -rf v\nEOF",
+		"sudo --login <<EOF\nrm -rf v\nEOF", "doas -s <<EOF\nrm -rf v\nEOF",
+		"sudo --user root -s <<EOF\nrm -rf v\nEOF", "sudo --group staff -i <<EOF\nrm -rf v\nEOF",
 		// git command runners: rebase -x/--exec, bisect run, submodule foreach, -c alias.!
 		"git rebase -x 'rm -rf v' HEAD~1", "git rebase --exec='rm -rf v'", "git rebase --exec 'rm -rf v'",
 		"git rebase --exe='rm -rf v'", "git rebase --exe 'rm -rf v'",
@@ -152,6 +158,8 @@ func TestPersonOnly(t *testing.T) {
 		"git rebase -i HEAD~3", "git rebase --exec 'go test ./...' HEAD~2", "git bisect run go test ./...",
 		"git submodule foreach git pull", "git -c alias.st=status st", "script -q /dev/null",
 		"git -c user.name='A B' commit -m x", "git -c core.pager='less -R' log", "git -c core.sshCommand='ssh -i k' fetch",
+		// a heredoc fed to sudo without its shell options is data, and a benign command in another shell still goes
+		"sudo -u me cat <<EOF\nrm x\nEOF", "sudo -g staff -E cat <<EOF\nrm x\nEOF", "csh -c 'ls -la'", "tcsh <<EOF\necho hi\nEOF",
 	}
 	for _, c := range goes {
 		if why := personOnly(c); why != "" {
