@@ -72,7 +72,8 @@ func (p *plugin) configure(ip pluginkit.InitParams) error {
 	return nil
 }
 
-// read reads the site and keeps how it went for the status.
+// read reads the site and keeps how it went for the status. A cached copy standing in for a failed read is
+// handed to the caller, but the failure still counts for the status.
 func (p *plugin) read(ctx context.Context, path string, fresh time.Duration) ([]byte, error) {
 	body, err := p.site.get(ctx, path, fresh)
 	p.mu.Lock()
@@ -86,7 +87,10 @@ func (p *plugin) read(ctx context.Context, path string, fresh time.Duration) ([]
 		p.lastErr, p.lastErrAt = err, time.Now()
 		p.logf("linuxdo: %s", clip(oneLine(err.Error()), 200))
 	}
-	return body, err
+	if body != nil {
+		return body, nil
+	}
+	return nil, err
 }
 
 // connectorStatus is connector.status's answer.
