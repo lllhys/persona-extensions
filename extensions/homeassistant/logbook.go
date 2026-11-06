@@ -162,20 +162,7 @@ func (a *app) toolLogbook(ctx context.Context, areaQ, entity, start, end string,
 	if err != nil {
 		return "", err
 	}
-	var kept []LogEntry
-	count := map[string]int{}
-	for _, e := range entries {
-		switch {
-		case e.EntityID != "" && hm.Hidden[e.EntityID] && hm.AreaOf[e.EntityID] == nil:
-			continue
-		case in != nil && !in[e.EntityID]:
-			continue
-		}
-		kept = append(kept, e)
-		if e.EntityID != "" {
-			count[e.EntityID]++
-		}
-	}
+	kept, count := keepLog(hm, entries, in)
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s 到 %s 的日志（%s）", where, from.In(loc).Format("01-02 15:04"), to.In(loc).Format("01-02 15:04"), loc.String())
 	if len(kept) == 0 {
@@ -259,30 +246,59 @@ func entryState(hm *home, e LogEntry) string {
 	return e.State
 }
 
-// logLine is one entry: who, what, and what made it happen.
-func logLine(hm *home, e LogEntry) string {
-	line := logName(hm, e)
-	if st := entryState(hm, e); st != "" {
-		if e.State != "" {
-			line += " → " + st
-		} else {
-			line += " " + st
+// keepLog leaves out the entries of hidden areas' entities (and, with in, those not in it), and counts each
+// entity's entries.
+func keepLog(hm *home, entries []LogEntry, in map[string]bool) ([]LogEntry, map[string]int) {
+	var kept []LogEntry
+	count := map[string]int{}
+	for _, e := range entries {
+		switch {
+		case e.EntityID != "" && hm.Hidden[e.EntityID] && hm.AreaOf[e.EntityID] == nil:
+			continue
+		case in != nil && !in[e.EntityID]:
+			continue
+		}
+		kept = append(kept, e)
+		if e.EntityID != "" {
+			count[e.EntityID]++
 		}
 	}
-	if n := hm.areaName(e.EntityID); n != "" {
-		line += "（" + n + "）"
+	return kept, count
+}
+
+// logLine is one entry: who, what, and what made it happen.
+func logLine(hm *home, e LogEntry) string {
+	what, where, by := logParts(hm, e)
+	if where != "" {
+		what += "（" + where + "）"
+	}
+	if by != "" {
+		what += "，" + by
+	}
+	return what
+}
+
+// logParts is an entry's pieces: who and what ("客厅灯 → 开"), its area, and what made it happen ("由自动化「夜灯」").
+func logParts(hm *home, e LogEntry) (what, where, by string) {
+	what = logName(hm, e)
+	if st := entryState(hm, e); st != "" {
+		if e.State != "" {
+			what += " → " + st
+		} else {
+			what += " " + st
+		}
 	}
 	switch {
 	case strings.HasPrefix(e.ContextEntity, "automation.") || strings.HasPrefix(e.ContextEntity, "script."):
-		by := e.ContextName
+		name := e.ContextName
 		if s, ok := hm.ByID[e.ContextEntity]; ok {
-			by = s.Name()
+			name = s.Name()
 		}
-		line += "，由" + domainName(strings.SplitN(e.ContextEntity, ".", 2)[0]) + "「" + orDash(by) + "」"
+		by = "由" + domainName(strings.SplitN(e.ContextEntity, ".", 2)[0]) + "「" + orDash(name) + "」"
 	case e.ContextUser != "" && e.ContextDomain != "":
-		line += "，有人调用了 " + e.ContextDomain + "." + e.ContextSvc
+		by = "有人调用了 " + e.ContextDomain + "." + e.ContextSvc
 	case e.ContextUser != "":
-		line += "，有人操作"
+		by = "有人操作"
 	}
-	return line
+	return what, hm.areaName(e.EntityID), by
 }

@@ -26,7 +26,16 @@ type pageState struct {
 	Q    string `json:"q,omitempty"` // the search: the list page shows what matches it instead of the watchlist
 	Sort string `json:"s,omitempty"` // the watchlist's order: "" its own, "up" the biggest rise first, "down" the biggest fall
 	Mkt  string `json:"m,omitempty"` // the watchlist shows only this source's group; "" every group
+	Opts bool   `json:"o,omitempty"` // the order and market choices are open (else one row says what is chosen)
+	Form bool   `json:"f,omitempty"` // the instrument page's form for a new alert is open
 }
+
+const (
+	moversShow = 3    // the watchlist's biggest moves on top of the list, when it has more than this
+	alertNear  = 0.01 // a price alert this close to its price (a fraction of it) is marked on its row
+	// alertNearMove: a move alert is marked once the move is this much of the percent it waits for
+	alertNearMove = 0.8
+)
 
 const (
 	candlesShow  = 60 // bars in the charts (a chart takes 120 points a series)
@@ -109,10 +118,14 @@ func (p *plugin) uiAction(ctx context.Context, _ *pluginkit.Hub, raw json.RawMes
 	switch kind {
 	case "open":
 		if refOK {
-			open = &ref
+			open, st.Form = &ref, false
 		}
 	case "back":
-		open = nil
+		open, st.Form = nil, false
+	case "opts": // the row saying the order and market: open the choices, or close them
+		st.Opts = !st.Opts
+	case "form": // the instrument page's 新建提醒: open the form, or close it
+		st.Form = !st.Form
 	case "search":
 		q, ok := r.Values["q"] // the search box
 		if !ok {
@@ -132,6 +145,7 @@ func (p *plugin) uiAction(ctx context.Context, _ *pluginkit.Hub, raw json.RawMes
 		} else {
 			st.Mkt = ""
 		}
+		st.Opts = false // chosen: the choices fold back into their row
 	case "bar":
 		if arg == "" { // the segmented control: the choice is in the values
 			arg = r.Values["bar"]
@@ -186,7 +200,7 @@ func (p *plugin) uiAction(ctx context.Context, _ *pluginkit.Hub, raw json.RawMes
 			break
 		}
 		q, _ := p.quote(ctx, ref)
-		toast = "已设提醒：" + ref.Symbol + " " + a.what(q)
+		toast, st.Form = "已设提醒："+ref.Symbol+" "+a.what(q), false
 	case "unalert": // the rest is the alert's id
 		if a, ok, err := p.alerts.remove(arg); err != nil {
 			toast = err.Error()
@@ -299,19 +313,13 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 		st.Mkt = "" // nothing of it left
 		v.State = st.encode()
 	}
+	marked := p.alertMarks(qs)
+	// 今天: the watchlist's biggest moves either way, when the list is too long to take in at a glance
+	if sec, ok := p.moversSection(watch, qs, marked); ok {
+		v.Sections = append(v.Sections, sec)
+	}
 	if d.v2 && len(watch) > 1 {
-		ctl := pluginkit.Section{Items: []pluginkit.Item{{Type: "segmented", Name: "sort", Value: or(st.Sort, "order"),
-			Action: &pluginkit.UIAction{ID: "sort"}, Choices: []pluginkit.Choice{{Value: "order", Title: "自选顺序"},
-				{Value: "up", Title: "涨幅"}, {Value: "down", Title: "跌幅"}}}}}
-		if len(present) > 1 && len(present) < 5 { // a segmented control takes at most 5
-			mkt := pluginkit.Item{Type: "segmented", Name: "mkt", Value: or(st.Mkt, "all"), Action: &pluginkit.UIAction{ID: "mkt"},
-				Choices: []pluginkit.Choice{{Value: "all", Title: "全部"}}}
-			for _, src := range present {
-				mkt.Choices = append(mkt.Choices, pluginkit.Choice{Value: src.ID(), Title: src.Market()})
-			}
-			ctl.Items = append(ctl.Items, mkt)
-		}
-		v.Sections = append(v.Sections, ctl)
+		v.Sections = append(v.Sections, p.orderSection(st, present))
 	}
 
 	// one group a source, in the sources' order
@@ -341,7 +349,7 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 				periods[q.Period] = true
 				active = active || !q.Idle
 			}
-			sec.Items = append(sec.Items, p.quoteRow(r, q, ok, false))
+			sec.Items = append(sec.Items, marked.on(p.quoteRow(r, q, ok, false), r))
 		}
 		switch {
 		case periods["24h"]:
@@ -366,6 +374,133 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 		v.RefreshAfter = refreshIdle
 	}
 	return v
+}
+
+// moversSection is the watchlist's biggest moves either way, the biggest rise first, each a row opening it; false
+// when the watchlist has moversShow or fewer with a change (the list itself is then as short).
+func (p *plugin) moversSection(watch []Ref, qs map[Ref]Quote, marked alertMarks) (pluginkit.Section, bool) {
+	var moved []Ref
+	for _, r := range watch {
+		if _, ok := qs[r].Change(); ok {
+			moved = append(moved, r)
+		}
+	}
+	if len(moved) <= moversShow {
+		return pluginkit.Section{}, false
+	}
+	sort.SliceStable(moved, func(i, j int) bool {
+		ci, _ := qs[moved[i]].Change()
+		cj, _ := qs[moved[j]].Change()
+		return math.Abs(ci) > math.Abs(cj)
+	})
+	moved = moved[:moversShow]
+	sortByChange(moved, qs, false)
+	sec := pluginkit.Section{Title: "自选 · 动得最多的"}
+	for _, r := range moved {
+		it := p.quoteRow(r, qs[r], true, false)
+		it.Subtitle = "" // on top it is the name, the price and the change; the figures are in its group below
+		if q := qs[r]; q.Name != "" {
+			it.Subtitle = r.Symbol
+		}
+		sec.Items = append(sec.Items, marked.on(it, r))
+	}
+	return sec, true
+}
+
+// orderSection is the watchlist's order and the market shown: one row saying what is chosen (自选顺序 unless the
+// user chose otherwise) that opens the choices; choosing folds them back.
+func (p *plugin) orderSection(st pageState, present []Source) pluginkit.Section {
+	sorts := []pluginkit.Choice{{Value: "order", Title: "自选顺序"}, {Value: "up", Title: "涨幅"}, {Value: "down", Title: "跌幅"}}
+	mkts := []pluginkit.Choice{{Value: "all", Title: "全部"}}
+	if len(present) > 1 && len(present) < 5 { // a segmented control takes at most 5
+		for _, src := range present {
+			mkts = append(mkts, pluginkit.Choice{Value: src.ID(), Title: src.Market()})
+		}
+	}
+	title := func(cs []pluginkit.Choice, v string) string {
+		if i := slices.IndexFunc(cs, func(c pluginkit.Choice) bool { return c.Value == v }); i >= 0 {
+			return cs[i].Title
+		}
+		return cs[0].Title
+	}
+	row := pluginkit.Item{Type: "row", Title: "排序 · " + title(sorts, st.Sort), Action: &pluginkit.UIAction{ID: "opts"}}
+	if len(mkts) > 1 {
+		row.Title += " · " + title(mkts, st.Mkt)
+	}
+	if !st.Opts {
+		return pluginkit.Section{Items: []pluginkit.Item{row}}
+	}
+	row.Value = "收起"
+	sec := pluginkit.Section{Items: []pluginkit.Item{row,
+		{Type: "segmented", Name: "sort", Value: or(st.Sort, "order"), Action: &pluginkit.UIAction{ID: "sort"}, Choices: sorts}}}
+	if len(mkts) > 1 {
+		sec.Items = append(sec.Items, pluginkit.Item{Type: "segmented", Name: "mkt", Value: or(st.Mkt, "all"),
+			Action: &pluginkit.UIAction{ID: "mkt"}, Choices: mkts})
+	}
+	return sec
+}
+
+// alertMarks are, by instrument, what its row says of its price alerts: one met, else one close to its price.
+type alertMarks map[Ref]alertMark
+
+type alertMark struct {
+	text string
+	met  bool
+}
+
+// on marks it, an instrument's row: the alert first in its subtitle and, for one met, after its change.
+func (m alertMarks) on(it pluginkit.Item, r Ref) pluginkit.Item {
+	mk, ok := m[r]
+	if !ok {
+		return it
+	}
+	it.Subtitle = strings.TrimSuffix(mk.text+" · "+it.Subtitle, " · ")
+	if mk.met {
+		if it.Badge == nil {
+			it.Badge = &pluginkit.Badge{Text: "提醒到了", Tone: "caution"}
+		} else {
+			it.Badge.Text += " · 提醒到了"
+		}
+	}
+	return it
+}
+
+// alertMarks reads every alert against the quotes on the page.
+func (p *plugin) alertMarks(qs map[Ref]Quote) alertMarks {
+	out := alertMarks{}
+	for _, a := range p.alerts.all() {
+		r, ok := p.srcs.parse(a.Ref)
+		if !ok || out[r].met {
+			continue
+		}
+		q := qs[r]
+		q.Decimals = max(q.Decimals, a.Decimals)
+		switch {
+		case a.Met != nil:
+			out[r] = alertMark{"提醒到了：" + a.what(q), true}
+		case a.near(q):
+			if _, has := out[r]; !has {
+				out[r] = alertMark{text: "快到提醒：" + a.what(q)}
+			}
+		}
+	}
+	return out
+}
+
+// near says whether an alert waiting is close to going off: the price within alertNear of its own, or the move at
+// alertNearMove of its percent.
+func (a Alert) near(q Quote) bool {
+	if a.Met != nil || q.Last == 0 || a.meets(q) {
+		return false
+	}
+	switch a.Kind {
+	case "above", "below":
+		return math.Abs(a.Value-q.Last) <= a.Value*alertNear
+	case "move":
+		c, ok := q.Change()
+		return ok && math.Abs(c)*100 >= a.Value*alertNearMove
+	}
+	return false
 }
 
 func or(s, dflt string) string {
@@ -469,13 +604,27 @@ func (p *plugin) searchSections(ctx context.Context, q string, v3, refresh bool)
 		return []pluginkit.Section{{Title: title, Items: []pluginkit.Item{
 			{Type: "text", Text: "没有和「" + q + "」对得上的：" + p.srcs.markets(), Style: "secondary"}, back}}}
 	}
+	// a result, and under one not in the watchlist a button adding it there and then (the search stays)
+	result := func(h hit) []pluginkit.Item {
+		items := []pluginkit.Item{p.quoteRow(h.Ref, h.Quote, true, true)}
+		if !p.watching(h.Ref) {
+			name := h.Ref.Symbol
+			if h.Quote.Name != "" {
+				name = h.Quote.Name
+			}
+			items = append(items, pluginkit.Item{Type: "button", Title: "加入自选 · " + clip(name, 20),
+				Action: &pluginkit.UIAction{ID: "add:" + h.Ref.String()}})
+		}
+		return items
+	}
 	var out []pluginkit.Section
 	if exact != nil {
-		out = append(out, pluginkit.Section{Title: "代码 " + exact.Ref.String(), Items: []pluginkit.Item{p.quoteRow(exact.Ref, exact.Quote, true, true)}})
+		out = append(out, pluginkit.Section{Title: "代码 " + exact.Ref.String(), Items: result(*exact)})
 	}
 	type grp struct {
 		src   Source
 		items []pluginkit.Item
+		n     int // the results (the items are also their buttons)
 		best  int
 	}
 	var gs []grp
@@ -483,7 +632,8 @@ func (p *plugin) searchSections(ctx context.Context, q string, v3, refresh bool)
 		g := grp{src: src, best: 9}
 		for _, h := range hits {
 			if h.Ref.Source == src.ID() {
-				g.items = append(g.items, p.quoteRow(h.Ref, h.Quote, true, true))
+				g.items = append(g.items, result(h)...)
+				g.n++
 				g.best = min(g.best, matchRank(q, src, h))
 			}
 		}
@@ -493,14 +643,14 @@ func (p *plugin) searchSections(ctx context.Context, q string, v3, refresh bool)
 	}
 	sort.SliceStable(gs, func(i, j int) bool { return gs[i].best < gs[j].best })
 	for _, g := range gs {
-		sec := pluginkit.Section{Title: fmt.Sprintf("%s · %d", g.src.Market(), len(g.items)), Items: g.items}
+		sec := pluginkit.Section{Title: fmt.Sprintf("%s · %d", g.src.Market(), g.n), Items: g.items}
 		if len(out) == 0 {
 			sec.Title = title + " · " + sec.Title
 		}
 		out = append(out, sec)
 	}
 	last := &out[len(out)-1]
-	last.Footer = "点一行看 K 线、加入自选"
+	last.Footer = "点一行看 K 线"
 	if len(hits) == searchMost {
 		last.Footer = fmt.Sprintf("只列最前面的 %d 个，写得再具体些能找到别的。", searchMost) + last.Footer
 	}
@@ -610,8 +760,9 @@ func (p *plugin) instPage(ctx context.Context, d draw, st pageState, r Ref) plug
 		v.Title = r.Symbol + " " + q.Name
 	}
 
-	// the period
-	last := pluginkit.Stat{Label: "最新价", Value: q.Price(q.Last)}
+	// the first screen: the way back, the price and its change, then the K line with its bars beside it; the rest
+	// (the period's figures, the alerts, keeping and moving it) below
+	last := pluginkit.Item{Type: "metric", Label: "最新价", Value: q.Price(q.Last)}
 	if c, ok := q.Change(); ok {
 		last.Detail, last.Tone = q.Period+" "+fmtChange(c), p.tone(c)
 	}
@@ -619,26 +770,7 @@ func (p *plugin) instPage(ctx context.Context, d draw, st pageState, r Ref) plug
 		last.Label = "休市 · 截至 " + q.At.Format("1/2 15:04")
 		v.RefreshAfter = refreshIdle
 	}
-	figures := []pluginkit.Stat{last, {Label: q.Period + " 最高", Value: q.Price(q.High)}, {Label: q.Period + " 最低", Value: q.Price(q.Low)},
-		{Label: q.Period + " 成交额", Value: fmtCompactFloat(q.Turnover) + " " + q.Currency}}
-	var facts []pluginkit.Stat
-	for _, f := range q.Facts {
-		facts = append(facts, pluginkit.Stat{Label: f.Label, Value: f.Value})
-	}
-	if d.v2 {
-		sec := pluginkit.Section{Items: []pluginkit.Item{{Type: "stat_grid", Stats: figures}}}
-		for i := 0; i < len(facts); i += statsMost { // a grid takes at most 6
-			sec.Items = append(sec.Items, pluginkit.Item{Type: "stat_grid", Stats: facts[i:min(i+statsMost, len(facts))]})
-		}
-		v.Sections = append(v.Sections, sec)
-	} else {
-		figures = append(figures, facts...)
-		var items []pluginkit.Item
-		for _, s := range figures {
-			items = append(items, pluginkit.Item{Type: "metric", Label: s.Label, Value: s.Value, Detail: s.Detail, Tone: s.Tone})
-		}
-		v.Sections = append(v.Sections, pluginkit.Section{Items: items})
-	}
+	v.Sections = append(v.Sections, pluginkit.Section{Items: []pluginkit.Item{back, last}})
 
 	kline := pluginkit.Section{Title: "K 线 · " + barTitle(bar)}
 	if d.v2 && len(bars) >= 2 && len(bars) <= 5 {
@@ -674,10 +806,30 @@ func (p *plugin) instPage(ctx context.Context, d draw, st pageState, r Ref) plug
 	default:
 		kline.Items = append(kline.Items, klineItems(cs, bar, d.loc, d.v2, q, p.tone)...)
 	}
-	v.Sections = append(v.Sections, kline, p.alertSection(r, q))
+	v.Sections = append(v.Sections, kline)
+
+	// the period's figures, and a stock's further ones
+	figures := []pluginkit.Stat{{Label: q.Period + " 最高", Value: q.Price(q.High)}, {Label: q.Period + " 最低", Value: q.Price(q.Low)},
+		{Label: q.Period + " 成交额", Value: fmtCompactFloat(q.Turnover) + " " + q.Currency}}
+	var facts []pluginkit.Stat
+	for _, f := range q.Facts {
+		facts = append(facts, pluginkit.Stat{Label: f.Label, Value: f.Value})
+	}
+	more := pluginkit.Section{Title: "详情"}
+	if d.v2 {
+		more.Items = append(more.Items, pluginkit.Item{Type: "stat_grid", Stats: figures})
+		for i := 0; i < len(facts); i += statsMost { // a grid takes at most 6
+			more.Items = append(more.Items, pluginkit.Item{Type: "stat_grid", Stats: facts[i:min(i+statsMost, len(facts))]})
+		}
+	} else {
+		for _, s := range append(figures, facts...) {
+			more.Items = append(more.Items, pluginkit.Item{Type: "metric", Label: s.Label, Value: s.Value})
+		}
+	}
+	v.Sections = append(v.Sections, more, p.alertSection(r, q, st.Form))
 
 	// what to do with it
-	acts := pluginkit.Section{}
+	acts := pluginkit.Section{Title: "自选"}
 	watch := group(p.watchlist(), r.Source) // moved within its source's group
 	if i := slices.Index(watch, r); i >= 0 {
 		if i > 1 {
@@ -701,7 +853,7 @@ func (p *plugin) instPage(ctx context.Context, d draw, st pageState, r Ref) plug
 		}
 		acts.Items = append(acts.Items, pluginkit.Item{Type: "link", Title: "在 " + site + " 打开", URL: u})
 	}
-	acts.Items = append(acts.Items, back,
+	acts.Items = append(acts.Items,
 		pluginkit.Item{Type: "text", Text: src.Name() + " 公开行情 · 读于 " + time.Now().In(d.loc).Format("15:04:05"), Style: "caption"})
 	v.Sections = append(v.Sections, acts)
 	return v
@@ -741,10 +893,10 @@ func klineItems(cs []Candle, bar string, loc *time.Location, v2 bool, q Quote, t
 			Display: clip(fmt.Sprintf("收 %s 高 %s 低 %s", q.Price(c.Close), q.Price(c.High), q.Price(c.Low)), 40)})
 		vol.Points = append(vol.Points, pluginkit.ChartPoint{Label: label, Value: c.Vol, Display: fmtCompactFloat(c.Vol)})
 	}
-	return []pluginkit.Item{
-		{Type: "stat_grid", Stats: stats},
+	return []pluginkit.Item{ // the price line right under the bars, its figures after the volume
 		{Type: "chart", Kind: "line", Title: "收盘价", Series: []pluginkit.ChartSeries{price}},
 		{Type: "chart", Kind: "bar", Title: "成交量", Series: []pluginkit.ChartSeries{vol}},
+		{Type: "stat_grid", Stats: stats},
 	}
 }
 
@@ -807,16 +959,29 @@ func fmtCompactFloat(f float64) string {
 	return strconv.FormatFloat(f, 'f', 2, 64)
 }
 
-// alertSection is an instrument's price alerts and the form for a new one.
-func (p *plugin) alertSection(r Ref, q Quote) pluginkit.Section {
-	sec := pluginkit.Section{Title: "价格提醒", Footer: "到了进收件箱，每条只提醒一次；每分钟查一次。点一条删掉"}
-	for _, a := range p.alerts.of(r) {
+// alertSection is an instrument's price alerts and a button opening the form for a new one (form: the form).
+func (p *plugin) alertSection(r Ref, q Quote, form bool) pluginkit.Section {
+	list := p.alerts.of(r)
+	sec := pluginkit.Section{Title: "价格提醒", Footer: "到了进收件箱，每条只提醒一次；每分钟查一次"}
+	if len(list) > 0 {
+		sec.Title = fmt.Sprintf("价格提醒 · %d", len(list))
+		sec.Footer += "。点一条删掉"
+	}
+	for _, a := range list {
 		sec.Items = append(sec.Items, p.alertRow(a, q, "unalert:"+a.ID))
 	}
-	sec.Items = append(sec.Items,
+	if !form {
+		return appendItems(sec, pluginkit.Item{Type: "button", Title: "新建提醒", Action: &pluginkit.UIAction{ID: "form"}})
+	}
+	return appendItems(sec,
 		pluginkit.Item{Type: "field", Name: "alert_kind", Label: "提醒", Kind: "choice", Value: "above", Choices: alertKinds},
 		pluginkit.Item{Type: "field", Name: "alert_value", Label: "价格，或涨跌幅的百分数", Kind: "number", Placeholder: q.Price(q.Last)},
-		pluginkit.Item{Type: "button", Title: "设提醒", Action: &pluginkit.UIAction{ID: "alert:" + r.String(), Submit: true}})
+		pluginkit.Item{Type: "button", Title: "设提醒", Action: &pluginkit.UIAction{ID: "alert:" + r.String(), Submit: true}},
+		pluginkit.Item{Type: "button", Title: "取消", Action: &pluginkit.UIAction{ID: "form"}})
+}
+
+func appendItems(sec pluginkit.Section, items ...pluginkit.Item) pluginkit.Section {
+	sec.Items = append(sec.Items, items...)
 	return sec
 }
 

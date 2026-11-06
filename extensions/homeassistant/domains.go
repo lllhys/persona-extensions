@@ -200,8 +200,14 @@ func controls(s State) []control {
 			}
 		}
 		return cs
-	case "switch", "fan", "humidifier", "input_boolean", "siren", "remote", "automation":
+	case "switch", "fan", "humidifier", "input_boolean", "siren", "remote":
 		return toggle()
+	case "automation":
+		cs := []control{{Title: "启用", Service: "turn_on"}}
+		if on {
+			cs = []control{{Title: "停用", Service: "turn_off"}}
+		}
+		return append(cs, control{Title: "触发一次", Service: "trigger"})
 	case "cover", "valve":
 		verb := "cover"
 		if s.Domain() == "valve" {

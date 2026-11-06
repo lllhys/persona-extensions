@@ -1,14 +1,14 @@
 {
   "market_version": 1,
-  "name": "nwverse 扩展",
-  "description": "nwverse 维护、以后可以公开的 Persona 扩展。",
+  "name": "官方扩展",
+  "description": "Persona 官方维护的扩展。",
   "plugins": [
     {
       "manifest": {
         "manifest_version": 1,
         "id": "claude-bypass-allow",
         "name": "Bypass 自动允许",
-        "version": "0.2.15",
+        "version": "0.2.16",
         "description": "Claude Code 开着 bypassPermissions（--dangerously-skip-permissions）时，有些调用仍会弹确认框（如读工作目录外的文件、开子 Agent、某些 Bash），无人值守的 Agent 就卡在「在等你」。在你选的电脑上给 Claude Code 装一个 PermissionRequest hook：只在会话是 bypass 模式时，自动允许 Bash、只读工具（Read、Glob、Grep、LS、NotebookRead）和子 Agent。删除、覆盖数据的 Bash 命令，目标都在临时目录或工作目录里（/tmp、会话的工作目录、~/ag-work、~/wt、Claude Code 的 worktree 等）时直接放行，其余的仍然问你；打开「删除和覆盖也自动允许」就都放行。force push、改权限的 Bash 命令，写文件、Workflow 和 MCP 工具，以及你自己配的 ask / deny 规则，始终问你。每次自动允许都记一条（命令截断、去掉密钥）。别的模式照常问你。",
         "publisher": "nwverse",
         "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/claude-bypass-allow",
@@ -98,9 +98,9 @@
       ],
       "packages": [
         {
-          "url": "release:claude-bypass-allow-v0.2.15/claude-bypass-allow-0.2.15.tar.gz",
-          "sha256": "c18e63c83273672e8a441fe451817b32c24f3040b818c2341cdf9327b4859d57",
-          "size": 12165767
+          "url": "release:claude-bypass-allow-v0.2.16/claude-bypass-allow-0.2.16.tar.gz",
+          "sha256": "ee6705228aa88d4aee2f026a8ca81f5560cd6bcfff217f2c3e28b30b98383fb7",
+          "size": 12168117
         }
       ]
     },
@@ -291,8 +291,8 @@
         "manifest_version": 1,
         "id": "homeassistant",
         "name": "Home Assistant",
-        "version": "0.1.6",
-        "description": "接你自己的 Home Assistant：主导航上多一个「家」，按区域看设备和传感器的状态、搜索实体，点开开关灯、调亮度、调空调温度和模式、开关窗帘、执行场景，看最近 24 小时的变化；助手能查家里的状态和历史，也能操作设备（每次都在手机上确认，门锁和警戒永远要确认）。用长期访问令牌连 Home Assistant 的 REST API。",
+        "version": "0.2.1",
+        "description": "接你自己的 Home Assistant：主导航上多一个「家」：总览直接写出每个房间开着什么，房间里按设备列（设备的配置开关收在设备里），灯和开关点一下就开关，点开设备调亮度、空调温度和模式、开关窗帘，看最近 24 小时的变化；「动态」看最近两小时家里的变化，「自动化」运行脚本和场景、启停和触发自动化；助手能查家里的状态、历史、全屋日志、长期统计和能耗，看摄像头画面，列出和运行自动化、脚本，按房间批量操作（跳过设备的配置开关），在音箱上播报，也能新建和修改自动化（每次都在手机上确认，门锁、警戒、改自动化和播报永远要确认）；提醒规则在门开、漏水、设备离线、湿度超标时主动推送到手机或叫助手。用长期访问令牌连 Home Assistant 的 REST 和 WebSocket API。",
         "publisher": "nwverse",
         "engines": {
           "plugin_protocol": 1
@@ -316,7 +316,9 @@
                 "actions"
               ],
               "confirm_always": [
-                "homeassistant_secure_call"
+                "homeassistant_secure_call",
+                "homeassistant_automation_edit",
+                "homeassistant_say"
               ]
             }
           ],
@@ -362,6 +364,16 @@
               "items": {
                 "type": "string"
               }
+            },
+            "watches": {
+              "type": "array",
+              "title": "提醒规则",
+              "description": "每行一条：看谁 条件 [for=持续多久] [do=notify|assistant|both] [level=time-sensitive] [cooldown=30m] [name=名字] [message=附言]。看谁是实体 id（可以带 *）或「类型@区域」，条件是 =状态、>数、<数 或 offline。如 binary_sensor.front_door =on for=1m；sensor.bathroom_humidity >75 for=10m do=assistant message=开排风扇；binary_sensor@厨房 class=moisture =on level=time-sensitive；switch.* offline",
+              "maxItems": 50,
+              "items": {
+                "type": "string",
+                "maxLength": 400
+              }
             }
           }
         },
@@ -374,7 +386,11 @@
           }
         ],
         "permissions": {
-          "network": []
+          "network": [],
+          "hub": [
+            "notify",
+            "assistant.ask"
+          ]
         }
       },
       "tags": [
@@ -384,9 +400,9 @@
       ],
       "packages": [
         {
-          "url": "release:homeassistant-v0.1.6/homeassistant-0.1.6.tar.gz",
-          "sha256": "d2f763ece941b858f7f853c4ca62c888fe70fa6f46683eee55b6bf147cade4de",
-          "size": 12870920
+          "url": "release:homeassistant-v0.2.1/homeassistant-0.2.1.tar.gz",
+          "sha256": "310042451e65c6d946c4b6c1da0929220ba19dd579a9e394125d503e5c3b57ac",
+          "size": 14119385
         }
       ]
     },
@@ -395,7 +411,7 @@
         "manifest_version": 1,
         "id": "larkagentx",
         "name": "Feishu (LarkAgentX adapter)",
-        "version": "0.1.5",
+        "version": "0.1.6",
         "description": "独立的飞书个人账号适配器：用户自行在伴随机器上安装 LarkAgentX，hub 使用 Go 程序经 SSH 接入。只收双白名单内的文本消息，发送全文始终需要确认；不启动 Agent、不发已读回执，不替换现有的飞书接入。非官方协议，真实账号联调尚未验证。",
         "publisher": "nwverse",
         "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/larkagentx",
@@ -483,9 +499,9 @@
       ],
       "packages": [
         {
-          "url": "release:larkagentx-v0.1.5/larkagentx-0.1.5.tar.gz",
-          "sha256": "75051b14d7e77017982d7e189ddd005fabbbe2f7ec47e506857b89cef93bf638",
-          "size": 11957961
+          "url": "release:larkagentx-v0.1.6/larkagentx-0.1.6.tar.gz",
+          "sha256": "0d0b49c4e332aaac984791f2e97749424ccb3821b93c7b8dbb3b8b2dca451491",
+          "size": 11962585
         }
       ]
     },
@@ -494,7 +510,7 @@
         "manifest_version": 1,
         "id": "linuxdo",
         "name": "LINUX DO",
-        "version": "0.1.10",
+        "version": "0.1.11",
         "description": "LINUX DO 社区的热门帖子：扩展里的一页按你的兴趣看热门、今日 / 本周最热和最新，点开在 App 里读正文和热门回复（hub 去读，手机不用代理）；助手能用工具查热门、读帖子。只读公开内容，不用账号。",
         "publisher": "nwverse",
         "engines": {
@@ -620,9 +636,9 @@
       ],
       "packages": [
         {
-          "url": "release:linuxdo-v0.1.10/linuxdo-0.1.10.tar.gz",
-          "sha256": "b9052c9fb1d09e4e5042d095585d4ed91619d4c4a4db243d9c8b64e88e82510c",
-          "size": 12128402
+          "url": "release:linuxdo-v0.1.11/linuxdo-0.1.11.tar.gz",
+          "sha256": "8b2ebb04ed449afddbd9cdd6f0531eaad7f657ea809919ed4fae951a5c7984a5",
+          "size": 12127972
         }
       ]
     },
@@ -631,7 +647,7 @@
         "manifest_version": 1,
         "id": "markets",
         "name": "行情",
-        "version": "0.6.1",
+        "version": "0.6.2",
         "description": "行情（加密货币来自 OKX 公开行情接口，A 股、港股、美股来自腾讯行情的网页接口，都不用账号）：主导航上多一个「行情」，搜币、搜股票，看自选的价格和涨跌，点开看 K 线走势和成交量；可以给代码设价格提醒，到了进收件箱；助手能用工具搜代码、查报价和 K 线。hub 去读，手机不用代理。",
         "publisher": "nwverse",
         "engines": {
@@ -783,9 +799,9 @@
       ],
       "packages": [
         {
-          "url": "release:markets-v0.6.1/markets-0.6.1.tar.gz",
-          "sha256": "7365c19d2efbe6f06bfeed0b4efc30e8df428005dc74cc3170dcb67e7692496f",
-          "size": 13022820
+          "url": "release:markets-v0.6.2/markets-0.6.2.tar.gz",
+          "sha256": "c1e33f8cb332db34a99a88d77d938091767743e049ec430805f0cf42d3e1dc78",
+          "size": 13048745
         }
       ]
     },
@@ -1074,7 +1090,7 @@
         "manifest_version": 1,
         "id": "telegram",
         "name": "Telegram",
-        "version": "0.1.20",
+        "version": "0.1.21",
         "description": "用你自己的 Telegram 账号（MTProto，hub 连 Telegram 的数据中心；hub 的环境设了 HTTPS_PROXY 时经它的 HTTP CONNECT 隧道）：App 里的 Telegram 会话，收件箱（私聊、@我），知识库归档，助手的 Telegram 工具和 tg 命令行。发消息、回复、转发、点 reaction、标为已读都先在手机上确认。登录（api_id、api_hash 和会话）加密存在 hub 的数据库里，不在扩展目录。",
         "publisher": "nwverse",
         "engines": {
@@ -1163,9 +1179,9 @@
       ],
       "packages": [
         {
-          "url": "release:telegram-v0.1.20/telegram-0.1.20.tar.gz",
-          "sha256": "b6beb83ffe0a57157c547f8c14998c41caf35f1c7d898114be52ae63ba9d52d8",
-          "size": 22267945
+          "url": "release:telegram-v0.1.21/telegram-0.1.21.tar.gz",
+          "sha256": "08dd4f8dd4d5c6122140bfde3ed32cda799f49ad96dc104d085e874ce9219d2d",
+          "size": 22270334
         }
       ]
     },
