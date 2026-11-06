@@ -19,6 +19,7 @@ type app struct {
 	items []item
 	// The invalidate page: when its data was asked for, and whether it came.
 	asked, came time.Time
+	gen         uint64 // Only the latest ask may deliver data.
 	// after is how long the data takes (3 s; tests make it shorter); now is the clock (tests fix it).
 	after time.Duration
 	now   func() time.Time
