@@ -687,6 +687,27 @@ func TestTools(t *testing.T) {
 	}
 }
 
+func TestToolKeywordsNarrowTheSettings(t *testing.T) {
+	f := newFakeSite(t)
+	sample(f)
+	p := testPlugin(t, f, map[string]any{"keywords": []string{"Claude", "GPU"}})
+	call := func(args string) string {
+		t.Helper()
+		res, err := p.cToolsCall(context.Background(), nil, json.RawMessage(args))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.(map[string]any)["text"].(string)
+	}
+	text := call(`{"name":"linuxdo_hot","args":{"keywords":["gpu"]}}`)
+	if !strings.Contains(text, "按「关键词 Claude、GPU · 隐藏 NSFW · 隐藏置顶 · 另外只看 gpu」过滤后 1 条") || !strings.Contains(text, "id 1004") || strings.Contains(text, "id 1001") {
+		t.Errorf("the call's keywords should narrow the configured ones:\n%s", text)
+	}
+	if text = call(`{"name":"linuxdo_hot","args":{"filtered":false,"keywords":["GPU"]}}`); !strings.Contains(text, "按「关键词 GPU」过滤后 1 条") || strings.Contains(text, "id 1001") {
+		t.Errorf("unfiltered, keywords only:\n%s", text)
+	}
+}
+
 func TestTopicID(t *testing.T) {
 	for raw, want := range map[string]int64{`123`: 123, `"456"`: 456, `"https://linux.do/t/topic/789"`: 789, `"https://linux.do/t/some-slug/42/7"`: 42, `"https://linux.do/t/123456/7"`: 123456} {
 		if got, err := topicID(json.RawMessage(raw)); err != nil || got != want {

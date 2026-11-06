@@ -33,7 +33,7 @@ The hub fetches and renders the reader content, so the phone does not need its o
 | `hide_pinned` | Hide pinned site announcements; enabled by default. RSS exposes `discourse:topicPinned`; old announcements can otherwise dominate hot lists. |
 | `tz` | Time zone used for timestamps in the view and tools. |
 
-The page can temporarily show everything without interest filters. Tools apply the configured filters by default; set `filtered: false` to bypass them.
+The page can temporarily show everything without interest filters. Tools apply the configured filters by default; set `filtered: false` to bypass them. A `linuxdo_hot` call's `keywords` narrow the configured result further rather than adding to the configured keywords.
 
 ## App view and compatibility
 

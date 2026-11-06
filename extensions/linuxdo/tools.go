@@ -122,16 +122,20 @@ func (p *plugin) toolHot(ctx context.Context, list string, filtered bool, keywor
 		return "", err
 	}
 	all := len(topics)
-	f := filter{Keywords: keywords}
+	f, narrow := filter{Keywords: keywords}, filter{}
 	if filtered {
-		f = p.cfg.filter()
-		f.Keywords = append(f.Keywords, keywords...)
+		// The call's keywords narrow what the settings keep; merged into the settings' OR list they would widen it.
+		f, narrow = p.cfg.filter(), filter{Keywords: keywords}
 	}
-	topics = f.apply(topics)
+	topics = narrow.apply(f.apply(topics))
 	title, _, _ := listOf(list)
 	var b strings.Builder
 	fmt.Fprintf(&b, "LINUX DO %s：%d 条", title, all)
-	if d := f.describe(); d != "" {
+	d := f.describe()
+	if k := nonEmpty(narrow.Keywords); len(k) > 0 {
+		d = strings.TrimPrefix(d+" · 另外只看 "+strings.Join(k, "、"), " · ")
+	}
+	if d != "" {
 		fmt.Fprintf(&b, "，按「%s」过滤后 %d 条", d, len(topics))
 	}
 	if len(topics) > limit {
