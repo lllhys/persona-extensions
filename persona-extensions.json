@@ -1074,7 +1074,7 @@
         "manifest_version": 1,
         "id": "telegram",
         "name": "Telegram",
-        "version": "0.1.19",
+        "version": "0.1.20",
         "description": "用你自己的 Telegram 账号（MTProto，hub 连 Telegram 的数据中心；hub 的环境设了 HTTPS_PROXY 时经它的 HTTP CONNECT 隧道）：App 里的 Telegram 会话，收件箱（私聊、@我），知识库归档，助手的 Telegram 工具和 tg 命令行。发消息、回复、转发、点 reaction、标为已读都先在手机上确认。登录（api_id、api_hash 和会话）加密存在 hub 的数据库里，不在扩展目录。",
         "publisher": "nwverse",
         "engines": {
@@ -1163,9 +1163,9 @@
       ],
       "packages": [
         {
-          "url": "release:telegram-v0.1.19/telegram-0.1.19.tar.gz",
-          "sha256": "6ecf1da685d947048a2942346cc315edc69700eb2fa22f9d38bbff1095ed069f",
-          "size": 22267549
+          "url": "release:telegram-v0.1.20/telegram-0.1.20.tar.gz",
+          "sha256": "b6beb83ffe0a57157c547f8c14998c41caf35f1c7d898114be52ae63ba9d52d8",
+          "size": 22267945
         }
       ]
     },
