@@ -231,25 +231,39 @@ func mediaOf(m tg.MessageMediaClass) (kind, say string) {
 			return "FILE", "[文件]"
 		}
 		name := ""
+		var sticker, animated bool
+		var video *tg.DocumentAttributeVideo
+		var audio *tg.DocumentAttributeAudio
 		for _, a := range doc.Attributes {
 			switch a := a.(type) {
 			case *tg.DocumentAttributeSticker:
-				return "STICKER", "[贴纸]"
-			case *tg.DocumentAttributeAudio:
-				if a.Voice {
-					return "AUDIO", "[语音]"
-				}
-				return "AUDIO", "[音频]"
-			case *tg.DocumentAttributeVideo:
-				if a.RoundMessage {
-					return "VIDEO", "[视频消息]"
-				}
-				return "VIDEO", "[视频]"
+				sticker = true
 			case *tg.DocumentAttributeAnimated:
-				return "IMAGE", "[动图]"
+				animated = true
+			case *tg.DocumentAttributeVideo:
+				video = a
+			case *tg.DocumentAttributeAudio:
+				audio = a
 			case *tg.DocumentAttributeFilename:
 				name = a.FileName
 			}
+		}
+		// Classify after collecting attributes: video stickers and GIFs also carry video attributes.
+		switch {
+		case sticker:
+			return "STICKER", "[贴纸]"
+		case animated:
+			return "IMAGE", "[动图]"
+		case video != nil:
+			if video.RoundMessage {
+				return "VIDEO", "[视频消息]"
+			}
+			return "VIDEO", "[视频]"
+		case audio != nil:
+			if audio.Voice {
+				return "AUDIO", "[语音]"
+			}
+			return "AUDIO", "[音频]"
 		}
 		if name != "" {
 			return "FILE", fmt.Sprintf("[文件 %s · %s]", name, size(doc.Size))

@@ -105,6 +105,41 @@ func TestMessageOf(t *testing.T) {
 	}
 }
 
+func TestMediaOfDocumentAttributePrecedence(t *testing.T) {
+	for _, c := range []struct {
+		name       string
+		attributes []tg.DocumentAttributeClass
+		kind, text string
+	}{
+		{"video sticker", []tg.DocumentAttributeClass{&tg.DocumentAttributeVideo{}, &tg.DocumentAttributeSticker{}}, "STICKER", "[贴纸]"},
+		{"GIF", []tg.DocumentAttributeClass{&tg.DocumentAttributeVideo{}, &tg.DocumentAttributeAnimated{}}, "IMAGE", "[动图]"},
+		{"animated sticker", []tg.DocumentAttributeClass{&tg.DocumentAttributeAnimated{}, &tg.DocumentAttributeSticker{}}, "STICKER", "[贴纸]"},
+		{"video with audio", []tg.DocumentAttributeClass{&tg.DocumentAttributeAudio{}, &tg.DocumentAttributeVideo{}}, "VIDEO", "[视频]"},
+		{"round video", []tg.DocumentAttributeClass{&tg.DocumentAttributeFilename{FileName: "video.mp4"}, &tg.DocumentAttributeVideo{RoundMessage: true}}, "VIDEO", "[视频消息]"},
+		{"voice", []tg.DocumentAttributeClass{&tg.DocumentAttributeFilename{FileName: "voice.ogg"}, &tg.DocumentAttributeAudio{Voice: true}}, "AUDIO", "[语音]"},
+		{"audio", []tg.DocumentAttributeClass{&tg.DocumentAttributeFilename{FileName: "audio.mp3"}, &tg.DocumentAttributeAudio{}}, "AUDIO", "[音频]"},
+		{"file", []tg.DocumentAttributeClass{&tg.DocumentAttributeFilename{FileName: "example.pdf"}}, "FILE", "[文件 example.pdf · 2.0 MB]"},
+		{"default", nil, "FILE", "[文件]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			for _, order := range []string{"original", "reversed"} {
+				t.Run(order, func(t *testing.T) {
+					attributes := append([]tg.DocumentAttributeClass(nil), c.attributes...)
+					if order == "reversed" {
+						for i, j := 0, len(attributes)-1; i < j; i, j = i+1, j-1 {
+							attributes[i], attributes[j] = attributes[j], attributes[i]
+						}
+					}
+					kind, text := mediaOf(&tg.MessageMediaDocument{Document: &tg.Document{Size: 2 << 20, Attributes: attributes}})
+					if kind != c.kind || text != c.text {
+						t.Errorf("mediaOf() = (%q, %q), want (%q, %q)", kind, text, c.kind, c.text)
+					}
+				})
+			}
+		})
+	}
+}
+
 // In a forum every message sent in a topic carries reply_to {forum_topic, reply_to_msg_id: <topic id>}, the topic id
 // being its creation message's; only reply_to_top_id makes it a real reply. A reply to another chat's message isn't
 // one to this chat's message of that id.
