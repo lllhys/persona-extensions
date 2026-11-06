@@ -4,6 +4,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // The floor: Bash commands that stay with a person even in bypassPermissions mode, because they delete or overwrite
@@ -147,7 +148,7 @@ func (g *guard) personOnlyDepth(cmd string, depth int) string {
 	all, _ := scan(cmd)
 	for _, words := range all {
 		for _, w := range words {
-			if !sqlClients[path.Base(w)] {
+			if !sqlClients[progName(w)] {
 				continue
 			}
 			if sqlPermission.MatchString(cmd) {
@@ -187,7 +188,7 @@ func (g *guard) personOnlyDepth(cmd string, depth int) string {
 		}
 		shell := false
 		for i, w := range kept {
-			b := path.Base(w)
+			b := progName(w)
 			shell = shell || shells[b] || ((b == "sudo" || b == "doas") && sudoShell(kept[i+1:]))
 			for _, n := range globMatches(b) {
 				shell = shell || shells[n]
@@ -232,7 +233,7 @@ func (g *guard) personOnlyDepth(cmd string, depth int) string {
 // docker exec c sh -c '…').
 func (g *guard) nested(words []string, cmd string, depth int) string {
 	for _, w := range words {
-		if elsewhere[path.Base(w)] {
+		if elsewhere[progName(w)] {
 			roots := g.roots
 			g.roots = nil
 			defer func() { g.roots = roots }()
@@ -265,7 +266,7 @@ func stripHeredocs(cmd string) string {
 		segs, _ := scan(strings.Join(words, "\n"))
 		for _, ws := range segs {
 			for i, w := range ws {
-				b := path.Base(w)
+				b := progName(w)
 				keep = keep || shells[b] || ((b == "sudo" || b == "doas") && sudoShell(ws[i+1:]))
 				if b == "env" {
 					for _, a := range ws[i+1:] {
@@ -465,7 +466,7 @@ func withoutMessages(words []string) []string {
 	out := make([]string, 0, len(words))
 	for i := 0; i < len(words); i++ {
 		w := words[i]
-		if b := path.Base(w); b == "git" || b == "gh" {
+		if b := progName(w); b == "git" || b == "gh" {
 			prog = b
 		}
 		flag, val, inline := w, "", false
@@ -715,6 +716,20 @@ var wrappers = map[string]bool{
 	"do": true, "then": true, "else": true, "elif": true, "if": true, "while": true, "until": true, "!": true,
 }
 
+// progName is the program a word runs, by the name the checks know it by. macOS file systems ignore case by default,
+// and fold it the Unicode way, so RM, /bin/Rm and ſhred (a long s) run rm and shred: each letter becomes the lower
+// case of the smallest letter it folds with (on a case-sensitive file system that only asks more). The shell's own
+// builtins and keywords (cd, if) are matched as written.
+func progName(w string) string {
+	return strings.Map(func(r rune) rune {
+		m := r
+		for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+			m = min(m, f)
+		}
+		return unicode.ToLower(m)
+	}, path.Base(w))
+}
+
 // segmentPersonOnly looks at one simple command. A word counts as a program when it comes first (after NAME=value
 // assignments) or after a wrapper; so `grep -rn truncate src/` and `cd /tmp/rm` go through, `sudo -b rm x` does not.
 // A deletion or overwrite whose targets are all scratch (scratch.go) goes through, and so does one the setting lets
@@ -735,7 +750,7 @@ func (g *guard) segmentFrom(pre, words []string, depth int) string {
 		}
 		program := first || wrapped
 		first = false
-		name := path.Base(w)
+		name := progName(w)
 		before := append(append([]string{}, pre...), words[:i]...)
 		if program {
 			// a globbed program (/bin/r? -rf x) is whichever known program it matches

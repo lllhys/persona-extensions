@@ -116,6 +116,12 @@ func TestPersonOnly(t *testing.T) {
 		"{,rm} -rf v", "{,} rm -rf v", "{,rm,-rf,v}", "{,rm}{,} -rf v", "{,/usr/bin/rm} -rf v", "{{rm,-rf},x}",
 		"{" + strings.Repeat(",", 5000) + "rm} -rf v", "echo " + strings.Repeat("{a,b}", 20) + "; rm -rf v",
 		"echo $(true)#y; rm -rf v", "echo `true`#y; rm -rf v", "echo $(x)#c && rm -rf v", "x$(echo hi)#z; rm -rf v",
+		// macOS file systems ignore case by default: RM finds /bin/RM and runs rm
+		`RM -rf "$t"`, "cd view && /bin/Rm -f sub/*", "sudo RM -rf /var/x", "SUDO rm -rf /var/x", "Git reset --hard",
+		"CHMOD 777 ~/.ssh", "/bin/R? -rf v", "BASH -c 'rm -rf v'", `PSQL -c "DROP TABLE users"`, "MKFS.ext4 /dev/sdb1",
+		"ſudo rm -rf /var/x", "ſhred ~/f", "/bin/ſh -c 'rm -rf v'", "\u212Aubectl delete ns x",
+		"CSH -c 'rm -rf v'", "/bin/Tcsh -c 'rm -rf v'", "PWSH -c 'rm -rf v'", "SUDO -s <<EOF\nrm -rf v\nEOF",
+		"Doas -s <<EOF\nrm -rf v\nEOF", "Git -C d clean -fd", "GIT --namespace n reset --hard", "Git -c alias.x=clean x -fdx",
 	}
 	for _, c := range stays {
 		if personOnly(c) == "" {
