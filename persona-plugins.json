@@ -1,7 +1,7 @@
 {
   "market_version": 1,
-  "name": "nwverse 扩展",
-  "description": "nwverse 维护、以后可以公开的 Persona 扩展。",
+  "name": "官方扩展",
+  "description": "Persona 官方维护的扩展。",
   "plugins": [
     {
       "manifest": {
