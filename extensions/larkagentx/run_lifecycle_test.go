@@ -293,3 +293,38 @@ func TestRunIdlesAndShutsDownWithoutSession(t *testing.T) {
 		t.Fatalf("shutdown started a companion: starts=%d bridges=%d", s, n)
 	}
 }
+
+// A failure that detaches the companion (a transient session.check result or
+// a failed send) reconnects on the 2s backoff floor by itself. Nothing calls
+// signal() after the failure: the loop must not sleep the minute-long probe
+// interval it uses while a companion is attached.
+func TestRunReconnectsOnBackoffAfterDetach(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fail func(*runHarness, *fakeBridge)
+	}{
+		{"error check state", func(r *runHarness, b *fakeBridge) {
+			b.setCheckState("error")
+			r.c.signal() // run the next probe now instead of in a minute
+		}},
+		{"failed send", func(r *runHarness, b *fakeBridge) {
+			b.setFailCode("unavailable")
+			b.setFail("session.send")
+			if _, err := invoke(r.c, "actions.do", sendParams("backoff-test", "Synthetic text")); err == nil {
+				t.Error("failed send reported success")
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRunHarness(t, persistedSessionData, 0)
+			b0 := waitOpen(t, r)
+			tc.fail(r, b0)
+			assertClosed(t, b0)
+			waitFor(t, 5*time.Second, func() bool { return connectorState(r.c) == "ok" && connectorAttached(r.c) },
+				"loop did not reconnect within the backoff after a detach")
+			if s, n, _ := r.stats(); n != 2 {
+				t.Fatalf("starts=%d bridges=%d, want one replacement companion", s, n)
+			}
+		})
+	}
+}
