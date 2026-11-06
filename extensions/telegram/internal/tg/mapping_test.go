@@ -1,9 +1,13 @@
 package telegram
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/gotd/td/bin"
 	"github.com/gotd/td/tg"
 )
 
@@ -97,5 +101,58 @@ func TestMessageOf(t *testing.T) {
 	post := messageOf(&tg.Message{ID: 9, Date: int(at.Unix()), Message: "频道的示例消息", PeerID: &tg.PeerChannel{ChannelID: 5}}, e)
 	if post.FromKey != "c5" || post.From != "示例频道" {
 		t.Fatalf("a post without a sender %+v", post)
+	}
+}
+
+// A chat found by search keeps its @username, so a write can name it that way after tg search as after tg chats.
+func TestSearchKeepsUsernames(t *testing.T) {
+	user := &tg.User{ID: 42, AccessHash: 4242, FirstName: "示例", Username: "example_user"}
+	group := &tg.Channel{ID: 2, AccessHash: 22, Title: "示例群", Megagroup: true, Username: "example_group"}
+	now := int(time.Now().Unix())
+	dm := &tg.Message{ID: 5, PeerID: &tg.PeerUser{UserID: 42}, FromID: &tg.PeerUser{UserID: 42}, Date: now, Message: "示例发布说明"}
+	post := &tg.Message{ID: 6, PeerID: &tg.PeerChannel{ChannelID: 2}, FromID: &tg.PeerUser{UserID: 42}, Date: now, Message: "示例发布说明"}
+	gc := offlineGotd(func(input bin.Encoder, output bin.Decoder) error {
+		switch r := input.(type) {
+		case *tg.MessagesGetDialogsRequest:
+			res := &tg.MessagesDialogs{Users: []tg.UserClass{user}}
+			if r.FolderID == 0 {
+				res.Dialogs = []tg.DialogClass{&tg.Dialog{Peer: &tg.PeerUser{UserID: 42}, TopMessage: 5}}
+				res.Messages = []tg.MessageClass{dm}
+			}
+			output.(*tg.MessagesDialogsBox).Dialogs = res
+		case *tg.MessagesSearchGlobalRequest:
+			output.(*tg.MessagesMessagesBox).Messages = &tg.MessagesMessages{Messages: []tg.MessageClass{dm, post},
+				Users: []tg.UserClass{user}, Chats: []tg.ChatClass{group}}
+		default:
+			return fmt.Errorf("unexpected %T", input)
+		}
+		return nil
+	})
+	ctx := context.Background()
+	found, err := gc.Search(ctx, "示例", nil, time.Time{}, time.Time{}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 2 || found[0].Dialog.Username != "example_user" || found[1].Dialog.Username != "example_group" {
+		t.Fatalf("found %+v", found)
+	}
+
+	c := newConn(&memSecrets{}, nil)
+	c.cl = gc
+	send := json.RawMessage(`{"chat":"@example_user","text":"你好"}`)
+	if _, err := c.Call(ctx, "telegram_list_chats", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := c.Describe(ctx, "telegram_send", send); err != nil {
+		t.Fatalf("after tg chats: %v", err)
+	}
+	if _, err := c.Call(ctx, "telegram_search_messages", json.RawMessage(`{"query":"示例"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := c.Describe(ctx, "telegram_send", send); err != nil {
+		t.Fatalf("after tg search: %v", err)
+	}
+	if _, _, err := c.Describe(ctx, "telegram_send", json.RawMessage(`{"chat":"@example_group","text":"你好"}`)); err != nil {
+		t.Fatalf("a group found only by tg search: %v", err)
 	}
 }

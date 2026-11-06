@@ -434,11 +434,11 @@ func (g *gotdClient) Search(ctx context.Context, query string, in *dialog, since
 		case *tg.PeerUser:
 			d.Kind = "dm"
 			if u := e.users[pp.UserID]; u != nil {
-				d.Bot, d.Self = u.Bot, u.Self
+				d.Bot, d.Self, d.Username = u.Bot, u.Self, u.Username
 			}
 		case *tg.PeerChannel:
 			if ch, ok := e.chats[pp.ChannelID].(*tg.Channel); ok {
-				d.Broadcast = ch.Broadcast && !ch.Megagroup
+				d.Broadcast, d.Username = ch.Broadcast && !ch.Megagroup, ch.Username
 			}
 		}
 		out = append(out, found{Dialog: d, Message: messageOf(m, e)})
