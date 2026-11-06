@@ -96,6 +96,23 @@ func TestCompanionProcessHelper(t *testing.T) {
 				fmt.Printf("{\"event\":\"message\",\"message\":{\"id\":\"burst-%03d\",\"chat\":\"chat-test\",\"sender\":\"sender-test\",\"text\":\"Burst %d\"}}\n", i, i)
 			}
 		}
+		if (mode == "burst-check-error" || mode == "burst-check-signed-out") && (req.Method == "session.check" || req.Method == "session.send") {
+			// Messages read while a probe or send runs, then a failure:
+			// "error" (transient, #163) or a send error, or an explicit
+			// sign-out. 70 is more than the 64-slot event buffer.
+			for i := 0; i < 70; i++ {
+				fmt.Printf("{\"event\":\"message\",\"message\":{\"id\":\"probe-%03d\",\"chat\":\"chat-test\",\"sender\":\"sender-test\",\"text\":\"Probe %d\"}}\n", i, i)
+			}
+			switch {
+			case req.Method == "session.send":
+				fmt.Printf("{\"id\":%d,\"error\":{\"code\":\"unavailable\"}}\n", req.ID)
+			case mode == "burst-check-error":
+				fmt.Printf("{\"id\":%d,\"result\":{\"state\":\"error\"}}\n", req.ID)
+			default:
+				fmt.Printf("{\"id\":%d,\"result\":{\"state\":\"not_signed_in\"}}\n", req.ID)
+			}
+			continue
+		}
 		if mode == "burst-reply" && req.Method == "session.send" {
 			fmt.Printf("{\"id\":%d,\"result\":{\"message_id\":\"message-sent\"}}\n", req.ID)
 			continue
@@ -467,4 +484,61 @@ func TestEventBacklogOverflowFailsClosed(t *testing.T) {
 	case <-time.After(7 * time.Second):
 		t.Fatal("bridge kept queueing past the backlog limit")
 	}
+}
+
+// TestMessagesReadDuringFailedProbeReachInbox pins #285: a session.check
+// that fails transiently detaches the companion while holding c.op, after
+// it already read 70 allowlisted messages (more than the event buffer, so
+// some wait in the FIFO). Nothing replays them, so they must still reach
+// the inbox. An explicit sign-out still discards them.
+func TestMessagesReadDuringFailedProbeReachInbox(t *testing.T) {
+	for _, tc := range []struct {
+		mode string
+		want int
+	}{{"burst-check-error", 70}, {"burst-check-signed-out", 0}} {
+		t.Run(tc.mode, func(t *testing.T) {
+			t.Setenv("PERSONA_LARKAGENTX_TEST_HELPER", tc.mode)
+			c := newConnector()
+			ctx, cancel := context.WithCancel(context.Background())
+			c.ctx, c.hub = ctx, &memoryHub{data: persistedSessionData}
+			c.argv, c.chats, c.senders = []string{os.Args[0], "-test.run=^TestCompanionProcessHelper$"}, []string{"chat-test"}, []string{"sender-test"}
+			c.factory = startBridge
+			done := make(chan struct{})
+			go func() { c.run(); close(done) }()
+			defer func() { cancel(); <-done }()
+			waitFor(t, 5*time.Second, func() bool { return connectorState(c) != "ok" && !connectorAttached(c) },
+				"the failed probe did not detach the companion")
+			seen := func() int { c.mu.Lock(); defer c.mu.Unlock(); return len(c.data.Seen) }
+			for deadline := time.Now().Add(3 * time.Second); seen() < tc.want && time.Now().Before(deadline); {
+				time.Sleep(time.Millisecond)
+			}
+			time.Sleep(200 * time.Millisecond)
+			if n := seen(); n != tc.want {
+				t.Fatalf("seen=%d after the failed probe, want %d", n, tc.want)
+			}
+		})
+	}
+}
+
+// A send that fails after the companion read messages keeps them too (#285).
+func TestMessagesReadDuringFailedSendReachInbox(t *testing.T) {
+	t.Setenv("PERSONA_LARKAGENTX_TEST_HELPER", "burst-check-error")
+	c, _, _ := fixture(t)
+	c.argv = []string{os.Args[0], "-test.run=^TestCompanionProcessHelper$"}
+	c.factory = startBridge
+	c.op.Lock()
+	c.detach()
+	if _, err := c.create(); err != nil {
+		c.op.Unlock()
+		t.Fatal(err)
+	}
+	c.op.Unlock()
+	if _, err := invoke(c, "actions.do", sendParams("failed-send-test", "Synthetic text")); err == nil {
+		t.Fatal("failed send reported success")
+	}
+	waitFor(t, 5*time.Second, func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return len(c.data.Seen) == 70
+	}, "messages read during the failed send were dropped")
 }

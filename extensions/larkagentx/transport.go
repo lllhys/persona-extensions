@@ -45,6 +45,9 @@ type bridge interface {
 	Events() <-chan bridgeEvent
 	Done() <-chan struct{}
 	Close()
+	// Drain returns, in order, the events read but not handed to the
+	// consumer. It is meaningful once Done has fired.
+	Drain() []bridgeEvent
 }
 
 type processBridge struct {
@@ -174,6 +177,10 @@ func (b *processBridge) deliver(delivered chan<- struct{}) {
 		select {
 		case b.events <- ev:
 		case <-b.shutdown:
+			// Keep the event for Drain.
+			b.queueMu.Lock()
+			b.queue = append([]bridgeEvent{ev}, b.queue...)
+			b.queueMu.Unlock()
 			return
 		}
 	}
@@ -249,4 +256,16 @@ func (b *processBridge) Close() {
 			}
 		}()
 	})
+}
+
+func (b *processBridge) Drain() []bridgeEvent {
+	var out []bridgeEvent
+	for len(b.events) > 0 {
+		out = append(out, <-b.events)
+	}
+	b.queueMu.Lock()
+	out = append(out, b.queue...)
+	b.queue = nil
+	b.queueMu.Unlock()
+	return out
 }

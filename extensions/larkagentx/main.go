@@ -19,7 +19,7 @@ import (
 )
 
 const id = "larkagentx"
-const version = "0.1.7"
+const version = "0.1.8"
 const sendAction = "larkagentx_send_text"
 
 //go:embed persona-extension.json
@@ -132,6 +132,9 @@ type connector struct {
 	qr                   string
 	data                 stored
 	wake                 chan struct{}
+	// released holds companions detached by a failed probe or send while
+	// signed in; watch still takes the messages they already read (#285).
+	released map[bridge]bool
 }
 
 func newConnector() *connector {
@@ -279,7 +282,7 @@ func (c *connector) run() {
 			}
 			if err := b.Call(c.ctx, "session.check", nil, &result); err != nil {
 				c.setError(err)
-				c.detach()
+				c.release()
 			} else if result.State == "not_signed_in" {
 				// An explicit sign-out is the only probe result that expires
 				// the stored session and requires interactive sign-in.
@@ -290,7 +293,7 @@ func (c *connector) run() {
 				// complete (network/timeout), not when credentials are gone.
 				// Detach and let reconnect run session.open, which revalidates.
 				c.setError(failure("unavailable"))
-				c.detach()
+				c.release()
 			}
 		}
 		c.op.Unlock()
@@ -334,6 +337,22 @@ func (c *connector) detach() {
 	if b != nil {
 		b.Close()
 	}
+}
+
+// release detaches the companion after a failed probe or send. Unless the
+// failure signed the session out, the messages it already read still reach
+// the inbox: the companion emitted them and nothing replays them. Callers
+// hold c.op.
+func (c *connector) release() {
+	c.mu.Lock()
+	if c.b != nil && c.state != "not_signed_in" {
+		if c.released == nil {
+			c.released = map[bridge]bool{}
+		}
+		c.released[c.b] = true
+	}
+	c.mu.Unlock()
+	c.detach()
 }
 
 func (c *connector) create() (bridge, error) {
@@ -387,8 +406,16 @@ func (c *connector) watch(b bridge) {
 		case <-b.Done():
 			c.op.Lock()
 			c.mu.Lock()
-			current := c.b == b
+			current, released := c.b == b, c.released[b]
+			delete(c.released, b)
 			c.mu.Unlock()
+			if released {
+				for _, ev := range b.Drain() {
+					if ev.Event == "message" {
+						c.receive(ev.Message)
+					}
+				}
+			}
 			if current {
 				c.detach()
 				c.mu.Lock()
@@ -405,7 +432,11 @@ func (c *connector) watch(b bridge) {
 			c.op.Lock()
 			c.mu.Lock()
 			current := c.b == b && c.state == "ok"
+			released := c.released[b]
 			c.mu.Unlock()
+			if released && ev.Event == "message" {
+				c.receive(ev.Message)
+			}
 			if current {
 				if ev.Event == "message" {
 					c.receive(ev.Message)
@@ -497,6 +528,7 @@ func (c *connector) adopt(ctx context.Context, session json.RawMessage) error {
 	c.mu.Lock()
 	old := c.data
 	c.data = stored{Session: slices.Clone(session), Writes: old.Writes}
+	c.released = nil // a new sign-in starts a fresh inbox
 	c.mu.Unlock()
 	if err := c.open(ctx); err != nil {
 		c.mu.Lock()
