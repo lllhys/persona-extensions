@@ -59,7 +59,8 @@ func newSite(base string) *site {
 	return &site{base: base, http: &http.Client{Timeout: 20 * time.Second}, cache: map[string]cached{}}
 }
 
-// get reads path, from the cache when it is younger than fresh (fresh 0 reads it again).
+// get reads path, from the cache when it is younger than fresh (fresh 0 reads it again). When the read fails
+// and an older copy is cached, it returns that copy together with the error.
 func (s *site) get(ctx context.Context, path string, fresh time.Duration) ([]byte, error) {
 	s.mu.Lock()
 	c, ok := s.cache[path]
@@ -70,7 +71,7 @@ func (s *site) get(ctx context.Context, path string, fresh time.Duration) ([]byt
 	body, err := s.fetch(ctx, path)
 	if err != nil {
 		if ok && !errors.Is(err, errNoTopic) { // an older copy beats an error page
-			return c.body, nil
+			return c.body, err
 		}
 		return nil, err
 	}
