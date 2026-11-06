@@ -39,31 +39,109 @@ var shells = map[string]bool{"bash": true, "sh": true, "zsh": true, "dash": true
 var sqlClients = map[string]bool{"psql": true, "mysql": true, "mariadb": true, "sqlite3": true, "sqlcmd": true,
 	"clickhouse": true, "clickhouse-client": true, "duckdb": true, "cqlsh": true}
 
-// sqlDestructive is SQL that deletes data or changes who may use it.
-var sqlDestructive = regexp.MustCompile(`(?i)\b(drop\s+(table|database|schema|index|view|user|role)|truncate\b|delete\s+from|grant\b|revoke\b|alter\s+(user|role))`)
+// sqlPermission is SQL that changes who may use data, sqlDeletion SQL that deletes it.
+var (
+	sqlPermission = regexp.MustCompile(`(?i)\b(drop\s+(user|role)|grant\b|revoke\b|alter\s+(user|role))`)
+	sqlDeletion   = regexp.MustCompile(`(?i)\b(drop\s+(table|database|schema|index|view)|truncate\b|delete\s+from)`)
+)
 
 // onlinePermission is a path in a GitHub API call that is about who may do what.
 var onlinePermission = regexp.MustCompile(`(?i)(collaborators|permissions|protection|/teams|/members|memberships|invitations|rulesets|/keys|secrets|/hooks|environments)`)
 
 // personOnly says why cmd must stay with a person ("" when it need not).
-func personOnly(cmd string) string { return personOnlyDepth(cmd, 0) }
+func personOnly(cmd string) string { return (&guard{}).personOnly(cmd) }
 
-func personOnlyDepth(cmd string, depth int) string {
+// guard reads one command for the floor. Its zero value reads it with no scratch targets and nothing let through.
+type guard struct {
+	allowDestructive bool   // the setting: deletions and overwrites go through (not disk formatting)
+	roots            *roots // where scratch targets may be; nil: nowhere
+	cwd              string // the session's working directory
+
+	sv  *shellVars // the command string being read
+	seg int        // the segment being read in it
+
+	// notes are the deletions and overwrites let through, and why, for the audit log
+	notes []string
+}
+
+// newGuard is the guard for a session in cwd.
+func newGuard(cwd string, allowDestructive bool) *guard {
+	return &guard{allowDestructive: allowDestructive, roots: scratchRoots(cwd), cwd: cwd}
+}
+
+// personOnly says why cmd must stay with a person ("" when it need not).
+func (g *guard) personOnly(cmd string) string {
+	g.notes = nil
+	return g.personOnlyDepth(cmd, 0)
+}
+
+// lets says whether the setting lets a floor reason through: deletion and overwriting, not a forced push, a
+// permission change, disk formatting, an online change or an unclear command. It notes the ones it lets through.
+func (g *guard) lets(why string) bool {
+	if !g.allowDestructive {
+		return false
+	}
+	if (strings.HasPrefix(why, "deletion") && !strings.Contains(why, "permission")) || strings.HasPrefix(why, "overwrite") {
+		g.note("setting: " + why)
+		return true
+	}
+	return false
+}
+
+func (g *guard) note(n string) {
+	for _, x := range g.notes {
+		if x == n {
+			return
+		}
+	}
+	g.notes = append(g.notes, n)
+}
+
+// stays is why, unless the setting lets it through ("").
+func (g *guard) stays(why string) string {
+	if why == "" || g.lets(why) {
+		return ""
+	}
+	return why
+}
+
+func (g *guard) personOnlyDepth(cmd string, depth int) string {
 	all, _ := scan(cmd)
 	for _, words := range all {
 		for _, w := range words {
-			if sqlClients[path.Base(w)] && sqlDestructive.MatchString(cmd) {
-				return "deletion or permission change (SQL)"
+			if !sqlClients[path.Base(w)] {
+				continue
+			}
+			if sqlPermission.MatchString(cmd) {
+				return "permission change (SQL)"
+			}
+			if sqlDeletion.MatchString(cmd) {
+				if why := g.stays("deletion (SQL)"); why != "" {
+					return why
+				}
 			}
 		}
 	}
-	segs, redirects := scan(stripHeredocs(cmd))
-	if len(redirects) > 0 {
-		return "overwrite: > " + redirects[0]
+	stripped := stripHeredocs(cmd)
+	full, redirects, tail := scanFull(stripped)
+	sv, seg := g.sv, g.seg
+	defer func() { g.sv, g.seg = sv, seg }()
+	g.sv = readVars(stripped, full, tail, g.cwd, depth == 0)
+	for _, r := range redirects {
+		g.seg = r.seg
+		if g.scratchTargets(nil, []string{r.target}) {
+			g.note("scratch: > " + r.target)
+			continue
+		}
+		if why := g.stays("overwrite: > " + r.target); why != "" {
+			return why
+		}
 	}
-	for _, words := range segs {
+	for k, s := range full {
+		words := s.words
+		g.seg = k
 		kept := withoutMessages(words)
-		if why := segmentPersonOnly(kept, depth); why != "" {
+		if why := g.segmentPersonOnly(kept, depth); why != "" {
 			return why
 		}
 		if depth >= 3 {
@@ -103,13 +181,27 @@ func personOnlyDepth(cmd string, depth int) string {
 						target = strings.TrimPrefix(target, "-qc")
 					}
 				}
-				if why := personOnlyDepth(target, depth+1); why != "" {
+				if why := g.nested(kept, target, depth+1); why != "" {
 					return why
 				}
 			}
 		}
 	}
 	return ""
+}
+
+// nested reads a command string that the words run: with no scratch targets when it runs elsewhere (ssh host '…',
+// docker exec c sh -c '…').
+func (g *guard) nested(words []string, cmd string, depth int) string {
+	for _, w := range words {
+		if elsewhere[path.Base(w)] {
+			roots := g.roots
+			g.roots = nil
+			defer func() { g.roots = roots }()
+			break
+		}
+	}
+	return g.personOnlyDepth(cmd, depth)
 }
 
 // stripHeredocs takes out the body of each heredoc that is not fed to a shell: what cat, tee or python read is data.
@@ -374,8 +466,35 @@ func isMessageFlag(prog, flag string) bool {
 // substitutions separate. redirects are the files output is written to with >, >|, N> or &> (not >>, not >&N),
 // outside /dev/ and /tmp/.
 func scan(cmd string) (segs [][]string, redirects []string) {
+	full, reds, _ := scanFull(cmd)
+	for _, s := range full {
+		segs = append(segs, s.words)
+	}
+	for _, r := range reds {
+		redirects = append(redirects, r.target)
+	}
+	return segs, redirects
+}
+
+// segment is one simple command's words, and the separators ( ; \n & | ( ) { } $( and backticks) between the one
+// before it and this one: before is "" for the first.
+type segment struct {
+	words  []string
+	before string
+}
+
+// redirect is a file output is written to, and the index of the segment it was read in (the one being read then:
+// the number of segments finished before it).
+type redirect struct {
+	target string
+	seg    int
+}
+
+// scanFull is scan with the separators between segments, and each redirect's segment.
+func scanFull(cmd string) (segs []segment, redirects []redirect, tail string) {
 	var words []string
 	var cur strings.Builder
+	var sep strings.Builder // separators since the last segment
 	inWord, single, double := false, false, false
 	param := 0 // open ${ … } parameter expansions, whose braces are not brace expansion
 	endWord := func() {
@@ -388,7 +507,8 @@ func scan(cmd string) (segs [][]string, redirects []string) {
 	endSegment := func() {
 		endWord()
 		if len(words) > 0 {
-			segs = append(segs, words)
+			segs = append(segs, segment{words: words, before: sep.String()})
+			sep.Reset()
 			words = nil
 		}
 	}
@@ -443,6 +563,7 @@ func scan(cmd string) (segs [][]string, redirects []string) {
 				cur.WriteRune(r)
 			case standalone:
 				endSegment() // a { … } group: its words are a command
+				sep.WriteRune(r)
 			default:
 				// part of a word: brace expansion makes it several words ({rm,-rf,x} is rm -rf x)
 				cur.WriteRune(map[rune]rune{'{': braceOpen, '}': braceClose}[r])
@@ -459,23 +580,25 @@ func scan(cmd string) (segs [][]string, redirects []string) {
 			endWord()
 			var target string
 			if i, target = redirectTarget(rs, i); target != "" {
-				redirects = append(redirects, target)
+				redirects = append(redirects, redirect{target: target, seg: len(segs)})
 			}
 		case r == '<':
 			endWord()
 		case strings.ContainsRune(";&|\n()`", r):
 			endSegment()
+			sep.WriteRune(r)
 		case r == ' ' || r == '\t' || r == '\r':
 			endWord()
 		case r == '$' && i+1 < len(rs) && rs[i+1] == '(':
 			endSegment()
+			sep.WriteRune(r)
 		default:
 			cur.WriteRune(r)
 			inWord = true
 		}
 	}
 	endSegment()
-	return segs, redirects
+	return segs, redirects, sep.String()
 }
 
 // redirectTarget reads the redirect whose > is at rs[i]: the file it overwrites ("" for >>, >&N, /dev/ and /tmp/),
@@ -556,8 +679,15 @@ var wrappers = map[string]bool{
 
 // segmentPersonOnly looks at one simple command. A word counts as a program when it comes first (after NAME=value
 // assignments) or after a wrapper; so `grep -rn truncate src/` and `cd /tmp/rm` go through, `sudo -b rm x` does not.
-func segmentPersonOnly(words []string, depth int) string {
-	first, wrapped := true, false
+// A deletion or overwrite whose targets are all scratch (scratch.go) goes through, and so does one the setting lets
+// through.
+func (g *guard) segmentPersonOnly(words []string, depth int) string {
+	return g.segmentFrom(nil, words, depth)
+}
+
+// segmentFrom is segmentPersonOnly for words that come after pre in the simple command (a globbed program's).
+func (g *guard) segmentFrom(pre, words []string, depth int) string {
+	first, wrapped := len(pre) == 0, len(pre) > 0
 	for i, w := range words {
 		if first && strings.Contains(w, "=") && !strings.HasPrefix(w, "-") {
 			continue
@@ -568,10 +698,11 @@ func segmentPersonOnly(words []string, depth int) string {
 		program := first || wrapped
 		first = false
 		name := path.Base(w)
+		before := append(append([]string{}, pre...), words[:i]...)
 		if program {
 			// a globbed program (/bin/r? -rf x) is whichever known program it matches
 			for _, n := range globMatches(name) {
-				if why := segmentPersonOnly(append([]string{n}, words[i+1:]...), depth); why != "" {
+				if why := g.segmentFrom(append(before, w), append([]string{n}, words[i+1:]...), depth); why != "" {
 					return why
 				}
 			}
@@ -586,19 +717,33 @@ func segmentPersonOnly(words []string, depth int) string {
 		if !program {
 			continue
 		}
+		rest := words[i+1:]
 		if why, ok := alwaysPerson[name]; ok {
-			return why + ": " + name
+			r := why + ": " + name
+			if name == "dd" && ddDisk(rest) {
+				return "disk overwrite: dd"
+			}
+			if why == "permission change" || diskTools[name] {
+				return r
+			}
+			if g.scratchTargets(before, targetsOf(name, rest)) {
+				g.note("scratch: " + name)
+				continue
+			}
+			if r = g.stays(r); r != "" {
+				return r
+			}
+			continue
 		}
 		if strings.HasPrefix(name, "mkfs") {
-			return "overwrite: " + name
+			return "disk overwrite: " + name
 		}
-		rest := words[i+1:]
 		var why string
 		switch name {
 		case "git": // its arguments are not programs (git mv, git rm are git's own)
-			return gitPersonOnly(rest, depth)
+			return g.stays(g.gitPersonOnly(rest, depth))
 		case "gh":
-			return ghPersonOnly(rest)
+			return g.stays(ghPersonOnly(rest))
 		case "find": // what -exec runs is checked as the words after it
 			if has(rest, "-delete") {
 				why = "deletion: find -delete"
@@ -617,7 +762,7 @@ func segmentPersonOnly(words []string, depth int) string {
 			}
 		case "install":
 			if hasShort(rest, 'm') || hasShort(rest, 'o') || hasShort(rest, 'g') || hasPrefix(rest, "--mode") || hasPrefix(rest, "--owner") || hasPrefix(rest, "--group") {
-				why = "permission change: install -m"
+				return "permission change: install -m"
 			}
 		case "cp":
 			if has(rest, "--force") || has(rest, "--remove-destination") || hasShort(rest, 'f') {
@@ -637,11 +782,11 @@ func segmentPersonOnly(words []string, depth int) string {
 				why = "deletion: " + name
 			}
 		case "kubectl", "helm":
-			if hasAny(rest, "delete", "uninstall", "drain") {
+			if hasAny(rest, "role", "rolebinding", "clusterrole", "clusterrolebinding", "serviceaccount", "sa") &&
+				hasAny(rest, "create", "apply", "edit", "patch", "replace", "set", "delete") {
+				return "permission change: " + name
+			} else if hasAny(rest, "delete", "uninstall", "drain") {
 				why = "deletion: " + name
-			} else if hasAny(rest, "create", "apply", "edit", "patch", "replace", "set") &&
-				hasAny(rest, "role", "rolebinding", "clusterrole", "clusterrolebinding", "serviceaccount", "sa") {
-				why = "permission change: " + name
 			}
 		case "terraform", "tofu", "pulumi":
 			if has(rest, "destroy") || has(rest, "-destroy") {
@@ -650,47 +795,70 @@ func segmentPersonOnly(words []string, depth int) string {
 		case "aws":
 			switch {
 			case has(rest, "iam") || hasPrefixContaining(rest, "put-", "policy") || hasPrefixContaining(rest, "put-", "acl"):
-				why = "permission change: aws"
+				return "permission change: aws"
 			case hasPrefix(rest, "delete-") || hasPrefix(rest, "terminate-") || has(rest, "--delete") || (has(rest, "s3") && hasAny(rest, "rm", "rb")):
 				why = "deletion: aws"
 			}
 		case "gcloud", "gsutil":
 			for _, r := range rest {
 				if strings.Contains(r, "iam-policy") || r == "iam" || r == "acl" {
-					why = "permission change: " + name
+					return "permission change: " + name
 				}
 			}
-			if why == "" && hasAny(rest, "delete", "rm", "rb") {
+			if hasAny(rest, "delete", "rm", "rb") {
 				why = "deletion: " + name
 			}
 		case "az":
 			if has(rest, "role") {
-				why = "permission change: az role"
+				return "permission change: az role"
 			} else if has(rest, "delete") {
 				why = "deletion: az"
 			}
 		}
-		if why != "" {
+		if why == "" {
+			continue
+		}
+		switch name {
+		case "find", "rsync", "ln", "cp", "tee":
+			if g.scratchTargets(before, targetsOf(name, rest)) {
+				g.note("scratch: " + name)
+				continue
+			}
+		}
+		if why = g.stays(why); why != "" {
 			return why
 		}
 	}
 	return ""
 }
 
+// diskTools format or repartition a disk: they stay with a person even when the setting lets deletions through.
+var diskTools = map[string]bool{"wipefs": true, "fdisk": true, "parted": true}
+
+// ddDisk says whether dd writes to a device.
+func ddDisk(args []string) bool {
+	for _, a := range args {
+		if of, ok := strings.CutPrefix(a, "of="); ok && strings.HasPrefix(path.Clean(of), "/dev/") && path.Clean(of) != "/dev/null" {
+			return true
+		}
+	}
+	return false
+}
+
 // gitPersonOnly looks at what follows git: its subcommand (after -C, -c and other global flags) and that one's
 // arguments.
-func gitPersonOnly(args []string, depth int) string {
+func (g *guard) gitPersonOnly(args []string, depth int) string {
 	i := 0
 	for i < len(args) && strings.HasPrefix(args[i], "-") {
 		if (args[i] == "-C" || args[i] == "-c" || args[i] == "--git-dir" || args[i] == "--work-tree") && i+1 < len(args) {
 			if args[i] == "-c" && depth < 3 {
-				if why := gitConfigPersonOnly(args[i+1], depth); why != "" {
+				if why := g.gitConfigPersonOnly(args[i+1], depth); why != "" {
 					return why
 				}
 			}
 			i++
 		} else if strings.HasPrefix(args[i], "-c") && depth < 3 {
-			if why := gitConfigPersonOnly(strings.TrimPrefix(args[i], "-c"), depth); why != "" {
+			if why := g.gitConfigPersonOnly(strings.TrimPrefix(args[i], "-c"), depth); why != "" {
 				return why
 			}
 		}
@@ -707,12 +875,12 @@ func gitPersonOnly(args []string, depth int) string {
 				cmdArgs := rest[k+1:]
 				for _, w := range cmdArgs {
 					if strings.ContainsAny(w, " \t\n;&|()<>") && depth < 3 {
-						if why := personOnlyDepth(w, depth+1); why != "" {
+						if why := g.personOnlyDepth(w, depth+1); why != "" {
 							return why
 						}
 					}
 				}
-				return segmentPersonOnly(cmdArgs, depth)
+				return g.segmentPersonOnly(cmdArgs, depth)
 			}
 		}
 	case "submodule":
@@ -724,13 +892,13 @@ func gitPersonOnly(args []string, depth int) string {
 				}
 				for _, w := range cmdArgs {
 					if strings.ContainsAny(w, " \t\n;&|()<>") && depth < 3 {
-						if why := personOnlyDepth(w, depth+1); why != "" {
+						if why := g.personOnlyDepth(w, depth+1); why != "" {
 							return why
 						}
 					}
 				}
 				if len(cmdArgs) > 0 {
-					return segmentPersonOnly(cmdArgs, depth)
+					return g.segmentPersonOnly(cmdArgs, depth)
 				}
 			}
 		}
@@ -751,7 +919,7 @@ func gitPersonOnly(args []string, depth int) string {
 				}
 			}
 			if cmd != "" && depth < 3 {
-				if why := personOnlyDepth(cmd, depth+1); why != "" {
+				if why := g.personOnlyDepth(cmd, depth+1); why != "" {
 					return why
 				}
 			}
@@ -845,18 +1013,60 @@ func checkoutOperands(args []string) []string {
 	return out
 }
 
-// ghPersonOnly looks at what follows gh.
+// ghPersonOnly looks at what follows gh: a permission change counts before a deletion (gh secret delete changes
+// who may use the secret), so that the setting does not let it through.
 func ghPersonOnly(args []string) string {
+	if why := ghPermission(args); why != "" {
+		return why
+	}
 	if has(args, "delete") || has(args, "--delete-branch") || hasPrefix(args, "--delete") {
 		return "deletion: gh"
 	}
-	// gh takes -R/--repo before the command too (gh -R o/r secret set X): skip flags to find the command
+	if ghMethod(args) == "DELETE" {
+		return "deletion: gh api DELETE"
+	}
+	return ""
+}
+
+// ghCommand is gh's command and what follows it: gh takes -R/--repo before the command too (gh -R o/r secret set X).
+func ghCommand(args []string) []string {
 	for len(args) > 0 && strings.HasPrefix(args[0], "-") {
 		if (args[0] == "-R" || args[0] == "--repo") && len(args) > 1 {
 			args = args[1:]
 		}
 		args = args[1:]
 	}
+	return args
+}
+
+// ghMethod is a gh api call's HTTP method ("" when it is not one).
+func ghMethod(args []string) string {
+	args = ghCommand(args)
+	if len(args) == 0 || args[0] != "api" {
+		return ""
+	}
+	method := "GET"
+	for i, a := range args {
+		switch {
+		case (a == "-X" || a == "--method") && i+1 < len(args):
+			method = strings.ToUpper(args[i+1])
+		case strings.HasPrefix(a, "-X") && len(a) > 2:
+			method = strings.ToUpper(a[2:])
+		case strings.HasPrefix(a, "--method="):
+			method = strings.ToUpper(strings.TrimPrefix(a, "--method="))
+		case a == "-f" || a == "-F" || a == "--field" || a == "--raw-field" || a == "--input" ||
+			strings.HasPrefix(a, "--field=") || strings.HasPrefix(a, "--raw-field=") || strings.HasPrefix(a, "--input="):
+			if method == "GET" {
+				method = "POST"
+			}
+		}
+	}
+	return method
+}
+
+// ghPermission says why a gh command changes who may do what ("" when it does not).
+func ghPermission(all []string) string {
+	args := ghCommand(all)
 	if len(args) == 0 {
 		return ""
 	}
@@ -868,25 +1078,7 @@ func ghPersonOnly(args []string) string {
 			return "permission change: gh repo " + args[1]
 		}
 	case "api":
-		method := "GET"
-		for i, a := range args {
-			switch {
-			case (a == "-X" || a == "--method") && i+1 < len(args):
-				method = strings.ToUpper(args[i+1])
-			case strings.HasPrefix(a, "-X") && len(a) > 2:
-				method = strings.ToUpper(a[2:])
-			case strings.HasPrefix(a, "--method="):
-				method = strings.ToUpper(strings.TrimPrefix(a, "--method="))
-			case a == "-f" || a == "-F" || a == "--field" || a == "--raw-field" || a == "--input" ||
-				strings.HasPrefix(a, "--field=") || strings.HasPrefix(a, "--raw-field=") || strings.HasPrefix(a, "--input="):
-				if method == "GET" {
-					method = "POST"
-				}
-			}
-		}
-		if method == "DELETE" {
-			return "deletion: gh api DELETE"
-		}
+		method := ghMethod(all)
 		if has(args, "graphql") {
 			for _, a := range args {
 				if strings.Contains(strings.ToLower(a), "mutation") {
@@ -904,8 +1096,6 @@ func ghPersonOnly(args []string) string {
 					return "permission change: gh api " + a
 				}
 			}
-		}
-		if method != "GET" && method != "HEAD" {
 			for _, a := range args[1:] {
 				if !strings.HasPrefix(a, "-") && onlinePermission.MatchString(a) {
 					return "permission change: gh api " + method
@@ -968,16 +1158,16 @@ func hasShort(words []string, c byte) bool {
 // gitConfigPersonOnly looks at a git -c setting. Many values are commands git runs through the shell: a ! alias,
 // core.pager, core.editor, core.sshCommand, diff.external, credential and filter helpers and more; so a value that
 // starts with ! or holds a space or a shell operator is read as a command, whatever the key.
-func gitConfigPersonOnly(cfg string, depth int) string {
+func (g *guard) gitConfigPersonOnly(cfg string, depth int) string {
 	_, val, ok := strings.Cut(cfg, "=")
 	if !ok {
 		return ""
 	}
 	if cmd, bang := strings.CutPrefix(val, "!"); bang {
-		return personOnlyDepth(cmd, depth+1)
+		return g.personOnlyDepth(cmd, depth+1)
 	}
 	if strings.ContainsAny(val, " \t\n;&|()<>") {
-		return personOnlyDepth(val, depth+1)
+		return g.personOnlyDepth(val, depth+1)
 	}
 	return ""
 }

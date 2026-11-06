@@ -196,9 +196,12 @@ func TestHookOtherTools(t *testing.T) {
 }
 
 func TestHookLeavesDestructiveBash(t *testing.T) {
+	b := newBox(t)
 	e := newEnv(t)
 	for _, cmd := range []string{"cd view && rm -f sub/*", "git push --force", "chmod -R 777 .", "git reset --hard", "ssh host rm -rf /srv/x"} {
-		if got := e.hook(t, request(e, "bypassPermissions", "Bash", cmd), time.Now()); got != "" {
+		req := request(e, "bypassPermissions", "Bash", cmd)
+		req["cwd"] = b.home // not a project: relative targets are not scratch
+		if got := e.hook(t, req, time.Now()); got != "" {
 			t.Errorf("%q: answered %q, should stay with a person", cmd, got)
 		}
 	}
