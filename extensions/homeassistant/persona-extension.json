@@ -2,8 +2,8 @@
   "manifest_version": 1,
   "id": "homeassistant",
   "name": "Home Assistant",
-  "version": "0.1.6",
-  "description": "接你自己的 Home Assistant：主导航上多一个「家」，按区域看设备和传感器的状态、搜索实体，点开开关灯、调亮度、调空调温度和模式、开关窗帘、执行场景，看最近 24 小时的变化；助手能查家里的状态和历史，也能操作设备（每次都在手机上确认，门锁和警戒永远要确认）。用长期访问令牌连 Home Assistant 的 REST API。",
+  "version": "0.2.0",
+  "description": "接你自己的 Home Assistant：主导航上多一个「家」，按区域看设备和传感器的状态、搜索实体，点开开关灯、调亮度、调空调温度和模式、开关窗帘、执行场景，看最近 24 小时的变化；助手能查家里的状态、历史、全屋日志、长期统计和能耗，看摄像头画面，列出和运行自动化、脚本，按房间批量操作（跳过设备的配置开关），在音箱上播报，也能新建和修改自动化（每次都在手机上确认，门锁、警戒、改自动化和播报永远要确认）；提醒规则在门开、漏水、设备离线、湿度超标时主动推送到手机或叫助手。用长期访问令牌连 Home Assistant 的 REST 和 WebSocket API。",
   "publisher": "nwverse",
   "tags": ["智能家居", "Home Assistant", "设备"],
   "engines": {
@@ -28,7 +28,9 @@
           "actions"
         ],
         "confirm_always": [
-          "homeassistant_secure_call"
+          "homeassistant_secure_call",
+          "homeassistant_automation_edit",
+          "homeassistant_say"
         ]
       }
     ],
@@ -74,6 +76,16 @@
         "items": {
           "type": "string"
         }
+      },
+      "watches": {
+        "type": "array",
+        "title": "提醒规则",
+        "description": "每行一条：看谁 条件 [for=持续多久] [do=notify|assistant|both] [level=time-sensitive] [cooldown=30m] [name=名字] [message=附言]。看谁是实体 id（可以带 *）或「类型@区域」，条件是 =状态、>数、<数 或 offline。如 binary_sensor.front_door =on for=1m；sensor.bathroom_humidity >75 for=10m do=assistant message=开排风扇；binary_sensor@厨房 class=moisture =on level=time-sensitive；switch.* offline",
+        "maxItems": 50,
+        "items": {
+          "type": "string",
+          "maxLength": 400
+        }
       }
     }
   },
@@ -86,6 +98,10 @@
     }
   ],
   "permissions": {
-    "network": []
+    "network": [],
+    "hub": [
+      "notify",
+      "assistant.ask"
+    ]
   }
 }

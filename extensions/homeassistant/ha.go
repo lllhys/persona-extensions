@@ -119,6 +119,20 @@ type ha struct {
 	lastErr   error
 	lastErrAt time.Time
 	retry     bool // the user asked to try again (Retry, refresh): the next request goes out even after a refusal
+	reg       *Registry
+	regAt     time.Time
+	autoCfg   map[string]string // automation config id → its config as last read (canonical JSON)
+
+	wsMu sync.Mutex
+	wsc  *wsConn // the commands' WebSocket (ws.go)
+}
+
+// cachedHome is the last states and areas read, however old (false: none yet): for actions.describe, which may not
+// reach out.
+func (h *ha) cachedHome() ([]State, []Area, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.states, h.areas, h.states != nil
 }
 
 // tryAgain lets the next request go out though the token was refused a moment ago.
@@ -157,8 +171,14 @@ var authPause = 5 * time.Minute
 
 // send sends one request and returns the answer's body; errors are kept for the connector's status.
 func (h *ha) send(ctx context.Context, method, path string, body any) ([]byte, error) {
+	raw, _, err := h.sendTyped(ctx, method, path, body)
+	return raw, err
+}
+
+// sendTyped is send with the answer's content type.
+func (h *ha) sendTyped(ctx context.Context, method, path string, body any) ([]byte, string, error) {
 	if !h.configured() {
-		return nil, errNotConfigured
+		return nil, "", errNotConfigured
 	}
 	h.mu.Lock()
 	refused := h.lastErr != nil && errors.Is(h.lastErr, errUnauthorized) && time.Since(h.lastErrAt) < authPause && !h.retry
@@ -166,19 +186,19 @@ func (h *ha) send(ctx context.Context, method, path string, body any) ([]byte, e
 	h.retry = false
 	h.mu.Unlock()
 	if refused {
-		return nil, last
+		return nil, "", last
 	}
 	var rd io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		rd = bytes.NewReader(b)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, h.base+path, rd)
 	if err != nil {
-		return nil, fmt.Errorf("Home Assistant 的地址不对：%w", err)
+		return nil, "", fmt.Errorf("Home Assistant 的地址不对：%w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+h.token)
 	req.Header.Set("Content-Type", "application/json")
@@ -190,7 +210,7 @@ func (h *ha) send(ctx context.Context, method, path string, body any) ([]byte, e
 			err = fmt.Errorf("连不上 Home Assistant（%s）：%w", h.host(), unwrapURL(err))
 		}
 		h.note(err)
-		return nil, err
+		return nil, "", err
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
@@ -216,7 +236,7 @@ func (h *ha) send(ctx context.Context, method, path string, body any) ([]byte, e
 		err = fmt.Errorf("Home Assistant 回了 HTTP %d：%s", resp.StatusCode, clip(oneLine(msg), 200))
 	}
 	h.note(err)
-	return raw, err
+	return raw, resp.Header.Get("Content-Type"), err
 }
 
 // do sends one request and decodes the JSON answer into out (nil: discarded).

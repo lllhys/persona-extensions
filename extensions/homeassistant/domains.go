@@ -17,7 +17,7 @@ import (
 // whole system, run commands or reach outside), and anything that is only read.
 var defaultWritable = []string{"light", "switch", "fan", "cover", "climate", "media_player", "vacuum", "humidifier",
 	"water_heater", "input_boolean", "input_number", "input_select", "number", "select", "button", "input_button",
-	"scene", "script", "remote", "siren", "valve", "lawn_mower", "lock", "alarm_control_panel"}
+	"scene", "script", "automation", "remote", "siren", "valve", "lawn_mower", "lock", "alarm_control_panel"}
 
 // secureDomains open doors or disarm alarms: the assistant reaches them only through homeassistant_secure_call,
 // which the phone always confirms (confirm_always), and the page asks before each tap.

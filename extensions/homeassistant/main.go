@@ -18,11 +18,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"regexp"
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/nwverse/persona/sdk/go/ext"
 )
@@ -47,6 +49,7 @@ type Config struct {
 	InsecureTLS bool     `json:"insecure_tls,omitempty"`
 	Writable    []string `json:"writable_domains,omitempty"`
 	HiddenAreas []string `json:"hidden_areas,omitempty"`
+	Watches     []string `json:"watches,omitempty"` // watch.go parseRule
 }
 
 // app is the running extension: the client and the settings, replaced as a whole by each initialize.
@@ -58,9 +61,34 @@ type app struct {
 	cfg      Config
 	writable []string
 	cfgErr   error // what is wrong with the settings, for the status and the page
+	tz       *time.Location
+	dataDir  string
+	hub      *hubAPI
+	watch    *watcher
 }
 
-func newApp(logf func(string, ...any)) *app { return &app{logf: logf, ha: newHA("", "", false)} }
+func newApp(logf func(string, ...any)) *app {
+	a := &app{logf: logf, ha: newHA("", "", false)}
+	a.watch = newWatcher(a)
+	return a
+}
+
+// loc is the user's time zone (the hub's), else this machine's.
+func (a *app) loc() *time.Location {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.tz != nil {
+		return a.tz
+	}
+	return time.Local
+}
+
+// hubAPI is the hub's API as initialize gave it (nil: none).
+func (a *app) hubAPI() *hubAPI {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.hub
+}
 
 func (a *app) program() ext.Program {
 	return ext.Program{ID: id, Version: version, Manifest: manifest, Init: a.init,
@@ -68,13 +96,40 @@ func (a *app) program() ext.Program {
 		UI:         map[string]ext.Page{pageUI: {Render: a.render, Action: a.action}}}
 }
 
-func (a *app) init(_ context.Context, in *ext.Init, _ *ext.Hub) (map[string]any, error) {
+func (a *app) init(ctx context.Context, in *ext.Init, _ *ext.Hub) (map[string]any, error) {
 	var cfg Config
 	if err := in.Config(&cfg); err != nil {
 		return nil, fmt.Errorf("config: %w", err)
 	}
 	a.configure(cfg, in.Secrets["token"])
+	a.mu.Lock()
+	if loc, err := time.LoadLocation(in.Hub.Timezone); err == nil && in.Hub.Timezone != "" {
+		a.tz = loc
+	}
+	a.dataDir = in.Info().DataDir
+	a.hub = &hubAPI{url: in.Hub.URL, token: in.Hub.Token, scopes: in.Hub.Scopes, http: &http.Client{Timeout: 20 * time.Second}}
+	a.mu.Unlock()
+	a.watch.load(a.dataDir)
+	go a.warm(ctx)
+	go a.watch.run(ctx)
 	return nil, nil
+}
+
+// warm reads what actions.describe draws from (it may not reach out): the states, areas, services and the entity
+// registry, now and every few minutes.
+func (a *app) warm(ctx context.Context) {
+	for {
+		if h, _, _ := a.client(); h.configured() {
+			_, _ = a.home(ctx, statesFor)
+			_, _ = h.Services(ctx)
+			_, _ = h.Registry(ctx)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(4 * time.Minute):
+		}
+	}
 }
 
 // configure takes the settings and the token: an address that is not http(s) leaves the extension unconfigured,
@@ -96,7 +151,11 @@ func (a *app) configure(cfg Config, token string) {
 	if err != nil {
 		base = ""
 	}
+	if a.ha != nil {
+		a.ha.closeWS()
+	}
 	a.ha = newHA(base, cleanToken(token), cfg.InsecureTLS)
+	a.watch.setSettings(cfg.Watches)
 }
 
 // cleanToken is the token as pasted, without spaces, quotes or a "Bearer " in front.

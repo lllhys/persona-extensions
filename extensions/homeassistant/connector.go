@@ -63,17 +63,23 @@ func callSchema(secure bool) map[string]any {
 	if secure {
 		what = "要调用的服务：门锁 lock / unlock / open，警戒 alarm_arm_home / alarm_arm_away / alarm_disarm"
 	}
-	return map[string]any{"type": "object", "additionalProperties": false, "required": []string{"entity_id", "service"}, "properties": map[string]any{
+	props := map[string]any{
 		"entity_id": map[string]any{"description": "一个实体 id，或同一类型（domain）的几个", "oneOf": []any{
 			map[string]any{"type": "string"}, map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "minItems": 1, "maxItems": callMost}}},
 		"service": map[string]any{"type": "string", "description": what},
 		"data":    map[string]any{"type": "object", "description": "服务的参数，如 {\"brightness_pct\": 50}、{\"temperature\": 24}、{\"option\": \"静音\"}；不要写 entity_id"},
-	}}
+	}
+	if secure {
+		return map[string]any{"type": "object", "additionalProperties": false, "required": []string{"entity_id", "service"}, "properties": props}
+	}
+	props["area"] = map[string]any{"type": "string", "description": "按区域批量操作：区域的名字或 id（和 domain 一起写，不写 entity_id），如「客厅」。设备的配置开关、诊断项、隐藏的和离线的不算在内，卡片上列出全部会操作的实体"}
+	props["domain"] = map[string]any{"type": "string", "description": "按区域操作时的类型，如 light、switch、cover、fan"}
+	return map[string]any{"type": "object", "additionalProperties": false, "required": []string{"service"}, "properties": props}
 }
 
 var actions = []tool{
 	{Name: callAction,
-		Description: "在 Home Assistant 里操作设备：对一个或几个同类型的实体调用一个服务（开关灯、调亮度、调空调温度和模式、开关窗帘、执行场景……）。只能操作扩展设置允许的类型；门锁和警戒用 " + secureAction + "。用户在手机上确认后才执行。",
+		Description: "在 Home Assistant 里操作设备：对一个或几个同类型的实体调用一个服务（开关灯、调亮度、调空调温度和模式、开关窗帘、执行场景……），或者按区域批量操作（area + domain，如「关掉客厅所有灯」：area 客厅、domain light、service turn_off）。只能操作扩展设置允许的类型；门锁和警戒用 " + secureAction + "。用户在手机上确认后才执行。",
 		InputSchema: callSchema(false)},
 	{Name: secureAction,
 		Description: "在 Home Assistant 里操作门锁和警戒（上锁、开锁、布防、撤防）。每次都要用户在手机上确认。",
@@ -99,6 +105,12 @@ func (a *app) connector(ctx context.Context, method string, raw json.RawMessage)
 	case "tools.list":
 		return map[string]any{"tools": tools}, nil
 	case "tools.call":
+		if res, ok, err := a.callNewTool(ctx, p.Name, p.Args); ok { // tools.go
+			if err != nil {
+				return nil, err
+			}
+			return res, nil
+		}
 		text, err := a.callTool(ctx, p.Name, p.Args)
 		if err != nil {
 			return nil, err
@@ -107,17 +119,21 @@ func (a *app) connector(ctx context.Context, method string, raw json.RawMessage)
 	case "actions.list":
 		return map[string]any{"tools": actions}, nil
 	case "actions.describe":
-		c, err := a.readCall(p.Name, p.Args)
+		w, err := a.readWrite(p.Name, p.Args)
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"action": map[string]string{"name": p.Name, "visible": "家里的设备（Home Assistant）"}, "summary": a.summary(c)}, nil
+		pin(p.Name, p.Args, w.pin())
+		return map[string]any{"action": map[string]string{"name": p.Name, "visible": w.visible()}, "summary": w.summary(a)}, nil
 	case "actions.do":
-		c, err := a.readCall(p.Name, p.Args)
+		w, err := a.readWrite(p.Name, p.Args)
 		if err != nil {
 			return nil, err
 		}
-		return a.do(ctx, p.RequestID, c)
+		if err := pinned(p.Name, p.Args, w.pin()); err != nil {
+			return nil, err
+		}
+		return a.do(ctx, p.RequestID, w)
 	}
 	return nil, ext.UnknownMethod("connector." + method)
 }
@@ -153,13 +169,16 @@ func (a *app) status() map[string]any {
 	return st
 }
 
-// a call is one write, read from the action's args.
+// a call is one write, read from the action's args: named entities of one domain, or (homeassistant_call only)
+// every entity of a domain in an area, settings and diagnostics of devices left out (registry.go).
 type call struct {
 	Secure   bool
 	Domain   string
 	Service  string
 	Entities []string
 	Data     map[string]any
+	Area     string    // the area's name when the call is by area
+	Skipped  []skipped // what the area has of the domain that the call leaves out
 }
 
 var (
@@ -168,7 +187,8 @@ var (
 )
 
 // readCall checks an action's args without the network (actions.describe must not reach out): entity ids of one
-// domain, a service name, the domain writable on this path, and data that does not retarget the call.
+// domain (or an area and a domain, read from what is cached), a service name, the domain writable on this path, and
+// data that does not retarget the call.
 func (a *app) readCall(name string, raw json.RawMessage) (call, error) {
 	var c call
 	switch name {
@@ -180,30 +200,44 @@ func (a *app) readCall(name string, raw json.RawMessage) (call, error) {
 	}
 	var args struct {
 		EntityID json.RawMessage `json:"entity_id"`
+		Area     string          `json:"area"`
+		Domain   string          `json:"domain"`
 		Service  string          `json:"service"`
 		Data     map[string]any  `json:"data"`
 	}
 	if len(raw) == 0 || json.Unmarshal(raw, &args) != nil {
-		return c, bad("参数要有 entity_id 和 service")
+		return c, bad("参数要有 entity_id（或 area 和 domain）和 service")
 	}
-	var one string
-	if json.Unmarshal(args.EntityID, &one) == nil {
-		c.Entities = []string{one}
-	} else if json.Unmarshal(args.EntityID, &c.Entities) != nil {
-		return c, bad("entity_id 要是一个实体 id 或几个")
-	}
-	if len(c.Entities) == 0 || len(c.Entities) > callMost {
-		return c, bad(fmt.Sprintf("entity_id 要有 1 到 %d 个", callMost))
-	}
-	for _, e := range c.Entities {
-		if !entityRE.MatchString(e) {
-			return c, bad(fmt.Sprintf("「%s」不是实体 id（像 light.living_room 这样）", clip(e, 60)))
+	args.Area = strings.TrimSpace(args.Area)
+	switch {
+	case len(args.EntityID) > 0 && args.Area != "":
+		return c, bad("entity_id 和 area 只写一个")
+	case args.Area != "" && c.Secure:
+		return c, bad("门锁和警戒要一个个写 entity_id，不能按区域批量操作")
+	case args.Area != "":
+		if err := a.readArea(&c, args.Area, strings.ToLower(strings.TrimSpace(args.Domain))); err != nil {
+			return c, err
 		}
-		d, _, _ := strings.Cut(e, ".")
-		if c.Domain == "" {
-			c.Domain = d
-		} else if d != c.Domain {
-			return c, bad("一次只能操作同一类型（domain）的实体")
+	default:
+		var one string
+		if json.Unmarshal(args.EntityID, &one) == nil {
+			c.Entities = []string{one}
+		} else if json.Unmarshal(args.EntityID, &c.Entities) != nil {
+			return c, bad("entity_id 要是一个实体 id 或几个（或者写 area 和 domain）")
+		}
+		if len(c.Entities) == 0 || len(c.Entities) > callMost {
+			return c, bad(fmt.Sprintf("entity_id 要有 1 到 %d 个", callMost))
+		}
+		for _, e := range c.Entities {
+			if !entityRE.MatchString(e) {
+				return c, bad(fmt.Sprintf("「%s」不是实体 id（像 light.living_room 这样）", clip(e, 60)))
+			}
+			d, _, _ := strings.Cut(e, ".")
+			if c.Domain == "" {
+				c.Domain = d
+			} else if d != c.Domain {
+				return c, bad("一次只能操作同一类型（domain）的实体")
+			}
 		}
 	}
 	if c.Service = strings.TrimSpace(args.Service); !serviceRE.MatchString(c.Service) {
@@ -214,25 +248,87 @@ func (a *app) readCall(name string, raw json.RawMessage) (call, error) {
 	}
 	for _, k := range []string{"entity_id", "device_id", "area_id", "floor_id", "label_id"} {
 		if _, ok := args.Data[k]; ok {
-			return c, bad("data 里不能写 " + k + "：要操作的实体只能写在 entity_id 里")
+			return c, bad("data 里不能写 " + k + "：要操作的实体只能写在 entity_id（或 area）里")
 		}
 	}
 	c.Data = args.Data
-	h, _, _ := a.client()
-	h.mu.Lock()
-	services := h.services
-	h.mu.Unlock()
-	if ds, ok := services[c.Domain]; ok && services != nil {
-		if _, ok := ds[c.Service]; !ok {
-			return c, bad(fmt.Sprintf("%s 没有服务 %s", c.Domain, c.Service))
-		}
+	if err := a.hasService(c.Domain, c.Service); err != nil {
+		return c, err
 	}
 	return c, nil
 }
 
+// hasService refuses a service Home Assistant does not have, when its services were read.
+func (a *app) hasService(domain, service string) error {
+	h, _, _ := a.client()
+	h.mu.Lock()
+	services := h.services
+	h.mu.Unlock()
+	if ds, ok := services[domain]; ok && services != nil {
+		if _, ok := ds[service]; !ok {
+			return bad(fmt.Sprintf("%s 没有服务 %s", domain, service))
+		}
+	}
+	return nil
+}
+
+// areaMost is the most entities one call by area operates.
+const areaMost = 50
+
+// readArea makes c a call on every entity of domain in the area named q, from what was last read: the states, the
+// areas and the entity registry (without the registry the call cannot tell a device from its settings, so it is
+// refused).
+func (a *app) readArea(c *call, q, domain string) error {
+	if !domainRE.MatchString(domain) {
+		return bad("按区域操作要写 domain（如 light、switch、cover）")
+	}
+	hm := a.cachedHome()
+	if hm == nil {
+		return bad("还没读过家里的设备：先用 " + id + "_search 看一下这个区域（area 写上它），再按区域操作")
+	}
+	if hm.ByType {
+		return bad("读不到 Home Assistant 的区域（" + hm.Note + "），不能按区域操作：请写 entity_id")
+	}
+	ar := hm.area(q)
+	if ar == nil {
+		return bad(fmt.Sprintf("没有区域「%s」；有：%s", clip(q, 30), strings.Join(areaNames(hm.Areas), "、")))
+	}
+	h, _, _ := a.client()
+	reg := h.cachedRegistry()
+	if reg == nil {
+		return bad("还没读到 Home Assistant 的实体注册表（entity registry），分不出哪些是设备的配置开关，不能按区域批量操作：先用 " +
+			id + "_search 看一下这个区域再试，或者写 entity_id（注册表要管理员的令牌）")
+	}
+	targets, left := batch(hm, reg, ar, domain)
+	if len(targets) == 0 {
+		msg := fmt.Sprintf("「%s」里没有能操作的%s（%s）", ar.Name, domainName(domain), domain)
+		if len(left) > 0 {
+			msg += "：" + skippedText(left)
+		}
+		return bad(msg)
+	}
+	if len(targets) > areaMost {
+		return bad(fmt.Sprintf("「%s」里有 %d 个%s，一次最多 %d 个：请分几次写 entity_id", ar.Name, len(targets), domainName(domain), areaMost))
+	}
+	c.Area, c.Domain, c.Skipped = ar.Name, domain, left
+	for _, s := range targets {
+		c.Entities = append(c.Entities, s.EntityID)
+	}
+	return nil
+}
+
+func skippedText(left []skipped) string {
+	var out []string
+	for _, s := range left {
+		out = append(out, fmt.Sprintf("「%s」（%s）%s", s.Name, s.ID, s.Why))
+	}
+	return strings.Join(out, "；")
+}
+
 func bad(msg string) error { return &ext.Error{Code: "invalid_params", Message: msg} }
 
-// summary is the card's text: which devices, what is done, with what.
+// summary is the card's text: which devices, what is done, with what. A call by area lists every entity it operates
+// and every one of the domain it leaves out.
 func (a *app) summary(c call) string {
 	h, _, _ := a.client()
 	var names []string
@@ -244,7 +340,22 @@ func (a *app) summary(c call) string {
 		}
 	}
 	verb := serviceText(c.Domain, c.Service)
-	out := fmt.Sprintf("对%s执行：%s", strings.Join(names, "、"), verb)
+	var out string
+	if c.Area != "" {
+		out = fmt.Sprintf("对「%s」的 %d 个%s执行：%s\n", c.Area, len(c.Entities), domainName(c.Domain), verb)
+		for _, n := range names {
+			out += "- " + n + "\n"
+		}
+		if len(c.Skipped) > 0 {
+			out += "不操作：\n"
+			for _, s := range c.Skipped {
+				out += fmt.Sprintf("- 「%s」（%s）：%s\n", s.Name, s.ID, s.Why)
+			}
+		}
+		out = strings.TrimRight(out, "\n")
+	} else {
+		out = fmt.Sprintf("对%s执行：%s", strings.Join(names, "、"), verb)
+	}
 	if len(c.Data) > 0 {
 		b, _ := json.Marshal(c.Data)
 		out += "，参数 " + clip(string(b), 300)
@@ -282,7 +393,7 @@ var (
 	done   = map[string]string{}
 )
 
-func (a *app) do(ctx context.Context, requestID string, c call) (any, error) {
+func (a *app) do(ctx context.Context, requestID string, w write) (any, error) {
 	if requestID == "" || len(requestID) > 256 {
 		return nil, bad("没有 request_id")
 	}
@@ -292,7 +403,7 @@ func (a *app) do(ctx context.Context, requestID string, c call) (any, error) {
 		return map[string]any{"text": text}, nil
 	}
 	doneMu.Unlock()
-	text, err := a.run(ctx, c)
+	text, err := w.run(ctx, a)
 	if err != nil {
 		return nil, err
 	}
@@ -399,17 +510,38 @@ func (a *app) home(ctx context.Context, fresh time.Duration) (*home, error) {
 	if err != nil {
 		return nil, err
 	}
+	areas, err := h.Areas(ctx)
+	if errors.Is(err, errUnauthorized) { // the states were read with this token: it is the template API
+		h.note(nil)
+	}
+	return buildHome(cfg, states, areas, err), nil
+}
+
+// cachedHome is home from what was last read, without a request (nil: nothing read yet): for actions.describe.
+func (a *app) cachedHome() *home {
+	h, cfg, _ := a.client()
+	states, areas, ok := h.cachedHome()
+	if !ok {
+		return nil
+	}
+	var err error
+	if areas == nil {
+		err = errors.New("区域还没读到")
+	}
+	return buildHome(cfg, states, areas, err)
+}
+
+// buildHome indexes the states and the areas (areasErr: they could not be read, so the "areas" are the types).
+func buildHome(cfg Config, states []State, areas []Area, areasErr error) *home {
 	hm := &home{States: states, ByID: map[string]State{}, AreaOf: map[string]*Area{}, Hidden: map[string]bool{}}
 	for _, s := range states {
 		hm.ByID[s.EntityID] = s
 	}
-	areas, err := h.Areas(ctx)
 	switch {
-	case errors.Is(err, errUnauthorized): // the states were read with this token: it is the template API
+	case errors.Is(areasErr, errUnauthorized):
 		areas, hm.ByType, hm.Note = byType(states), true, errNotAdmin.Error()
-		h.note(nil)
-	case err != nil:
-		areas, hm.ByType, hm.Note = byType(states), true, "读不到区域："+err.Error()
+	case areasErr != nil:
+		areas, hm.ByType, hm.Note = byType(states), true, "读不到区域："+areasErr.Error()
 	}
 	for _, ar := range areas {
 		if hidden(cfg, ar) {
@@ -425,7 +557,7 @@ func (a *app) home(ctx context.Context, fresh time.Duration) (*home, error) {
 			hm.AreaOf[e] = &hm.Areas[i]
 		}
 	}
-	return hm, nil
+	return hm
 }
 
 // byType makes stand-in areas of the device types, in deviceDomains' order: "@light" 灯, "@switch" 开关…
@@ -649,6 +781,13 @@ func (a *app) toolSearch(ctx context.Context, query, areaQ, domain string, unava
 	if areaQ != "" {
 		if ar = hm.area(areaQ); ar == nil {
 			return "", fmt.Errorf("没有区域「%s」；有：%s", clip(areaQ, 30), strings.Join(areaNames(hm.Areas), "、"))
+		}
+	}
+	if ar != nil { // what a call by area reads (from the cache: actions.describe may not reach out)
+		h, _, _ := a.client()
+		_, _ = h.Services(ctx)
+		if _, err := h.Registry(ctx); err != nil {
+			a.logf("entity registry: %v", err)
 		}
 	}
 	found := hm.match(query, ar, strings.ToLower(strings.TrimSpace(domain)), unavailable)

@@ -32,6 +32,9 @@ type fakeHA struct {
 	token string
 	hits  int  // requests that reached it
 	user  bool // the token's user is not an administrator: the template API answers 401, as Home Assistant's does
+	areas string
+	// more answers what the tests of the newer tools add (features_test.go): true when it did
+	more func(w http.ResponseWriter, r *http.Request) bool
 }
 
 func newFakeHA(t *testing.T) *fakeHA {
@@ -54,9 +57,12 @@ func newFakeHA(t *testing.T) *fakeHA {
 		s.LastChanged, s.LastUpdated = at, at
 		f.state[s.EntityID] = s
 	}
-	areas := `[["living","客厅",["light.living","climate.living_ac","sensor.living_temp","switch.fan_plug","select.ac_mode","sensor.fridge_freezer"]],` +
+	f.areas = `[["living","客厅",["light.living","climate.living_ac","sensor.living_temp","switch.fan_plug","select.ac_mode","sensor.fridge_freezer"]],` +
 		`["bedroom","卧室",["light.bed","lock.front"]],["kitchen","厨房",["binary_sensor.leak"]],["away","别处",["light.other_home"]]]`
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if f.more != nil && f.more(w, r) {
+			return
+		}
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		f.hits++
@@ -86,7 +92,7 @@ func newFakeHA(t *testing.T) *fakeHA {
 				fmt.Fprint(w, `{"message":"Unauthorized"}`)
 				return
 			}
-			fmt.Fprint(w, areas)
+			fmt.Fprint(w, f.areas)
 		case p == "/api/services" && r.Method == http.MethodGet:
 			fmt.Fprint(w, `[{"domain":"light","services":{"turn_on":{},"turn_off":{},"toggle":{}}},{"domain":"lock","services":{"lock":{},"unlock":{}}},`+
 				`{"domain":"climate","services":{"set_temperature":{},"set_hvac_mode":{},"turn_off":{}}},{"domain":"select","services":{"select_option":{}}}]`)
