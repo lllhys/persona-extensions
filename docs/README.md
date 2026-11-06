@@ -7,6 +7,7 @@
 - [Installation](installation.md): register the public market, install local packages and handle older hubs.
 - [GitHub](extensions/github.md): the inbox, knowledge-base archive, assistant tools and sign-in of the GitHub connector (moved out of the hub), and a GitHub page: what needs you, repositories and their code, and PR / issue review.
 - [LINUX DO](extensions/linuxdo.md): public topics, filtering, request limits and the app view.
+- [V2EX](extensions/v2ex.md): public hot, latest and followed-node topics, filtering, request limits and the app view.
 - [Telegram](extensions/telegram.md): login, inbox, archives, network requirements, tools and the `tg` CLI.
 - [Bypass auto-allow (Claude Code)](extensions/claude-bypass-allow.md): auto-allow Claude Code's remaining Bash, read-only and subagent prompts in bypassPermissions sessions on chosen computers; deletion, overwriting, force pushes, permission changes and your own ask/deny rules still ask; audit log and limits.
 - [Feishu / LarkAgentX adapter](extensions/larkagentx.md): non-redistributing user-installed companion, headless QR/import login, exact allowlists, always-confirmed text sends and experimental validation limits.
