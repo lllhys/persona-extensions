@@ -92,6 +92,33 @@ func (h *ha) cachedRegistry() *Registry {
 	return h.reg
 }
 
+// pageRegistry is the registry for the page: read when stale, the last one (or nil) when it cannot be (a token that
+// may not use the WebSocket's config commands): the page then lists entities one by one. A failure is not tried
+// again for registryFor, and is not the connector's error: the states were read a moment ago.
+func (a *app) pageRegistry(ctx context.Context) *Registry {
+	h, _, _ := a.client()
+	h.mu.Lock()
+	failed, last := !h.regFailAt.IsZero() && time.Since(h.regFailAt) < registryFor, h.reg
+	h.mu.Unlock()
+	if failed {
+		return last
+	}
+	r, err := h.Registry(ctx)
+	if err != nil {
+		if ctx.Err() == nil {
+			h.mu.Lock()
+			h.regFailAt = time.Now()
+			h.mu.Unlock()
+			h.note(nil)
+		}
+		return last
+	}
+	h.mu.Lock()
+	h.regFailAt = time.Time{}
+	h.mu.Unlock()
+	return r
+}
+
 // mainDomains are what a device is: a light, a fan… A switch, select, number or button of a device that also has one
 // of these is a setting of that device, not a device of its own.
 var mainDomains = []string{"light", "fan", "climate", "cover", "media_player", "vacuum", "humidifier", "water_heater",

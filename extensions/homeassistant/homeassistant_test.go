@@ -173,10 +173,23 @@ func texts(v *wire.View) string {
 	if v.Filter != nil {
 		fmt.Fprintf(&b, "[filter %s=%q %d choices]\n", v.Filter.Name, v.Filter.Value, len(v.Filter.Choices))
 	}
+	if v.Tabs != nil {
+		var ts []string
+		for _, t := range v.Tabs.Items {
+			ts = append(ts, t.Value+"="+t.Title)
+		}
+		fmt.Fprintf(&b, "[tabs %s=%q %s]\n", v.Tabs.Name, v.Tabs.Value, strings.Join(ts, " "))
+	}
 	for _, s := range v.Sections {
 		fmt.Fprintf(&b, "## %s | %s\n", s.Title, s.Footer)
 		for _, it := range s.Items {
 			fmt.Fprintf(&b, "%s %s|%s|%s|%s|%s|%s", it.Type, it.Title, it.Subtitle, it.Value, it.Text, it.Label, it.Detail)
+			for _, c := range it.Crumbs {
+				fmt.Fprintf(&b, " /%s", c.Title)
+				if c.Action != nil {
+					fmt.Fprintf(&b, "→%s", c.Action.ID)
+				}
+			}
 			if it.Badge != nil {
 				fmt.Fprintf(&b, " [%s %s]", it.Badge.Text, it.Badge.Tone)
 			}
@@ -247,30 +260,62 @@ func TestPage(t *testing.T) {
 	// the overview: areas with what is on, alarms first; a hidden area nowhere
 	v, _ := a.render(context.Background(), req(nil, "", nil))
 	got := check(t, v)
-	contains(t, got, "[search", "[filter area=\"\" 4 choices]", "## 报警", "厨房漏水|传感器 · 厨房|", "[有水 danger]",
-		"row 客厅|3 个设备，2 个开着，1 个离线，温度 27.5°|", "[2 开着 positive] →area:living", "→area:bedroom")
+	contains(t, got, "[search", "[filter area=\"\" 4 choices]", `[tabs tab="home" home=家 log=动态 auto=自动化]`, "## 报警", "厨房漏水|传感器 · 厨房|", "[有水 danger]",
+		"row 客厅|客厅灯、空调（制冷） 开着 · 27.5°|", "[2 开着 positive] →area:living", "row 卧室|都关着|", "→area:bedroom")
 	if strings.Contains(got, "别处") {
 		t.Errorf("a hidden area shows:\n%s", got)
 	}
 
-	// an area: its devices, offline ones behind a row; sensors on the other tab
+	// an area: a section per kind of device, a light turned off from its row, offline ones behind a row; sensors on
+	// the other tab
 	res, st := act(t, a, pageState{}, "area:living", nil)
 	got = texts(res.View)
-	contains(t, got, "segmented", "## 设备 · 2", "客厅灯|灯 · 亮度 50%||", "[开 positive] →open:light.living", "[制冷 positive]", "还有 1 个离线的")
-	if strings.Contains(got, "客厅温度") {
-		t.Errorf("a sensor among the devices:\n%s", got)
+	contains(t, got, "breadcrumb ||||| /家→home /客厅", "segmented", "## 灯 · 1", "row 客厅灯|亮度 50%|", "[开 positive] →do:light.living|turn_off",
+		"## 空调/温控 · 1", "row 空调|室温 27.5° · 设定 26°|", "[制冷 positive] →open:climate.living_ac", "还有 1 个离线的", "→pick")
+	if strings.Contains(got, "客厅温度") || strings.Contains(got, "button 返回") {
+		t.Errorf("a sensor among the devices, or a back button with a breadcrumb:\n%s", got)
 	}
+	res, st2 := act(t, a, st, "do:light.living|turn_off", nil)
+	if f.lastCall() != "light.turn_off [light.living] {}" || !strings.Contains(res.Toast, "好了：客厅灯：关") || st2.Area != "living" {
+		t.Fatalf("a row's tap: %q, toast %q", f.lastCall(), res.Toast)
+	}
+	contains(t, texts(res.View), "[关 neutral] →do:light.living|turn_on")
+	res, _ = act(t, a, st, "pick", nil)
+	contains(t, texts(res.View), "→open:light.living", "改回点一下就开关")
+	for _, forged := range []string{"do:lock.front|unlock", "do:light.living|toggle", "do:light.other_home|turn_off", "do:shell_command.reboot|turn_on"} {
+		f.mu.Lock()
+		f.calls = nil
+		f.mu.Unlock()
+		if res, _ := act(t, a, st, forged, nil); f.lastCall() != "" || res.Toast == "" {
+			t.Errorf("%s went through: %q %q", forged, f.lastCall(), res.Toast)
+		}
+	}
+	act(t, a, st, "do:light.living|turn_on", nil)
 	res, st = act(t, a, st, "kind", map[string]string{"kind": "sensors"})
 	contains(t, texts(res.View), "客厅温度|传感器|27.5 °C|")
 	res, _ = act(t, a, pageState{Area: "living"}, "offline", nil)
 	contains(t, texts(res.View), "风扇插座", "[离线 caution]", "不列离线的")
 
-	// a light: its controls, a tap turns it off
+	// a light: the way back on top, its controls, a tap turns it off; its attributes folded
 	res, st = act(t, a, pageState{Area: "living"}, "open:light.living", nil)
 	got = texts(res.View)
-	contains(t, got, "metric ||开||状态|亮度 50%", "button 关", "→svc:turn_off", `→svc:turn_on|{"brightness_pct":20}`, "## 最近 24 小时", "## 属性", "[brightness 128]")
-	if res.View.Search != nil {
-		t.Errorf("a search box on an entity's page")
+	contains(t, got, "breadcrumb ||||| /家→home /客厅→back /客厅灯", "metric ||开||状态|亮度 50%", "button 关", "→svc:turn_off",
+		`→svc:turn_on|{"brightness_pct":20}`, "## 最近 24 小时", "row 属性 · 2|brightness、supported_color_modes|", "→attrs")
+	if res.View.Search != nil || res.View.Tabs != nil || strings.Contains(got, "[brightness 128]") || strings.Contains(got, "button 返回") {
+		t.Errorf("a search box or tabs on an entity's page, attributes unfolded, a back button:\n%s", got)
+	}
+	if res, _ := act(t, a, st, "attrs", nil); !strings.Contains(texts(res.View), "[brightness 128]") || !strings.Contains(texts(res.View), "收起属性") {
+		t.Errorf("attributes do not unfold:\n%s", texts(res.View))
+	}
+	if res, back := act(t, a, st, "back", nil); back.Entity != "" || back.Area != "living" || !strings.Contains(texts(res.View), "## 灯 · 1") {
+		t.Errorf("back: %+v", back)
+	}
+	// an app before UI version 4: a 返回 button on top instead
+	old := req(st, "", nil)
+	old.UIVersion = 3
+	ov, _ := a.render(context.Background(), old)
+	if ov.Tabs != nil || len(ov.Sections) == 0 || ov.Sections[0].Items[0].Type != "button" || ov.Sections[0].Items[0].Action.ID != "back" {
+		t.Errorf("UI version 3:\n%s", texts(ov))
 	}
 	res, st = act(t, a, st, "svc:turn_off", nil)
 	if f.lastCall() != "light.turn_off [light.living] {}" || !strings.Contains(res.Toast, "好了：客厅灯：关") {
@@ -323,7 +368,7 @@ func TestNotAdmin(t *testing.T) {
 	a := newTestApp(t, f, Config{})
 	v, _ := a.render(context.Background(), req(nil, "", nil))
 	got := check(t, v)
-	contains(t, got, "不是 Home Assistant 的管理员", "## 类型 · ", "row 灯|3 个设备，2 个开着|", "→area:@light", "[filter area=\"\"")
+	contains(t, got, "不是 Home Assistant 的管理员", "## 类型 · ", "row 灯|客厅灯、", "→area:@light", "[filter area=\"\"")
 	if strings.Contains(got, "不认这个令牌") {
 		t.Fatalf("a valid token reads as refused:\n%s", got)
 	}
