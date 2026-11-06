@@ -861,7 +861,7 @@
         "manifest_version": 1,
         "id": "sentry",
         "name": "Sentry",
-        "version": "0.1.0",
+        "version": "0.1.1",
         "description": "把 Persona 各端（hub、网页、安卓、之后的 iOS / Mac）的错误和崩溃发到你的 Sentry 项目，方便持续发现和修问题。报告先经 hub 脱敏：不含消息正文、token、用户名、机器名和 IP 地址。填好 DSN 才开始上报；没有填就什么都不发。",
         "publisher": "nwverse",
         "homepage": "https://github.com/nwverse/persona-extensions/blob/main/docs/extensions/sentry.md",
@@ -908,6 +908,12 @@
               "title": "包含 hub 日志里的错误行",
               "description": "关掉后只发异常、崩溃和 panic",
               "default": true
+            },
+            "allow_http": {
+              "type": "boolean",
+              "title": "允许 http 的 DSN（自建实例）",
+              "description": "默认只接受 https。打开后也接受 http:// 的 DSN：DSN 里的公钥和每条报告都会明文传输，同一网络上的人能看到、也能用这个公钥伪造报告。只在可信的内网里接自建实例时打开",
+              "default": false
             }
           }
         },
@@ -915,7 +921,7 @@
           {
             "name": "dsn",
             "title": "DSN",
-            "description": "Sentry 项目的 DSN：Settings › Projects › 你的项目 › Client Keys (DSN)，形如 https://<公钥>@<组织>.ingest.sentry.io/<项目号>",
+            "description": "Sentry 项目的 DSN：Settings › Projects › 你的项目 › Client Keys (DSN)，形如 https://<公钥>@<组织>.ingest.sentry.io/<项目号>；http:// 的要先打开「允许 http 的 DSN」",
             "required": true
           }
         ],
@@ -934,9 +940,9 @@
       ],
       "packages": [
         {
-          "url": "release:sentry-v0.1.0/sentry-0.1.0.tar.gz",
-          "sha256": "ca1fbee931446f9788f969ac77071b802a4eb28179949156692a23127139b990",
-          "size": 12453120
+          "url": "release:sentry-v0.1.1/sentry-0.1.1.tar.gz",
+          "sha256": "196c687f7a5311ea55bae251f5d9ff8faaa06fedcd755217e9d266b99362c6ae",
+          "size": 12455193
         }
       ]
     },
