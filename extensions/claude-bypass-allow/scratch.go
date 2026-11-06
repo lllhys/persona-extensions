@@ -402,6 +402,13 @@ func (sv *shellVars) cd(args []string, k int) {
 			next = append(next, filepath.Clean(d))
 			continue
 		}
+		// Shells search CDPATH unless the first component is . or ... We do not resolve that search: a command
+		// may set CDPATH dynamically, so relative destructive targets must remain subject to confirmation.
+		first := strings.SplitN(d, string(filepath.Separator), 2)[0]
+		if first != "." && first != ".." && (os.Getenv("CDPATH") != "" || sv.sets("CDPATH")) {
+			sv.cwds = nil
+			return
+		}
 		if len(sv.cwds) == 0 {
 			sv.cwds = nil
 			return
