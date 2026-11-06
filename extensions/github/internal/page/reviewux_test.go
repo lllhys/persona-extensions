@@ -64,8 +64,8 @@ func reviewSignedIn(t *testing.T) (*Page, *reviewFake) {
 				}
 			}
 			_, _ = w.Write([]byte(`{"data":{}}`))
-		case p == "/graphql" && strings.Contains(b, "reviewThreads(first: 100) { nodes { id"):
-			_, _ = w.Write([]byte(`{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T_100","comments":{"nodes":[{"databaseId":100}]}}]}}}}}`))
+		case p == "/graphql" && strings.Contains(b, "reviewThreads(first: 100, after: $after)"):
+			_, _ = w.Write([]byte(`{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[{"id":"T_100","isResolved":true,"comments":{"nodes":[{"databaseId":100}]}}]}}}}}`))
 		case p == repoAPI+"/pulls/12" && r.Method == http.MethodGet:
 			_, _ = w.Write([]byte(`{"node_id":"PR_12","draft":false,"merged":false,"head":{"ref":"cache","sha":"abc123"},"base":{"ref":"main"},"requested_reviewers":[{"login":"octo"}],
 "additions":2,"deletions":1,"commits":1,"changed_files":2,"mergeable":true,"mergeable_state":"clean"}`))

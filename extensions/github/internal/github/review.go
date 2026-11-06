@@ -128,43 +128,80 @@ func (c *Connector) Conversations(ctx context.Context, repo string, number int) 
 
 type threadState struct{ resolved, outdated bool }
 
-const reviewThreadsQuery = `query($owner: String!, $name: String!, $n: Int!) {
+const reviewThreadsQuery = `query($owner: String!, $name: String!, $n: Int!, $after: String) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $n) {
-      reviewThreads(first: 100) { nodes { isResolved isOutdated comments(first: 1) { nodes { databaseId } } } }
+      reviewThreads(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { id isResolved isOutdated comments(first: 1) { nodes { databaseId } } }
+      }
     }
   }
 }`
 
+// reviewThread is a conversation on lines: its GraphQL id, its first comment's id and its state.
+type reviewThread struct {
+	id    string
+	first int64
+	threadState
+}
+
+// reviewThreads are a PR's conversations on lines, oldest first, threadListPages pages of 100 like the comments on
+// lines the review page reads.
+func (c *Connector) reviewThreads(ctx context.Context, repo string, number int) ([]reviewThread, error) {
+	owner, name, _ := strings.Cut(repo, "/")
+	var out []reviewThread
+	var after any
+	for range threadListPages {
+		var res struct {
+			Repository struct {
+				PullRequest struct {
+					ReviewThreads struct {
+						PageInfo struct {
+							HasNextPage bool   `json:"hasNextPage"`
+							EndCursor   string `json:"endCursor"`
+						} `json:"pageInfo"`
+						Nodes []struct {
+							ID         string `json:"id"`
+							IsResolved bool   `json:"isResolved"`
+							IsOutdated bool   `json:"isOutdated"`
+							Comments   struct {
+								Nodes []struct {
+									DatabaseID int64 `json:"databaseId"`
+								} `json:"nodes"`
+							} `json:"comments"`
+						} `json:"nodes"`
+					} `json:"reviewThreads"`
+				} `json:"pullRequest"`
+			} `json:"repository"`
+		}
+		if err := c.graphQL(ctx, reviewThreadsQuery, map[string]any{"owner": owner, "name": name, "n": number, "after": after}, &res); err != nil {
+			return nil, err
+		}
+		rt := res.Repository.PullRequest.ReviewThreads
+		for _, t := range rt.Nodes {
+			if len(t.Comments.Nodes) > 0 {
+				out = append(out, reviewThread{t.ID, t.Comments.Nodes[0].DatabaseID, threadState{t.IsResolved, t.IsOutdated}})
+			}
+		}
+		if !rt.PageInfo.HasNextPage {
+			break
+		}
+		after = rt.PageInfo.EndCursor
+	}
+	return out, nil
+}
+
 // resolved is which conversations are resolved or outdated, by their first comment's id; nothing when GraphQL fails
 // (the page then shows every conversation as open).
 func (c *Connector) resolved(ctx context.Context, repo string, number int) map[int64]threadState {
-	owner, name, _ := strings.Cut(repo, "/")
-	var out struct {
-		Repository struct {
-			PullRequest struct {
-				ReviewThreads struct {
-					Nodes []struct {
-						IsResolved bool `json:"isResolved"`
-						IsOutdated bool `json:"isOutdated"`
-						Comments   struct {
-							Nodes []struct {
-								DatabaseID int64 `json:"databaseId"`
-							} `json:"nodes"`
-						} `json:"comments"`
-					} `json:"nodes"`
-				} `json:"reviewThreads"`
-			} `json:"pullRequest"`
-		} `json:"repository"`
-	}
-	if c.graphQL(ctx, reviewThreadsQuery, map[string]any{"owner": owner, "name": name, "n": number}, &out) != nil {
+	threads, err := c.reviewThreads(ctx, repo, number)
+	if err != nil {
 		return nil
 	}
 	m := map[int64]threadState{}
-	for _, t := range out.Repository.PullRequest.ReviewThreads.Nodes {
-		if len(t.Comments.Nodes) > 0 {
-			m[t.Comments.Nodes[0].DatabaseID] = threadState{t.IsResolved, t.IsOutdated}
-		}
+	for _, t := range threads {
+		m[t.first] = t.threadState
 	}
 	return m
 }

@@ -221,38 +221,16 @@ func (c *Connector) DiscardPending(ctx context.Context, repo string, number int)
 	return err
 }
 
-const threadIDQuery = `query($owner: String!, $name: String!, $n: Int!) {
-  repository(owner: $owner, name: $name) {
-    pullRequest(number: $n) { reviewThreads(first: 100) { nodes { id comments(first: 1) { nodes { databaseId } } } } }
-  }
-}`
-
 // Resolve resolves a conversation on lines (by its first comment's id), or opens it again.
 func (c *Connector) Resolve(ctx context.Context, repo string, number int, comment int64, resolved bool) error {
-	owner, name, _ := strings.Cut(repo, "/")
-	var res struct {
-		Repository struct {
-			PullRequest struct {
-				ReviewThreads struct {
-					Nodes []struct {
-						ID       string `json:"id"`
-						Comments struct {
-							Nodes []struct {
-								DatabaseID int64 `json:"databaseId"`
-							} `json:"nodes"`
-						} `json:"comments"`
-					} `json:"nodes"`
-				} `json:"reviewThreads"`
-			} `json:"pullRequest"`
-		} `json:"repository"`
-	}
-	if err := c.graphQL(ctx, threadIDQuery, map[string]any{"owner": owner, "name": name, "n": number}, &res); err != nil {
+	threads, err := c.reviewThreads(ctx, repo, number)
+	if err != nil {
 		return err
 	}
 	id := ""
-	for _, t := range res.Repository.PullRequest.ReviewThreads.Nodes {
-		if len(t.Comments.Nodes) > 0 && t.Comments.Nodes[0].DatabaseID == comment {
-			id = t.ID
+	for _, t := range threads {
+		if t.first == comment {
+			id = t.id
 		}
 	}
 	if id == "" {
