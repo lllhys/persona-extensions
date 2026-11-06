@@ -111,6 +111,16 @@ func (b *fakeBridge) Call(_ context.Context, m string, p, out any) error {
 func (b *fakeBridge) Events() <-chan bridgeEvent { return b.events }
 func (b *fakeBridge) Done() <-chan struct{}      { return b.done }
 func (b *fakeBridge) Close()                     { b.stop.Do(func() { close(b.done) }) }
+func (b *fakeBridge) Drain() (out []bridgeEvent) {
+	for {
+		select {
+		case ev := <-b.events:
+			out = append(out, ev)
+		default:
+			return out
+		}
+	}
+}
 func (b *fakeBridge) count(m string) int {
 	b.mu.Lock()
 	defer b.mu.Unlock()

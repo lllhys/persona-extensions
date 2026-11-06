@@ -328,3 +328,51 @@ func TestRunReconnectsOnBackoffAfterDetach(t *testing.T) {
 		})
 	}
 }
+
+// probeErrorBridge reads one allowlisted message during session.check and
+// then answers state "error", as bridge.py does when auth.validate times out.
+type probeErrorBridge struct{ *fakeBridge }
+
+func (b *probeErrorBridge) Call(ctx context.Context, m string, p, out any) error {
+	if m == "session.check" {
+		b.events <- bridgeEvent{Event: "message", Message: message{ID: "during-probe", Chat: "chat-test",
+			Sender: "sender-test", Text: "Synthetic message during the probe", At: time.Now()}}
+		raw, _ := json.Marshal(map[string]string{"state": "error"})
+		return json.Unmarshal(raw, out)
+	}
+	return b.fakeBridge.Call(ctx, m, p, out)
+}
+
+// The message watch takes while the failed probe holds c.op still reaches
+// the inbox after the reconnect (#285).
+func TestRunKeepsMessageReadDuringFailedProbe(t *testing.T) {
+	c := newConnector()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c.ctx, c.hub = ctx, &memoryHub{data: persistedSessionData}
+	c.argv, c.chats, c.senders = []string{"synthetic-command"}, []string{"chat-test"}, []string{"sender-test"}
+	var mu sync.Mutex
+	starts := 0
+	c.factory = func(context.Context, []string) (bridge, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if starts++; starts == 1 {
+			return &probeErrorBridge{newFakeBridge()}, nil
+		}
+		return newFakeBridge(), nil
+	}
+	done := make(chan struct{})
+	go func() { c.run(); close(done) }()
+	defer func() { cancel(); <-done }()
+	waitFor(t, 3*time.Second, func() bool { return connectorState(c) == "error" && !connectorAttached(c) },
+		"the failed probe did not detach the companion")
+	c.signal()
+	waitFor(t, 5*time.Second, func() bool { return connectorState(c) == "ok" && connectorAttached(c) },
+		"connector did not reconnect after the transient probe failure")
+	time.Sleep(200 * time.Millisecond)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.data.Seen) != 1 || len(c.data.Inbox) != 1 {
+		t.Fatalf("message read during a failed probe was dropped: seen=%d inbox=%d", len(c.data.Seen), len(c.data.Inbox))
+	}
+}
