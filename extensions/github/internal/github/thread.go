@@ -287,6 +287,30 @@ type threadEvent struct {
 	} `json:"rename"`
 }
 
+// checkRunPages bounds how many pages of a commit's check runs (100 each) are read.
+const checkRunPages = 10
+
+// readCheckRuns reads a commit's check runs (as T) a page at a time, until a short page or total_count of them,
+// so a matrix build's runs past the first 100 count too; total is GitHub's total_count. get is cachedGet or Get.
+func readCheckRuns[T any](ctx context.Context, get func(ctx context.Context, path string, out any) error, repo, sha string) (runs []T, total int, err error) {
+	for page := 1; page <= checkRunPages; page++ {
+		var batch struct {
+			Total int `json:"total_count"`
+			Runs  []T `json:"check_runs"`
+		}
+		if err := get(ctx, fmt.Sprintf("/repos/%s/commits/%s/check-runs?per_page=100&page=%d", repo, url.PathEscape(sha), page), &batch); err != nil {
+			return nil, 0, err
+		}
+		if page == 1 {
+			total = batch.Total
+		}
+		if runs = append(runs, batch.Runs...); len(batch.Runs) < 100 || total > 0 && len(runs) >= total {
+			break
+		}
+	}
+	return runs, total, nil
+}
+
 type threadCheckRun struct {
 	ID          int64      `json:"id"`
 	Name        string     `json:"name"`
@@ -443,15 +467,13 @@ func (c *Connector) reviewMessages(ctx context.Context, pulls, me string) ([]con
 // checkMessages are the head commit's checks, each at the time it finished (or started); a failed Actions job carries
 // the end of its log.
 func (c *Connector) checkMessages(ctx context.Context, repo, sha string, opened time.Time) ([]connector.ThreadMessage, error) {
-	var res struct {
-		Runs []threadCheckRun `json:"check_runs"`
-	}
-	if err := c.cachedGet(ctx, fmt.Sprintf("/repos/%s/commits/%s/check-runs?per_page=100", repo, url.PathEscape(sha)), &res); err != nil {
+	runs, _, err := readCheckRuns[threadCheckRun](ctx, c.cachedGet, repo, sha)
+	if err != nil {
 		return nil, err
 	}
 	var out []connector.ThreadMessage
 	logs := 0
-	for _, r := range res.Runs {
+	for _, r := range runs {
 		state := checkState(r)
 		at := opened
 		switch {

@@ -3,7 +3,6 @@ package github
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"sort"
 	"strconv"
 	"time"
@@ -210,17 +209,16 @@ func (c *Connector) pullDetail(ctx context.Context, d *Detail) error {
 	if pr.Head.SHA == "" {
 		return nil
 	}
-	var runs struct {
-		CheckRuns []struct {
-			Name       string `json:"name"`
-			Status     string `json:"status"`
-			Conclusion string `json:"conclusion"`
-		} `json:"check_runs"`
+	type run struct {
+		Name       string `json:"name"`
+		Status     string `json:"status"`
+		Conclusion string `json:"conclusion"`
 	}
-	if err := c.cachedGet(ctx, fmt.Sprintf("/repos/%s/commits/%s/check-runs?per_page=100", d.Repo, url.PathEscape(pr.Head.SHA)), &runs); err != nil {
+	runs, _, err := readCheckRuns[run](ctx, c.cachedGet, d.Repo, pr.Head.SHA)
+	if err != nil {
 		return nil // checks are extra: the PR is shown without them
 	}
-	for _, r := range runs.CheckRuns {
+	for _, r := range runs {
 		switch {
 		case r.Status != "completed":
 			d.Checks.Pending++

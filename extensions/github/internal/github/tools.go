@@ -389,30 +389,29 @@ func (c *Connector) checks(ctx context.Context, repo string, number int, ref str
 		}
 		ref = pr.Head.SHA
 	}
-	var res struct {
-		Total int `json:"total_count"`
-		Runs  []struct {
-			ID         int64  `json:"id"`
-			Name       string `json:"name"`
-			Status     string `json:"status"`
-			Conclusion string `json:"conclusion"`
-			HTMLURL    string `json:"html_url"`
-			App        struct {
-				Slug string `json:"slug"`
-			} `json:"app"`
-			Output struct {
-				Title   string `json:"title"`
-				Summary string `json:"summary"`
-			} `json:"output"`
-		} `json:"check_runs"`
+	type run struct {
+		ID         int64  `json:"id"`
+		Name       string `json:"name"`
+		Status     string `json:"status"`
+		Conclusion string `json:"conclusion"`
+		HTMLURL    string `json:"html_url"`
+		App        struct {
+			Slug string `json:"slug"`
+		} `json:"app"`
+		Output struct {
+			Title   string `json:"title"`
+			Summary string `json:"summary"`
+		} `json:"output"`
 	}
-	if _, err := c.Get(ctx, fmt.Sprintf("/repos/%s/commits/%s/check-runs?per_page=100", repo, url.PathEscape(ref)), &res); err != nil {
+	get := func(ctx context.Context, path string, out any) error { _, err := c.Get(ctx, path, out); return err }
+	runs, total, err := readCheckRuns[run](ctx, get, repo, ref)
+	if err != nil {
 		return "", err
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%d checks on %s", res.Total, short(ref))
+	fmt.Fprintf(&b, "%d checks on %s", total, short(ref))
 	failed := 0
-	for _, r := range res.Runs {
+	for _, r := range runs {
 		state := r.Status
 		if r.Status == "completed" {
 			state = r.Conclusion

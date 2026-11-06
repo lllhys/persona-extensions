@@ -303,19 +303,18 @@ func (c *Connector) Checks(ctx context.Context, repo, sha string) ([]Check, erro
 	if !validRepo(repo) || sha == "" {
 		return nil, fmt.Errorf("no commit to check")
 	}
-	var runs struct {
-		CheckRuns []struct {
-			threadCheckRun
-			Output struct {
-				Title string `json:"title"`
-			} `json:"output"`
-		} `json:"check_runs"`
+	type run struct {
+		threadCheckRun
+		Output struct {
+			Title string `json:"title"`
+		} `json:"output"`
 	}
-	if err := c.cachedGet(ctx, fmt.Sprintf("/repos/%s/commits/%s/check-runs?per_page=100", repo, url.PathEscape(sha)), &runs); err != nil {
+	runs, _, err := readCheckRuns[run](ctx, c.cachedGet, repo, sha)
+	if err != nil {
 		return nil, err
 	}
 	var out []Check
-	for _, r := range runs.CheckRuns {
+	for _, r := range runs {
 		ck := Check{ID: r.ID, Name: r.Name, App: r.App.Slug, State: checkState(r.threadCheckRun), Title: r.Output.Title, URL: r.HTMLURL,
 			Actions: r.App.Slug == "github-actions"}
 		if r.StartedAt != nil {
@@ -335,7 +334,7 @@ func (c *Connector) Checks(ctx context.Context, repo, sha string) ([]Check, erro
 			UpdatedAt   time.Time `json:"updated_at"`
 		} `json:"statuses"`
 	}
-	if err := c.cachedGet(ctx, fmt.Sprintf("/repos/%s/commits/%s/status", repo, url.PathEscape(sha)), &st); err == nil {
+	if err := c.cachedGet(ctx, fmt.Sprintf("/repos/%s/commits/%s/status?per_page=100", repo, url.PathEscape(sha)), &st); err == nil {
 		for _, s := range st.Statuses {
 			state := map[string]string{"error": "failure", "failure": "failure", "pending": "pending", "success": "success"}[s.State]
 			out = append(out, Check{Name: s.Context, State: cmp.Or(state, "neutral"), Title: s.Description, URL: s.TargetURL, Completed: s.UpdatedAt})
