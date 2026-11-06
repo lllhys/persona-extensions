@@ -32,7 +32,8 @@ var alwaysPerson = map[string]string{
 
 // shells run their arguments (or input) as commands.
 var shells = map[string]bool{"bash": true, "sh": true, "zsh": true, "dash": true, "ksh": true, "fish": true,
-	"eval": true, "ssh": true, "autossh": true, "su": true, "watch": true}
+	"eval": true, "ssh": true, "autossh": true, "su": true, "watch": true,
+	"flock": true, "script": true, "sg": true, "npx": true, "trap": true, "coproc": true}
 
 // sqlClients run SQL given as an argument or on their input.
 var sqlClients = map[string]bool{"psql": true, "mysql": true, "mariadb": true, "sqlite3": true, "sqlcmd": true,
@@ -62,20 +63,44 @@ func personOnlyDepth(cmd string, depth int) string {
 	}
 	for _, words := range segs {
 		kept := withoutMessages(words)
-		if why := segmentPersonOnly(kept); why != "" {
+		if why := segmentPersonOnly(kept, depth); why != "" {
 			return why
 		}
 		if depth >= 3 {
 			continue
 		}
 		shell := false
-		for _, w := range kept {
-			shell = shell || shells[path.Base(w)]
+		for i, w := range kept {
+			b := path.Base(w)
+			shell = shell || shells[b]
+			if b == "env" {
+				for _, a := range kept[i+1:] {
+					if a == "-S" || a == "--split-string" || strings.HasPrefix(a, "-S") || strings.HasPrefix(a, "--split-string=") {
+						shell = true
+						break
+					}
+				}
+			}
 		}
 		for _, w := range kept {
 			sub := strings.Contains(w, "$(") || strings.Contains(w, "`")
 			if sub || (shell && strings.ContainsAny(w, " \t\n;&|()<>")) {
-				if why := personOnlyDepth(w, depth+1); why != "" {
+				target := w
+				if shell {
+					switch {
+					case strings.HasPrefix(target, "-S"):
+						target = strings.TrimPrefix(target, "-S")
+					case strings.HasPrefix(target, "--split-string="):
+						target = strings.TrimPrefix(target, "--split-string=")
+					case strings.HasPrefix(target, "--command="):
+						target = strings.TrimPrefix(target, "--command=")
+					case strings.HasPrefix(target, "-c"):
+						target = strings.TrimPrefix(target, "-c")
+					case strings.HasPrefix(target, "-qc"):
+						target = strings.TrimPrefix(target, "-qc")
+					}
+				}
+				if why := personOnlyDepth(target, depth+1); why != "" {
 					return why
 				}
 			}
@@ -106,8 +131,17 @@ func stripHeredocs(cmd string) string {
 		keep := false
 		segs, _ := scan(strings.Join(words, "\n"))
 		for _, ws := range segs {
-			for _, w := range ws {
-				keep = keep || shells[path.Base(w)]
+			for i, w := range ws {
+				b := path.Base(w)
+				keep = keep || shells[b]
+				if b == "env" {
+					for _, a := range ws[i+1:] {
+						if a == "-S" || a == "--split-string" || strings.HasPrefix(a, "-S") || strings.HasPrefix(a, "--split-string=") {
+							keep = true
+							break
+						}
+					}
+				}
 			}
 		}
 		for _, h := range pending {
@@ -467,22 +501,24 @@ func isDigits(s string) bool {
 }
 
 // wrappers run the next program word as a command (sudo rm, xargs rm, find -exec rm, ssh host rm, eval rm,
-// busybox rm, autossh host rm, for …; do rm …), so after one every word counts as a possible program; shell
-// keywords are here too. ssh runs its unquoted arguments ("ssh host rm -rf x") joined with a space through the
-// remote shell, the way it runs one quoted argument; autossh execs ssh; busybox runs its applet as a program.
+// busybox rm, autossh host rm, unshare rm, taskset 1 rm, for …; do rm …), so after one every word counts as a
+// possible program; shell keywords are here too. ssh runs its unquoted arguments ("ssh host rm -rf x") joined
+// with a space through the remote shell, the way it runs one quoted argument; autossh execs ssh; busybox runs its
+// applet as a program.
 var wrappers = map[string]bool{
 	"sudo": true, "doas": true, "xargs": true, "parallel": true, "env": true, "nice": true, "ionice": true, "nohup": true,
 	"time": true, "timeout": true, "exec": true, "command": true, "builtin": true, "stdbuf": true, "setsid": true,
 	"flock": true, "chroot": true, "runuser": true, "strace": true, "unbuffer": true, "watch": true, "ssh": true,
 	"autossh": true, "busybox": true, "eval": true,
 	"npx": true, "pnpx": true, "bunx": true, "dlx": true, "uvx": true, "pipx": true,
+	"unshare": true, "taskset": true, "coproc": true, "script": true, "sg": true, "trap": true,
 	"-exec": true, "-execdir": true, "-ok": true, "-okdir": true,
 	"do": true, "then": true, "else": true, "elif": true, "if": true, "while": true, "until": true, "!": true,
 }
 
 // segmentPersonOnly looks at one simple command. A word counts as a program when it comes first (after NAME=value
 // assignments) or after a wrapper; so `grep -rn truncate src/` and `cd /tmp/rm` go through, `sudo -b rm x` does not.
-func segmentPersonOnly(words []string) string {
+func segmentPersonOnly(words []string, depth int) string {
 	first, wrapped := true, false
 	for i, w := range words {
 		if first && strings.Contains(w, "=") && !strings.HasPrefix(w, "-") {
@@ -511,7 +547,7 @@ func segmentPersonOnly(words []string) string {
 		var why string
 		switch name {
 		case "git": // its arguments are not programs (git mv, git rm are git's own)
-			return gitPersonOnly(rest)
+			return gitPersonOnly(rest, depth)
 		case "gh":
 			return ghPersonOnly(rest)
 		case "find": // what -exec runs is checked as the words after it
@@ -594,11 +630,20 @@ func segmentPersonOnly(words []string) string {
 
 // gitPersonOnly looks at what follows git: its subcommand (after -C, -c and other global flags) and that one's
 // arguments.
-func gitPersonOnly(args []string) string {
+func gitPersonOnly(args []string, depth int) string {
 	i := 0
 	for i < len(args) && strings.HasPrefix(args[i], "-") {
-		if args[i] == "-C" || args[i] == "-c" || args[i] == "--git-dir" || args[i] == "--work-tree" {
+		if (args[i] == "-C" || args[i] == "-c" || args[i] == "--git-dir" || args[i] == "--work-tree") && i+1 < len(args) {
+			if args[i] == "-c" && depth < 3 {
+				if why := gitConfigPersonOnly(args[i+1], depth); why != "" {
+					return why
+				}
+			}
 			i++
+		} else if strings.HasPrefix(args[i], "-c") && depth < 3 {
+			if why := gitConfigPersonOnly(strings.TrimPrefix(args[i], "-c"), depth); why != "" {
+				return why
+			}
 		}
 		i++
 	}
@@ -607,6 +652,61 @@ func gitPersonOnly(args []string) string {
 	}
 	sub, rest := args[i], args[i+1:]
 	switch sub {
+	case "bisect":
+		for k, a := range rest {
+			if a == "run" && k+1 < len(rest) {
+				cmdArgs := rest[k+1:]
+				for _, w := range cmdArgs {
+					if strings.ContainsAny(w, " \t\n;&|()<>") && depth < 3 {
+						if why := personOnlyDepth(w, depth+1); why != "" {
+							return why
+						}
+					}
+				}
+				return segmentPersonOnly(cmdArgs, depth)
+			}
+		}
+	case "submodule":
+		for k, a := range rest {
+			if a == "foreach" {
+				cmdArgs := rest[k+1:]
+				for len(cmdArgs) > 0 && strings.HasPrefix(cmdArgs[0], "-") {
+					cmdArgs = cmdArgs[1:]
+				}
+				for _, w := range cmdArgs {
+					if strings.ContainsAny(w, " \t\n;&|()<>") && depth < 3 {
+						if why := personOnlyDepth(w, depth+1); why != "" {
+							return why
+						}
+					}
+				}
+				if len(cmdArgs) > 0 {
+					return segmentPersonOnly(cmdArgs, depth)
+				}
+			}
+		}
+	case "rebase":
+		for j := 0; j < len(rest); j++ {
+			cmd := ""
+			if rest[j] == "-x" && j+1 < len(rest) {
+				j++
+				cmd = rest[j]
+			} else if strings.HasPrefix(rest[j], "-x") && len(rest[j]) > 2 {
+				cmd = strings.TrimPrefix(rest[j], "-x")
+			} else if longOpt(rest[j], "--exec") {
+				if _, v, ok := strings.Cut(rest[j], "="); ok {
+					cmd = v
+				} else if j+1 < len(rest) {
+					j++
+					cmd = rest[j]
+				}
+			}
+			if cmd != "" && depth < 3 {
+				if why := personOnlyDepth(cmd, depth+1); why != "" {
+					return why
+				}
+			}
+		}
 	case "push":
 		for _, a := range rest {
 			if strings.HasPrefix(a, "--force") || longOpt(a, "--mirror", "--delete", "--prune") ||
@@ -814,4 +914,21 @@ func hasShort(words []string, c byte) bool {
 		}
 	}
 	return false
+}
+
+// gitConfigPersonOnly looks at a git -c setting. Many values are commands git runs through the shell: a ! alias,
+// core.pager, core.editor, core.sshCommand, diff.external, credential and filter helpers and more; so a value that
+// starts with ! or holds a space or a shell operator is read as a command, whatever the key.
+func gitConfigPersonOnly(cfg string, depth int) string {
+	_, val, ok := strings.Cut(cfg, "=")
+	if !ok {
+		return ""
+	}
+	if cmd, bang := strings.CutPrefix(val, "!"); bang {
+		return personOnlyDepth(cmd, depth+1)
+	}
+	if strings.ContainsAny(val, " \t\n;&|()<>") {
+		return personOnlyDepth(val, depth+1)
+	}
+	return ""
 }

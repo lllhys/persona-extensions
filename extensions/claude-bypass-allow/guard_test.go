@@ -57,6 +57,21 @@ func TestPersonOnly(t *testing.T) {
 		// other command wrappers: eval runs its words in this shell, autossh execs ssh, busybox runs its applet
 		"eval rm -rf /x", "eval git push --force", "autossh -M 0 host rm -rf /x",
 		"busybox rm -rf /x", "busybox sh -c 'rm -rf /x'",
+		// command runners and wrappers: env -S/--split-string, flock/script/sg/npx -c, trap, coproc, unshare, taskset
+		"env -S 'rm -rf v'", "env --split-string='rm -rf v'", `env -S"rm -rf v"`,
+		"flock /tmp/l -c 'rm -rf v'", "script -qc 'rm -rf v' /dev/null", "script -c 'rm -rf v'",
+		"sg grp -c 'rm -rf v'", "npx -c 'rm -rf v'",
+		"trap 'rm -rf v' EXIT",
+		"coproc rm -rf v", "coproc NAME { rm -rf v; }",
+		"unshare rm -rf v", "taskset 1 rm -rf v",
+		// git command runners: rebase -x/--exec, bisect run, submodule foreach, -c alias.!
+		"git rebase -x 'rm -rf v' HEAD~1", "git rebase --exec='rm -rf v'", "git rebase --exec 'rm -rf v'",
+		"git rebase --exe='rm -rf v'", "git rebase --exe 'rm -rf v'",
+		"git -c alias.x='!rm -rf v' x",
+		"git -c core.sshCommand='rm -rf v' fetch", "git -c diff.external='rm -rf v' diff", "git -c core.pager='rm -rf v' log",
+		`git -c core.editor="sh -c 'rm -rf v'" commit --amend`, "git -c credential.helper='!rm -rf v' fetch",
+		"git bisect run rm -rf v",
+		"git submodule foreach 'rm -rf v'", "git submodule foreach --recursive 'rm -rf v'",
 		// a /tmp/ or /dev/ path that .. takes out of it is a kept file
 		"echo x > /tmp/../etc/hosts", "go test > /tmp/a/../../home/u/.bashrc 2>&1", "tee /tmp/../home/u/.profile",
 		"ls &> /dev/../etc/motd", "echo x > /tmp/\\.\\./etc/hosts", "echo x > /tmp/\\\n../etc/hosts",
@@ -116,6 +131,11 @@ func TestPersonOnly(t *testing.T) {
 		"git checkout -b feat/x origin/main", "git checkout --orphan new main",
 		"git checkout --track origin/x", "git checkout -t origin/x", "git checkout -q main", "git checkout --detach v1",
 		"git switch -c x origin/main", "git branch --list 'feat/*'", "git tag --list", "git checkout --conflict diff3 main",
+		// benign forms for command runners and git subcommands still go through
+		"env FOO=1 go test ./...", "flock /tmp/l make", "trap - EXIT", "trap 'echo done' EXIT",
+		"git rebase -i HEAD~3", "git rebase --exec 'go test ./...' HEAD~2", "git bisect run go test ./...",
+		"git submodule foreach git pull", "git -c alias.st=status st", "script -q /dev/null",
+		"git -c user.name='A B' commit -m x", "git -c core.pager='less -R' log", "git -c core.sshCommand='ssh -i k' fetch",
 	}
 	for _, c := range goes {
 		if why := personOnly(c); why != "" {
