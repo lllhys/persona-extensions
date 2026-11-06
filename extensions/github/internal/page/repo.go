@@ -495,7 +495,7 @@ func webTree(repoURL, ref, dir string) string {
 	if dir == "" && ref == "" {
 		return repoURL
 	}
-	return repoURL + "/tree/" + ref + "/" + dir
+	return repoURL + "/tree/" + escapeSegments(ref) + "/" + escapeSegments(dir)
 }
 
 func parentDir(p string) string {

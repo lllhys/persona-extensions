@@ -370,6 +370,10 @@ func TestFileLinksEscapeRefAndPath(t *testing.T) {
 		"[setup](https://github.com/example-org/example-repo/blob/fix/%2312/docs/C%23/setup.md)",
 		"[top](https://github.com/example-org/example-repo/blob/fix/%2312/README.md)",
 		"[100%](https://github.com/example-org/example-repo/blob/fix/%2312/docs/100%25/notes.md)")
+	// The directory's 在 GitHub 打开 too.
+	dir := state{V: viewRepo, Repo: "example-org/example-repo", Tab: tabCode, Ref: "fix/#12", Path: "docs/C#"}
+	v, _ = p.Render(context.Background(), req(3, dir, "", nil))
+	has(t, "dir", checked(t, v), `"url":"https://github.com/example-org/example-repo/tree/fix/%2312/docs/C%23"`)
 }
 
 // In a repository's file a /root-relative link or image resolves against the repository at the ref, not the host.
