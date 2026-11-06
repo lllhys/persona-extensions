@@ -844,6 +844,128 @@
           "size": 22156632
         }
       ]
+    },
+    {
+      "manifest": {
+        "manifest_version": 1,
+        "id": "v2ex",
+        "name": "V2EX",
+        "version": "0.1.0",
+        "description": "V2EX 社区的帖子：扩展里的一页看热门、最新和你关注的节点，点开在 App 里读正文和最新回复（hub 去读，手机不用代理）；助手能用工具查列表、读帖子。只读公开内容，不用账号。",
+        "publisher": "nwverse",
+        "engines": {
+          "plugin_protocol": 1
+        },
+        "runtime": {
+          "command": {
+            "linux-amd64": "bin/v2ex-linux-amd64",
+            "linux-arm64": "bin/v2ex-linux-arm64",
+            "darwin-arm64": "bin/v2ex-darwin-arm64",
+            "darwin-amd64": "bin/v2ex-darwin-amd64"
+          }
+        },
+        "contributes": {
+          "connectors": [
+            {
+              "id": "v2ex",
+              "name": "V2EX",
+              "capabilities": [
+                "status",
+                "tools"
+              ],
+              "hosts": [
+                "www.v2ex.com"
+              ]
+            }
+          ],
+          "ui": [
+            {
+              "id": "topics",
+              "title": "V2EX 帖子",
+              "placement": "plugin_page"
+            }
+          ]
+        },
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "list": {
+              "type": "string",
+              "title": "打开时看",
+              "default": "hot",
+              "oneOf": [
+                {
+                  "const": "hot",
+                  "title": "热门"
+                },
+                {
+                  "const": "latest",
+                  "title": "最新"
+                },
+                {
+                  "const": "nodes",
+                  "title": "我的节点"
+                }
+              ]
+            },
+            "nodes": {
+              "type": "array",
+              "title": "我的节点",
+              "description": "节点的英文名，如 python、programmer（节点页面链接 /go/ 后面那段）；最多 5 个，空着就没有「我的节点」",
+              "maxItems": 5,
+              "items": {
+                "type": "string"
+              }
+            },
+            "exclude_nodes": {
+              "type": "array",
+              "title": "不看这些节点",
+              "description": "节点的英文名或中文名，要完全一样（不分大小写）",
+              "items": {
+                "type": "string"
+              }
+            },
+            "keywords": {
+              "type": "array",
+              "title": "关键词",
+              "description": "标题或正文里有其中一个才显示（不分大小写）；空着不限",
+              "items": {
+                "type": "string"
+              }
+            },
+            "exclude_keywords": {
+              "type": "array",
+              "title": "屏蔽词",
+              "description": "标题或正文里有其中一个就不显示",
+              "items": {
+                "type": "string"
+              }
+            },
+            "tz": {
+              "type": "string",
+              "title": "时区",
+              "description": "页面和工具里的时间用这个时区（如 Asia/Shanghai）；空着用 App 或 hub 机器的"
+            }
+          }
+        },
+        "permissions": {
+          "network": [
+            "www.v2ex.com"
+          ]
+        }
+      },
+      "tags": [
+        "社区",
+        "热门",
+        "阅读"
+      ],
+      "packages": [
+        {
+          "url": "release:v2ex-v0.1.0/v2ex-0.1.0.tar.gz",
+          "sha256": "1b9319beb04afcf65eae1fa1c65c167043cb7ae905ca4ab9cdafc402ffecc8a7",
+          "size": 12636661
+        }
+      ]
     }
   ],
   "signing_key": "ed25519:hcYSzYZjIC0RZYSnQFf9WQvtdFwRoH/d1kILFWNkNmc="
