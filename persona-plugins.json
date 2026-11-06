@@ -8,7 +8,7 @@
         "manifest_version": 1,
         "id": "claude-bypass-allow",
         "name": "Bypass 自动允许",
-        "version": "0.2.17",
+        "version": "0.2.18",
         "description": "Claude Code 开着 bypassPermissions（--dangerously-skip-permissions）时，有些调用仍会弹确认框（如读工作目录外的文件、开子 Agent、某些 Bash），无人值守的 Agent 就卡在「在等你」。在你选的电脑上给 Claude Code 装一个 PermissionRequest hook：只在会话是 bypass 模式时，自动允许 Bash、只读工具（Read、Glob、Grep、LS、NotebookRead）和子 Agent。删除、覆盖数据的 Bash 命令，目标都在临时目录或工作目录里（/tmp、会话的工作目录、~/ag-work、~/wt、Claude Code 的 worktree 等）时直接放行，其余的仍然问你；打开「删除和覆盖也自动允许」就都放行。force push、改权限的 Bash 命令，写文件、Workflow 和 MCP 工具，以及你自己配的 ask / deny 规则，始终问你。每次自动允许都记一条（命令截断、去掉密钥）。别的模式照常问你。",
         "publisher": "nwverse",
         "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/claude-bypass-allow",
@@ -98,9 +98,9 @@
       ],
       "packages": [
         {
-          "url": "release:claude-bypass-allow-v0.2.17/claude-bypass-allow-0.2.17.tar.gz",
-          "sha256": "bd0056ba5dd316c1feeddb10d5b4c1fb530ad51b154658acbaa136233ce39dc9",
-          "size": 12251341
+          "url": "release:claude-bypass-allow-v0.2.18/claude-bypass-allow-0.2.18.tar.gz",
+          "sha256": "62ae6fcda0588a770d0ce05867d090585218ad70725bca3a54d11c9220841ba0",
+          "size": 12249607
         }
       ]
     },
@@ -109,7 +109,7 @@
         "manifest_version": 1,
         "id": "github",
         "name": "GitHub",
-        "version": "0.4.17",
+        "version": "0.4.18",
         "description": "GitHub 进 Persona：收件箱里是请你 review、@ 你、指派给你、你的 PR / issue 有了新评论或 review、CI 失败；和你有关的 PR、issue 归档进知识库；助手能搜、读 PR / issue、看改动和 CI，评论和 review 先在手机上确认。登录用你某台电脑上的 gh 登录或设备码登录，token 加密存在 hub 的数据库里。侧边栏的「GitHub」页：待你 review 的 PR、你的 PR 和 CI、指派 / 提到你的、通知和关注的动态、你的仓库（浏览代码、分支、README），PR 的改动文件、逐文件 diff 和行内评论、全部评论、CI 日志摘要，在这一页上评论、review、合并（先预览、确认后才发）。",
         "publisher": "nwverse",
         "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/github",
@@ -280,9 +280,9 @@
       ],
       "packages": [
         {
-          "url": "release:github-v0.4.17/github-0.4.17.tar.gz",
-          "sha256": "b368bdcf0d72827c92f33549f7149d370531fe17e7e351bceb2aefa94d39d8d4",
-          "size": 13696114
+          "url": "release:github-v0.4.18/github-0.4.18.tar.gz",
+          "sha256": "2fe84beda73e26365ec1618ca20c3fadc6c11319973976c383d873faed7547f5",
+          "size": 13699468
         }
       ]
     },
@@ -411,7 +411,7 @@
         "manifest_version": 1,
         "id": "larkagentx",
         "name": "Feishu (LarkAgentX adapter)",
-        "version": "0.1.7",
+        "version": "0.1.8",
         "description": "独立的飞书个人账号适配器：用户自行在伴随机器上安装 LarkAgentX，hub 使用 Go 程序经 SSH 接入。只收双白名单内的文本消息，发送全文始终需要确认；不启动 Agent、不发已读回执，不替换现有的飞书接入。非官方协议，真实账号联调尚未验证。",
         "publisher": "nwverse",
         "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/larkagentx",
@@ -499,9 +499,9 @@
       ],
       "packages": [
         {
-          "url": "release:larkagentx-v0.1.7/larkagentx-0.1.7.tar.gz",
-          "sha256": "f1fb5756635d53d9ea3f1343b10b7c1f93106692d269b761a759a009b69df3a8",
-          "size": 12050525
+          "url": "release:larkagentx-v0.1.8/larkagentx-0.1.8.tar.gz",
+          "sha256": "818f41f8d216dc2e05c21a0c2774703f35bf53ecec0c7d23408f71b70a8b8dd9",
+          "size": 12052645
         }
       ]
     },
