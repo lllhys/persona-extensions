@@ -1,6 +1,7 @@
 dist/
 __pycache__/
 # `go build` inside an extension's directory leaves the program there under the extension's id.
+/extensions/*/hackernews
 /extensions/*/linuxdo
 /extensions/*/markets
 /extensions/*/sentry
