@@ -69,7 +69,7 @@ Every row opens something: a PR or issue opens its page, a repository opens the 
 - Comments on a line or a range of lines (dragged over), alone or as a draft of your pending review (GitHub's pending review, nobody else sees it). Drafts show at their lines; the review bar at the foot sends them with a summary as a comment, an approval or a request for changes, or throws them away.
 - Suggestions (```` ```suggestion ```` blocks), resolving and reopening conversations, links to a file's lines.
 
-Older apps keep the earlier rendering: code and diffs are fenced Markdown blocks (```` ```diff ````, ```` ```go ````), files and comments are rows. Descriptions, comments and READMEs are cleaned to the Markdown the hub accepts: images become links, relative links resolve against the repository, HTML and reference links are rewritten, and a comment the hub would still refuse is shown as text.
+Older apps keep the earlier rendering: code and diffs are fenced Markdown blocks (```` ```diff ````, ```` ```go ````), files and comments are rows. Descriptions, comments and READMEs are cleaned to the Markdown the hub accepts: images become links, relative links resolve against the repository (in a README or file, a link starting with `/` against its root at the branch), HTML and reference links are rewritten, and a comment the hub would still refuse is shown as text.
 
 Apps from before UI version 3 get rows instead of the segmented tabs, a search field instead of the search box, plain text instead of Markdown and a back button.
 

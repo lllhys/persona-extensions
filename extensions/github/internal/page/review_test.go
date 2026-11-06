@@ -18,7 +18,7 @@ import (
 
 const repoAPI = "/repos/example-org/example-repo"
 
-const readme = "# Example\n\n![logo](docs/logo.png)\n\nSee [the guide](docs/guide.md) and <a href=\"https://example.com\">site</a>, " +
+const readme = "# Example\n\n![logo](docs/logo.png)\n\nSee [the guide](docs/guide.md), [install](/docs/install.md) and <a href=\"https://example.com\">site</a>, " +
 	"[bad](javascript:alert(1)), <http://insecure.example.com>.\n<p align=\"center\"><img src=\"x.png\" alt=\"shot\"></p>\n" +
 	"[ref link][g]\n\n[g]: https://example.com/g\n\n```js\nconst a = '<b>' + \"](javascript:x)\";\n```\n"
 
@@ -174,6 +174,7 @@ func TestRepositories(t *testing.T) {
 	has(t, "repo", got, `"title":"PR"`, `"title":"Issue"`, `"title":"提交"`, `"label":"星标","value":"1.2k"`, "src", "README.md", `"name":"ref"`, `"value":"cache"`,
 		"[logo](https://github.com/example-org/example-repo/blob/main/docs/logo.png)",
 		"[the guide](https://github.com/example-org/example-repo/blob/main/docs/guide.md)", "[site](https://example.com)",
+		"[install](https://github.com/example-org/example-repo/blob/main/docs/install.md)",
 		"[ref link](https://example.com/g)", "shot", "const a = ")
 	hasNot(t, "repo", got, "javascript:alert", "<p align", "<img", "[g]:", "<http://")
 
@@ -356,8 +357,25 @@ func TestEveryPageFitsEveryApp(t *testing.T) {
 	}
 }
 
+// In a repository's file a /root-relative link or image resolves against the repository at the ref, not the host.
+func TestRootRelativeLinks(t *testing.T) {
+	root := "https://github.com/o/r/blob/main/"
+	for _, tc := range []struct{ in, want string }{
+		{"[guide](/docs/guide.md)", "[guide](https://github.com/o/r/blob/main/docs/guide.md)"},
+		{"![arch](/img/arch.png)", "[arch](https://github.com/o/r/blob/main/img/arch.png)"},
+		{"[x](/docs/x.md#setup)", "[x](https://github.com/o/r/blob/main/docs/x.md#setup)"},
+		{"[up](../y.md)", "[up](https://github.com/o/r/blob/main/y.md)"},
+		{"[cdn](//cdn.example/a.js)", "cdn"},
+	} {
+		if got := cleanMarkdown(tc.in, root+"sub", root); got != tc.want {
+			t.Errorf("cleanMarkdown(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestCleanMarkdown(t *testing.T) {
 	for _, tc := range []struct{ in, base, want string }{
+		{"[x](/docs/x.md)", "https://github.com/o/r/blob/main/sub/", "[x](https://github.com/docs/x.md)"}, // a description: the host
 		{"![a](https://x.example/a.png)", "", "[a](https://x.example/a.png)"},
 		{"![a](a.png)", "", "a"},
 		{"[![build](https://img.example/b.svg)](https://ci.example/b)", "", "[build](https://ci.example/b)"},
@@ -373,7 +391,7 @@ func TestCleanMarkdown(t *testing.T) {
 		{"before <!-- never closed", "", "before"},
 		{"`[x](javascript:y)`", "", "`[x](javascript:y)`"},
 	} {
-		got := cleanMarkdown(tc.in, tc.base)
+		got := cleanMarkdown(tc.in, tc.base, "")
 		if got != tc.want {
 			t.Errorf("cleanMarkdown(%q) = %q, want %q", tc.in, got, tc.want)
 		}

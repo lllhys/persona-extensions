@@ -250,8 +250,8 @@ func (p *Page) codeTab(ctx context.Context, r *ext.UIRequest, v *wire.View, s st
 	out = append(out, dir)
 	if readme != "" {
 		if name, text, err := p.c.Readme(ctx, s.Repo, s.Ref, s.Path); err == nil && strings.TrimSpace(text) != "" {
-			base := fmt.Sprintf("%s/%s/blob/%s/%s", p.c.Web(), s.Repo, s.Ref, parentDir(name))
-			out = append(out, wire.Section{Title: path.Base(name), Items: fileBody(r, name, text, base, false, readmeMost)})
+			root := fmt.Sprintf("%s/%s/blob/%s/", p.c.Web(), s.Repo, s.Ref)
+			out = append(out, wire.Section{Title: path.Base(name), Items: fileBody(r, name, text, root, false, readmeMost)})
 		}
 	}
 	return out
@@ -318,8 +318,8 @@ func (p *Page) file(ctx context.Context, r *ext.UIRequest, s state) *wire.View {
 	case f.Text == "":
 		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{{Type: wire.ComponentEmpty, Key: "empty", Title: "空文件", Icon: wire.NavIconDoc}}})
 	case md && !s.Src:
-		base := fmt.Sprintf("%s/%s/blob/%s/%s", p.c.Web(), s.Repo, s.Ref, parentDir(s.Path))
-		v.Sections = append(v.Sections, wire.Section{Items: fileBody(r, s.Path, f.Text, base, false, readmeMost)})
+		root := fmt.Sprintf("%s/%s/blob/%s/", p.c.Web(), s.Repo, s.Ref)
+		v.Sections = append(v.Sections, wire.Section{Items: fileBody(r, s.Path, f.Text, root, false, readmeMost)})
 	case r.UIVersion >= 4: // a code component: line numbers, highlighting, line links (review.go)
 		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{codeOf(s, f)}})
 	default:
