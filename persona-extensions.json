@@ -8,8 +8,8 @@
         "manifest_version": 1,
         "id": "claude-bypass-allow",
         "name": "Bypass 自动允许",
-        "version": "0.2.10",
-        "description": "Claude Code 开着 bypassPermissions（--dangerously-skip-permissions）时，有些调用仍会弹确认框（如读工作目录外的文件、开子 Agent、某些 Bash），无人值守的 Agent 就卡在「在等你」。在你选的电脑上给 Claude Code 装一个 PermissionRequest hook：只在会话是 bypass 模式时，自动允许 Bash、只读工具（Read、Glob、Grep、LS、NotebookRead）和子 Agent。删除、覆盖数据、force push、改权限的 Bash 命令，写文件、Workflow 和 MCP 工具，以及你自己配的 ask / deny 规则，仍然问你。每次自动允许都记一条（命令截断、去掉密钥）。别的模式照常问你。",
+        "version": "0.2.12",
+        "description": "Claude Code 开着 bypassPermissions（--dangerously-skip-permissions）时，有些调用仍会弹确认框（如读工作目录外的文件、开子 Agent、某些 Bash），无人值守的 Agent 就卡在「在等你」。在你选的电脑上给 Claude Code 装一个 PermissionRequest hook：只在会话是 bypass 模式时，自动允许 Bash、只读工具（Read、Glob、Grep、LS、NotebookRead）和子 Agent。删除、覆盖数据的 Bash 命令，目标都在临时目录或工作目录里（/tmp、会话的工作目录、~/ag-work、~/wt、Claude Code 的 worktree 等）时直接放行，其余的仍然问你；打开「删除和覆盖也自动允许」就都放行。force push、改权限的 Bash 命令，写文件、Workflow 和 MCP 工具，以及你自己配的 ask / deny 规则，始终问你。每次自动允许都记一条（命令截断、去掉密钥）。别的模式照常问你。",
         "publisher": "nwverse",
         "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/claude-bypass-allow",
         "engines": {
@@ -66,7 +66,13 @@
                   "linux"
                 ]
               },
-              "x-confirm": "这台电脑上 bypass 模式的 Claude Code 会话，Bash、读文件（包括工作目录外的）和开子 Agent 的确认将不再问你、直接执行。删除、覆盖数据、force push、改权限仍然问你。每次都会记录。"
+              "x-confirm": "这台电脑上 bypass 模式的 Claude Code 会话，Bash、读文件（包括工作目录外的）和开子 Agent 的确认将不再问你、直接执行。删除、覆盖临时目录和工作目录里的东西也直接执行；别处的删除、覆盖，以及 force push、改权限仍然问你。每次都会记录。"
+            },
+            "allow_destructive": {
+              "type": "boolean",
+              "title": "删除和覆盖也自动允许",
+              "description": "打开后，bypass 模式下删除、覆盖数据的 Bash 命令（rm、mv、git reset --hard、写进文件的 > 等）不管目标在哪都直接放行，包括家目录和工作目录以外的，删掉的可能找不回来。force push、改权限、格式化磁盘，以及你自己配的 ask / deny 规则仍然问你。关着时，只有目标都在临时目录、工作目录里的才放行。",
+              "default": false
             },
             "config_dirs": {
               "type": "array",
@@ -92,9 +98,9 @@
       ],
       "packages": [
         {
-          "url": "release:claude-bypass-allow-v0.2.10/claude-bypass-allow-0.2.10.tar.gz",
-          "sha256": "861123afa4dcce0ec7fa461c418ec97a346e711a4c5a018902b1b841a381e254",
-          "size": 12048590
+          "url": "release:claude-bypass-allow-v0.2.12/claude-bypass-allow-0.2.12.tar.gz",
+          "sha256": "eec6c4c4400c75345f1ae748fe10b3adb95c64057e9b7da21e46609db00020c1",
+          "size": 12163567
         }
       ]
     },
