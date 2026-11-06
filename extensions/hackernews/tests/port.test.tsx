@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { Renderer, type Snapshot, type UIEvent } from "@persona/extension/ui";
-import type { UIRequest, View } from "@persona/extension";
+import { connect, type UIRequest, type View } from "@persona/extension";
 import { Fixture, epoch } from "./fixtures.ts";
 import { HackerNews, ReadError, limits } from "../src/service.ts";
 import { callTool, connector, tools } from "../src/tools.ts";
@@ -85,6 +85,21 @@ test("story HTML text, ranked top-level comments and safe in-app links", async (
   const item = await service.item(1);
   for (const url of ["http://example.com", "javascript:alert(1)", "file:///tmp/a", "https://me:secret@example.com"]) assert.equal(safeLink({ ...item, url }), "");
   assert.ok(!text(await draw(service, { s: 3 })).includes("Open article"));
+});
+test("native push retains the bounded story title and hidden stories expose no article link", async () => {
+  const { fixture, service } = setup();
+  fixture.item({ id: 1, type: "story", title: "😀".repeat(300), url: "https://example.com/article" });
+  const view = await snapshotPage(service).render({ locale: "en", ui_version: 3 } as UIRequest);
+  const row = view.sections.flatMap(section => section.items).find(it => it.key === "story-1");
+  assert.ok(row?.type === "row" && row.action?.push);
+  assert.equal(row.action.push.title, clip("😀".repeat(300), 200));
+  for (const flag of ["dead", "deleted"]) {
+    fixture.item({ id: 9, type: "story", title: "Hidden fixture article", url: "https://example.com/hidden", [flag]: true });
+    const hidden = await draw(new HackerNews(fixture.fetch), { s: 9 });
+    assert.ok(text(hidden).includes("deleted or hidden"));
+    assert.ok(!text(hidden).includes("Open article"));
+    assert.ok(text(hidden).includes("https://news.ycombinator.com/item?id=9"));
+  }
 });
 test("bounded story/comments/text, fetch parallelism and no nested comments", async () => {
   const { fixture, service } = setup(); fixture.delay = 2;
@@ -229,6 +244,99 @@ test("rapid feed selection ignores late effects and denied callbacks cannot chan
   assert.ok(text(snapshot.view).includes("Show HN · 3"));
   assert.ok(!text(snapshot.view).includes("New · 3"));
   renderer.dispose();
+});
+test("legacy snapshot downgrade works through the process SDK", async () => {
+  const { service } = setup();
+  const answers = new Map<string, { error?: unknown; result: any }>();
+  const connection = connect({ id: "hackernews", version: "0.1.0", ui: { stories: snapshotPage(service) } }, line => {
+    const frame = JSON.parse(line); answers.set(frame.id, frame);
+  });
+  let next = 0;
+  const call = async (method: string, params: unknown) => {
+    const id = String(++next);
+    connection.line(JSON.stringify({ id, method, params })); await connection.drain();
+    const answer = answers.get(id); assert.ok(answer); assert.ifError(answer.error); return answer.result;
+  };
+  try {
+    await call("initialize", { protocol: 1, hub: { build: 0, extension_points: {} }, granted: {} });
+    for (const ui_version of [1, 2]) {
+      const context = { contribution: "stories", locale: "en", ui_version };
+      const list: View = await call("ui.render", context);
+      const story = list.sections.flatMap(section => section.items).find(it => it.key === "story-1");
+      assert.ok(story?.type === "row" && story.action); assert.match(story.action.id, /^ext\.push\./);
+      const detail = await call("ui.action", { ...context, action: story.action.id });
+      assert.ok(text(detail.view).includes("Back to list"));
+      const back = await call("ui.action", { ...context, action: "back", state: detail.view.state });
+      assert.ok(text(back.view).includes("Synthetic Rust article"));
+    }
+  } finally { connection.close(); }
+});
+test("snapshot render deadlines retain localized error and navigation controls", async () => {
+  const timeout = AbortSignal.timeout;
+  try {
+    AbortSignal.timeout = () => timeout(5);
+    const { fixture, service } = setup(); fixture.delay = 50;
+    for (const locale of ["en", "zh-Hans", "ja"]) {
+      const view = await snapshotPage(service).render({ locale, ui_version: 2 } as UIRequest);
+      assert.ok(text(view).includes(textsFor(locale).slow)); assert.ok(text(view).includes(textsFor(locale).retry));
+      const detail = await snapshotPage(service).render({ locale, ui_version: 2, state: '{"s":1}' } as UIRequest);
+      assert.ok(text(detail).includes(textsFor(locale).slow)); assert.ok(text(detail).includes(textsFor(locale).back));
+    }
+  } finally { AbortSignal.timeout = timeout; }
+});
+test("canceling stalled adapter streams releases all request slots", async () => {
+  let started = 0, canceled = 0, stall = true;
+  const service = new HackerNews(async () => stall ? new Response(new ReadableStream<Uint8Array>({
+    start() { started++; }, pull() {}, cancel() { canceled++; }
+  })) : Response.json({ id: 9 }));
+  const controller = new AbortController();
+  const pending = assert.rejects(Promise.all(Array.from({ length: limits.parallel }, (_, i) => service.item(i + 1, false, controller.signal))), { name: "AbortError" });
+  await until(() => started === limits.parallel); await Promise.resolve(); controller.abort(); await pending;
+  await until(() => canceled === limits.parallel);
+  stall = false; assert.equal((await service.item(9)).id, 9); assert.equal(service.status().state, "ok");
+});
+test("refreshing a missing item invalidates its younger normal-cache copy", async () => {
+  for (const missing of [null, new Response("missing", { status: 404 })]) {
+    const { fixture, service } = setup(); await service.item(1); fixture.time += limits.refresh + 1;
+    fixture.bodies.set("/item/1.json", missing);
+    const notFound = (error: unknown) => error instanceof ReadError && error.code === "not_found";
+    await assert.rejects(service.item(1, true), notFound); await assert.rejects(service.item(1), notFound);
+    assert.equal(fixture.hits.get("/item/1.json"), 3); assert.equal(service.status().state, "ok");
+  }
+});
+test("connector status follows completion order even within one clock millisecond", async () => {
+  const { fixture, service } = setup(); await service.item(1);
+  const lastSync = service.status().last_sync;
+  fixture.bodies.set("/item/2.json", new Response("failure", { status: 500 }));
+  await assert.rejects(service.item(2));
+  assert.equal(service.status("en").state, "error"); assert.ok(service.status("en").error?.includes("HTTP 500"));
+  await service.item(1); assert.equal(service.status().state, "error"); assert.equal(service.status().last_sync, lastSync);
+  await service.item(3); assert.equal(service.status().state, "ok"); assert.equal(service.status().last_sync, lastSync);
+});
+test("refresh is scoped to its action, not later feed navigation", async () => {
+  const { fixture, service } = setup(); await service.stories("top"); await service.stories("new");
+  fixture.time += limits.refresh + 1;
+  let snapshot!: Snapshot;
+  const renderer = new Renderer({ authorize: () => true, onRender: value => { snapshot = value; } });
+  try {
+    renderer.mount(root({ service, locale: "en" })); await until(() => text(snapshot.view).includes("Top · 3"));
+    await renderer.event(event(snapshot, "refresh")); await until(() => text(snapshot.view).includes("Top · 3"));
+    assert.equal(fixture.hits.get("/topstories.json"), 2);
+    await renderer.event(event(snapshot, "feed", { list: "new" })); await until(() => text(snapshot.view).includes("New · 3"));
+    assert.equal(fixture.hits.get("/newstories.json"), 1);
+  } finally { renderer.dispose(); }
+});
+test("service replacement publishes loading rather than the previous service's data", async () => {
+  const first = setup(), second = setup();
+  second.fixture.item({ id: 1, type: "story", title: "Replacement fixture article" }); second.fixture.delay = 10;
+  let snapshot!: Snapshot;
+  const renderer = new Renderer({ authorize: () => true, onRender: value => { snapshot = value; } });
+  try {
+    renderer.mount(root({ service: first.service, locale: "en" })); await until(() => text(snapshot.view).includes("Synthetic Rust article"));
+    renderer.render(root({ service: second.service, locale: "en" }));
+    assert.ok(text(snapshot.view).includes("Reading Hacker News")); assert.ok(!text(snapshot.view).includes("Synthetic Rust article"));
+    await until(() => text(snapshot.view).includes("Replacement fixture article"));
+  } finally { renderer.dispose(); }
 });
 test("manifest stays transitional, unchanged version and read-only egress", async () => {
   const manifest = JSON.parse(await readFile("persona-extension.json", "utf8"));

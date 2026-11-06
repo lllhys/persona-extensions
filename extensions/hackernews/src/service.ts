@@ -38,17 +38,17 @@ export class HackerNews {
   private running = 0;
   private queue: (() => void)[] = [];
   private lastOK?: number;
-  private lastError?: { error: ReadError; at: number };
+  private lastError?: ReadError;
   constructor(private fetch: FetchAdapter, config: Config = {}, readonly now: () => number = Date.now, private cacheLimit: number = limits.cache) {
     if (typeof fetch !== "function") throw new Error("a sanctioned fetch adapter is required");
     if (!Number.isSafeInteger(cacheLimit) || cacheLimit < 1 || cacheLimit > limits.cache) throw new Error("invalid cache limit");
     this.config = normalize(config);
   }
   status(locale = "") {
-    const fail = this.lastError && (this.lastOK === undefined || this.lastError.at > this.lastOK);
+    const fail = this.lastError !== undefined;
     return { state: fail ? "error" : "ok", account: textsFor(locale).account,
       ...(this.lastOK !== undefined ? { last_sync: new Date(this.lastOK).toISOString() } : {}),
-      ...(fail ? { error: errorText(this.lastError!.error, locale) } : {}) };
+      ...(fail ? { error: errorText(this.lastError, locale) } : {}) };
   }
   private async acquire(signal: AbortSignal): Promise<() => void> {
     aborted(signal);
@@ -77,10 +77,13 @@ export class HackerNews {
       const reader = response.body?.getReader();
       if (!reader) throw new ReadError("bad_answer");
       const parts: Uint8Array[] = []; let size = 0;
+      // Host-provided streams may not themselves observe the request signal.
+      const cancel = () => { void reader.cancel().catch(() => {}); };
+      combined.addEventListener("abort", cancel, { once: true });
       try {
         for (;;) { aborted(combined); const part = await reader.read(); if (part.done) break;
           size += part.value.length; if (size > limits.response) throw new ReadError("bad_answer"); parts.push(part.value); }
-      } finally { void reader.cancel().catch(() => {}); reader.releaseLock(); }
+      } finally { combined.removeEventListener("abort", cancel); cancel(); reader.releaseLock(); }
       aborted(combined);
       const bytes = new Uint8Array(size); let offset = 0;
       for (const part of parts) { bytes.set(part, offset); offset += part.length; }
@@ -108,12 +111,14 @@ export class HackerNews {
         this.cache.delete(first[0]);
       }
       this.lastOK = reading.at;
+      this.lastError = undefined;
       return reading;
     } catch (error) {
       aborted(signal);
       if (cancelled(error)) throw error;
       const failure = error instanceof ReadError ? error : new ReadError("bad_answer");
-      if (failure.code !== "not_found") this.lastError = { error: failure, at: this.now() };
+      if (failure.code === "not_found") this.cache.delete(path);
+      else this.lastError = failure;
       if (old && failure.code !== "not_found") return { ...old, stale: failure };
       throw failure;
     }

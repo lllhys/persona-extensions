@@ -27,7 +27,7 @@ export async function loadPage(service: HackerNews, state: PageState, refresh = 
 export function page(props: PageProps): Node {
   const { service, state, loaded, locale = "", uiVersion = 3 } = props;
   const t = textsFor(locale), now = service.now();
-  const act = (id: string, next?: PageState): Action => props.action?.(id, next) ?? (next ? open(id, "", next) : { id });
+  const act = (id: string, next?: PageState, title?: string): Action => props.action?.(id, next) ?? (next ? open(id, "", next, title) : { id });
   const bodyText = (key: string, content: string, style: "body" | "secondary" | "caption" = "secondary") => <Text key={key} text={clip(content, 1800)} style={style} />;
   const picker = <Section key="picker" title={uiVersion < 2 ? t.pick : undefined}>
     {uiVersion >= 2 ? <Segmented key="feed" name="list" value={state.l} choices={Object.keys(feeds).map(id => ({ value: id, title: t.lists[id as Feed] }))} action={act("list")} />
@@ -40,7 +40,7 @@ export function page(props: PageProps): Node {
   if (state.s) {
     const story = loaded.kind === "story" ? loaded.thread.story : undefined;
     const tail = <Section key="tail" footer={t.textOnly}>
-      {story && safeLink(story) ? <Link key="article" title={t.openArticle} url={safeLink(story)} /> : null}
+      {story && !gone(story) && safeLink(story) ? <Link key="article" title={t.openArticle} url={safeLink(story)} /> : null}
       <Link key="site" title={t.openSite} url={itemURL(state.s)} />
       <Button key="refresh" title={t.refresh} action={act("refresh")} />
       {uiVersion < 3 || props.action ? <Button key="back" title={t.back} action={act("back")} /> : null}
@@ -74,7 +74,7 @@ export function page(props: PageProps): Node {
       {l.missed ? bodyText("missed", fmt(t.missed, l.missed)) : null}
     </Section> : null}
     <Section key="stories" title={title} footer={description ? (state.a ? t.unfiltered : clip(fmt(t.byInterests, description), 1800)) : undefined}>
-      {shown.map(it => <Row key={`story-${it.id}`} title={clip(it.title, 300)} subtitle={clip(meta(t, it, now), 300)} action={act(`story:${it.id}`, { ...state, s: it.id })} />)}
+      {shown.map(it => <Row key={`story-${it.id}`} title={clip(it.title, 300)} subtitle={clip(meta(t, it, now), 300)} action={act(`story:${it.id}`, { ...state, s: it.id }, clip(it.title, 200))} />)}
       {!shown.length ? bodyText("empty", t.nothing) : null}
       {active(f) && (state.a || shown.length < l.stories.length) ? <Row key="all" title={state.a ? t.filterAgain : fmt(t.showAll, l.stories.length)} action={act("all")} /> : null}
     </Section>
