@@ -1,0 +1,49 @@
+{
+  "title": "列表",
+  "sections": [
+    {
+      "title": "0 条，显示 0 条",
+      "items": [
+        {
+          "type": "empty",
+          "title": "没有找到「没有这一条」",
+          "icon": "search"
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"list\",\"q\":\"没有这一条\"}",
+  "search": {
+    "placeholder": "条目名",
+    "value": "没有这一条",
+    "action": {
+      "id": "search"
+    }
+  },
+  "filter": {
+    "name": "kind",
+    "title": "种类",
+    "choices": [
+      {
+        "value": "all",
+        "title": "全部"
+      },
+      {
+        "value": "doc",
+        "title": "文档"
+      },
+      {
+        "value": "chat",
+        "title": "聊天"
+      },
+      {
+        "value": "mail",
+        "title": "邮件"
+      }
+    ],
+    "value": "all",
+    "action": {
+      "id": "kind"
+    }
+  }
+}

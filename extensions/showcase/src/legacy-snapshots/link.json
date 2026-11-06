@@ -1,0 +1,20 @@
+{
+  "title": "链接",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "link",
+          "title": "example.com",
+          "url": "https://example.com/"
+        },
+        {
+          "type": "link",
+          "title": "很长的链接标题：长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长",
+          "url": "https://example.com/a/very/long/path?with=query"
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"link\"}"
+}

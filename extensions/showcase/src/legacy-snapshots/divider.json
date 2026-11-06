@@ -1,0 +1,34 @@
+{
+  "title": "分隔线",
+  "sections": [
+    {
+      "title": "节的标题跟第一组",
+      "footer": "页脚跟最后一组",
+      "items": [
+        {
+          "type": "row",
+          "title": "第一组的一行"
+        },
+        {
+          "type": "row",
+          "title": "第一组的另一行"
+        },
+        {
+          "type": "divider"
+        },
+        {
+          "type": "row",
+          "title": "第二组的一行"
+        },
+        {
+          "type": "divider"
+        },
+        {
+          "type": "text",
+          "text": "第三组：一段字"
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"divider\"}"
+}

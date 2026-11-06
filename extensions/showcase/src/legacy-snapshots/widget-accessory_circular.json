@@ -1,0 +1,13 @@
+{
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "progress",
+          "label": "完成",
+          "ratio": 0.72
+        }
+      ]
+    }
+  ]
+}

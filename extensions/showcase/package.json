@@ -1,0 +1,22 @@
+{
+  "name": "@persona-examples/showcase",
+  "version": "0.1.3",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit && tsc --noEmit --jsx react-jsxdev && node scripts/check-negative.mjs",
+    "test": "tsx --test src/*.test.tsx",
+    "test:bun": "bun test src",
+    "build:source": "node scripts/build-source.mjs"
+  },
+  "dependencies": {
+    "@persona/extension": "file:../../sdk/ts"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.2",
+    "@types/node": "22.10.2",
+    "esbuild": "0.25.12",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
+}

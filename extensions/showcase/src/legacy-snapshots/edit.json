@@ -1,0 +1,64 @@
+{
+  "title": "编辑 示例条目 03",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "field",
+          "label": "标题",
+          "value": "示例条目 03",
+          "name": "title",
+          "kind": "text"
+        },
+        {
+          "type": "field",
+          "label": "种类",
+          "value": "mail",
+          "name": "kind",
+          "kind": "choice",
+          "choices": [
+            {
+              "value": "doc",
+              "title": "文档"
+            },
+            {
+              "value": "chat",
+              "title": "聊天"
+            },
+            {
+              "value": "mail",
+              "title": "邮件"
+            }
+          ]
+        },
+        {
+          "type": "field",
+          "label": "备注",
+          "value": "第 3 条的备注。",
+          "name": "note",
+          "kind": "text"
+        },
+        {
+          "type": "field",
+          "label": "完成",
+          "value": "false",
+          "name": "done",
+          "kind": "toggle"
+        }
+      ]
+    },
+    {
+      "items": [
+        {
+          "type": "button",
+          "title": "保存",
+          "action": {
+            "id": "save",
+            "submit": true
+          }
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"edit\",\"id\":\"3\"}"
+}
