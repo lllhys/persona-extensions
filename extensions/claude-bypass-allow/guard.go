@@ -32,8 +32,46 @@ var alwaysPerson = map[string]string{
 
 // shells run their arguments (or input) as commands.
 var shells = map[string]bool{"bash": true, "sh": true, "zsh": true, "dash": true, "ksh": true, "fish": true,
-	"eval": true, "ssh": true, "autossh": true, "su": true, "watch": true,
+	"csh": true, "tcsh": true, "mksh": true, "ash": true, "yash": true, "posh": true, "rbash": true, "pwsh": true,
+	"powershell": true, "eval": true, "ssh": true, "autossh": true, "su": true, "watch": true,
 	"flock": true, "script": true, "sg": true, "npx": true, "trap": true, "coproc": true}
+
+// sudoShell says whether the options after sudo or doas start a shell (-s/--shell, -i/--login), which runs a
+// quoted argument or its input as commands. It reads options up to the first word that is not one, skipping the
+// values of options that take one.
+func sudoShell(args []string) bool {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--shell" || a == "--login":
+			return true
+		case a == "--" || !strings.HasPrefix(a, "-") || len(a) < 2:
+			return false
+		case strings.HasPrefix(a, "--"):
+			if sudoLongValue[a] { // --user root: the next word is its value
+				i++
+			}
+			continue
+		}
+		for j := 1; j < len(a); j++ {
+			if a[j] == 's' || a[j] == 'i' {
+				return true
+			}
+			if strings.IndexByte("CDghpRrTtUu", a[j]) >= 0 { // the rest of the word, or the next one, is its value
+				if j == len(a)-1 {
+					i++
+				}
+				break
+			}
+		}
+	}
+	return false
+}
+
+// sudoLongValue are sudo's long options that take a value, which is the next word unless it follows "=".
+var sudoLongValue = map[string]bool{"--close-from": true, "--chdir": true, "--group": true, "--host": true,
+	"--prompt": true, "--chroot": true, "--role": true, "--type": true, "--command-timeout": true,
+	"--other-user": true, "--user": true}
 
 // sqlClients run SQL given as an argument or on their input.
 var sqlClients = map[string]bool{"psql": true, "mysql": true, "mariadb": true, "sqlite3": true, "sqlcmd": true,
@@ -150,7 +188,7 @@ func (g *guard) personOnlyDepth(cmd string, depth int) string {
 		shell := false
 		for i, w := range kept {
 			b := path.Base(w)
-			shell = shell || shells[b]
+			shell = shell || shells[b] || ((b == "sudo" || b == "doas") && sudoShell(kept[i+1:]))
 			for _, n := range globMatches(b) {
 				shell = shell || shells[n]
 			}
@@ -228,7 +266,7 @@ func stripHeredocs(cmd string) string {
 		for _, ws := range segs {
 			for i, w := range ws {
 				b := path.Base(w)
-				keep = keep || shells[b]
+				keep = keep || shells[b] || ((b == "sudo" || b == "doas") && sudoShell(ws[i+1:]))
 				if b == "env" {
 					for _, a := range ws[i+1:] {
 						if a == "-S" || a == "--split-string" || strings.HasPrefix(a, "-S") || strings.HasPrefix(a, "--split-string=") {
