@@ -662,3 +662,28 @@ func TestManifest(t *testing.T) {
 		}
 	}
 }
+
+// Every ui contribution in the manifest is served by the handlers; another is refused.
+func TestUIContributions(t *testing.T) {
+	var m struct {
+		Contributes struct {
+			UI []struct {
+				ID string `json:"id"`
+			} `json:"ui"`
+		} `json:"contributes"`
+	}
+	if err := json.Unmarshal(manifest, &m); err != nil {
+		t.Fatal(err)
+	}
+	h := newPlugin(t.Logf).handlers()
+	for _, ui := range m.Contributes.UI {
+		raw, _ := json.Marshal(map[string]any{"contribution": ui.ID, "ui_version": 5})
+		if _, err := h["ui.render"](context.Background(), nil, raw); err != nil && strings.Contains(err.Error(), "no contribution") {
+			t.Errorf("ui %s: %v", ui.ID, err)
+		}
+	}
+	raw, _ := json.Marshal(map[string]any{"contribution": "nope", "ui_version": 5})
+	if _, err := h["ui.render"](context.Background(), nil, raw); err == nil {
+		t.Error("an unknown contribution is drawn")
+	}
+}

@@ -420,12 +420,12 @@ func (p *plugin) handlers() map[string]pluginkit.Handler {
 		"ui.action":               p.uiAction,
 	}
 	for name, fn := range h {
-		want := "markets"
+		want := []string{"markets"}
 		if strings.HasPrefix(name, "ui.") {
-			want = "watchlist"
+			want = []string{"watchlist", "card"} // the manifest's ui contributions
 		}
 		h[name] = func(ctx context.Context, hub *pluginkit.Hub, params json.RawMessage) (any, error) {
-			if c := pluginkit.Contribution(params); c != "" && c != want {
+			if c := pluginkit.Contribution(params); c != "" && !slices.Contains(want, c) {
 				return nil, pluginkit.Errorf(pluginkit.CodeNoContribution, "no contribution %s here", c)
 			}
 			return fn(ctx, hub, params)
