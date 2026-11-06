@@ -510,7 +510,7 @@
         "manifest_version": 1,
         "id": "linuxdo",
         "name": "LINUX DO",
-        "version": "0.1.10",
+        "version": "0.1.11",
         "description": "LINUX DO 社区的热门帖子：扩展里的一页按你的兴趣看热门、今日 / 本周最热和最新，点开在 App 里读正文和热门回复（hub 去读，手机不用代理）；助手能用工具查热门、读帖子。只读公开内容，不用账号。",
         "publisher": "nwverse",
         "engines": {
@@ -636,9 +636,9 @@
       ],
       "packages": [
         {
-          "url": "release:linuxdo-v0.1.10/linuxdo-0.1.10.tar.gz",
-          "sha256": "b9052c9fb1d09e4e5042d095585d4ed91619d4c4a4db243d9c8b64e88e82510c",
-          "size": 12128402
+          "url": "release:linuxdo-v0.1.11/linuxdo-0.1.11.tar.gz",
+          "sha256": "8b2ebb04ed449afddbd9cdd6f0531eaad7f657ea809919ed4fae951a5c7984a5",
+          "size": 12127972
         }
       ]
     },
@@ -1090,7 +1090,7 @@
         "manifest_version": 1,
         "id": "telegram",
         "name": "Telegram",
-        "version": "0.1.20",
+        "version": "0.1.21",
         "description": "用你自己的 Telegram 账号（MTProto，hub 连 Telegram 的数据中心；hub 的环境设了 HTTPS_PROXY 时经它的 HTTP CONNECT 隧道）：App 里的 Telegram 会话，收件箱（私聊、@我），知识库归档，助手的 Telegram 工具和 tg 命令行。发消息、回复、转发、点 reaction、标为已读都先在手机上确认。登录（api_id、api_hash 和会话）加密存在 hub 的数据库里，不在扩展目录。",
         "publisher": "nwverse",
         "engines": {
@@ -1179,9 +1179,9 @@
       ],
       "packages": [
         {
-          "url": "release:telegram-v0.1.20/telegram-0.1.20.tar.gz",
-          "sha256": "b6beb83ffe0a57157c547f8c14998c41caf35f1c7d898114be52ae63ba9d52d8",
-          "size": 22267945
+          "url": "release:telegram-v0.1.21/telegram-0.1.21.tar.gz",
+          "sha256": "08dd4f8dd4d5c6122140bfde3ed32cda799f49ad96dc104d085e874ce9219d2d",
+          "size": 22270334
         }
       ]
     },
