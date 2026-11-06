@@ -323,13 +323,13 @@ func TestLayoutGroups(t *testing.T) {
 	for _, s := range v.Sections {
 		titles = append(titles, s.Title)
 	}
-	if !slices.Equal(titles[:4], []string{"加密货币 · 2", "A股 · 2", "港股 · 1", "美股 · 2"}) {
+	if !slices.Equal(titles[:6], []string{"大盘", "", "加密货币 · 2", "A股 · 2", "港股 · 1", "美股 · 2"}) {
 		t.Fatalf("groups %q", titles)
 	}
 	got := texts(v)
 	for _, want := range []string{
-		"row 贵州茅台 600519.SH · 高 1457.72 · 低 1436.00 1440.49   [-0.79% positive]",
-		"row 苹果 AAPL · 高 355.38 · 低 342.06 · 休市 · 截至 11/5 16:00 344.17",
+		"row 贵州茅台 600519.SH · -11.51 · 成交 35.57亿 CNY 1440.49   [-0.79% positive]",
+		"row 苹果 AAPL · -5.34 · 成交 262.40亿 USD · 休市 · 截至 11/5 16:00 344.17",
 		"## A股 · 2 | 涨跌按上个交易日的收盘价算，时间是交易所当地的",
 		"## 美股 · 2 | 涨跌按上个交易日的收盘价算，时间是交易所当地的。点一行看 K 线"} {
 		if !strings.Contains(got, want) {
@@ -339,7 +339,7 @@ func TestLayoutGroups(t *testing.T) {
 	if v.Search == nil || v.Search.Placeholder != "搜代码或名称：BTC、茅台、腾讯、AAPL" {
 		t.Errorf("search box %+v", v.Search)
 	}
-	if strings.Contains(got, "腾讯控股 00700 · 高 428.60 · 低 419.60 · 休市") {
+	if strings.Contains(got, "腾讯控股 00700 · -7.40 · 成交 67.96亿 HKD · 休市") || !strings.Contains(got, "腾讯控股 00700 · -7.40") {
 		t.Errorf("Hong Kong is trading:\n%s", got)
 	}
 
@@ -550,5 +550,126 @@ func TestCard(t *testing.T) {
 	var pe *pluginkit.Error
 	if !errors.As(err, &pe) || pe.Code != pluginkit.CodeUnsupported {
 		t.Errorf("off: %v", err)
+	}
+}
+
+func TestBatchTwoPage(t *testing.T) {
+	ft, fo := newFakeTencent(t), newFakeOKX(t)
+	p := newPlugin(t.Logf)
+	p.srcs = append(sources{newOKX(fo.srv.URL)}, tencentSources(ft.hosts())...)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "watchlist.json"),
+		[]byte(`["cn:600519.SH","BTC-USDT","cn:300750.SZ","ETH-USDT","cn:000001.SH","us:AAPL"]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var ip pluginkit.InitParams
+	ip.Plugin.DataDir = dir
+	if err := p.configure(ip); err != nil {
+		t.Fatal(err)
+	}
+	rowTitles := func(v pluginkit.View, group string) []string {
+		var out []string
+		for _, s := range v.Sections {
+			if strings.HasPrefix(s.Title, group) {
+				for _, it := range s.Items {
+					out = append(out, it.Title)
+				}
+			}
+		}
+		return out
+	}
+
+	// 大盘 first, then the controls: the order, and the markets the watchlist has
+	v := render(t, p, "", 5)
+	checkView(t, v)
+	if v.Sections[0].Title != "大盘" || len(v.Sections[0].Items[0].Stats) != 3 {
+		t.Fatalf("大盘: %s", texts(v))
+	}
+	ctl := v.Sections[1].Items
+	if len(ctl) != 2 || ctl[0].Name != "sort" || ctl[1].Name != "mkt" || len(ctl[1].Choices) != 4 || ctl[1].Choices[3].Title != "美股" {
+		t.Fatalf("controls: %+v", ctl)
+	}
+
+	// the biggest fall first within each group: 宁德时代 -3.68%, 上证指数 -1.10%, 贵州茅台 -0.79%
+	r := act(t, p, v.State, "sort", map[string]string{"sort": "down"})
+	if got := rowTitles(*r.View, "A股"); !slices.Equal(got, []string{"宁德时代", "上证指数", "贵州茅台"}) {
+		t.Errorf("by fall: %v", got)
+	}
+	if got := rowTitles(*r.View, "加密货币"); !slices.Equal(got, []string{"ETH-USDT", "BTC-USDT"}) {
+		t.Errorf("crypto by fall: %v", got)
+	}
+	r = act(t, p, r.View.State, "sort", map[string]string{"sort": "up"})
+	if got := rowTitles(*r.View, "A股"); !slices.Equal(got, []string{"贵州茅台", "上证指数", "宁德时代"}) {
+		t.Errorf("by rise: %v", got)
+	}
+	// one market only; the order kept in the state; the stored order untouched
+	r = act(t, p, r.View.State, "mkt", map[string]string{"mkt": "cn"})
+	var groups []string
+	for _, s := range r.View.Sections {
+		if strings.Contains(s.Title, " · ") {
+			groups = append(groups, s.Title)
+		}
+	}
+	if !slices.Equal(groups, []string{"A股 · 3"}) || !strings.Contains(r.View.State, `"s":"up"`) {
+		t.Errorf("filtered: %v %s", groups, r.View.State)
+	}
+	if got := refStrings(p.watchlist()); got[0] != "cn:600519.SH" || got[2] != "cn:300750.SZ" {
+		t.Errorf("stored order changed: %v", got)
+	}
+	r = act(t, p, r.View.State, "mkt", map[string]string{"mkt": "all"})
+	if strings.Contains(r.View.State, `"m"`) {
+		t.Errorf("all markets: %s", r.View.State)
+	}
+
+	// a query that is itself a code comes first as its own row (the search box being the way to add one)
+	r = act(t, p, "", "search", map[string]string{"q": "cn:300750"})
+	got := texts(*r.View)
+	if r.View.Sections[0].Title != "代码 cn:300750.SZ" || !strings.Contains(got, "row 宁德时代 300750.SZ · 股票") {
+		t.Errorf("a code searched:\n%s", got)
+	}
+}
+
+func TestMatchRank(t *testing.T) {
+	_, cn, hk, _ := txSources(t)
+	okxSrc := newOKX("")
+	for _, c := range []struct {
+		q    string
+		src  Source
+		h    hit
+		want int
+	}{
+		{"700", hk, hit{Ref{"hk", "00700"}, Quote{Name: "腾讯控股"}}, 0},
+		{"腾讯控股", hk, hit{Ref{"hk", "00700"}, Quote{Name: "腾讯控股"}}, 0},
+		{"腾讯", hk, hit{Ref{"hk", "00700"}, Quote{Name: "腾讯控股"}}, 1},
+		{"腾讯", cn, hit{Ref{"cn", "000847.SH"}, Quote{Name: "腾讯济安"}}, 1},
+		{"tengxun", hk, hit{Ref{"hk", "00700"}, Quote{Name: "腾讯控股"}}, 2},
+		{"btc", okxSrc, hit{Ref{"okx", "BTC-USDT"}, Quote{}}, 0},
+		{"茅台", okxSrc, hit{Ref{"okx", "MT-USDT"}, Quote{}}, 3},
+	} {
+		if got := matchRank(c.q, c.src, c.h); got != c.want {
+			t.Errorf("matchRank(%q, %s) = %d, want %d", c.q, c.h.Ref, got, c.want)
+		}
+	}
+}
+
+func TestOKXFewOrMany(t *testing.T) {
+	f := newFakeOKX(t)
+	o := newOKX(f.srv.URL)
+	ctx := context.Background()
+	before := f.hits.Load()
+	qs, err := o.Quotes(ctx, []string{"BTC-USDT", "ETH-USDT", "NOPE-USDT"}, time.Minute)
+	if err != nil || len(qs) != 2 || f.hits.Load()-before != 3 {
+		t.Fatalf("few: %v %v, %d requests", qs, err, f.hits.Load()-before)
+	}
+	// the missing one is remembered while fresh
+	before = f.hits.Load()
+	if _, err := o.Quotes(ctx, []string{"NOPE-USDT"}, time.Minute); err != nil || f.hits.Load() != before {
+		t.Errorf("missing asked again: %v, %d requests", err, f.hits.Load()-before)
+	}
+	// more than a few: the whole list, one request
+	before = f.hits.Load()
+	ids := []string{"BTC-USDT", "ETH-USDT", "DOGE-USDT", "WBTC-USDT", "BTC-USDC", "NOPE-USDT"}
+	if qs, err := o.Quotes(ctx, ids, time.Minute); err != nil || len(qs) != 5 || f.hits.Load()-before != 1 {
+		t.Errorf("many: %d %v, %d requests", len(qs), err, f.hits.Load()-before)
 	}
 }

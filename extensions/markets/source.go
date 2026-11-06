@@ -78,6 +78,18 @@ type Quote struct {
 // Fact is one further figure of a quote.
 type Fact struct{ Label, Value string }
 
+// PriceLike writes f (a difference of prices) with as many decimals as like is written with.
+func (q Quote) PriceLike(f, like float64) string {
+	if q.Decimals > 0 {
+		return strconv.FormatFloat(f, 'f', q.Decimals, 64)
+	}
+	l := fmtPrice(like)
+	if _, frac, ok := strings.Cut(l, "."); ok {
+		return strconv.FormatFloat(f, 'f', len(frac), 64)
+	}
+	return strconv.FormatFloat(f, 'f', 0, 64)
+}
+
 // Price writes one of its prices with its decimals; "—" when unknown.
 func (q Quote) Price(f float64) string {
 	if q.Decimals > 0 && f != 0 {

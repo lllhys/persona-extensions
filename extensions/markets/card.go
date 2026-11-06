@@ -49,28 +49,25 @@ func (p *plugin) quotesEach(ctx context.Context, refs []Ref) (map[Ref]Quote, err
 	return out, first
 }
 
-func (p *plugin) card(ctx context.Context) (pluginkit.View, error) {
-	if !p.cardOn() {
-		return pluginkit.View{}, pluginkit.Errorf(pluginkit.CodeUnsupported, "the card is off in the settings")
-	}
-	v := pluginkit.View{RefreshAfter: cardRefresh}
-	var marks []Ref
+// marks are the benchmarks of the sources there are.
+func (p *plugin) marks() []Ref {
+	var out []Ref
 	for _, s := range benchmarks {
 		if r, ok := p.srcs.parse(s); ok && strings.HasPrefix(s, r.Source+":") {
-			marks = append(marks, r)
+			out = append(out, r)
 		}
 	}
-	watch := p.watchlist()
-	qs, err := p.quotesEach(ctx, append(append([]Ref{}, marks...), watch...))
-	active := false
+	return out
+}
 
+// markStats are the benchmarks as stats: a name, the last price and the change; those without a quote left out.
+func (p *plugin) markStats(marks []Ref, qs map[Ref]Quote) []pluginkit.Stat {
 	var stats []pluginkit.Stat
 	for _, r := range marks {
 		q, ok := qs[r]
 		if !ok {
 			continue
 		}
-		active = active || !q.Idle
 		label := q.Name
 		if label == "" {
 			label, _, _ = strings.Cut(r.Symbol, "-") // BTC-USDT: BTC
@@ -81,7 +78,24 @@ func (p *plugin) card(ctx context.Context) (pluginkit.View, error) {
 		}
 		stats = append(stats, st)
 	}
-	if len(stats) > 0 {
+	return stats
+}
+
+func (p *plugin) card(ctx context.Context) (pluginkit.View, error) {
+	if !p.cardOn() {
+		return pluginkit.View{}, pluginkit.Errorf(pluginkit.CodeUnsupported, "the card is off in the settings")
+	}
+	v := pluginkit.View{RefreshAfter: cardRefresh}
+	marks := p.marks()
+	watch := p.watchlist()
+	qs, err := p.quotesEach(ctx, append(append([]Ref{}, marks...), watch...))
+	active := false
+	for _, r := range marks {
+		if q, ok := qs[r]; ok {
+			active = active || !q.Idle
+		}
+	}
+	if stats := p.markStats(marks, qs); len(stats) > 0 {
 		v.Sections = append(v.Sections, pluginkit.Section{Items: []pluginkit.Item{{Type: "stat_grid", Stats: stats}}})
 	}
 
