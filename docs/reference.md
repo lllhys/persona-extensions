@@ -4,7 +4,7 @@
 
 ## Manifests and configuration
 
-Each extension is rooted at `extensions/<id>/` and has one manifest, `persona-extension.json`. [scripts/manifest.py](../scripts/manifest.py) checks directory/id agreement, versions and tags, that every file the manifest references is in the extension under `skills/` or `assistant/` (the directories packaging copies), and that `extension_pack` members without their own `market` are extensions in this repository; it rejects a committed `persona-plugin.json` or `market.json`. [extensions/manifests_test.go](../extensions/manifests_test.go) validates every manifest, with and without `tags`, against the SDK `Manifest` schema.
+Each extension is rooted at `extensions/<id>/` and has one manifest, `persona-extension.json`. [scripts/manifest.py](../scripts/manifest.py) checks directory/id agreement, versions and tags, that every file the manifest references is in the extension under `skills/` or `assistant/` (the directories packaging copies), and that `extension_pack` members without their own `market` are extensions in this repository; it rejects a committed `persona-plugin.json` or `market.json`. [tools/manifests/manifests_test.go](../tools/manifests/manifests_test.go) validates every manifest, with and without `tags`, against the SDK `Manifest` schema.
 
 | Field or file | Purpose |
 | --- | --- |
@@ -50,6 +50,6 @@ Do not remove old files or rename protocol identifiers as part of documentation 
 
 ## SDK ownership
 
-[sdk/VERSION](../sdk/VERSION) records the source revision. The entire `sdk/go/` directory is copied from the official Persona SDK by the upstream `scripts/gen/sync-sdk.sh`; it is not maintained independently here. The root [go.mod](../go.mod) resolves `github.com/nwverse/persona/sdk/go` to that local copy.
+[sdk/VERSION](../sdk/VERSION) records the source revision. The entire `sdk/go/` directory is copied from the official Persona SDK by the upstream `scripts/gen/sync-sdk.sh`; it is not maintained independently here. There is no module at the repository root: each module that uses the SDK (every Go extension, [pluginkit](../pluginkit/go.mod) and [tools](../tools/go.mod)) resolves `github.com/nwverse/persona/sdk/go` to that local copy with its own `replace` directive.
 
 Do not hand-edit synced code, schema descriptions or generated wire types to translate documentation. Changes belong upstream and arrive through a new sync. This includes a small number of Chinese upstream section-title references; runtime labels and synthetic Chinese fixtures in the SDK are also intentionally preserved. Manually maintained guides in this repository use English and link to the copied schemas instead of duplicating them.

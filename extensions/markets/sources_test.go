@@ -103,7 +103,7 @@ func TestSources(t *testing.T) {
 		t.Errorf("groups %q %q", v.Sections[1].Title, v.Sections[2].Title)
 	}
 	for _, want := range []string{"row BTC-USDT +2000.00", "row Example Apple AAPL · +10 · 成交 90.00亿 USD 210",
-		"[+5.00% danger] →open:us:AAPL", "OKX、美股 公开行情", "segmented   all   →mkt"} {
+		"[+5.00% danger] →open:us:AAPL", "OKX、美股 公开行情", "row 排序 · 自选顺序 · 全部"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the page has no %q:\n%s", want, got)
 		}

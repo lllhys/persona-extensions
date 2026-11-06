@@ -20,6 +20,11 @@ const (
 	frameScanLimit = frameLimit + 64*1024
 )
 
+// backlogLimit caps events read but not yet handed to the consumer (the
+// same bound as the Seen list). Beyond it the bridge fails closed rather
+// than grow without bound behind a wedged consumer.
+const backlogLimit = 4096
+
 type bridgeEvent struct {
 	Event   string  `json:"event"`
 	State   string  `json:"state"`
@@ -53,6 +58,10 @@ type processBridge struct {
 	done     chan struct{}
 	shutdown chan struct{}
 	stop     sync.Once
+	queueMu  sync.Mutex
+	queue    []bridgeEvent
+	eof      bool
+	more     chan struct{}
 }
 
 func startBridge(ctx context.Context, argv []string) (bridge, error) {
@@ -74,13 +83,18 @@ func startBridge(ctx context.Context, argv []string) (bridge, error) {
 		_ = in.Close()
 		return nil, failure("unavailable")
 	}
-	b := &processBridge{cmd: cmd, in: in, pending: map[int]chan bridgeReply{}, events: make(chan bridgeEvent, 64), done: make(chan struct{}), shutdown: make(chan struct{})}
+	b := &processBridge{cmd: cmd, in: in, pending: map[int]chan bridgeReply{}, events: make(chan bridgeEvent, 64), done: make(chan struct{}), shutdown: make(chan struct{}), more: make(chan struct{}, 1)}
 	go b.read(out)
 	return b, nil
 }
 
 func (b *processBridge) read(out io.Reader) {
 	defer func() { b.Close(); _ = b.cmd.Wait(); close(b.done) }()
+	delivered := make(chan struct{})
+	go b.deliver(delivered)
+	// On EOF or a bad frame, hand over what was already read before
+	// closing, as the blocking delivery did.
+	defer func() { b.push(nil); <-delivered }()
 	sc := bufio.NewScanner(out)
 	sc.Buffer(make([]byte, 4096), frameScanLimit)
 	for sc.Scan() {
@@ -89,14 +103,11 @@ func (b *processBridge) read(out io.Reader) {
 			return
 		}
 		if r.Event != "" {
-			// Delivery blocks for as long as the consumer needs: the watch
-			// goroutine holds the event across a slow op (a 10s secret save
-			// or a 30s session check), so a full buffer must not tear down a
-			// healthy companion. Only Close() unblocks delivery, by closing
-			// shutdown; then read() returns and fail-closes the bridge.
-			select {
-			case b.events <- r.bridgeEvent:
-			case <-b.shutdown:
+			// Events go through a FIFO so the scanner keeps reading: a
+			// reply can follow them, and its caller holds c.op, which
+			// watch needs before it takes the next event (#250).
+			if !b.push(&r.bridgeEvent) {
+				b.Close()
 				return
 			}
 			continue
@@ -109,6 +120,61 @@ func (b *processBridge) read(out io.Reader) {
 			case ch <- r:
 			default:
 			}
+		}
+	}
+}
+
+// push queues ev for deliver, or marks the end of the stream when ev is
+// nil. It reports false when the backlog is full.
+func (b *processBridge) push(ev *bridgeEvent) bool {
+	b.queueMu.Lock()
+	if ev == nil {
+		b.eof = true
+	} else if len(b.queue) >= backlogLimit {
+		b.queueMu.Unlock()
+		return false
+	} else {
+		b.queue = append(b.queue, *ev)
+	}
+	b.queueMu.Unlock()
+	select {
+	case b.more <- struct{}{}:
+	default:
+	}
+	return true
+}
+
+// deliver hands queued events to the consumer in order. Delivery blocks for
+// as long as the consumer needs: the watch goroutine holds the event across
+// a slow op (a 10s secret save or a 30s session check), so a full buffer
+// must not tear down a healthy companion. Only Close() unblocks delivery,
+// by closing shutdown; otherwise deliver returns once the stream has ended
+// and the queue is empty.
+func (b *processBridge) deliver(delivered chan<- struct{}) {
+	defer close(delivered)
+	for {
+		b.queueMu.Lock()
+		if len(b.queue) == 0 {
+			eof := b.eof
+			b.queueMu.Unlock()
+			if eof {
+				return
+			}
+			select {
+			case <-b.more:
+			case <-b.shutdown:
+				return
+			}
+			continue
+		}
+		ev := b.queue[0]
+		b.queue[0] = bridgeEvent{}
+		b.queue = b.queue[1:]
+		b.queueMu.Unlock()
+		select {
+		case b.events <- ev:
+		case <-b.shutdown:
+			return
 		}
 	}
 }

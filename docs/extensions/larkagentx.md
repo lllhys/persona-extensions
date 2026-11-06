@@ -111,7 +111,7 @@ The original companion speaks JSON-lines over stdio, limited to 1 MiB per frame:
 
 ```sh
 python3 -I -B extensions/larkagentx/bridge_test.py
-go test -race ./extensions/larkagentx
+go -C extensions/larkagentx test -race ./...
 scripts/ci.sh
 ```
 
