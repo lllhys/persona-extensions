@@ -109,7 +109,7 @@
         "manifest_version": 1,
         "id": "github",
         "name": "GitHub",
-        "version": "0.4.12",
+        "version": "0.4.13",
         "description": "GitHub 进 Persona：收件箱里是请你 review、@ 你、指派给你、你的 PR / issue 有了新评论或 review、CI 失败；和你有关的 PR、issue 归档进知识库；助手能搜、读 PR / issue、看改动和 CI，评论和 review 先在手机上确认。登录用你某台电脑上的 gh 登录或设备码登录，token 加密存在 hub 的数据库里。侧边栏的「GitHub」页：待你 review 的 PR、你的 PR 和 CI、指派 / 提到你的、通知和关注的动态、你的仓库（浏览代码、分支、README），PR 的改动文件、逐文件 diff 和行内评论、全部评论、CI 日志摘要，在这一页上评论、review、合并（先预览、确认后才发）。",
         "publisher": "nwverse",
         "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/github",
@@ -280,9 +280,9 @@
       ],
       "packages": [
         {
-          "url": "release:github-v0.4.12/github-0.4.12.tar.gz",
-          "sha256": "26677b559846a457869dc87d1efae849a1050247c99d77bf49ff9429040bf26e",
-          "size": 13544236
+          "url": "release:github-v0.4.13/github-0.4.13.tar.gz",
+          "sha256": "1a763663fd9e4f6129a1e8fffaeac9ba35458151c18503fc24ee8d2f075a6918",
+          "size": 13547340
         }
       ]
     },
@@ -1074,7 +1074,7 @@
         "manifest_version": 1,
         "id": "telegram",
         "name": "Telegram",
-        "version": "0.1.18",
+        "version": "0.1.19",
         "description": "用你自己的 Telegram 账号（MTProto，hub 连 Telegram 的数据中心；hub 的环境设了 HTTPS_PROXY 时经它的 HTTP CONNECT 隧道）：App 里的 Telegram 会话，收件箱（私聊、@我），知识库归档，助手的 Telegram 工具和 tg 命令行。发消息、回复、转发、点 reaction、标为已读都先在手机上确认。登录（api_id、api_hash 和会话）加密存在 hub 的数据库里，不在扩展目录。",
         "publisher": "nwverse",
         "engines": {
@@ -1163,9 +1163,9 @@
       ],
       "packages": [
         {
-          "url": "release:telegram-v0.1.18/telegram-0.1.18.tar.gz",
-          "sha256": "2789004aec6a00316e4c6c54c3c8d7c3348fa3a55376c2991dcc222d3ad405a6",
-          "size": 22266011
+          "url": "release:telegram-v0.1.19/telegram-0.1.19.tar.gz",
+          "sha256": "6ecf1da685d947048a2942346cc315edc69700eb2fa22f9d38bbff1095ed069f",
+          "size": 22267549
         }
       ]
     },
