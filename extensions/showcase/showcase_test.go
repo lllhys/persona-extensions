@@ -193,6 +193,52 @@ func TestEditFlow(t *testing.T) {
 	}
 }
 
+// Pre-v3 apps need an explicit detail view after saving, with the list context intact.
+func TestOldAppSaveView(t *testing.T) {
+	for _, version := range []int{1, 2} {
+		a := newApp()
+		ctx := context.Background()
+		s := state{P: "edit", ID: "3", Q: "示例", Kind: "mail", Shown: 40}
+		r := req(pageUI, wire.SizeFull, version, &s)
+		r.Action = "save"
+		r.Values = map[string]string{"title": "改过的标题", "kind": "mail", "note": "新的备注", "done": "true"}
+		res, err := a.action(ctx, r)
+		if err != nil || res == nil || res.View == nil || res.Pop || res.Toast != "保存了" {
+			t.Fatalf("UI v%d save: %+v, %v; want an explicit view and toast, no pop", version, res, err)
+		}
+		if res.View.Title != "改过的标题" {
+			t.Fatalf("UI v%d save view title = %q", version, res.View.Title)
+		}
+		var saved state
+		if err := json.Unmarshal([]byte(res.View.State), &saved); err != nil {
+			t.Fatal(err)
+		}
+		want := s
+		want.P = "detail"
+		if saved != want {
+			t.Fatalf("UI v%d save state = %+v, want %+v", version, saved, want)
+		}
+		// A refresh must stay on the detail, and Back must restore the original list.
+		r.State, r.Action = res.View.State, ""
+		v, err := a.render(ctx, r)
+		if err != nil || v.Title != "改过的标题" {
+			t.Fatalf("UI v%d refreshed detail: %+v, %v", version, v, err)
+		}
+		r.Action = "back"
+		if _, err := a.action(ctx, r); err != nil {
+			t.Fatal(err)
+		}
+		var back state
+		if err := r.DecodeState(&back); err != nil {
+			t.Fatal(err)
+		}
+		want.P, want.ID = "list", ""
+		if back != want {
+			t.Fatalf("UI v%d back state = %+v, want %+v", version, back, want)
+		}
+	}
+}
+
 // TestEditBack: apps before UI version 3 draw pages in place and have no native stack back,
 // so the edit page renders its own back button, exactly like detail(); v3 apps render neither.
 func TestEditBack(t *testing.T) {

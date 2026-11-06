@@ -17,7 +17,7 @@ The pages cover text styles and long text, metrics, progress, rows (badges, icon
 
 The list demonstrates search, filtering and pagination: 60 items, 20 at a time. Its navigation flow is list → detail → edit → save → pop, with the saved detail drawn again. The invalidate page answers with loading immediately and sends `ui.invalidate` three seconds later to redraw the visible page.
 
-Before UI version 3, list controls use fields and buttons; the SDK converts push navigation to drawing the new page in place. Each page includes a return button for that fallback (the detail and edit pages return to the list, other pages to the catalog), and returning from the list's detail or edit page restores the list with its search text, kind filter and loaded page intact.
+Before UI version 3, saving an item returns the updated detail view in place, preserving the list context. List controls use fields and buttons; the SDK converts push navigation to drawing the new page in place. Each page includes a return button for that fallback (the detail and edit pages return to the list, other pages to the catalog), and returning from the list's detail or edit page restores the list with its search text, kind filter and loaded page intact.
 
 ## Shared view snapshots
 

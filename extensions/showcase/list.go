@@ -186,6 +186,11 @@ func (a *app) save(r *ext.UIRequest, s state) (*wire.ActionResult, error) {
 		}
 	}
 	a.mu.Unlock()
+	if r.UIVersion < 3 {
+		// Older apps draw in place; a pop would make the SDK render the catalog's empty state.
+		s.P = "detail"
+		return &wire.ActionResult{View: a.detail(r, s), Toast: "保存了"}, nil
+	}
 	return &wire.ActionResult{Toast: "保存了", Pop: true}, nil
 }
 
