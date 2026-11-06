@@ -109,7 +109,7 @@
         "manifest_version": 1,
         "id": "github",
         "name": "GitHub",
-        "version": "0.4.11",
+        "version": "0.4.12",
         "description": "GitHub 进 Persona：收件箱里是请你 review、@ 你、指派给你、你的 PR / issue 有了新评论或 review、CI 失败；和你有关的 PR、issue 归档进知识库；助手能搜、读 PR / issue、看改动和 CI，评论和 review 先在手机上确认。登录用你某台电脑上的 gh 登录或设备码登录，token 加密存在 hub 的数据库里。侧边栏的「GitHub」页：待你 review 的 PR、你的 PR 和 CI、指派 / 提到你的、通知和关注的动态、你的仓库（浏览代码、分支、README），PR 的改动文件、逐文件 diff 和行内评论、全部评论、CI 日志摘要，在这一页上评论、review、合并（先预览、确认后才发）。",
         "publisher": "nwverse",
         "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/github",
@@ -280,9 +280,9 @@
       ],
       "packages": [
         {
-          "url": "release:github-v0.4.11/github-0.4.11.tar.gz",
-          "sha256": "e39d49c49808c63bf04eaaaad1d1600c4de5230035f6b7f563b31e84189da3d8",
-          "size": 13541208
+          "url": "release:github-v0.4.12/github-0.4.12.tar.gz",
+          "sha256": "26677b559846a457869dc87d1efae849a1050247c99d77bf49ff9429040bf26e",
+          "size": 13544236
         }
       ]
     },
