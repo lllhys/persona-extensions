@@ -3,6 +3,7 @@ package telegram
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -116,5 +117,42 @@ func TestProxyDialRefused(t *testing.T) {
 	_, err = proxyDial(func(*http.Request) (*url.URL, error) { return pu, nil })(context.Background(), "tcp", "149.154.167.50:443")
 	if err == nil || !strings.Contains(err.Error(), "403") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// A proxy the client cannot go through is said at once, naming it (#283): gotd retries a failed dial until its
+// context ends, so the error used to be lost and the status said only 超时.
+func TestDialSaysProxyFailure(t *testing.T) {
+	refusing, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer refusing.Close()
+	go func() {
+		for {
+			c, err := refusing.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				_, _ = http.ReadRequest(bufio.NewReader(c))
+				_, _ = c.Write([]byte("HTTP/1.1 407 Proxy Authentication Required\r\nContent-Length: 0\r\n\r\n"))
+			}()
+		}
+	}()
+	defer func(f func(*http.Request) (*url.URL, error)) { proxyFromEnvironment = f }(proxyFromEnvironment)
+	for _, proxy := range []string{"socks5://127.0.0.1:1080", "http://" + refusing.Addr().String()} {
+		pu, _ := url.Parse(proxy)
+		proxyFromEnvironment = func(*http.Request) (*url.URL, error) { return pu, nil }
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cl, err := dialGotd(ctx, creds{1234567, exampleHash}, &memSession{}, newGate(), func() {})
+		cancel()
+		if cl != nil {
+			t.Fatalf("%s: connected", proxy)
+		}
+		if got := explain(err); errors.Is(err, context.DeadlineExceeded) || !strings.Contains(got, "proxy") {
+			t.Fatalf("%s: the status says 连不上 Telegram：%s (err %v)", proxy, got, err)
+		}
 	}
 }
