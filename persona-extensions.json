@@ -384,7 +384,7 @@
         "manifest_version": 1,
         "id": "linuxdo",
         "name": "LINUX DO",
-        "version": "0.1.9",
+        "version": "0.1.10",
         "description": "LINUX DO 社区的热门帖子：扩展里的一页按你的兴趣看热门、今日 / 本周最热和最新，点开在 App 里读正文和热门回复（hub 去读，手机不用代理）；助手能用工具查热门、读帖子。只读公开内容，不用账号。",
         "publisher": "nwverse",
         "engines": {
@@ -510,9 +510,9 @@
       ],
       "packages": [
         {
-          "url": "release:linuxdo-v0.1.9/linuxdo-0.1.9.tar.gz",
-          "sha256": "d5ff7ea87e27f087c25ebcd7fc6d2d8b79c084f89607f44822f9962bb21761cc",
-          "size": 12128422
+          "url": "release:linuxdo-v0.1.10/linuxdo-0.1.10.tar.gz",
+          "sha256": "b9052c9fb1d09e4e5042d095585d4ed91619d4c4a4db243d9c8b64e88e82510c",
+          "size": 12128402
         }
       ]
     },
