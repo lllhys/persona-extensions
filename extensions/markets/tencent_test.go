@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona-extensions/pluginkit"
+	"github.com/nwverse/persona/sdk/go/exttest"
 )
 
 // fakeTencent answers like Tencent's endpoints from the samples in testdata/tencent, recorded from the live ones:
@@ -57,6 +59,13 @@ func newFakeTencent(t *testing.T) *fakeTencent {
 			name := "search-none.txt"
 			if r.URL.Query().Get("q") == "tengxun" {
 				name = "search-tengxun.txt"
+			}
+			serveFile(t, w, name)
+		case r.URL.Path == "/appstock/app/minute/query":
+			name := "minute-" + r.URL.Query().Get("code") + ".json"
+			if _, err := os.Stat(filepath.Join("testdata/tencent", name)); err != nil {
+				_, _ = w.Write([]byte(`{"code":-1,"msg":"param error","data":[]}`))
+				return
 			}
 			serveFile(t, w, name)
 		case r.URL.Path == "/appstock/app/fqkline/get", r.URL.Path == "/appstock/app/kline/mkline":
@@ -253,7 +262,7 @@ func TestTencentCandles(t *testing.T) {
 	if _, err := hk.Candles(ctx, "00700", "1D", 3, time.Minute); !errors.Is(err, ErrNotFound) {
 		t.Errorf("a code Tencent answers param error for: %v", err)
 	}
-	if !slices.Equal(cn.Bars(), []string{"15m", "1H", "1D", "1W"}) || !slices.Equal(us.Bars(), []string{"1D", "1W"}) {
+	if !slices.Equal(cn.Bars(), []string{"T", "15m", "1H", "1D", "1W"}) || !slices.Equal(us.Bars(), []string{"T", "1D", "1W"}) {
 		t.Errorf("bars %v %v", cn.Bars(), us.Bars())
 	}
 }
@@ -376,5 +385,170 @@ func TestDecimals(t *testing.T) {
 	}
 	if got := (Quote{}).Price(3.50210); got != "3.5021" {
 		t.Errorf("auto: %s", got)
+	}
+}
+
+func TestFactsAndMinutes(t *testing.T) {
+	_, cn, hk, us := txSources(t)
+	ctx := context.Background()
+	q, err := cn.Quote(ctx, "600519.SH", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts := map[string]string{}
+	var order []string
+	for _, f := range q.Facts {
+		facts[f.Label] = f.Value
+		order = append(order, f.Label)
+	}
+	for label, want := range map[string]string{"今开": "1450.00", "昨收": "1452.00", "涨停": "1597.20", "跌停": "1306.80",
+		"52 周最高": "1539.98", "52 周最低": "1151.01", "市盈率": "21.92", "换手率": "0.20%"} {
+		if facts[label] != want {
+			t.Errorf("600519 %s = %q, want %q (%v)", label, facts[label], want, q.Facts)
+		}
+	}
+	if !strings.HasSuffix(facts["总市值"], "万亿 CNY") || !strings.HasSuffix(facts["成交量"], "万") || order[0] != "今开" {
+		t.Errorf("600519 facts %v", q.Facts)
+	}
+	idx, _ := cn.Quote(ctx, "000001.SH", time.Minute)
+	for _, f := range idx.Facts {
+		if f.Label == "市盈率" || f.Label == "涨停" || f.Label == "总市值" {
+			t.Errorf("an index has no %s", f.Label)
+		}
+	}
+	h, _ := hk.Quote(ctx, "00700", time.Minute)
+	if len(h.Facts) == 0 || h.Facts[len(h.Facts)-1].Label != "52 周最低" {
+		t.Errorf("00700 facts %v", h.Facts)
+	}
+
+	// the minute line: A-shares 121 minutes gathered two a point, from 9:30; volumes in shares
+	m, err := cn.Candles(ctx, "600519.SH", "T", 0, time.Minute)
+	if err != nil || len(m) != 61 {
+		t.Fatalf("minutes %d %v", len(m), err)
+	}
+	if !m[0].At.Equal(time.Date(2026, 11, 6, 9, 30, 0, 0, marketInfo[mCN].loc)) || m[0].Open != 1450 || m[0].Close != 1450.98 || m[0].Vol != 446500 {
+		t.Errorf("first point %+v", m[0])
+	}
+	if m[1].Vol <= 0 || !m[1].At.Equal(m[0].At.Add(2*time.Minute)) {
+		t.Errorf("second point %+v", m[1])
+	}
+	if hm, err := hk.Candles(ctx, "00700", "T", 0, time.Minute); err != nil || len(hm) == 0 || len(hm) > minutePoints {
+		t.Errorf("hk minutes %d %v", len(hm), err)
+	}
+	// before the US day's first trade the line is empty
+	if um, err := us.Candles(ctx, "AAPL", "T", 0, time.Minute); err != nil || len(um) != 0 {
+		t.Errorf("us minutes %v %v", um, err)
+	}
+}
+
+func TestBatchOnePage(t *testing.T) {
+	ft, fo := newFakeTencent(t), newFakeOKX(t)
+	p := newPlugin(t.Logf)
+	p.srcs = append(sources{newOKX(fo.srv.URL)}, tencentSources(ft.hosts())...)
+	defer func(old func() time.Time) { now = old }(now)
+	now = func() time.Time { return time.Date(2026, 11, 6, 11, 40, 0, 0, marketInfo[mCN].loc) }
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "watchlist.json"), []byte(`["cn:600519.SH","us:AAPL","cn:300750.SZ","cn:000001.SH"]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var ip pluginkit.InitParams
+	ip.Plugin.DataDir = dir
+	if err := p.configure(ip); err != nil {
+		t.Fatal(err)
+	}
+
+	// the instrument page: the facts in grids of at most six, the minute line offered
+	r := act(t, p, "", "open:cn:000001.SH", nil)
+	got := texts(*r.View)
+	for _, want := range []string{"{今开=", "{52 周最高=", "→top:cn:000001.SH", "→up:cn:000001.SH"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the page has no %q:\n%s", want, got)
+		}
+	}
+	r = act(t, p, `{"i":"cn:600519.SH"}`, "bar", map[string]string{"bar": "T"})
+	if got := texts(*r.View); !strings.Contains(got, "K 线 · 今日分时") || !strings.Contains(got, "开盘以来") || !strings.Contains(got, "<收盘价 61>") {
+		t.Errorf("the minute line:\n%s", got)
+	}
+	// 置顶 moves it to the top of its group, over the others of its source only
+	act(t, p, `{"i":"cn:000001.SH"}`, "top:cn:000001.SH", nil)
+	if got := refStrings(p.watchlist()); !slices.Equal(got, []string{"cn:000001.SH", "us:AAPL", "cn:600519.SH", "cn:300750.SZ"}) {
+		t.Errorf("top %v", got)
+	}
+	// a US stock before its day: the minute line says so; a closed market's page refreshes slowly
+	r = act(t, p, `{"i":"us:AAPL","b":"T"}`, "refresh", nil)
+	if got := texts(*r.View); !strings.Contains(got, "还没有分时") || r.View.RefreshAfter != refreshIdle {
+		t.Errorf("us before the day (refresh %d):\n%s", r.View.RefreshAfter, got)
+	}
+
+	// added from a search's result: back to the search, the row marked
+	r = act(t, p, "", "search", map[string]string{"q": "tengxun"})
+	r = act(t, p, r.View.State, "open:hk:00700", nil)
+	r = act(t, p, r.View.State, "add:hk:00700", nil)
+	if r.Toast != "已加入 00700" || r.View.Title != "行情" || !strings.Contains(texts(*r.View), "已在自选") {
+		t.Errorf("after adding from a search: %q\n%s", r.Toast, texts(*r.View))
+	}
+
+	// the watchlist refreshes as usual while a market trades, slowly when none does
+	if v := render(t, p, "", 5); v.RefreshAfter != refreshEvery {
+		t.Errorf("A-shares trading: refresh %d", v.RefreshAfter)
+	}
+	now = func() time.Time { return time.Date(2026, 11, 6, 20, 0, 0, 0, marketInfo[mCN].loc) }
+	p.srcs = append(sources{newOKX(fo.srv.URL)}, tencentSources(ft.hosts())...) // a cache from before
+	if v := render(t, p, "", 5); v.RefreshAfter != refreshIdle {
+		t.Errorf("every market closed: refresh %d", v.RefreshAfter)
+	}
+}
+
+func TestCard(t *testing.T) {
+	ft, fo := newFakeTencent(t), newFakeOKX(t)
+	p := newPlugin(t.Logf)
+	p.srcs = append(sources{newOKX(fo.srv.URL)}, tencentSources(ft.hosts())...)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "watchlist.json"), []byte(`["cn:600519.SH","us:.DJI","BTC-USDT","hk:00700"]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var ip pluginkit.InitParams
+	ip.Plugin.DataDir = dir
+	if err := p.configure(ip); err != nil {
+		t.Fatal(err)
+	}
+	draw := func() (pluginkit.View, error) {
+		raw, _ := json.Marshal(map[string]any{"contribution": "card", "placement": "overview_card", "size": "compact", "ui_version": 5})
+		out, err := p.uiRender(context.Background(), nil, raw)
+		if err != nil {
+			return pluginkit.View{}, err
+		}
+		return out.(pluginkit.View), nil
+	}
+	v, err := draw()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := json.Marshal(v); exttest.CheckView(raw, true) != nil { // a card: compact limits
+		t.Fatalf("the hub would refuse the card: %v", exttest.CheckView(raw, true))
+	}
+	got := texts(v)
+	// the benchmarks: BTC, then the sample's 上证指数 and 恒生指数 (纳斯达克 is not in it)
+	for _, want := range []string{"{BTC=50000.00 +4.17% danger}", "{上证指数=3649.15 -1.10% positive}", "{恒生指数=",
+		"## 自选里动得最多的", "row BTC-USDT"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the card has no %q:\n%s", want, got)
+		}
+	}
+	// the biggest move first: BTC +4.17%, then .DJI -3.44%
+	rows := v.Sections[1].Items
+	if len(rows) != 4 || rows[0].Title != "BTC-USDT" || rows[1].Title != "道琼斯" || rows[0].Action != nil {
+		t.Errorf("moves %+v", rows)
+	}
+
+	// off: unsupported, which the apps draw as nothing
+	ip.Config = []byte(`{"overview_card": false}`)
+	if err := p.configure(ip); err != nil {
+		t.Fatal(err)
+	}
+	_, err = draw()
+	var pe *pluginkit.Error
+	if !errors.As(err, &pe) || pe.Code != pluginkit.CodeUnsupported {
+		t.Errorf("off: %v", err)
 	}
 }
