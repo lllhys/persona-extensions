@@ -8,7 +8,7 @@
         "manifest_version": 1,
         "id": "claude-bypass-allow",
         "name": "Bypass 自动允许",
-        "version": "0.2.13",
+        "version": "0.2.15",
         "description": "Claude Code 开着 bypassPermissions（--dangerously-skip-permissions）时，有些调用仍会弹确认框（如读工作目录外的文件、开子 Agent、某些 Bash），无人值守的 Agent 就卡在「在等你」。在你选的电脑上给 Claude Code 装一个 PermissionRequest hook：只在会话是 bypass 模式时，自动允许 Bash、只读工具（Read、Glob、Grep、LS、NotebookRead）和子 Agent。删除、覆盖数据的 Bash 命令，目标都在临时目录或工作目录里（/tmp、会话的工作目录、~/ag-work、~/wt、Claude Code 的 worktree 等）时直接放行，其余的仍然问你；打开「删除和覆盖也自动允许」就都放行。force push、改权限的 Bash 命令，写文件、Workflow 和 MCP 工具，以及你自己配的 ask / deny 规则，始终问你。每次自动允许都记一条（命令截断、去掉密钥）。别的模式照常问你。",
         "publisher": "nwverse",
         "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/claude-bypass-allow",
@@ -98,9 +98,9 @@
       ],
       "packages": [
         {
-          "url": "release:claude-bypass-allow-v0.2.13/claude-bypass-allow-0.2.13.tar.gz",
-          "sha256": "f0c7b319286046800ada59ad86ca8cb77fe93d6a90cfd0712b358cf6eb343989",
-          "size": 12167339
+          "url": "release:claude-bypass-allow-v0.2.15/claude-bypass-allow-0.2.15.tar.gz",
+          "sha256": "c18e63c83273672e8a441fe451817b32c24f3040b818c2341cdf9327b4859d57",
+          "size": 12165767
         }
       ]
     },
@@ -652,6 +652,57 @@
           "url": "release:markets-v0.3.0/markets-0.3.0.tar.gz",
           "sha256": "efbc39bb6b0ef5ecf6a9bab555e75e46364da66219a32c6d3419df5f4f180a8a",
           "size": 12827850
+        }
+      ]
+    },
+    {
+      "manifest": {
+        "manifest_version": 1,
+        "id": "mnemo",
+        "name": "mnemo 历史会话搜索",
+        "version": "0.1.0",
+        "description": "只有声明、不跑程序：跑助手的那台电脑上装了 mnemo（https://github.com/szupzj18/mnemo），Claude 助手就多一组 mcp__mnemo__* 工具，按内容搜 Claude Code、Codex 等 Agent 以前的会话，读命中处的上下文。只开只读工具，重建索引的 reindex 禁用。没装 mnemo 时什么都不加。Persona 不传凭据，也不读 mnemo 的配置。",
+        "publisher": "nwverse",
+        "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/mnemo",
+        "engines": {
+          "persona": ">=202611051918"
+        },
+        "contributes": {
+          "mcp_servers": [
+            {
+              "id": "mnemo",
+              "command": "mnemo",
+              "env": "PERSONA_MNEMO_BIN",
+              "args": [
+                "mcp"
+              ],
+              "requires": [
+                "mcp"
+              ],
+              "allow": [
+                "search_sessions",
+                "get_context",
+                "get_session",
+                "list_recent_sessions"
+              ],
+              "deny": [
+                "reindex"
+              ]
+            }
+          ]
+        }
+      },
+      "tags": [
+        "agents",
+        "assistant",
+        "search",
+        "mcp"
+      ],
+      "packages": [
+        {
+          "url": "release:mnemo-v0.1.0/mnemo-0.1.0.tar.gz",
+          "sha256": "d6555f50a82f84b970e8a84c531be518cdb7b81e70dc9e248fb6f2049e27b016",
+          "size": 840
         }
       ]
     },
