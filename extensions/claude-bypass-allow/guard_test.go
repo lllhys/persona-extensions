@@ -78,6 +78,13 @@ func TestPersonOnly(t *testing.T) {
 		`git -c core.editor="sh -c 'rm -rf v'" commit --amend`, "git -c credential.helper='!rm -rf v' fetch",
 		"git bisect run rm -rf v",
 		"git submodule foreach 'rm -rf v'", "git submodule foreach --recursive 'rm -rf v'",
+		// git global options that take the next word as their value, and -c aliases without ! (git arguments)
+		"git --namespace x clean -fdx", "git --namespace x reset --hard", "git --namespace x push --force origin main",
+		"git --config-env core.x=Y clean -fdx", "git --attr-source HEAD clean -fdx", "git --super-prefix x/ rm -r d",
+		"git -c alias.x=clean x -fdx", "git -c alias.x='reset --hard' x", "git -c alias.p='push --force' p origin main",
+		"git -c alias.c='checkout -f' c main", "git -c Alias.X=clean x -fd", "git -c alias.a=b -c alias.b=clean a",
+		"git -c alias.x=x x", "git --config-env alias.x=Y x", "git --config-env=alias.x=Y x", "git -calias.x=clean x",
+		"git -c alias.reset=status reset --hard",
 		// a /tmp/ or /dev/ path that .. takes out of it is a kept file
 		"echo x > /tmp/../etc/hosts", "go test > /tmp/a/../../home/u/.bashrc 2>&1", "tee /tmp/../home/u/.profile",
 		"ls &> /dev/../etc/motd", "echo x > /tmp/\\.\\./etc/hosts", "echo x > /tmp/\\\n../etc/hosts",
@@ -157,6 +164,8 @@ func TestPersonOnly(t *testing.T) {
 		"env FOO=1 go test ./...", "flock /tmp/l make", "trap - EXIT", "trap 'echo done' EXIT",
 		"git rebase -i HEAD~3", "git rebase --exec 'go test ./...' HEAD~2", "git bisect run go test ./...",
 		"git submodule foreach git pull", "git -c alias.st=status st", "script -q /dev/null",
+		"git --namespace x status", "git --config-env core.x=Y log", "git -c alias.co=checkout co main",
+		"git -c alias.l='log --oneline' l -5", "git -c alias.x=clean status",
 		"git -c user.name='A B' commit -m x", "git -c core.pager='less -R' log", "git -c core.sshCommand='ssh -i k' fetch",
 		// a heredoc fed to sudo without its shell options is data, and a benign command in another shell still goes
 		"sudo -u me cat <<EOF\nrm x\nEOF", "sudo -g staff -E cat <<EOF\nrm x\nEOF", "csh -c 'ls -la'", "tcsh <<EOF\necho hi\nEOF",
