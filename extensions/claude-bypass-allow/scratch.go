@@ -118,10 +118,11 @@ func within(d, a string) bool { return d == a || strings.HasPrefix(d, strings.Tr
 // worktree is a path in Claude Code's worktrees: …/.claude/worktrees/<name>[/…].
 var worktree = regexp.MustCompile(`/\.claude/worktrees/[^/]+`)
 
-// holds says whether the resolved path p is scratch.
+// holds says whether the resolved path p is scratch. .git counts whatever its letter case: .GIT is .git on macOS's
+// case-insensitive file systems (on a case-sensitive one that only asks more).
 func (r *roots) holds(p string) bool {
 	for _, part := range strings.Split(p, "/") {
-		if part == ".git" {
+		if strings.EqualFold(part, ".git") {
 			return false
 		}
 	}

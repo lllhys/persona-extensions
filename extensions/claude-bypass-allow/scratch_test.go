@@ -91,6 +91,8 @@ func TestScratchDeletions(t *testing.T) {
 		"rm -rf ~", "rm -rf ~/", "rm -rf $HOME", "rm -rf ~/ag-work", "rm -rf {tmp}", "rm -rf /", "rm -rf {home}/..",
 		"rm -rf {tmp}/../keep", "rm -rf /etc/x", "rm -rf ~/.ssh", "rm -rf ~/.ssh/id", "rm -rf ~/notes", "rm -rf {keep}/x",
 		"rm -rf .git", "rm -rf sub/.git/hooks", "rm -rf .", "rm -rf ..", "rm -rf ../other", "rm -rf {project}",
+		// .GIT and .Git are .git on macOS's case-insensitive file systems
+		"rm -rf .GIT", "rm -rf .Git/objects", "rm -rf sub/.gIt/hooks", "rm -rf {tmp}/clone/.GIT", "rm -rf ~/.claude/worktrees/w/.GIT",
 		"rm -rf {tmp}/*/", "rm -rf {tmp}/.*", "rm -rf {tmp}/*/x",
 		// through a symlink that leads out, or one the command may make
 		"rm -rf {tmp}/link/", "rm -rf {tmp}/link/f", "ln -s {keep} {tmp}/l2; rm -rf {tmp}/l2/f",
