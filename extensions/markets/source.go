@@ -35,6 +35,9 @@ type Source interface {
 	Hosts() []string
 	// URL is the instrument's page on the source's website ("" when none), opened from the app.
 	URL(symbol string) string
+	// Help says how its symbols are written, with the ref prefix, for the page and the tools ("OKX 的现货写
+	// okx:BTC-USDT…").
+	Help() string
 }
 
 var (
@@ -155,11 +158,16 @@ func (ss sources) label(r Ref) string {
 	return r.String()
 }
 
-// markets says what the sources cover, for the page and the tools: "加密货币（OKX）".
+// markets says what the sources cover, for the page and the tools: "加密货币（OKX）、A股" (the name only when it is
+// the market).
 func (ss sources) markets() string {
 	var parts []string
 	for _, s := range ss {
-		parts = append(parts, s.Market()+"（"+s.Name()+"）")
+		if s.Market() == s.Name() {
+			parts = append(parts, s.Name())
+		} else {
+			parts = append(parts, s.Market()+"（"+s.Name()+"）")
+		}
 	}
 	return strings.Join(parts, "、")
 }

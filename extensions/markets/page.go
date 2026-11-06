@@ -268,13 +268,13 @@ func (p *plugin) searchSection(ctx context.Context, q string, refresh bool) plug
 // addSection is the way to add by typing: with a search box (UI version 3) a code typed in full; before it, the
 // same field also searches.
 func (p *plugin) addSection(v3 bool) pluginkit.Section {
-	hint := "直接写代码：BTC-USDT、永续合约 BTC-USDT-SWAP，只写 BTC 当成 BTC-USDT"
+	var helps []string
+	for _, s := range p.srcs {
+		helps = append(helps, s.Help())
+	}
+	hint := "直接写代码：" + strings.Join(helps, "；")
 	if len(p.srcs) > 1 {
-		var ids []string
-		for _, s := range p.srcs {
-			ids = append(ids, s.ID()+":（"+s.Name()+"）")
-		}
-		hint += "；不写来源是 " + p.srcs[0].Name() + " 的，别的来源在代码前加：" + strings.Join(ids, "、")
+		hint += "。不写来源（代码前的「" + p.srcs[0].ID() + ":」这种）就是 " + p.srcs[0].Name() + " 的"
 	}
 	sec := pluginkit.Section{Title: "添加",
 		Footer: hint,
@@ -399,7 +399,11 @@ func (p *plugin) instPage(ctx context.Context, d draw, st pageState, r Ref) plug
 		acts.Items = append(acts.Items, pluginkit.Item{Type: "button", Title: "加入自选", Action: &pluginkit.UIAction{ID: "add:" + r.String()}})
 	}
 	if u := src.URL(r.Symbol); strings.HasPrefix(u, "https://") {
-		acts.Items = append(acts.Items, pluginkit.Item{Type: "link", Title: "在 " + src.Name() + " 打开", URL: u})
+		site := src.Name()
+		if s, ok := src.(interface{ Site() string }); ok { // the website is not named like the source
+			site = s.Site()
+		}
+		acts.Items = append(acts.Items, pluginkit.Item{Type: "link", Title: "在 " + site + " 打开", URL: u})
 	}
 	acts.Items = append(acts.Items, back,
 		pluginkit.Item{Type: "text", Text: src.Name() + " 公开行情 · 读于 " + time.Now().In(d.loc).Format("15:04:05"), Style: "caption"})

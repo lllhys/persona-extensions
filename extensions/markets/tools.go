@@ -27,7 +27,11 @@ func (p *plugin) tools() []Tool {
 	for _, b := range allBars {
 		barIDs = append(barIDs, b.id)
 	}
-	refs := fmt.Sprintf("代码写成「来源:代码」（如 okx:BTC-USDT），不写来源就是 %s 的；OKX 的现货写 BTC-USDT、ETH-USDC，永续合约 BTC-USDT-SWAP，只写 BTC 当成 BTC-USDT。", p.srcs[0].Name())
+	var helps []string
+	for _, s := range p.srcs {
+		helps = append(helps, s.Help())
+	}
+	refs := fmt.Sprintf("代码写成「来源:代码」（如 okx:BTC-USDT），不写来源就是 %s 的；%s。", p.srcs[0].Name(), strings.Join(helps, "；"))
 	return []Tool{
 		{Name: "markets_quote",
 			Description: "查实时行情（" + covers + "）：每个代码的最新价、这段时间（加密货币是 24 小时）的涨跌、最高、最低和成交额。" + refs + "symbols 不给就是用户的自选。",

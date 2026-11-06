@@ -331,6 +331,10 @@ func (o *okx) Market() string { return "加密货币" }
 
 func (o *okx) Hosts() []string { return []string{"www.okx.com"} }
 
+func (o *okx) Help() string {
+	return "OKX 的现货写 okx:BTC-USDT、okx:ETH-USDC，永续合约 okx:BTC-USDT-SWAP，只写币名（BTC）当成对 USDT"
+}
+
 // URL is the instrument's trading page on OKX.
 func (o *okx) URL(id string) string {
 	kind := "spot"

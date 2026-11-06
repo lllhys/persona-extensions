@@ -28,6 +28,7 @@ func (stocks) Market() string    { return "美股" }
 func (stocks) Hosts() []string   { return nil }
 func (stocks) Bars() []string    { return []string{"1D", "1W"} }
 func (stocks) URL(string) string { return "" }
+func (stocks) Help() string      { return "美股写 us:AAPL" }
 
 func (stocks) Normalize(s string) (string, bool) {
 	s = strings.ToUpper(strings.TrimSpace(s))
@@ -95,7 +96,7 @@ func TestSources(t *testing.T) {
 	v := render(t, p, "", 5)
 	got := texts(v)
 	for _, want := range []string{"row BTC-USDT · OKX 24h 高", "row AAPL · 美股 Example Apple · 今日 高 212 · 低 199 210",
-		"[+5.00% positive] →open:us:AAPL", "OKX、美股 公开行情", "别的来源在代码前加：okx:（OKX）、us:（美股）"} {
+		"[+5.00% positive] →open:us:AAPL", "OKX、美股 公开行情", "美股写 us:AAPL。不写来源（代码前的「okx:」这种）就是 OKX 的"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the page has no %q:\n%s", want, got)
 		}
@@ -163,7 +164,7 @@ func TestSources(t *testing.T) {
 	listed, _ := p.cToolsList(context.Background(), nil, nil)
 	b, _ := json.Marshal(listed)
 	_ = json.Unmarshal(b, &tl)
-	if !strings.Contains(tl.Tools[0].Description, "加密货币（OKX）、美股（美股）") {
+	if !strings.Contains(tl.Tools[0].Description, "加密货币（OKX）、美股）") {
 		t.Errorf("the tools do not say what they cover: %s", tl.Tools[0].Description)
 	}
 }

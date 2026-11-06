@@ -19,7 +19,7 @@ import (
 // market is adding its Source here, its hosts to the manifest's connector hosts and network permission
 // (TestManifest checks), and, when it needs a key, a secret in the manifest (docs/extensions/markets.md).
 func newSources() sources {
-	return sources{newOKX(okxBase)}
+	return append(sources{newOKX(okxBase)}, tencentSources(tencentBase)...)
 }
 
 // Config is the extension's configuration (the manifest's form).

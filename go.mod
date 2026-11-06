@@ -6,6 +6,7 @@ require (
 	github.com/gotd/log v0.1.0
 	github.com/gotd/td v0.163.0
 	github.com/nwverse/persona/sdk/go v0.0.0
+	golang.org/x/text v0.40.0
 )
 
 require (
@@ -43,7 +44,6 @@ require (
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/tools v0.48.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	rsc.io/qr v0.2.0 // indirect
