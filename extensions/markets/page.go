@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/nwverse/persona-extensions/pluginkit"
 )
@@ -22,6 +24,8 @@ type pageState struct {
 	Inst string `json:"i,omitempty"` // a ref ("okx:BTC-USDT"); a bare symbol is the default source's
 	Bar  string `json:"b,omitempty"`
 	Q    string `json:"q,omitempty"` // the search: the list page shows what matches it instead of the watchlist
+	Sort string `json:"s,omitempty"` // the watchlist's order: "" its own, "up" the biggest rise first, "down" the biggest fall
+	Mkt  string `json:"m,omitempty"` // the watchlist shows only this source's group; "" every group
 }
 
 const (
@@ -45,6 +49,12 @@ func (p *plugin) readState(raw string) (pageState, *Ref) {
 		st.Bar = ""
 	}
 	st.Q = cleanQuery(st.Q)
+	if st.Sort != "up" && st.Sort != "down" {
+		st.Sort = ""
+	}
+	if p.srcs.get(st.Mkt) == nil {
+		st.Mkt = ""
+	}
 	return st, open
 }
 
@@ -111,6 +121,17 @@ func (p *plugin) uiAction(ctx context.Context, _ *pluginkit.Hub, raw json.RawMes
 		st.Q, open = cleanQuery(q), nil
 	case "clear":
 		st.Q = ""
+	case "sort", "mkt":
+		if arg == "" { // the segmented control: the choice is in the values
+			arg = r.Values[kind]
+		}
+		if kind == "sort" {
+			st.Sort = map[string]string{"up": "up", "down": "down"}[arg]
+		} else if p.srcs.get(arg) != nil {
+			st.Mkt = arg
+		} else {
+			st.Mkt = ""
+		}
 	case "bar":
 		if arg == "" { // the segmented control: the choice is in the values
 			arg = r.Values["bar"]
@@ -200,7 +221,7 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 		v.Search = &pluginkit.Search{Placeholder: "搜代码或名称：" + strings.Join(ex, "、"), Value: st.Q, Action: pluginkit.UIAction{ID: "search"}}
 	}
 	if st.Q != "" {
-		v.Sections = append(v.Sections, p.searchSections(ctx, st.Q, refresh)...)
+		v.Sections = append(v.Sections, p.searchSections(ctx, st.Q, d.v3, refresh)...)
 		if !d.v3 {
 			v.Sections = append(v.Sections, p.addSection(false))
 		}
@@ -208,34 +229,93 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 		return v
 	}
 	watch := p.watchlist()
+	marks := p.marks()
+	// each source asked once, for its watchlist and its benchmark; one that fails says so in its group
+	qs, errs := map[Ref]Quote{}, map[string]error{}
+	for _, src := range p.srcs {
+		refs := group(watch, src.ID())
+		if len(refs) == 0 && !d.v2 {
+			continue
+		}
+		for _, m := range group(marks, src.ID()) {
+			if !slices.Contains(refs, m) {
+				refs = append(refs, m)
+			}
+		}
+		if len(refs) == 0 {
+			continue
+		}
+		got, err := src.Quotes(ctx, symbols(refs), freshness(quotesFor, refresh))
+		p.note(err)
+		if err != nil {
+			errs[src.ID()] = err
+			continue
+		}
+		for sym, q := range got {
+			qs[Ref{src.ID(), sym}] = q
+		}
+	}
+	active := len(watch) == 0 || len(errs) > 0 // a quote of a market trading, nothing to show, or a retry: the usual refresh
+
+	if d.v2 { // 大盘: each source's benchmark
+		if stats := p.markStats(marks, qs); len(stats) > 1 { // one alone (OKX only) would repeat the watchlist
+			v.Sections = append(v.Sections, pluginkit.Section{Title: "大盘", Items: []pluginkit.Item{{Type: "stat_grid", Stats: stats}}})
+		}
+	}
 	if len(watch) == 0 {
 		v.Sections = append(v.Sections, pluginkit.Section{Title: "自选 · 0",
 			Items: []pluginkit.Item{{Type: "text", Text: "自选是空的：搜一个加进来", Style: "secondary"}}})
 	}
-	// one group a source, in the sources' order; a source that fails says so in its group while the others draw
-	var groups []pluginkit.Section
-	active := len(watch) == 0 // a quote of a market trading, or nothing to show: the usual refresh
+
+	// the sources the watchlist has, for the filter
+	var present []Source
 	for _, src := range p.srcs {
-		refs := group(watch, src.ID())
-		if len(refs) == 0 {
+		if len(group(watch, src.ID())) > 0 {
+			present = append(present, src)
+		}
+	}
+	if st.Mkt != "" && !slices.ContainsFunc(present, func(s Source) bool { return s.ID() == st.Mkt }) {
+		st.Mkt = "" // nothing of it left
+		v.State = st.encode()
+	}
+	if d.v2 && len(watch) > 1 {
+		ctl := pluginkit.Section{Items: []pluginkit.Item{{Type: "segmented", Name: "sort", Value: or(st.Sort, "order"),
+			Action: &pluginkit.UIAction{ID: "sort"}, Choices: []pluginkit.Choice{{Value: "order", Title: "自选顺序"},
+				{Value: "up", Title: "涨幅"}, {Value: "down", Title: "跌幅"}}}}}
+		if len(present) > 1 && len(present) < 5 { // a segmented control takes at most 5
+			mkt := pluginkit.Item{Type: "segmented", Name: "mkt", Value: or(st.Mkt, "all"), Action: &pluginkit.UIAction{ID: "mkt"},
+				Choices: []pluginkit.Choice{{Value: "all", Title: "全部"}}}
+			for _, src := range present {
+				mkt.Choices = append(mkt.Choices, pluginkit.Choice{Value: src.ID(), Title: src.Market()})
+			}
+			ctl.Items = append(ctl.Items, mkt)
+		}
+		v.Sections = append(v.Sections, ctl)
+	}
+
+	// one group a source, in the sources' order
+	var groups []pluginkit.Section
+	for _, src := range present {
+		if st.Mkt != "" && src.ID() != st.Mkt {
 			continue
 		}
+		refs := group(watch, src.ID())
 		sec := pluginkit.Section{Title: fmt.Sprintf("%s · %d", src.Market(), len(refs))}
 		if len(p.srcs) == 1 {
 			sec.Title = fmt.Sprintf("自选 · %d", len(refs))
 		}
-		qs, err := src.Quotes(ctx, symbols(refs), freshness(quotesFor, refresh))
-		p.note(err)
-		if err != nil {
+		if err := errs[src.ID()]; err != nil {
 			sec.Items = []pluginkit.Item{{Type: "text", Text: err.Error(), Style: "secondary"},
 				{Type: "button", Title: "重试", Action: &pluginkit.UIAction{ID: "refresh"}}}
 			groups = append(groups, sec)
-			active = true
 			continue
+		}
+		if st.Sort != "" {
+			sortByChange(refs, qs, st.Sort == "down")
 		}
 		periods := map[string]bool{}
 		for _, r := range refs {
-			q, ok := qs[r.Symbol]
+			q, ok := qs[r]
 			if ok {
 				periods[q.Period] = true
 				active = active || !q.Idle
@@ -254,11 +334,37 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 		groups[n-1].Footer = strings.TrimPrefix(groups[n-1].Footer+"。点一行看 K 线", "。")
 	}
 	v.Sections = append(v.Sections, groups...)
-	v.Sections = append(v.Sections, p.addSection(d.v3), p.readAt(d))
+	if !d.v3 { // with a search box, a code is added through the search
+		v.Sections = append(v.Sections, p.addSection(false))
+	}
+	v.Sections = append(v.Sections, p.readAt(d))
 	if !active {
 		v.RefreshAfter = refreshIdle
 	}
 	return v
+}
+
+func or(s, dflt string) string {
+	if s == "" {
+		return dflt
+	}
+	return s
+}
+
+// sortByChange orders refs by their change, the biggest rise first (or the biggest fall, down); those without one
+// go last, in their order.
+func sortByChange(refs []Ref, qs map[Ref]Quote, down bool) {
+	sort.SliceStable(refs, func(i, j int) bool {
+		ci, oki := qs[refs[i]].Change()
+		cj, okj := qs[refs[j]].Change()
+		switch {
+		case oki != okj:
+			return oki
+		case down:
+			return ci < cj
+		}
+		return ci > cj
+	})
 }
 
 func symbols(refs []Ref) []string {
@@ -269,9 +375,9 @@ func symbols(refs []Ref) []string {
 	return out
 }
 
-// quoteRow is an instrument as a row: its name when it has one, else its symbol; the symbol (when the name is the
-// title), the period's range or that the market is not trading, and in a search its kind and turnover; the last
-// price and the change.
+// quoteRow is an instrument as a row: its name when it has one, else its symbol; under it the symbol (when the name
+// is the title), the change in price and the turnover, in a search its kind and whether it is in the watchlist, and
+// whether the market is trading; the last price and the change.
 func (p *plugin) quoteRow(r Ref, q Quote, ok, search bool) pluginkit.Item {
 	it := pluginkit.Item{Type: "row", Title: r.Symbol, Action: &pluginkit.UIAction{ID: "open:" + r.String()}}
 	if !ok {
@@ -284,18 +390,25 @@ func (p *plugin) quoteRow(r Ref, q Quote, ok, search bool) pluginkit.Item {
 		it.Title = q.Name
 		parts = append(parts, r.Symbol)
 	}
-	if search {
-		if q.Kind != "" {
-			parts = append(parts, q.Kind)
+	if search && q.Kind != "" {
+		parts = append(parts, q.Kind)
+	}
+	if !search && q.Base != 0 && q.Last != 0 {
+		d := q.Last - q.Base
+		sign := "+"
+		if d < 0 {
+			sign, d = "-", -d
 		}
-		if q.Turnover > 0 {
-			parts = append(parts, q.Period+" 成交额 "+fmtCompactFloat(q.Turnover)+" "+q.Currency)
+		if d == 0 {
+			sign = ""
 		}
-		if p.watching(r) {
-			parts = append(parts, "已在自选")
-		}
-	} else if q.High != 0 || q.Low != 0 {
-		parts = append(parts, "高 "+q.Price(q.High)+" · 低 "+q.Price(q.Low))
+		parts = append(parts, sign+q.PriceLike(d, q.Last))
+	}
+	if q.Turnover > 0 {
+		parts = append(parts, "成交 "+fmtCN(q.Turnover)+" "+q.Currency)
+	}
+	if search && p.watching(r) {
+		parts = append(parts, "已在自选")
 	}
 	if q.Idle && !q.At.IsZero() {
 		parts = append(parts, "休市 · 截至 "+q.At.Format("1/2 15:04"))
@@ -308,32 +421,55 @@ func (p *plugin) quoteRow(r Ref, q Quote, ok, search bool) pluginkit.Item {
 	return it
 }
 
-// searchSections list what matches q in every source, a group a source in the sources' order (each its best
-// first): a row each, opening the instrument (whose page adds it to the watchlist).
-func (p *plugin) searchSections(ctx context.Context, q string, refresh bool) []pluginkit.Section {
+// searchSections list what matches q in every source, a group a source, the group with the best match first (then
+// in the sources' order; each its best first): a row each, opening the instrument (whose page adds it to the
+// watchlist). With a search box (v3) a query that is itself a code (cn:600519, BTC-USDT-SWAP) comes first as its
+// own row, since the search box is then the only way to add one.
+func (p *plugin) searchSections(ctx context.Context, q string, v3, refresh bool) []pluginkit.Section {
 	title := "搜索「" + q + "」"
 	back := pluginkit.Item{Type: "button", Title: "返回自选", Action: &pluginkit.UIAction{ID: "clear"}}
 	hits, err := p.search(ctx, q, searchMost, refresh)
-	if err != nil {
+	var exact *hit
+	if v3 {
+		if r, ok := p.srcs.parse(q); ok && !slices.ContainsFunc(hits, func(h hit) bool { return h.Ref == r }) {
+			if x, qerr := p.quote(ctx, r); qerr == nil {
+				exact = &hit{r, x}
+			}
+		}
+	}
+	if err != nil && exact == nil {
 		return []pluginkit.Section{{Title: title, Items: []pluginkit.Item{{Type: "text", Text: err.Error(), Style: "secondary"},
 			{Type: "button", Title: "重试", Action: &pluginkit.UIAction{ID: "refresh"}}, back}}}
 	}
-	if len(hits) == 0 {
+	if len(hits) == 0 && exact == nil {
 		return []pluginkit.Section{{Title: title, Items: []pluginkit.Item{
 			{Type: "text", Text: "没有和「" + q + "」对得上的：" + p.srcs.markets(), Style: "secondary"}, back}}}
 	}
 	var out []pluginkit.Section
+	if exact != nil {
+		out = append(out, pluginkit.Section{Title: "代码 " + exact.Ref.String(), Items: []pluginkit.Item{p.quoteRow(exact.Ref, exact.Quote, true, true)}})
+	}
+	type grp struct {
+		src   Source
+		items []pluginkit.Item
+		best  int
+	}
+	var gs []grp
 	for _, src := range p.srcs {
-		var sec pluginkit.Section
+		g := grp{src: src, best: 9}
 		for _, h := range hits {
 			if h.Ref.Source == src.ID() {
-				sec.Items = append(sec.Items, p.quoteRow(h.Ref, h.Quote, true, true))
+				g.items = append(g.items, p.quoteRow(h.Ref, h.Quote, true, true))
+				g.best = min(g.best, matchRank(q, src, h))
 			}
 		}
-		if len(sec.Items) == 0 {
-			continue
+		if len(g.items) > 0 {
+			gs = append(gs, g)
 		}
-		sec.Title = fmt.Sprintf("%s · %d", src.Market(), len(sec.Items))
+	}
+	sort.SliceStable(gs, func(i, j int) bool { return gs[i].best < gs[j].best })
+	for _, g := range gs {
+		sec := pluginkit.Section{Title: fmt.Sprintf("%s · %d", g.src.Market(), len(g.items)), Items: g.items}
 		if len(out) == 0 {
 			sec.Title = title + " · " + sec.Title
 		}
@@ -346,6 +482,35 @@ func (p *plugin) searchSections(ctx context.Context, q string, refresh bool) []p
 	}
 	last.Items = append(last.Items, back)
 	return out
+}
+
+// matchRank is how well a hit matches what was searched, for ordering the groups: 0 its symbol as the source reads
+// the query, or its name exactly; 1 a name starting with it; 2 the rest; 3 a source without names (OKX) for a query
+// in Chinese, which only matches by accident.
+func matchRank(q string, src Source, h hit) int {
+	if sym, ok := src.Normalize(q); ok && sym == h.Ref.Symbol {
+		return 0
+	}
+	name := strings.ToLower(h.Quote.Name)
+	lq := strings.ToLower(strings.TrimSpace(q))
+	switch {
+	case name != "" && name == lq:
+		return 0
+	case name != "" && strings.HasPrefix(name, lq):
+		return 1
+	case h.Quote.Name == "" && hasHan(q):
+		return 3
+	}
+	return 2
+}
+
+func hasHan(s string) bool {
+	for _, r := range s {
+		if unicode.Is(unicode.Han, r) {
+			return true
+		}
+	}
+	return false
 }
 
 // addSection is the way to add by typing: with a search box (UI version 3) a code typed in full; before it, the
