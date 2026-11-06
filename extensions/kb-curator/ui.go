@@ -27,7 +27,7 @@ var tabs = []wire.Tab{{Value: "review", Title: "待确认"}, {Value: "fact", Tit
 var statusLabel = map[string]string{
 	"candidate": "待确认", "active": "有效", "stale": "过时", "superseded": "被取代", "rejected": "已驳回", "merged": "已合并",
 	"observed": "偶现", "recurring": "反复", "established": "固定", "dormant": "休眠",
-	"pending": "待确认", "later": "稍后", "accepted": "已合入", "auto": "自动合入", "expired": "已过期", "blocked": "等 hub 支持", "undone": "已撤销",
+	"pending": "待确认", "later": "稍后", "accepted": "已合入", "auto": "自动合入", "expired": "已过期", "blocked": "等 hub 支持", "held": "被锁着", "undone": "已撤销",
 }
 
 var riskTone = map[string]string{"low": wire.TonePositive, "medium": wire.ToneCaution, "high": wire.ToneDanger}
@@ -104,7 +104,7 @@ func (a *app) listPage(s page) *wire.View {
 	case "review":
 		var shown []string
 		for _, p := range c.St.S.Proposals {
-			if p.Status != "pending" && p.Status != "later" && p.Status != "blocked" && !(p.Status == "auto" && !p.Acked) {
+			if p.Status != "pending" && p.Status != "later" && p.Status != "blocked" && p.Status != "held" && !(p.Status == "auto" && !p.Acked) {
 				continue
 			}
 			rows = append(rows, wire.Component{Type: wire.ComponentRow, Title: short(p.Title, 60), Subtitle: curate.ProposalKinds[p.Kind].Title + " · " + p.ID,
@@ -187,7 +187,10 @@ func (a *app) proposalPage(s page) *wire.View {
 		info = append(info, secondary(p.Detail))
 	}
 	info = append(info, secondary(fmt.Sprintf("风险：%s · 状态：%s · 改动：%s", p.Risk, statusLabel[p.Status], p.Target)))
-	if p.Needs != "" {
+	switch {
+	case p.Status == "held":
+		info = append(info, secondary(p.Needs+"。要改，请先在知识库里自己改那一处，或者把锁交还。"))
+	case p.Needs != "":
 		info = append(info, secondary("要等 hub 支持："+p.Needs+"。现在只列出来，不执行。"))
 	}
 	var ch curate.Change

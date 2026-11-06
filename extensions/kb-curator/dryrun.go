@@ -27,6 +27,7 @@ func dryrun(args []string) error {
 	out := fs.String("out", "", "directory for the reports (default: print them)")
 	stateDir := fs.String("state", "", "state directory (default: a new temporary one)")
 	mode := fs.String("mode", "review", "mode: shadow | review")
+	small := fs.Int("admit-all-below", curate.Defaults().AdmitAllBelowTokens, "admit_all_below_tokens (0: always apply the rules)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -51,6 +52,7 @@ func dryrun(args []string) error {
 	}
 	cfg := curate.Defaults()
 	cfg.Mode = *mode
+	cfg.AdmitAllBelowTokens = *small
 	m := &stub.Model{}
 	c := &curate.Curator{Src: fx, Model: m, St: st, Cfg: cfg, Loc: time.UTC}
 	ctx := context.Background()

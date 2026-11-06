@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -99,35 +100,35 @@ func (c *Curator) ownerNames(ctx context.Context) []string {
 	return clean
 }
 
-// units lists every entity with material on day.
+// units lists every entity with material on day, from every source at once (kb.recent). A chat's entry carries
+// the time of its newest message, so a chat that also had messages after the day is listed too: the window runs
+// from the start of the day to now, and kb.day says whether the chat had messages that day. Other kinds count only
+// when they changed within the day.
 func (c *Curator) units(ctx context.Context, day string) ([]Unit, error) {
 	start, err := time.ParseInLocation("2006-01-02", day, c.Loc)
 	if err != nil {
 		return nil, err
 	}
 	end := start.Add(24 * time.Hour)
+	entries, err := c.Src.Recent(ctx, start, time.Time{})
+	if err != nil {
+		return nil, fmt.Errorf("kb.recent: %w", err)
+	}
 	var out []Unit
-	for _, kind := range unitKinds {
-		entries, err := c.Src.List(ctx, kind)
-		if err != nil {
-			if errors.Is(err, kbsrc.ErrNotFound) {
-				continue
-			}
-			return nil, fmt.Errorf("list %s: %w", kind, err)
+	for _, e := range entries {
+		kind := e.Kind
+		if kind == "" || !slices.Contains(unitKinds, kind) || (kind != "chats" && !e.Updated.Before(end)) {
+			continue
 		}
-		for _, e := range entries {
-			if e.Updated.Before(start) || (kind != "chats" && !e.Updated.Before(end)) {
-				continue
-			}
-			u, ok, err := c.unit(ctx, kind, e, day)
-			if err != nil {
-				return nil, err
-			}
-			if ok {
-				out = append(out, u)
-			}
+		u, ok, err := c.unit(ctx, kind, e, day)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out = append(out, u)
 		}
 	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Ref < out[j].Ref })
 	return out, nil
 }
 
@@ -148,6 +149,9 @@ func (c *Curator) unit(ctx context.Context, kind string, e wire.KBEntry, day str
 	}
 	if u.Meta.Importance == "" {
 		u.Meta.Importance = e.Importance
+	}
+	if u.Meta.Source == "" {
+		u.Meta.Source = e.Source
 	}
 	if kind != "chats" {
 		// A document, meeting, event or recording: its text, a line at a time, numbered as the knowledge base shows

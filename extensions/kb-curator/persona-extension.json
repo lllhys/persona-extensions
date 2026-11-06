@@ -12,7 +12,7 @@
     "memory"
   ],
   "engines": {
-    "persona": ">=202611050413",
+    "persona": ">=202611062050",
     "extension_protocol": 1
   },
   "runtime": {
@@ -53,6 +53,15 @@
       {
         "id": "kb-curator",
         "dir": "skills/kb-curator"
+      }
+    ],
+    "events": [
+      {
+        "id": "kb-curator-kb",
+        "subscribe": [
+          "kb.changed",
+          "kb.forgotten"
+        ]
       }
     ]
   },

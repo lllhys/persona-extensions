@@ -173,6 +173,10 @@ func (c *Curator) Decide(ctx context.Context, id, action, value string) (string,
 		}
 		var err error
 		msg, err = c.apply(ctx, p, action, false, "manual")
+		var conflict *kbsrc.Conflict
+		if errors.As(err, &conflict) {
+			return conflict.Error() + "。已记下，交给你决定", c.St.Save()
+		}
 		if err != nil {
 			return "", err
 		}
@@ -247,32 +251,7 @@ func (c *Curator) apply(ctx context.Context, p *store.Proposal, action string, a
 	return "已合入", nil
 }
 
-// fields a write touches, by kb.update parameter.
-func touched(u wire.KBUpdateParams) []string {
-	var out []string
-	if u.Pinned != nil {
-		out = append(out, "pinned")
-	}
-	if u.Relevance != nil {
-		out = append(out, "relevance")
-	}
-	for f, v := range map[string]string{"status": u.Status, "note": u.Note, "importance": u.Importance} {
-		if v != "" {
-			out = append(out, f)
-		}
-	}
-	if len(u.RemovePeople) > 0 || len(u.People) > 0 {
-		out = append(out, "people")
-	}
-	if len(u.RemoveAliases) > 0 || len(u.Aliases) > 0 {
-		out = append(out, "aliases")
-	}
-	if u.Tags != nil {
-		out = append(out, "tags")
-	}
-	sort.Strings(out)
-	return out
-}
+func touched(u wire.KBUpdateParams) []string { return kbsrc.Fields(u) }
 
 func pick(meta json.RawMessage, fields []string) map[string]any {
 	all := map[string]any{}
@@ -286,11 +265,11 @@ func pick(meta json.RawMessage, fields []string) map[string]any {
 
 func (c *Curator) write(ctx context.Context, p *store.Proposal, ch Change, auto bool, run string) (string, error) {
 	up := *ch.Update
-	cur, err := c.Src.Get(ctx, up.Kind, up.ID)
-	if err != nil {
-		return "", fmt.Errorf("读 %s/%s：%w", up.Kind, up.ID, err)
-	}
 	if ch.PinLine != "" {
+		cur, err := c.Src.Get(ctx, up.Kind, up.ID)
+		if err != nil {
+			return "", fmt.Errorf("读 %s/%s：%w", up.Kind, up.ID, err)
+		}
 		old := kbsrc.DecodeMeta(cur).Pinned
 		next := old
 		if !strings.Contains(old, ch.PinLine) {
@@ -300,25 +279,60 @@ func (c *Curator) write(ctx context.Context, p *store.Proposal, ch Change, auto 
 	}
 	if auto {
 		f := false
-		up.Lock = &f // what the curator did on its own stays open to the hub's later maintenance
+		up.Lock = &f // what the curator did on its own is a suggestion the hub's pipeline may replace
+	}
+	// The lines the value rests on, so the entity shows where the curator's write came from.
+	for _, e := range p.Evidence {
+		kind, id, _ := strings.Cut(e.Chat, "/")
+		if kind == "chats" && len(up.Evidence) < 8 {
+			up.Evidence = append(up.Evidence, wire.KBEvidence{Chat: id, Day: e.Day, N: e.N})
+		}
 	}
 	fields := touched(up)
-	before := pick(cur.Meta, fields)
-	if err := c.Src.Update(ctx, up); err != nil {
+	free := map[string]bool{} // fields nobody held before this write: undo hands them back
+	for _, f := range fields {
+		free[f] = !c.holds(up.Kind+"/"+up.ID, f)
+	}
+	before, err := c.Src.Update(ctx, up)
+	var conflict *kbsrc.Conflict
+	if errors.As(err, &conflict) {
+		// A question for the user, not an error to retry: the proposal says who holds what.
+		p.Status, p.Needs = "held", conflict.Error()
+		return "", conflict
+	}
+	if err != nil {
 		return "", err
 	}
-	after := before
+	after := map[string]any{}
 	if d, err := c.Src.Get(ctx, up.Kind, up.ID); err == nil {
 		after = pick(d.Meta, fields)
 	}
 	bj, _ := json.Marshal(before)
 	aj, _ := json.Marshal(after)
 	uj, _ := json.Marshal(up)
+	fj, _ := json.Marshal(free)
 	c.St.S.NextApplied++
 	a := &store.Applied{ID: fmt.Sprintf("A-%04d", c.St.S.NextApplied), Proposal: p.ID, Run: run, At: c.now().UTC().Format(time.RFC3339),
-		Kind: p.Kind, Entity: up.Kind + "/" + up.ID, Before: bj, After: aj, Update: uj, StateSum: hash(string(aj))}
+		Kind: p.Kind, Entity: up.Kind + "/" + up.ID, Before: bj, After: aj, Update: uj, Free: fj, StateSum: hash(string(aj))}
 	c.St.S.Applied = append(c.St.S.Applied, a)
 	return a.ID, nil
+}
+
+// holds says whether an earlier write of the curator (with a lock, not undone) still holds a field of an entity.
+func (c *Curator) holds(entity, field string) bool {
+	for _, a := range c.St.S.Applied {
+		if a.Entity != entity || a.Undone != "" {
+			continue
+		}
+		var up wire.KBUpdateParams
+		if json.Unmarshal(a.Update, &up) != nil || (up.Lock != nil && !*up.Lock) {
+			continue
+		}
+		if slices.Contains(touched(up), field) {
+			return true
+		}
+	}
+	return false
 }
 
 // ErrChanged: the entity is not as the curator left it; undo would overwrite someone else's change.
@@ -386,27 +400,51 @@ func (c *Curator) undo(ctx context.Context, a *store.Applied) error {
 		if hash(string(now)) != a.StateSum {
 			return ErrChanged
 		}
-		before := map[string]any{}
+		// Undo is another write with the previous values (kb.update's before), handing back the fields that were free.
+		before := map[string]json.RawMessage{}
 		_ = json.Unmarshal(a.Before, &before)
+		free := map[string]bool{}
+		_ = json.Unmarshal(a.Free, &free)
 		f := false
 		inv := wire.KBUpdateParams{Kind: up.Kind, ID: up.ID, Lock: &f}
+		unlock := func(field string) {
+			if free[field] {
+				inv.Unlock = append(inv.Unlock, field)
+			}
+		}
 		if up.Pinned != nil {
-			s, _ := before["pinned"].(string)
-			inv.Pinned = &s
+			var old string
+			_ = json.Unmarshal(before["pinned"], &old)
+			if old == "" && free["pinned"] {
+				inv.Unlock = append(inv.Unlock, "pinned") // unlocking pinned clears it
+			} else {
+				inv.Pinned = &old
+			}
 		}
 		if up.Relevance != nil {
-			r := 0
-			if v, ok := before["relevance"].(float64); ok {
-				r = int(v)
-			}
-			inv.Relevance = &r
+			var r float64
+			_ = json.Unmarshal(before["relevance"], &r)
+			ri := int(r)
+			inv.Relevance = &ri
+			unlock("relevance")
 		}
 		if up.Status != "" {
-			inv.Status, _ = before["status"].(string)
+			_ = json.Unmarshal(before["status"], &inv.Status)
+			unlock("status")
 		}
-		inv.People = up.RemovePeople
-		inv.Aliases = up.RemoveAliases
-		if err := c.Src.Update(ctx, inv); err != nil {
+		if len(up.RemovePeople) > 0 {
+			inv.People = up.RemovePeople
+			unlock("people")
+		}
+		if len(up.RemoveAliases) > 0 {
+			inv.Aliases = up.RemoveAliases
+			unlock("aliases")
+		}
+		if _, err := c.Src.Update(ctx, inv); err != nil {
+			var conflict *kbsrc.Conflict
+			if errors.As(err, &conflict) {
+				return ErrChanged
+			}
 			return err
 		}
 	}

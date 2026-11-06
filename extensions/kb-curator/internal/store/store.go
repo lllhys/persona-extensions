@@ -125,7 +125,8 @@ type Proposal struct {
 	Evidence []Evidence      `json:"evidence,omitempty"`
 	Key      string          `json:"key"` // content address: the same proposal is never made twice
 	// Status: pending → accepted (applied) | rejected | expired | later (back to pending when shown again) |
-	// auto (applied without asking) | blocked (needs a hub method that does not exist yet) | undone
+	// auto (applied without asking) | blocked (needs a hub method that does not exist yet) | held (the user or
+	// another extension holds a field it writes: kb.update said conflict) | undone
 	Status   string `json:"status"`
 	Verdict  string `json:"verdict,omitempty"` // shadow mode: right | wrong
 	Created  string `json:"created"`
@@ -145,9 +146,10 @@ type Applied struct {
 	At       string          `json:"at"`
 	Kind     string          `json:"kind"`
 	Entity   string          `json:"entity"`
-	Before   json.RawMessage `json:"before"` // the fields the write touched, as they were
-	After    json.RawMessage `json:"after"`  // as the curator wrote them
-	Update   json.RawMessage `json:"update"` // the kb.update params sent
+	Before   json.RawMessage `json:"before"`         // the fields the write touched, as they were
+	After    json.RawMessage `json:"after"`          // as the curator wrote them
+	Update   json.RawMessage `json:"update"`         // the kb.update params sent
+	Free     json.RawMessage `json:"free,omitempty"` // field → nobody held it before: undo unlocks it
 	Undone   string          `json:"undone,omitempty"`
 	StateSum string          `json:"state_sum"` // hash of the touched fields after the write, checked before undo
 }

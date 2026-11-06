@@ -50,16 +50,16 @@ type Model interface {
 // curator then runs only its deterministic steps.
 var ErrUnavailable = errors.New("model unavailable to extensions")
 
-// Hub calls model.complete on the hub (docs/interface-needs.md N1: not in the hub yet). The hub resolves the tier
-// to the model the user picked for this extension under Settings › Models, so the extension never holds a key.
+// Hub calls model.complete on the hub (not in the hub yet: nwverse/persona#6102). The hub resolves the extension's
+// own model purpose (plugin.<id>, Settings › Models), so the extension never holds a key.
 type Hub struct {
 	H         *ext.Hub
 	Extension string
 }
 
+// completeParams is model.complete as proposed upstream (nwverse/persona#6102): one purpose per extension, so the
+// tier is not sent yet (docs/interface-needs.md asks for an optional one).
 type completeParams struct {
-	Purpose    string          `json:"purpose"`
-	Tier       Tier            `json:"tier"`
 	System     string          `json:"system"`
 	Messages   []message       `json:"messages"`
 	MaxTokens  int             `json:"max_tokens"`
@@ -83,7 +83,7 @@ type completeResult struct {
 func (h Hub) Complete(ctx context.Context, r Request) (Response, error) {
 	var out completeResult
 	err := h.H.Call(ctx, "model.complete", completeParams{
-		Purpose: "plugin." + h.Extension + "." + r.Step, Tier: r.Tier, System: r.System,
+		System:   r.System,
 		Messages: []message{{Role: "user", Content: r.User}}, MaxTokens: r.MaxTokens, JSONSchema: r.Schema,
 	}, &out)
 	var e *ext.Error

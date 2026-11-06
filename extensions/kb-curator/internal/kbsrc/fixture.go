@@ -146,38 +146,80 @@ func (f *Fixture) Owner(context.Context) (wire.KBOwner, error) {
 	return o, err
 }
 
-// Update applies the fields the curator writes, the way the hub does (docs/knowledge.md "Corrections, locks and
-// unlinking"): additions first, then removals; touched fields are locked unless lock is false.
-func (f *Fixture) Update(_ context.Context, p wire.KBUpdateParams) error {
+// Extension is the id the fixture attributes extension writes to (the hub takes it from the connection).
+const Extension = "kb-curator"
+
+// Update is an extension's write, held to the rules of nwverse/persona#6110 (docs/knowledge.md "Who holds a
+// field"): a field the user or another extension holds refuses the whole update with a Conflict; written fields
+// become the extension's (with its evidence) unless lock is false; unlock hands fields back (unlocking pinned
+// clears it); the answer is each written field's previous value.
+func (f *Fixture) Update(_ context.Context, p wire.KBUpdateParams) (map[string]json.RawMessage, error) {
+	return f.write(p, "ext:"+Extension)
+}
+
+// UserUpdate is the user's own edit (the app, the assistant): it writes anything and takes over what it touches.
+func (f *Fixture) UserUpdate(p wire.KBUpdateParams) error {
+	_, err := f.write(p, "user")
+	return err
+}
+
+func (f *Fixture) write(p wire.KBUpdateParams, by string) (map[string]json.RawMessage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	m, ok := f.meta[p.Kind+"/"+p.ID]
 	if !ok {
-		return ErrNotFound
+		return nil, ErrNotFound
+	}
+	fields := Fields(p)
+	prov, _ := m["provenance"].(map[string]any)
+	if prov == nil {
+		prov = map[string]any{}
+	}
+	holder := func(field string) string {
+		if e, ok := prov[field].(map[string]any); ok {
+			return str(e["by"])
+		}
+		if slices.Contains(strs(m["locked_fields"]), field) || (field == "pinned" && str(m["pinned"]) != "") {
+			return "user"
+		}
+		return ""
+	}
+	if by != "user" {
+		held := map[string]string{}
+		for _, fl := range append(slices.Clone(fields), p.Unlock...) {
+			if h := holder(fl); h != "" && h != by {
+				held[fl] = h
+			}
+		}
+		if len(held) > 0 {
+			return nil, &Conflict{Holders: held}
+		}
 	}
 	f.writes = append(f.writes, p)
-	var touched []string
-	set := func(field string, v any) {
-		m[field] = v
-		touched = append(touched, field)
+	before := map[string]json.RawMessage{}
+	for _, fl := range fields {
+		b, _ := json.Marshal(m[fl])
+		if fl == "summary" {
+			b, _ = json.Marshal(f.summary[p.Kind+"/"+p.ID])
+		}
+		before[fl] = b
 	}
 	if p.Pinned != nil {
-		set("pinned", *p.Pinned)
+		m["pinned"] = *p.Pinned
 	}
 	for field, v := range map[string]string{"note": p.Note, "status": p.Status, "importance": p.Importance, "name": p.Name, "goal": p.Goal, "my_role": p.MyRole} {
 		if v != "" {
-			set(field, v)
+			m[field] = v
 		}
 	}
 	if p.Relevance != nil {
-		set("relevance", float64(*p.Relevance))
+		m["relevance"] = float64(*p.Relevance)
 	}
 	if p.Tags != nil {
-		set("tags", toAny(p.Tags))
+		m["tags"] = toAny(p.Tags)
 	}
 	if p.Summary != "" {
 		f.summary[p.Kind+"/"+p.ID] = p.Summary
-		touched = append(touched, "summary")
 	}
 	add := func(field string, vs []string) {
 		if len(vs) == 0 {
@@ -189,14 +231,12 @@ func (f *Fixture) Update(_ context.Context, p wire.KBUpdateParams) error {
 				cur = append(cur, v)
 			}
 		}
-		set(field, toAny(cur))
+		m[field] = toAny(cur)
 	}
 	remove := func(field string, vs []string) {
-		if len(vs) == 0 {
-			return
+		if len(vs) > 0 {
+			m[field] = toAny(slices.DeleteFunc(strs(m[field]), func(s string) bool { return slices.Contains(vs, s) }))
 		}
-		cur := slices.DeleteFunc(strs(m[field]), func(s string) bool { return slices.Contains(vs, s) })
-		set(field, toAny(cur))
 	}
 	add("aliases", p.Aliases)
 	add("people", p.People)
@@ -206,16 +246,90 @@ func (f *Fixture) Update(_ context.Context, p wire.KBUpdateParams) error {
 	remove("people", p.RemovePeople)
 	remove("chats", p.RemoveChats)
 	remove("projects", p.RemoveProjects)
-	if p.Lock == nil || *p.Lock {
-		locked := strs(m["locked_fields"])
-		for _, t := range touched {
-			if !slices.Contains(locked, t) {
-				locked = append(locked, t)
+	locked := strs(m["locked_fields"])
+	lock := p.Lock == nil || *p.Lock
+	for _, fl := range fields {
+		switch {
+		case by == "user":
+			delete(prov, fl) // the user takes it over
+			if !slices.Contains(locked, fl) {
+				locked = append(locked, fl)
+			}
+		case lock:
+			ev := []any{}
+			for _, e := range p.Evidence {
+				ev = append(ev, map[string]any{"chat": e.Chat, "day": e.Day, "n": float64(e.N)})
+			}
+			prov[fl] = map[string]any{"by": by, "evidence": ev}
+			if !slices.Contains(locked, fl) {
+				locked = append(locked, fl)
 			}
 		}
-		m["locked_fields"] = toAny(locked)
 	}
-	return nil
+	for _, fl := range p.Unlock {
+		delete(prov, fl)
+		locked = slices.DeleteFunc(locked, func(x string) bool { return x == fl })
+		if fl == "pinned" {
+			m["pinned"] = ""
+		}
+	}
+	m["locked_fields"] = toAny(locked)
+	m["provenance"] = prov
+	return before, nil
+}
+
+// Fields are the metadata fields an update writes, by kb.update parameter.
+func Fields(u wire.KBUpdateParams) []string {
+	var out []string
+	if u.Pinned != nil {
+		out = append(out, "pinned")
+	}
+	if u.Relevance != nil {
+		out = append(out, "relevance")
+	}
+	for f, v := range map[string]string{"status": u.Status, "note": u.Note, "importance": u.Importance, "name": u.Name, "goal": u.Goal, "my_role": u.MyRole, "summary": u.Summary} {
+		if v != "" {
+			out = append(out, f)
+		}
+	}
+	if len(u.RemovePeople) > 0 || len(u.People) > 0 {
+		out = append(out, "people")
+	}
+	if len(u.RemoveAliases) > 0 || len(u.Aliases) > 0 {
+		out = append(out, "aliases")
+	}
+	if len(u.RemoveChats) > 0 || len(u.Chats) > 0 {
+		out = append(out, "chats")
+	}
+	if len(u.RemoveProjects) > 0 || len(u.Projects) > 0 {
+		out = append(out, "projects")
+	}
+	if u.Tags != nil {
+		out = append(out, "tags")
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Recent lists entities of every kind updated in [since, until), newest first; chats carry their source.
+func (f *Fixture) Recent(ctx context.Context, since, until time.Time) ([]wire.KBEntry, error) {
+	var out []wire.KBEntry
+	for _, kind := range []string{"chats", "docs", "meetings", "events", "recordings"} {
+		es, _ := f.List(ctx, kind)
+		for _, e := range es {
+			if e.Updated.Before(since) || (!until.IsZero() && !e.Updated.Before(until)) {
+				continue
+			}
+			if kind == "chats" {
+				f.mu.Lock()
+				e.Source = str(f.meta["chats/"+e.ID]["source"])
+				f.mu.Unlock()
+			}
+			out = append(out, e)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Updated.After(out[j].Updated) })
+	return out, nil
 }
 
 // Writes are the updates made so far.

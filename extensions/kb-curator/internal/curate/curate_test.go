@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -245,7 +246,9 @@ func TestWeeklyHealthPinsApplyUndo(t *testing.T) {
 		t.Fatal(err)
 	}
 	keep := []string{"Atlas 平台"}
-	_ = fx.Update(ctx, wire.KBUpdateParams{Kind: "projects", ID: "atlas", Aliases: keep})
+	if err := fx.UserUpdate(wire.KBUpdateParams{Kind: "projects", ID: "atlas", Aliases: keep}); err != nil {
+		t.Fatal(err)
+	}
 	if err := c.Undo(ctx, alias.ApplyLog); !errors.Is(err, ErrChanged) {
 		t.Fatalf("undo over a later edit: %v", err)
 	}
@@ -317,5 +320,80 @@ func TestForgetSource(t *testing.T) {
 		if strings.HasPrefix(d.Chat, "chats/wechat-") {
 			t.Fatal("the ledger keeps a forgotten source")
 		}
+	}
+}
+
+func TestSmallDayStillDropsMarketing(t *testing.T) {
+	c, _ := newCurator(t, &stub.Model{}, "shadow")
+	c.Cfg.AdmitAllBelowTokens = 1 << 20
+	if _, err := c.RunDaily(context.Background(), "2026-11-03", false); err != nil {
+		t.Fatal(err)
+	}
+	got := decisions(c, "2026-11-03")
+	if got["M3_other_mail→drop"] != 1 || got["M1_bulk_mail→drop"] != 1 || got["S0_small_volume→include"] == 0 {
+		t.Fatalf("small day: %v", got)
+	}
+}
+
+// Writes follow nwverse/persona#6110: evidence goes with the write, the curator then holds the field, undo hands a
+// field that was free back (unlocking pinned clears it), and a field the user holds is a question, not a write.
+func TestHoldersEvidenceAndConflict(t *testing.T) {
+	c, fx := newCurator(t, &stub.Model{}, "review")
+	ctx := context.Background()
+	for _, d := range []string{"2026-11-03", "2026-11-04"} {
+		if _, err := c.RunDaily(ctx, d, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := c.RunWeekly(ctx, "2026-W45", false); err != nil {
+		t.Fatal(err)
+	}
+	var pins []*store.Proposal
+	for _, p := range c.St.S.Proposals {
+		if p.Kind == "pin_fact" && strings.HasPrefix(p.Target, "chats/") {
+			pins = append(pins, p)
+		}
+	}
+	if len(pins) < 2 {
+		t.Fatalf("%d chat pins", len(pins))
+	}
+	// 1. Accepted: written with evidence, held by the curator.
+	if _, err := c.Decide(ctx, pins[0].ID, "accept", ""); err != nil {
+		t.Fatal(err)
+	}
+	w := fx.Writes()[len(fx.Writes())-1]
+	if len(w.Evidence) == 0 || w.Evidence[0].Day == "" {
+		t.Fatalf("no evidence on the write: %+v", w)
+	}
+	kind, id, _ := strings.Cut(pins[0].Target, "/")
+	d, _ := fx.Get(ctx, kind, id)
+	var meta map[string]any
+	_ = json.Unmarshal(d.Meta, &meta)
+	if prov, _ := meta["provenance"].(map[string]any); prov["pinned"] == nil {
+		t.Fatalf("the curator holds what it wrote: %v", meta["provenance"])
+	}
+	// 2. Undo: the field was free before, so it is handed back and cleared.
+	if err := c.Undo(ctx, pins[0].ApplyLog); err != nil {
+		t.Fatal(err)
+	}
+	d, _ = fx.Get(ctx, kind, id)
+	meta = map[string]any{}
+	_ = json.Unmarshal(d.Meta, &meta)
+	if meta["pinned"] != "" || strings.Contains(fmt.Sprint(meta["locked_fields"]), "pinned") {
+		t.Fatalf("after undo: pinned %q locked %v", meta["pinned"], meta["locked_fields"])
+	}
+	// 3. The user pins something on another chat; the curator's pin there becomes a question.
+	kind, id, _ = strings.Cut(pins[1].Target, "/")
+	mine := "我自己确认的事实"
+	if err := fx.UserUpdate(wire.KBUpdateParams{Kind: kind, ID: id, Pinned: &mine}); err != nil {
+		t.Fatal(err)
+	}
+	msg, err := c.Decide(ctx, pins[1].ID, "accept", "")
+	if err != nil || pins[1].Status != "held" || !strings.Contains(msg, "pinned") {
+		t.Fatalf("conflict: %q %v %s", msg, err, pins[1].Status)
+	}
+	d, _ = fx.Get(ctx, kind, id)
+	if m := kbsrc.DecodeMeta(d); m.Pinned != mine {
+		t.Fatalf("the user's pin was overwritten: %q", m.Pinned)
 	}
 }

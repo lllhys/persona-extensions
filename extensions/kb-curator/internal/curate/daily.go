@@ -50,10 +50,11 @@ func (c *Curator) RunDaily(ctx context.Context, day string, dry bool) (*store.Ru
 		decisions[i].Chat = u.Ref
 	}
 	if triage.SmallDay(decisions, cfg) {
-		run.Notes = append(run.Notes, "当天数据量小，除屏蔽、群发邮件外全部读")
+		run.Notes = append(run.Notes, "当天数据量小，除屏蔽、群发邮件外全部读（其他邮件仍由模型分类）")
 		for i := range decisions {
 			d := &decisions[i]
-			if d.Action != triage.Include && d.Rule != triage.RBlock && d.Rule != triage.MBulk && d.Rule != triage.RPrivate {
+			// Mail the rules could not place still goes to the model: marketing is dropped for everyone.
+			if d.Action != triage.Include && d.Rule != triage.RBlock && d.Rule != triage.MBulk && d.Rule != triage.RPrivate && d.Rule != triage.MOther {
 				d.Action, d.Rule = triage.Include, triage.RSmall
 				for _, l := range units[i].Lines {
 					d.Shown[l.N] = true

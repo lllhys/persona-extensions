@@ -7,18 +7,19 @@ The hub's own pipeline summarizes chats as they arrive. This extension is a seco
 - once a day for the day before;
 - once a week, on Monday, for the ISO week before.
 
-It keeps its own state in its data directory and touches the knowledge base only through the knowledge-base RPC (`kb.read`, `kb.write`). Every write it makes is either a proposal you accepted or a kind of proposal you allowed it to apply by itself.
+It keeps its own state in its data directory and touches the knowledge base only through the knowledge-base RPC (`kb.read`, `kb.write`). It needs a hub with attributed extension writes (nwverse/persona#6110). Every write it makes is either a proposal you accepted or a kind of proposal you allowed it to apply by itself.
 
 | Extension point | Contribution | Behavior |
 | --- | --- | --- |
 | `ui` | `kb-curator` (`nav_page`) | Tabs: proposals to review, facts, practices, knowledge, the graph, and run reports. Each item opens with its citations. Proposals can be accepted, edited, rejected or postponed. Accepted proposals can be undone. |
 | `ui` | `kb-curator-today` (`overview_card`) | Pending proposals and active items at a glance. |
 | `ui` | `kb-curator-health` (`extension_page`) | Who "I" am (the names used to recognize you), the latest triage funnel, and buttons to run a pass now. |
+| `events` | `kb-curator-kb`: `kb.changed`, `kb.forgotten` | A forgotten source's derived data (items, digests, raw answers, graph evidence) is deleted at once; the weekly pass also reconciles against entities that no longer exist. |
 | `skills` | `kb-curator` | Tells the assistant what the curator does and how to cite the facts it recorded. |
 
 ## Daily pass
 
-1. **One triage for every source.** Lark chats, mail, WeChat, GitHub, documents, meetings, events and recordings all go through the same rules. The source and kind of a chat are features of the rules, not separate pipelines. The rules are evaluated in this order:
+1. **One triage for every source.** One `kb.recent` call lists what came in from every source. Lark chats, mail, WeChat, GitHub, documents, meetings, events and recordings all go through the same rules. The source and kind of a chat are features of the rules, not separate pipelines. The rules are evaluated in this order:
    - Your pins and blocks.
    - Direct messages are read.
    - GitHub reviews and issues that involve you are read.
@@ -81,7 +82,11 @@ It keeps its own state in its data directory and touches the knowledge base only
 - **Shadow mode.** For the first `shadow_days` (default 14), proposals are only judged right or wrong; nothing is written. After that, `mode: auto` sends them to review.
 - **Automatic application.** Kinds listed in `auto_apply_kinds` are applied automatically only after at least 10 proposals of that kind have been judged, with precision at least `auto_apply_min_precision` (default 0.95). High-risk kinds are never applied automatically. Automatic writes do not lock the fields they touch, and they stay listed until you acknowledge them.
 - **Expiry.** A proposal shown and left alone for `proposal_expiry_days` (default 14) expires, and nothing changes. The clock starts when the proposal is first shown.
-- **Undo.** Every write records the touched fields before and after. Undo checks first that those fields are still as the curator left them. If someone has changed them since, undo stops and does not overwrite the change.
+- **Holders.** Accepted writes carry their citations as `evidence`. The curator then holds the fields it wrote, so the built-in pipeline no longer rewrites them. Writes the curator applied by itself use `lock: false`, so the pipeline may still replace them.
+- **Conflicts.** If you or another extension hold a field, the hub refuses the whole write with `conflict`. The proposal is then marked as held, says who holds what, and is never retried.
+- **Undo.** Every write records the previous values that `kb.update` returns in `before`, and a hash of the touched fields as written.
+  - Undo first checks that those fields are still as the curator left them. If someone has changed them since, it stops and does not overwrite the change.
+  - Otherwise it writes the previous values back, and hands back with `unlock` the fields nobody held before. Unlocking `pinned` clears it.
 - **Blocked proposals.** Proposals that need a hub method that does not exist yet (for example, marking a person as not a person) are listed as blocked.
 
 ## Model calls
