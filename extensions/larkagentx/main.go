@@ -19,7 +19,7 @@ import (
 )
 
 const id = "larkagentx"
-const version = "0.1.6"
+const version = "0.1.7"
 const sendAction = "larkagentx_send_text"
 
 //go:embed persona-extension.json
@@ -294,8 +294,13 @@ func (c *connector) run() {
 			}
 		}
 		c.op.Unlock()
+		// Re-read c.b: a failed check above detached the companion, and the
+		// reconnect must use the backoff, not the minute-long probe interval.
+		c.mu.Lock()
+		attached := c.b != nil
+		c.mu.Unlock()
 		pause := wait
-		if b != nil {
+		if attached {
 			pause = time.Minute
 		} else {
 			wait = min(wait*2, time.Minute)
