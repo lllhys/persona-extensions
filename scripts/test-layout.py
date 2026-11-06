@@ -2,6 +2,7 @@
 """Tests for the repository layout check: python3 -I scripts/test-layout.py."""
 import importlib.util
 import pathlib
+import subprocess
 import tempfile
 import unittest
 
@@ -79,6 +80,28 @@ class LayoutTests(unittest.TestCase):
     def test_go_outside_every_module(self):
         files = {**GOOD, 'scripts/gen/main.go': 'package main\n'}
         self.assertEqual(self.problems(files), ['scripts/gen: Go code that belongs to no module'])
+
+
+    def test_compiled_program_in_an_extension(self):
+        for magic in [b'\x7fELF\x02\x01\x01', b'\xcf\xfa\xed\xfe\x0c\x00', b'\xca\xfe\xba\xbe\x00']:
+            with self.subTest(magic=magic):
+                tmp, root = tree(GOOD)
+                with tmp:
+                    (pathlib.Path(root) / 'extensions/alpha/alpha').write_bytes(magic + b'\x00' * 64)
+                    self.assertEqual(layout.problems(root), [
+                        'extensions/alpha/alpha: a compiled program; the release builds it from source, '
+                        'so it does not go in the repository (go build -o elsewhere, or delete it)'])
+
+    def test_untracked_program_in_a_checkout_is_fine(self):
+        # A local `go build` in a git checkout leaves the program untracked: only what is committed counts.
+        tmp, root = tree(GOOD)
+        with tmp:
+            subprocess.run(['git', 'init', '-q', root], check=True)
+            subprocess.run(['git', '-C', root, 'add', '.'], check=True)
+            (pathlib.Path(root) / 'extensions/alpha/alpha').write_bytes(b'\x7fELF' + b'\x00' * 64)
+            self.assertEqual(layout.problems(root), [])
+            subprocess.run(['git', '-C', root, 'add', 'extensions/alpha/alpha'], check=True)
+            self.assertEqual(len(layout.problems(root)), 1)
 
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""The repository's layout rules: no package-manager file at the root, and every Go extension is its own module.
+"""The repository's layout rules: no package-manager file at the root, every Go extension is its own module, and no
+compiled program is committed.
 
   scripts/check-layout.py           check, print what is wrong and exit 1 if anything is
   scripts/check-layout.py modules   the Go modules scripts/ci.sh vets and tests, one directory per line
@@ -11,6 +12,7 @@ sdk/go/), which an extension pulls in with a replace directive; repository-level
 """
 import os
 import re
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -34,6 +36,11 @@ FORBIDDEN = {
 FORBIDDEN_PATTERNS = [re.compile(r"requirements.*\.txt"), re.compile(r".*\.csproj"), re.compile(r".*\.gemspec")]
 
 SKIP_DIRS = {".git", "dist", "node_modules", "testdata"}
+
+# The first bytes of a compiled program: ELF (linux), Mach-O 64- and 32-bit, and Mach-O universal (darwin). A
+# `go build` inside an extension's directory leaves one there; the release builds every program from source
+# (scripts/package.sh), so one in the repository is only weight in every clone.
+PROGRAM_MAGIC = (b"\x7fELF", b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xca\xfe\xba\xbe")
 
 
 def forbidden(name):
@@ -68,6 +75,31 @@ def modules(root):
     return out
 
 
+def committed(root, top):
+    """The files under root/top, relative to root: the tracked ones in a git checkout (a local build stays untracked or
+    ignored), every file otherwise."""
+    if os.path.exists(os.path.join(root, ".git")):  # a directory, or a file in a worktree
+        try:
+            res = subprocess.run(["git", "-C", root, "ls-files", "-z", "--", top], capture_output=True)
+        except OSError:  # no git: look at every file
+            res = None
+        if res is not None and res.returncode == 0:
+            return sorted(n.decode("utf-8", "surrogateescape") for n in res.stdout.split(b"\0") if n)
+    out = []
+    for d, dirs, files in os.walk(os.path.join(root, top)):
+        dirs[:] = [x for x in dirs if x not in SKIP_DIRS]
+        out += [os.path.relpath(os.path.join(d, f), root) for f in files]
+    return sorted(out)
+
+
+def compiled(path):
+    try:
+        with open(path, "rb") as f:
+            return f.read(4) in PROGRAM_MAGIC
+    except OSError:
+        return False
+
+
 def problems(root):
     out = []
     for name in sorted(os.listdir(root)):
@@ -85,6 +117,10 @@ def problems(root):
         path = module_path(gomod)
         if not path or not path.endswith(f"/extensions/{e}"):
             out.append(f"extensions/{e}/go.mod: module path {path!r} does not end in /extensions/{e}")
+    for name in committed(root, "extensions"):
+        if compiled(os.path.join(root, name)):
+            out.append(f"{name}: a compiled program; the release builds it from source, "
+                       "so it does not go in the repository (go build -o elsewhere, or delete it)")
     # Go code outside a module: nothing at the root resolves it any more.
     for top, dirs, files in os.walk(root):
         dirs[:] = [x for x in dirs if x not in SKIP_DIRS]
