@@ -421,6 +421,21 @@ func TestCleanMarkdown(t *testing.T) {
 	}
 }
 
+// A file the repository page draws (up to the contents API's 1 MB) with many <!-- in a code block: each one is kept,
+// and the time stays linear in the size, not one rescan of the kept text per <!--.
+func TestCommentsInCodeLinear(t *testing.T) {
+	text := "# HTML snippets\n\n```html\n" + strings.Repeat("<!---->\n", 60000) + "```\n\n<!-- template -->\nText" // ~480 KB
+	start := time.Now()
+	got := dropComments(text)
+	if took := time.Since(start); took > 2*time.Second {
+		t.Fatalf("dropComments on %d bytes took %v", len(text), took)
+	}
+	if want := strings.TrimSuffix(text, "<!-- template -->\nText") + "\nText"; got != want {
+		t.Fatalf("code comments kept: %d of %d, template comment dropped: %v",
+			strings.Count(got, "<!---->"), 60000, !strings.Contains(got, "template"))
+	}
+}
+
 func TestParsePatch(t *testing.T) {
 	hs := parsePatch(patch)
 	if len(hs) != 1 || len(hs[0].lines) != 5 {
