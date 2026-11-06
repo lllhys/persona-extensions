@@ -105,6 +105,42 @@ func TestMessageOf(t *testing.T) {
 	}
 }
 
+// In a forum every message sent in a topic carries reply_to {forum_topic, reply_to_msg_id: <topic id>}, the topic id
+// being its creation message's; only reply_to_top_id makes it a real reply. A reply to another chat's message isn't
+// one to this chat's message of that id.
+func TestReplyToInForumsAndOtherChats(t *testing.T) {
+	e := exampleEntities()
+	at := time.Unix(1_800_000_000, 0)
+	const topic = 100
+	in := func(id int, h *tg.MessageReplyHeader) *tg.Message {
+		return &tg.Message{ID: id, Date: int(at.Unix()), Message: "话题里的示例消息", FromID: &tg.PeerUser{UserID: 1},
+			PeerID: &tg.PeerChannel{ChannelID: 2}, ReplyTo: h}
+	}
+	for _, c := range []struct {
+		name string
+		h    *tg.MessageReplyHeader
+		want int
+	}{
+		{"a plain topic message", &tg.MessageReplyHeader{ForumTopic: true, ReplyToMsgID: topic}, 0},
+		{"a reply inside a topic", &tg.MessageReplyHeader{ForumTopic: true, ReplyToMsgID: 102, ReplyToTopID: topic}, 102},
+		{"a reply to another chat", &tg.MessageReplyHeader{ReplyToMsgID: 7, ReplyToPeerID: &tg.PeerChannel{ChannelID: 5}}, 0},
+		{"a reply naming its own chat", &tg.MessageReplyHeader{ReplyToMsgID: 7, ReplyToPeerID: &tg.PeerChannel{ChannelID: 2}}, 7},
+	} {
+		if got := messageOf(in(101, c.h), e).ReplyTo; got != c.want {
+			t.Errorf("%s: replies to %d, want %d", c.name, got, c.want)
+		}
+	}
+	create := &tg.MessageService{ID: topic, Date: int(at.Unix()), PeerID: &tg.PeerChannel{ChannelID: 2},
+		Action: &tg.MessageActionTopicCreate{Title: "示例话题"}}
+	plain := in(101, &tg.MessageReplyHeader{ForumTopic: true, ReplyToMsgID: topic})
+	if got := sourceMessages([]message{messageOf(create, e), messageOf(plain, e)})[1].Text; got != "话题里的示例消息" {
+		t.Errorf("a plain topic message archived as %q", got)
+	}
+	if p := pageMessageOf(plain, e); p.ReplyTo != 0 {
+		t.Errorf("the page quotes message %d over a plain topic message", p.ReplyTo)
+	}
+}
+
 // A chat found by search keeps its @username, so a write can name it that way after tg search as after tg chats.
 func TestSearchKeepsUsernames(t *testing.T) {
 	user := &tg.User{ID: 42, AccessHash: 4242, FirstName: "示例", Username: "example_user"}

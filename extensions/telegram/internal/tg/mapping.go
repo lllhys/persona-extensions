@@ -179,8 +179,14 @@ func messageOf(mc tg.MessageClass, e entities) message {
 			}
 			out.From = e.nameOf(m.PeerID)
 		}
-		if h, ok := m.ReplyTo.(*tg.MessageReplyHeader); ok {
-			out.ReplyTo = h.ReplyToMsgID
+		// In a forum topic every message names the topic's creation message; only one with a top id answers a message.
+		// A reply to another chat's message can't be found in this one.
+		if h, ok := m.ReplyTo.(*tg.MessageReplyHeader); ok && (!h.ForumTopic || h.ReplyToTopID != 0) {
+			to, _ := e.peerOf(h.ReplyToPeerID)
+			here, _ := e.peerOf(m.PeerID)
+			if h.ReplyToPeerID == nil || to.key() == here.key() {
+				out.ReplyTo = h.ReplyToMsgID
+			}
 		}
 		var parts []string
 		if f := m.FwdFrom; f.FromName != "" || f.FromID != nil {
