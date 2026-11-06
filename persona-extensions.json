@@ -527,7 +527,7 @@
         "manifest_version": 1,
         "id": "markets",
         "name": "行情",
-        "version": "0.3.0",
+        "version": "0.4.0",
         "description": "行情（加密货币来自 OKX 公开行情接口，A 股、港股、美股来自腾讯行情的网页接口，都不用账号）：主导航上多一个「行情」，搜币、搜股票，看自选的价格和涨跌，点开看 K 线走势和成交量；助手能用工具搜代码、查报价和 K 线。hub 去读，手机不用代理。",
         "publisher": "nwverse",
         "engines": {
@@ -565,6 +565,12 @@
               "title": "行情",
               "placement": "nav_page",
               "icon": "chart"
+            },
+            {
+              "id": "card",
+              "title": "行情",
+              "placement": "overview_card",
+              "opens": "watchlist"
             }
           ]
         },
@@ -586,6 +592,10 @@
               "default": "1H",
               "oneOf": [
                 {
+                  "const": "T",
+                  "title": "今日分时（股票）"
+                },
+                {
                   "const": "15m",
                   "title": "15 分钟"
                 },
@@ -606,6 +616,12 @@
                   "title": "1 周"
                 }
               ]
+            },
+            "overview_card": {
+              "type": "boolean",
+              "title": "总览卡片",
+              "description": "在总览上放一张行情卡片：BTC、上证指数、恒生指数、纳斯达克，和自选里涨跌最多的几个，点开进「行情」。关掉就不显示",
+              "default": true
             },
             "colors": {
               "type": "string",
@@ -649,9 +665,9 @@
       ],
       "packages": [
         {
-          "url": "release:markets-v0.3.0/markets-0.3.0.tar.gz",
-          "sha256": "efbc39bb6b0ef5ecf6a9bab555e75e46364da66219a32c6d3419df5f4f180a8a",
-          "size": 12827850
+          "url": "release:markets-v0.4.0/markets-0.4.0.tar.gz",
+          "sha256": "461511ac9161aaef86bf0d75dc143f423dba9a271307a387415f9dd17af13d6b",
+          "size": 12879944
         }
       ]
     },
