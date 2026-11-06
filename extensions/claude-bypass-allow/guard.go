@@ -624,7 +624,11 @@ func gitPersonOnly(args []string) string {
 		}
 	case "checkout", "switch":
 		if has(rest, "--") || has(rest, ".") || hasLongOpt(rest, "--force", "--discard-changes") || hasShort(rest, 'f') ||
-			(sub == "checkout" && (hasPrefix(rest, "--pathspec-from-file") || len(checkoutOperands(rest)) > 1)) {
+			(sub == "checkout" && (hasLongOpt(rest, "--pathspec-from-file") || len(checkoutOperands(rest)) > 1)) {
+			return "overwrite: git " + sub
+		}
+		// -B and -C reset a branch that exists, as git branch -f does; git switch --orphan empties the work tree
+		if (sub == "checkout" && hasShort(rest, 'B')) || (sub == "switch" && (hasShort(rest, 'C') || hasLongOpt(rest, "--force-create", "--orphan"))) {
 			return "overwrite: git " + sub
 		}
 	case "branch", "tag":
@@ -640,7 +644,7 @@ func gitPersonOnly(args []string) string {
 			return "deletion: git worktree remove"
 		}
 	case "update-ref":
-		if has(rest, "-d") {
+		if has(rest, "-d") || has(rest, "--stdin") { // --stdin reads delete (and update) lines
 			return "deletion: git update-ref -d"
 		}
 	case "reflog":

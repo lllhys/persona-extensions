@@ -76,7 +76,9 @@ func TestPersonOnly(t *testing.T) {
 		"git reset --har", "git reset --ha HEAD~1", "git reset --kee HEAD~1", "git checkout --forc main",
 		"git switch --discard main", "git branch --del x", "git branch --delete-merged 'origin/*'", "git tag --forc v1",
 		"git checkout HEAD f", "git checkout origin/main -q src/a.go",
-		"git checkout --pathspec-from-file=list main",
+		"git checkout --pathspec-from-file=list main", "git checkout --pathspec-fr=list main", "git checkout main --pathspec-fr list",
+		"git checkout -B feat", "git checkout -B x origin/x", "git switch -C feat", "git switch --force-create feat main",
+		"git switch --orphan new", "printf 'delete refs/heads/keep\\n' | git update-ref --stdin",
 	}
 	for _, c := range stays {
 		if personOnly(c) == "" {
@@ -111,7 +113,7 @@ func TestPersonOnly(t *testing.T) {
 		"eval echo hi", "busybox ls -la", "busybox true", "autossh -M 0 host", `eval "$(ssh-agent -s)"`,
 		// git options that are not shortenings of a destructive one, and a checkout of one branch or commit
 		"git push --dry-run origin x", "git push --porcelain", "git push --progress origin x", "git reset --soft HEAD~1",
-		"git checkout -b feat/x origin/main", "git checkout -B x origin/x", "git checkout --orphan new main",
+		"git checkout -b feat/x origin/main", "git checkout --orphan new main",
 		"git checkout --track origin/x", "git checkout -t origin/x", "git checkout -q main", "git checkout --detach v1",
 		"git switch -c x origin/main", "git branch --list 'feat/*'", "git tag --list", "git checkout --conflict diff3 main",
 	}
