@@ -610,7 +610,8 @@ func TestManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	if m.ID != "markets" || len(m.Contributes.Connectors) != 1 || m.Contributes.Connectors[0].ID != "markets" ||
-		len(m.Contributes.UI) != 1 || m.Contributes.UI[0].ID != "watchlist" || m.Contributes.UI[0].Placement != "nav_page" {
+		len(m.Contributes.UI) != 2 || m.Contributes.UI[0].ID != "watchlist" || m.Contributes.UI[0].Placement != "nav_page" ||
+		m.Contributes.UI[1].ID != "card" || m.Contributes.UI[1].Placement != "overview_card" {
 		t.Fatalf("manifest: %+v", m)
 	}
 	h := newPlugin(t.Logf).handlers()

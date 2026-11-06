@@ -29,6 +29,8 @@ type Config struct {
 	TZ        string   `json:"tz,omitempty"`
 	// Colors is how a change is coloured: "red_up" (红涨绿跌, the default) or "green_up".
 	Colors string `json:"colors,omitempty"`
+	// OverviewCard: the card on 总览; nil (not set) is on.
+	OverviewCard *bool `json:"overview_card,omitempty"`
 }
 
 // defaultWatchlist is the watchlist when the configuration seeds none: the default source's symbols.
@@ -218,6 +220,33 @@ func (p *plugin) moveWatch(r Ref, by int) error {
 				w[i], w[j] = w[j], w[i]
 				break
 			}
+		}
+		return w, "", nil
+	})
+	return err
+}
+
+// moveWatchTop moves r to the top of its source's group.
+func (p *plugin) moveWatchTop(r Ref) error {
+	_, err := p.setWatch(func(w []Ref) ([]Ref, string, error) {
+		if !slices.Contains(w, r) {
+			return w, "", nil
+		}
+		// the group's places stay its own: r takes the first, the group's others before it move down one of them
+		var at []int
+		for i, x := range w {
+			if x.Source == r.Source {
+				at = append(at, i)
+			}
+		}
+		g := []Ref{r}
+		for _, i := range at {
+			if w[i] != r {
+				g = append(g, w[i])
+			}
+		}
+		for k, i := range at {
+			w[i] = g[k]
 		}
 		return w, "", nil
 	})

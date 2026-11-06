@@ -27,6 +27,9 @@ type pageState struct {
 const (
 	candlesShow  = 60 // bars in the charts (a chart takes 120 points a series)
 	refreshEvery = 30 // seconds: the apps draw the page again while it is on screen
+	// refreshIdle: the same when every quote on it is from a market not trading (a closed market's figures stay)
+	refreshIdle = 300
+	statsMost   = 6 // stats in a stat_grid
 )
 
 func (p *plugin) readState(raw string) (pageState, *Ref) {
@@ -70,6 +73,9 @@ func (p *plugin) uiRender(ctx context.Context, _ *pluginkit.Hub, raw json.RawMes
 	if err := json.Unmarshal(raw, &r); err != nil {
 		return nil, err
 	}
+	if r.Contribution == "card" {
+		return p.card(ctx)
+	}
 	st, open := p.readState(r.State)
 	return p.page(ctx, p.drawFor(r), st, open, false), nil
 }
@@ -78,6 +84,13 @@ func (p *plugin) uiAction(ctx context.Context, _ *pluginkit.Hub, raw json.RawMes
 	var r pluginkit.UIRequest
 	if err := json.Unmarshal(raw, &r); err != nil {
 		return nil, err
+	}
+	if r.Contribution == "card" { // it has no buttons: drawn again
+		v, err := p.card(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return pluginkit.ActionResult{View: &v}, nil
 	}
 	st, open := p.readState(r.State)
 	refresh, toast := false, ""
@@ -127,6 +140,9 @@ func (p *plugin) uiAction(ctx context.Context, _ *pluginkit.Hub, raw json.RawMes
 			toast = err.Error()
 		} else {
 			toast = msg
+			if st.Q != "" && open != nil && *open == ref { // added from a search's result: back to the search
+				open = nil
+			}
 		}
 	case "remove":
 		if refOK {
@@ -134,6 +150,12 @@ func (p *plugin) uiAction(ctx context.Context, _ *pluginkit.Hub, raw json.RawMes
 				toast = err.Error()
 			} else {
 				toast = msg
+			}
+		}
+	case "top":
+		if refOK {
+			if err := p.moveWatchTop(ref); err != nil {
+				toast = err.Error()
 			}
 		}
 	case "up", "down":
@@ -192,6 +214,7 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 	}
 	// one group a source, in the sources' order; a source that fails says so in its group while the others draw
 	var groups []pluginkit.Section
+	active := len(watch) == 0 // a quote of a market trading, or nothing to show: the usual refresh
 	for _, src := range p.srcs {
 		refs := group(watch, src.ID())
 		if len(refs) == 0 {
@@ -207,6 +230,7 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 			sec.Items = []pluginkit.Item{{Type: "text", Text: err.Error(), Style: "secondary"},
 				{Type: "button", Title: "重试", Action: &pluginkit.UIAction{ID: "refresh"}}}
 			groups = append(groups, sec)
+			active = true
 			continue
 		}
 		periods := map[string]bool{}
@@ -214,6 +238,7 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 			q, ok := qs[r.Symbol]
 			if ok {
 				periods[q.Period] = true
+				active = active || !q.Idle
 			}
 			sec.Items = append(sec.Items, p.quoteRow(r, q, ok, false))
 		}
@@ -230,6 +255,9 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 	}
 	v.Sections = append(v.Sections, groups...)
 	v.Sections = append(v.Sections, p.addSection(d.v3), p.readAt(d))
+	if !active {
+		v.RefreshAfter = refreshIdle
+	}
 	return v
 }
 
@@ -400,12 +428,22 @@ func (p *plugin) instPage(ctx context.Context, d draw, st pageState, r Ref) plug
 	}
 	if q.Idle && !q.At.IsZero() {
 		last.Label = "休市 · 截至 " + q.At.Format("1/2 15:04")
+		v.RefreshAfter = refreshIdle
 	}
 	figures := []pluginkit.Stat{last, {Label: q.Period + " 最高", Value: q.Price(q.High)}, {Label: q.Period + " 最低", Value: q.Price(q.Low)},
 		{Label: q.Period + " 成交额", Value: fmtCompactFloat(q.Turnover) + " " + q.Currency}}
+	var facts []pluginkit.Stat
+	for _, f := range q.Facts {
+		facts = append(facts, pluginkit.Stat{Label: f.Label, Value: f.Value})
+	}
 	if d.v2 {
-		v.Sections = append(v.Sections, pluginkit.Section{Items: []pluginkit.Item{{Type: "stat_grid", Stats: figures}}})
+		sec := pluginkit.Section{Items: []pluginkit.Item{{Type: "stat_grid", Stats: figures}}}
+		for i := 0; i < len(facts); i += statsMost { // a grid takes at most 6
+			sec.Items = append(sec.Items, pluginkit.Item{Type: "stat_grid", Stats: facts[i:min(i+statsMost, len(facts))]})
+		}
+		v.Sections = append(v.Sections, sec)
 	} else {
+		figures = append(figures, facts...)
 		var items []pluginkit.Item
 		for _, s := range figures {
 			items = append(items, pluginkit.Item{Type: "metric", Label: s.Label, Value: s.Value, Detail: s.Detail, Tone: s.Tone})
@@ -439,7 +477,11 @@ func (p *plugin) instPage(ctx context.Context, d draw, st pageState, r Ref) plug
 	case err != nil:
 		kline.Items = append(kline.Items, pluginkit.Item{Type: "text", Text: err.Error(), Style: "secondary"})
 	case len(cs) == 0:
-		kline.Items = append(kline.Items, pluginkit.Item{Type: "text", Text: src.Name() + " 没给这个周期的 K 线", Style: "secondary"})
+		text := src.Name() + " 没给这个周期的 K 线"
+		if bar == "T" {
+			text = "还没有分时：今天还没开盘"
+		}
+		kline.Items = append(kline.Items, pluginkit.Item{Type: "text", Text: text, Style: "secondary"})
 	default:
 		kline.Items = append(kline.Items, klineItems(cs, bar, d.loc, d.v2, q, p.tone)...)
 	}
@@ -449,6 +491,9 @@ func (p *plugin) instPage(ctx context.Context, d draw, st pageState, r Ref) plug
 	acts := pluginkit.Section{}
 	watch := group(p.watchlist(), r.Source) // moved within its source's group
 	if i := slices.Index(watch, r); i >= 0 {
+		if i > 1 {
+			acts.Items = append(acts.Items, pluginkit.Item{Type: "button", Title: "置顶", Action: &pluginkit.UIAction{ID: "top:" + r.String()}})
+		}
 		if i > 0 {
 			acts.Items = append(acts.Items, pluginkit.Item{Type: "button", Title: "上移", Action: &pluginkit.UIAction{ID: "up:" + r.String()}})
 		}
@@ -483,6 +528,9 @@ func klineItems(cs []Candle, bar string, loc *time.Location, v2 bool, q Quote, t
 		hi, lo = math.Max(hi, c.High), math.Min(lo, c.Low)
 	}
 	span := pluginkit.Stat{Label: fmt.Sprintf("%d 根涨跌", len(cs)), Value: "—"}
+	if bar == "T" {
+		span.Label = "开盘以来"
+	}
 	if first.Open != 0 {
 		ch := (last.Close - first.Open) / first.Open
 		span.Value, span.Tone = fmtChange(ch), tone(ch)
@@ -513,8 +561,11 @@ func klineItems(cs []Candle, bar string, loc *time.Location, v2 bool, q Quote, t
 
 func barLabel(at time.Time, bar string, loc *time.Location) string {
 	at = at.In(loc)
-	if bar == "1D" || bar == "1W" {
+	switch bar {
+	case "1D", "1W":
 		return at.Format("1/2")
+	case "T":
+		return at.Format("15:04")
 	}
 	return at.Format("1/2 15:04")
 }
