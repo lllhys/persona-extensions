@@ -84,6 +84,9 @@ func TestPersonOnly(t *testing.T) {
 		"{rm,-rf,v}", "{rm,} -rf v", "r{m,} -rf v", "{r..r}m -rf v", "sudo {rm,-rf,v}", "git push origin {+main,dev}",
 		"/bin/r? -rf v", "/bin/r[m] -rf v", "/bin/r[!x] -rf v", "/usr/bin/r[l-n] -rf v", "r* -rf v",
 		"/usr/bin/su?o rm -rf v", "ba?h -c 'rm -rf v'", "bash -c $'rm -rf v'", "cd x && /bin/r? -rf v",
+		// from the review: a word expansion leaves empty is dropped, and a # in a word after $(…) is not a comment
+		"{,rm} -rf v", "{,} rm -rf v", "{,rm,-rf,v}", "{,rm}{,} -rf v", "{,/usr/bin/rm} -rf v", "{{rm,-rf},x}",
+		"echo $(true)#y; rm -rf v", "echo `true`#y; rm -rf v", "echo $(x)#c && rm -rf v", "x$(echo hi)#z; rm -rf v",
 	}
 	for _, c := range stays {
 		if personOnly(c) == "" {
@@ -126,6 +129,7 @@ func TestPersonOnly(t *testing.T) {
 		"echo $'hello\n'", "[ -f x ] && echo y", "find . -exec grep x {} \\;", "{ echo a; echo b; } | wc -l",
 		"echo '{rm,x}'", "jq '.a | {b,c}' f.json", "cp -r src/{a,b} dst/", "echo x # rm -rf y", "ls *", "./*.sh",
 		"echo {1..3}", "printf '%s\n' {a..e}", "go test ./... -run 'Test{A,B}'",
+		"echo {,a}", "ls *.{go,md}", "awk -F, '{print $1}' f.csv", "echo a#b", "echo x #c; # rm -rf v", "(cd x) # rm -rf v",
 	}
 	for _, c := range goes {
 		if why := personOnly(c); why != "" {
@@ -226,6 +230,25 @@ func TestMatcher(t *testing.T) {
 		got := matchingRule([]string{r.rule}, r.tool, "") != ""
 		if got != r.match {
 			t.Errorf("%s for %s: %v", r.rule, r.tool, got)
+		}
+	}
+}
+
+// TestBraceExpandBounded: a long or deeply nested brace word is read in bounded time, and its first words still are.
+func TestBraceExpandBounded(t *testing.T) {
+	for _, c := range []string{
+		strings.Repeat("{", 50000) + strings.Repeat("}", 50000),
+		strings.Repeat("A", 50000) + "{1..4096}",
+		strings.Repeat("{a,b}", 30),
+		"{rm,x} -rf " + strings.Repeat("{a,b}", 30),
+	} {
+		start := time.Now()
+		why := personOnly(c)
+		if d := time.Since(start); d > 2*time.Second {
+			t.Errorf("%.20q…: %v", c, d)
+		}
+		if strings.HasPrefix(c, "{rm") && why == "" {
+			t.Errorf("%.20q… should stay with a person", c)
 		}
 	}
 }

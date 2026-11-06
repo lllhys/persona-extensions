@@ -18,70 +18,92 @@ const (
 	braceComma = '\uE002'
 )
 
-// braceMax is how many words braceExpand makes of one word at most; past it, the rest are not made.
-const braceMax = 4096
+// braceMax is how many words braceExpand makes of one word at most, and braceWork how many characters it writes
+// in all: past them, the rest are not made (the first words, which hold the program, are made first).
+const (
+	braceMax  = 4096
+	braceWork = 1 << 20
+)
 
 // braceExpand is the words the shell makes of w by brace expansion: r{m,} is rm and r, {rm,-rf,x} is rm, -rf and x,
-// {q..s}m is qm, rm and sm. Braces without a comma or a range ({}, {x}) are kept as they are.
+// {q..s}m is qm, rm and sm. Braces without a comma or a range ({}, {x}) are kept as they are. A word that expansion
+// leaves empty is dropped, as the shell drops it ({,} rm x runs rm).
 func braceExpand(w string) []string {
 	if !strings.ContainsRune(w, braceOpen) {
 		return []string{restoreBraces(w)}
 	}
 	var out []string
-	expandInto(w, &out)
-	for i := range out {
-		out[i] = restoreBraces(out[i])
+	work := braceWork
+	expandInto([]rune(w), &out, &work)
+	kept := out[:0]
+	for _, x := range out {
+		if x != "" {
+			kept = append(kept, restoreBraces(x))
+		}
 	}
-	return out
+	return kept
 }
 
-func expandInto(w string, out *[]string) {
-	if len(*out) >= braceMax {
+func expandInto(rs []rune, out *[]string, work *int) {
+	if len(*out) >= braceMax || *work <= 0 {
 		return
 	}
-	rs := []rune(w)
+	*work -= len(rs) + 1
+	// match[i] is the index of the brace that closes the one opened at i (-1 when none does)
+	match := make([]int, len(rs))
+	var open []int
 	for i, r := range rs {
-		if r != braceOpen {
-			continue
-		}
-		depth, commas, end := 0, []int(nil), -1
-		for j := i; j < len(rs) && end < 0; j++ {
-			switch rs[j] {
-			case braceOpen:
-				depth++
-			case braceClose:
-				if depth--; depth == 0 {
-					end = j
-				}
-			case braceComma:
-				if depth == 1 {
-					commas = append(commas, j)
-				}
+		match[i] = -1
+		switch r {
+		case braceOpen:
+			open = append(open, i)
+		case braceClose:
+			if len(open) > 0 {
+				match[open[len(open)-1]] = i
+				open = open[:len(open)-1]
 			}
 		}
-		if end < 0 {
-			break // no closing brace: the rest is as written
+	}
+	for i, r := range rs {
+		if r != braceOpen || match[i] < 0 {
+			continue
 		}
-		var parts []string
+		end := match[i]
+		var commas []int
+		for j := i + 1; j < end; j++ {
+			switch {
+			case rs[j] == braceOpen && match[j] > 0:
+				j = match[j] // a nested pair's commas are its own
+			case rs[j] == braceComma:
+				commas = append(commas, j)
+			}
+		}
+		var parts [][]rune
 		if len(commas) > 0 {
 			start := i + 1
 			for _, c := range append(commas, end) {
-				parts = append(parts, string(rs[start:c]))
+				parts = append(parts, rs[start:c])
 				start = c + 1
 			}
-		} else {
-			parts = braceRange(string(rs[i+1 : end]))
+		} else if end-i <= 64 { // a sequence expression is short ({1..10..2}); a long inside is not one
+			for _, x := range braceRange(string(rs[i+1 : end])) {
+				parts = append(parts, []rune(x))
+			}
 		}
 		if parts == nil {
 			continue // {}, {x}: literal braces; a later pair may still expand
 		}
-		prefix, suffix := string(rs[:i]), string(rs[end+1:])
 		for _, p := range parts {
-			expandInto(prefix+p+suffix, out)
+			if len(*out) >= braceMax || *work <= 0 {
+				return
+			}
+			w := make([]rune, 0, len(rs)-(end-i+1)+len(p))
+			w = append(append(append(w, rs[:i]...), p...), rs[end+1:]...)
+			expandInto(w, out, work)
 		}
 		return
 	}
-	*out = append(*out, w)
+	*out = append(*out, string(rs))
 }
 
 // braceRange is the words of a sequence expression's inside (a..e, 1..10, 1..10..2), nil when it is not one.

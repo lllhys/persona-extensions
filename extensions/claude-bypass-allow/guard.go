@@ -380,8 +380,9 @@ func scan(cmd string) (segs [][]string, redirects []string) {
 			} else {
 				cur.WriteRune(r)
 			}
-		case r == '#' && !inWord:
-			// a comment, to the end of the line: decoding $'…' must not leave a quote in it open
+		case r == '#' && !inWord && (i == 0 || strings.ContainsRune(" \t\r\n;&|(<>", rs[i-1])):
+			// a comment, to the end of the line: decoding $'…' must not leave a quote in it open. Not after ) or a
+			// backtick, which may close a substitution in the word the # is part of ($(x)#y)
 			for i+1 < len(rs) && rs[i+1] != '\n' {
 				i++
 			}
