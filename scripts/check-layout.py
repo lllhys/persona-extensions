@@ -79,9 +79,12 @@ def committed(root, top):
     """The files under root/top, relative to root: the tracked ones in a git checkout (a local build stays untracked or
     ignored), every file otherwise."""
     if os.path.exists(os.path.join(root, ".git")):  # a directory, or a file in a worktree
-        res = subprocess.run(["git", "-C", root, "ls-files", "-z", "--", top], capture_output=True)
-        if res.returncode == 0:
-            return sorted(n.decode() for n in res.stdout.split(b"\0") if n)
+        try:
+            res = subprocess.run(["git", "-C", root, "ls-files", "-z", "--", top], capture_output=True)
+        except OSError:  # no git: look at every file
+            res = None
+        if res is not None and res.returncode == 0:
+            return sorted(n.decode("utf-8", "surrogateescape") for n in res.stdout.split(b"\0") if n)
     out = []
     for d, dirs, files in os.walk(os.path.join(root, top)):
         dirs[:] = [x for x in dirs if x not in SKIP_DIRS]
