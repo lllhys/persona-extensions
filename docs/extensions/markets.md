@@ -62,7 +62,7 @@ The extension checks the waiting alerts every minute on its own (each source ask
 
 | Setting | Meaning |
 | --- | --- |
-| `watchlist` | The initial watchlist (default `BTC-USDT`, `ETH-USDT`, `SOL-USDT`); stocks with their source, `cn:600519`, `hk:00700`, `us:AAPL`. Used only until the page first changes it; after that the watchlist lives in the extension's data directory (`watchlist.json`, at most 50 instruments). |
+| `watchlist` | The initial watchlist (default `BTC-USDT`, `ETH-USDT`, `SOL-USDT`); stocks with their source, `cn:600519`, `hk:00700`, `us:AAPL`. Used only until the page first changes it; after that the watchlist lives in the extension's data directory (`watchlist.json`, at most 50 instruments). A `watchlist.json` or `alerts.json` that cannot be read or parsed is moved aside to `<file>.corrupt` and logged (since 0.6.3); the configured watchlist and no alerts stand in. |
 | `bar` | Default bar for the instrument page and `markets_candles`: `T` (stocks' minute line), `15m`, `1H` (default), `4H`, `1D` or `1W`; a source without it uses its nearest. |
 | `triage_rules` | The user's own rules for sorting the alerts in the inbox (the standard setting every inbox extension has); empty uses the inbox's global rules. |
 | `overview_card` | The card on 总览 (default on). Off, the apps draw no card. |

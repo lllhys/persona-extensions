@@ -88,7 +88,7 @@ type alerts struct {
 	wake func()
 }
 
-func (as *alerts) load(dir string) {
+func (as *alerts) load(dir string, logf func(string, ...any)) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 	as.list, as.path = nil, ""
@@ -96,10 +96,7 @@ func (as *alerts) load(dir string) {
 		return
 	}
 	as.path = filepath.Join(dir, "alerts.json")
-	raw, err := os.ReadFile(as.path)
-	if err == nil {
-		_ = json.Unmarshal(raw, &as.list)
-	}
+	as.list, _ = readState[[]Alert](as.path, logf)
 }
 
 // saveLocked writes the list; as.mu held.

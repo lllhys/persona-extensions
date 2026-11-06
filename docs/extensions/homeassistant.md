@@ -80,7 +80,7 @@ Rules on state changes that notify the phone or wake the assistant as they happe
 - the same rule tells about the same entity once per `cooldown_minutes` (30); firings within 3 seconds go out as one delivery per rule ("2 个设备离线"); at most 30 deliveries an hour;
 - `do: notify` (default) sends `POST /api/v1/notify` on the hub (`level` `active` or `time-sensitive`, collapsing by rule, a tap opens the entity on the 家 page); `do: assistant` opens an assistant conversation with `POST /api/v1/assistant/conversations` saying what happened and the rule's `message` as the user's instruction; `both` does both.
 
-Rules come from the `watches` setting (one per line, below) and from the assistant through `homeassistant_watch` (kept in the data directory, `watches.json`). The manifest asks for the hub scopes `notify` and `assistant.ask` for this; a hub that did not grant them records the firing with the reason in `homeassistant_watches`.
+Rules come from the `watches` setting (one per line, below) and from the assistant through `homeassistant_watch` (kept in the data directory, `watches.json`; one that cannot be read or parsed is moved aside to `watches.json.corrupt` and logged, since 0.2.2). The manifest asks for the hub scopes `notify` and `assistant.ask` for this; a hub that did not grant them records the firing with the reason in `homeassistant_watches`.
 
 Setting lines: `<who> <condition> [for=10m] [do=notify|assistant|both] [level=time-sensitive] [cooldown=30m] [class=<device_class>] [attr=<attribute>] [from=<state>] [name=<名字>] [message=<the rest of the line>]`, where `<who>` is an entity id or pattern, or `<domain>@<area>` (`*@客厅`), and `<condition>` is `=<state>`, `><number>`, `<<number>` or `offline`:
 

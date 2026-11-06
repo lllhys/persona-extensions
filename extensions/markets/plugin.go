@@ -118,7 +118,7 @@ func (p *plugin) configure(ip pluginkit.InitParams) error {
 	}
 	p.cfg = cfg
 	p.rules = pluginkit.TriageRules(ip.Config)
-	p.alerts.load(ip.Plugin.DataDir)
+	p.alerts.load(ip.Plugin.DataDir, p.logf)
 
 	seed := cfg.Watchlist
 	if len(seed) == 0 {
@@ -130,17 +130,9 @@ func (p *plugin) configure(ip pluginkit.InitParams) error {
 	p.watchPath = ""
 	if ip.Plugin.DataDir != "" {
 		p.watchPath = filepath.Join(ip.Plugin.DataDir, "watchlist.json")
-		raw, err := os.ReadFile(p.watchPath)
-		switch {
-		case err == nil:
-			var stored []string
-			if json.Unmarshal(raw, &stored) == nil {
-				p.watch = p.readRefs(stored) // a bare symbol in it is the default source's
-			} else {
-				p.logf("markets: %s unreadable, starting from the configured watchlist", p.watchPath)
-			}
-		case !errors.Is(err, os.ErrNotExist):
-			p.logf("markets: read watchlist: %v", err)
+		// An unreadable one is moved aside and the configured watchlist stands in.
+		if stored, ok := readState[[]string](p.watchPath, p.logf); ok {
+			p.watch = p.readRefs(stored) // a bare symbol in it is the default source's
 		}
 	}
 	return nil

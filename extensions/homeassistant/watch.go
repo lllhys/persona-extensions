@@ -372,12 +372,7 @@ func (w *watcher) load(dir string) {
 		return
 	}
 	file := filepath.Join(dir, "watches.json")
-	var rules []Rule
-	if b, err := os.ReadFile(file); err == nil {
-		if err := json.Unmarshal(b, &rules); err != nil {
-			w.a.logf("watches.json: %v", err)
-		}
-	}
+	rules, _ := readState[[]Rule](file, w.a.logf)
 	for i := range rules {
 		rules[i].Source = "assistant"
 	}
