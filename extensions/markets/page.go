@@ -173,6 +173,27 @@ func (p *plugin) uiAction(ctx context.Context, _ *pluginkit.Hub, raw json.RawMes
 				toast = msg
 			}
 		}
+	case "alert": // a new price alert, from the instrument page's fields
+		if !refOK {
+			break
+		}
+		a, err := p.newAlert(ctx, ref, r.Values["alert_kind"], r.Values["alert_value"])
+		if err == nil {
+			err = p.alerts.add(a)
+		}
+		if err != nil {
+			toast = err.Error()
+			break
+		}
+		q, _ := p.quote(ctx, ref)
+		toast = "已设提醒：" + ref.Symbol + " " + a.what(q)
+	case "unalert": // the rest is the alert's id
+		if a, ok, err := p.alerts.remove(arg); err != nil {
+			toast = err.Error()
+		} else if ok {
+			_, sym, _ := strings.Cut(a.Ref, ":")
+			toast = "已删掉 " + sym + " 的提醒"
+		}
 	case "top":
 		if refOK {
 			if err := p.moveWatchTop(ref); err != nil {
@@ -334,6 +355,9 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 		groups[n-1].Footer = strings.TrimPrefix(groups[n-1].Footer+"。点一行看 K 线", "。")
 	}
 	v.Sections = append(v.Sections, groups...)
+	if sec, ok := p.alertsSection(qs); ok {
+		v.Sections = append(v.Sections, sec)
+	}
 	if !d.v3 { // with a search box, a code is added through the search
 		v.Sections = append(v.Sections, p.addSection(false))
 	}
@@ -650,7 +674,7 @@ func (p *plugin) instPage(ctx context.Context, d draw, st pageState, r Ref) plug
 	default:
 		kline.Items = append(kline.Items, klineItems(cs, bar, d.loc, d.v2, q, p.tone)...)
 	}
-	v.Sections = append(v.Sections, kline)
+	v.Sections = append(v.Sections, kline, p.alertSection(r, q))
 
 	// what to do with it
 	acts := pluginkit.Section{}
@@ -781,4 +805,55 @@ func fmtCompactFloat(f float64) string {
 		}
 	}
 	return strconv.FormatFloat(f, 'f', 2, 64)
+}
+
+// alertSection is an instrument's price alerts and the form for a new one.
+func (p *plugin) alertSection(r Ref, q Quote) pluginkit.Section {
+	sec := pluginkit.Section{Title: "价格提醒", Footer: "到了进收件箱，每条只提醒一次；每分钟查一次。点一条删掉"}
+	for _, a := range p.alerts.of(r) {
+		sec.Items = append(sec.Items, p.alertRow(a, q, "unalert:"+a.ID))
+	}
+	sec.Items = append(sec.Items,
+		pluginkit.Item{Type: "field", Name: "alert_kind", Label: "提醒", Kind: "choice", Value: "above", Choices: alertKinds},
+		pluginkit.Item{Type: "field", Name: "alert_value", Label: "价格，或涨跌幅的百分数", Kind: "number", Placeholder: q.Price(q.Last)},
+		pluginkit.Item{Type: "button", Title: "设提醒", Action: &pluginkit.UIAction{ID: "alert:" + r.String(), Submit: true}})
+	return sec
+}
+
+// alertRow is an alert as a row: what it waits for, and whether it went off. action is what a tap does.
+func (p *plugin) alertRow(a Alert, q Quote, action string) pluginkit.Item {
+	q.Decimals = max(q.Decimals, a.Decimals)
+	it := pluginkit.Item{Type: "row", Title: a.what(q), Subtitle: "等着", Action: &pluginkit.UIAction{ID: action}}
+	if strings.HasPrefix(action, "unalert:") {
+		it.Action.Confirm = "删掉这条提醒？"
+	}
+	if a.Met != nil {
+		it.Subtitle = "已提醒 · " + a.Met.In(p.zone()).Format("1/2 15:04") + " · " + q.Price(a.Price)
+		it.Badge = &pluginkit.Badge{Text: "到了", Tone: "caution"}
+	}
+	return it
+}
+
+// alertsSection lists every alert under the watchlist, each opening its instrument (whose page deletes it); false
+// when there is none.
+func (p *plugin) alertsSection(qs map[Ref]Quote) (pluginkit.Section, bool) {
+	list := p.alerts.all()
+	if len(list) == 0 {
+		return pluginkit.Section{}, false
+	}
+	sec := pluginkit.Section{Title: fmt.Sprintf("价格提醒 · %d", len(list)), Footer: "点一条看它的代码，在那里删掉"}
+	for _, a := range list {
+		r, ok := p.srcs.parse(a.Ref)
+		if !ok {
+			continue
+		}
+		it := p.alertRow(a, qs[r], "open:"+r.String())
+		name := r.Symbol
+		if a.Name != "" {
+			name = a.Name
+		}
+		it.Title = name + " " + it.Title
+		sec.Items = append(sec.Items, it)
+	}
+	return sec, true
 }
