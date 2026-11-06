@@ -43,7 +43,7 @@ go test ./...
 scripts/ci.sh
 ```
 
-`scripts/ci.sh` checks local documentation links and their regression tests, manifests (`scripts/manifest.py check`), Go formatting, the copied SDK's vet and full test suite, root `go vet`, Go tests, the [LarkAgentX companion's synthetic Python tests](extensions/larkagentx.md#local-validation-and-remaining-work), builds for every platform declared by each manifest, equivalent market entries and existing index signatures. It packages extensions locally, but without the `release` argument it does not publish anything.
+`scripts/ci.sh` checks local documentation links and their regression tests, manifests (`scripts/manifest.py check`), Go formatting, the copied SDK's vet and full test suite, root `go vet`, Go tests with the race detector (`go test -race ./...`, which needs cgo and a C compiler), the [LarkAgentX companion's synthetic Python tests](extensions/larkagentx.md#local-validation-and-remaining-work), builds for every platform declared by each manifest, equivalent market entries and existing index signatures. It packages extensions locally, but without the `release` argument it does not publish anything.
 
 The copied SDK is a nested module, so root `go vet ./...` and `go test ./...` do not reach it. `scripts/ci.sh` checks it separately; to run only that part:
 

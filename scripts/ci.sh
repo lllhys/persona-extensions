@@ -1,8 +1,8 @@
 #!/bin/bash
-# What CI runs, runnable on any machine with Go, Python 3 and (for release) gh:
+# What CI runs, runnable on any machine with Go, a C compiler (the race detector), Python 3 and (for release) gh:
 #   scripts/ci.sh            the checks a pull request needs: documentation links, manifests, gofmt,
-#                            the copied SDK's vet and tests, vet, tests, every platform builds, indexes,
-#                            and the indexes' signatures against market.pub (nwverse/persona#1848)
+#                            the copied SDK's vet and tests, vet, tests with the race detector, every platform builds,
+#                            indexes, and the indexes' signatures against market.pub (nwverse/persona#1848)
 #   scripts/ci.sh release <base>    then release the extensions whose version changed since the git ref <base>
 #                                   (a push to main: the last commit a release run finished for, else its "before");
 #                                   a version merged but meant to wait is not released
@@ -33,8 +33,9 @@ go -C sdk/go test -count=1 -timeout=90s ./...
 step vet
 go vet ./...
 
+# -race: tests start goroutines (connection loops, watchers) next to package settings they shorten for the test.
 step test
-go test ./...
+go test -race ./...
 
 step companion
 python3 -I -B extensions/larkagentx/bridge_test.py
