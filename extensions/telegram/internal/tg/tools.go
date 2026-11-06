@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -216,8 +215,9 @@ func (c *Conn) toolSearch(ctx context.Context, cl client, query, chat string, li
 }
 
 // find is the conversation a tool names: its key (u…, g…, c…), or its exact name. It looks in the list as last read
-// (the archive's, the inbox's) first, then in the ones the CLI's reads returned (tg search finds chats older than
-// any list), and asks Telegram for it only when the conversation is in neither.
+// (the archive's, the inbox's) first, then, by key only, in the ones the CLI's reads returned (tg search finds chats
+// older than any list), and asks Telegram for it only when the conversation is in neither. Those are a few chats
+// out of many, so a name is never taken from them: one there would hide another conversation of the same name.
 func (c *Conn) find(ctx context.Context, cl client, chat string) (dialog, error) {
 	chat = strings.TrimSpace(chat)
 	if chat == "" {
@@ -225,12 +225,13 @@ func (c *Conn) find(ctx context.Context, cl client, chat string) (dialog, error)
 	}
 	c.box.mu.Lock()
 	last := c.box.dialogs
-	seen := slices.Collect(maps.Values(c.box.seen))
+	seen, isSeen := c.box.seen[chat]
 	c.box.mu.Unlock()
-	for _, ds := range [][]dialog{last, seen} {
-		if d, err := pick(ds, chat); err == nil {
-			return d, nil
-		}
+	if d, err := pick(last, chat); err == nil {
+		return d, nil
+	}
+	if isSeen && seen.kept() {
+		return seen, nil
 	}
 	ds, err := cl.Dialogs(ctx, dialogsLimit)
 	if err != nil {

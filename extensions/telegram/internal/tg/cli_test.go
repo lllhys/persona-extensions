@@ -193,6 +193,25 @@ func TestCLIReadsAChatFoundBySearch(t *testing.T) {
 	}
 }
 
+// A name is not taken from what tg search found: those are a few chats, and another conversation of that name
+// would make the read ambiguous, as telegram_chats would show.
+func TestCLISearchedChatsDoNotResolveNames(t *testing.T) {
+	c, f, ctx := archiveAccount(t)
+	f.mu.Lock()
+	f.dialogs = append(f.dialogs,
+		dialog{Peer: peer{Kind: 'u', ID: 8, Hash: 88}, Name: "示例同名", Kind: "dm", Top: 31},
+		dialog{Peer: peer{Kind: 'u', ID: 9, Hash: 99}, Name: "示例同名", Kind: "dm", Top: 41})
+	f.history["u8"] = []message{{ID: 31, FromKey: "u8", From: "示例同名", Type: "TEXT", Text: "只在一个会话里的示例消息"}}
+	f.history["u9"] = []message{{ID: 41, FromKey: "u9", From: "示例同名", Type: "TEXT", Text: "另一个会话的示例消息"}}
+	f.mu.Unlock()
+	if _, err := c.Call(ctx, "telegram_search_messages", json.RawMessage(`{"query":"只在一个会话里"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := c.Call(ctx, "telegram_read_messages", json.RawMessage(`{"chat":"示例同名"}`)); err == nil {
+		t.Errorf("a name two chats share read one of them: %s", out)
+	}
+}
+
 // The writes go through the hub's gate: the card names the conversation (only one the reads listed, by id or
 // @username, never by a name two chats could share) and has the full text; declined, nothing reaches Telegram;
 // allowed, exactly that does, with a random_id.
