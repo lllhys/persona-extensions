@@ -14,7 +14,7 @@
     "ChartKind": {"type": "string", "enum": ["bar", "line"]},
     "ButtonRole": {"type": "string", "enum": ["normal", "destructive"]},
     "Placement": {
-      "description": "A slot in the apps an extension draws at (docs「UI 插槽」). extension_page is plugin_page's new name (UI version 3): the hub takes both and answers the new API with extension_page, the old one with plugin_page.",
+      "description": "A slot in the apps an extension draws at (docs \"UI slots\"). extension_page is plugin_page's new name (UI version 3): the hub takes both and answers the new API with extension_page, the old one with plugin_page.",
       "type": "string",
       "enum": ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget", "capsule_card"]
     },
@@ -24,7 +24,7 @@
       "enum": ["compact", "full", "small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"]
     },
     "WidgetFamily": {
-      "description": "A widget's size outside the app (docs「系统级位置」): a home screen widget's small / medium / large, a Lock Screen or watch face complication's accessory_*.",
+      "description": "A widget's size outside the app (docs \"System placements\"): a home screen widget's small / medium / large, a Lock Screen or watch face complication's accessory_*.",
       "type": "string",
       "enum": ["small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"]
     },
@@ -449,7 +449,7 @@
       "required": ["value"]
     },
     "Fact": {
-      "description": "A label and its value in a header (作者 · someone).",
+      "description": "A label and its value in a header (Author · someone).",
       "type": "object",
       "properties": {
         "label": {"type": "string", "maxLength": 200},
@@ -520,7 +520,7 @@
       "required": ["side", "line", "comments"]
     },
     "Comment": {
-      "description": "A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge (已批准). An event is a quiet line (merged, pushed two commits).",
+      "description": "A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge (Approved). An event is a quiet line (merged, pushed two commits).",
       "type": "object",
       "properties": {
         "id": {"type": "string", "maxLength": 256},
@@ -749,7 +749,7 @@
       "required": ["name", "choices", "value", "action"]
     },
     "More": {
-      "description": "A section's last row, 加载更多 (UI version 3): reaching it (or tapping it) calls ui.action with action once; the extension answers the whole view, longer.",
+      "description": "A section's last row, Load More (UI version 3): reaching it (or tapping it) calls ui.action with action once; the extension answers the whole view, longer.",
       "type": "object",
       "properties": {
         "title": {"type": "string", "maxLength": 2000},

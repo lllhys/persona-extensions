@@ -5,14 +5,14 @@
   "description": "What a messaging source answers the apps with (docs/extension-messaging.md, #2138): conversations, messages and their parts, sends, documents and posts. The apps draw them with their own messaging components; the hub checks every answer against these before passing it on.",
   "$defs": {
     "MessagingCapability": {
-      "description": "What a source supports (docs「三、能力」). The apps show only what is supported; an unknown one is ignored.",
+      "description": "What a source supports (docs \"3. Capabilities\"). The apps show only what is supported; an unknown one is ignored.",
       "type": "string",
       "enum": ["accounts", "pinned", "mentions", "attachments", "attachment_replies", "threads", "topics", "reactions",
                "read_receipts", "chat_pins", "profiles", "url_previews", "documents", "doc_comments", "posts",
                "edit_history", "translation"]
     },
     "MessagingComposerMode": {
-      "description": "A message box mode besides plain (docs「七、输入框模式」): what is sent is handled by the extension (encoded, sealed).",
+      "description": "A message box mode besides plain (docs \"7. Composer modes\"): what is sent is handled by the extension (encoded, sealed).",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -39,7 +39,7 @@
       "required": ["hosts", "opens"]
     },
     "MessagingItem": {
-      "description": "The manifest's contributes.messaging[]: one messaging source (docs「二、清单」).",
+      "description": "The manifest's contributes.messaging[]: one messaging source (docs \"2. Manifest\").",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -196,7 +196,7 @@
       "required": ["key", "count"]
     },
     "MessagingDecoration": {
-      "description": "A small line under a message's body the extension adds (勇攀高峰 · 已解码, 加密消息 · 对外展示).",
+      "description": "A small line under a message's body the extension adds (Brave Climb · Decoded, Encrypted Message · Public).",
       "type": "object",
       "properties": {
         "text": {"type": "string", "minLength": 1, "maxLength": 60},
@@ -307,7 +307,7 @@
       "required": ["text"]
     },
     "MessagingPart": {
-      "description": "A piece of a message's body, told apart by kind (docs「五」). An app that does not know a kind draws its text, or skips it.",
+      "description": "A piece of a message's body, told apart by kind (docs \"5. Conversations and messages\"). An app that does not know a kind draws its text, or skips it.",
       "oneOf": [
         {"$ref": "#/$defs/MessagingTextPart"}, {"$ref": "#/$defs/MessagingMentionPart"}, {"$ref": "#/$defs/MessagingLinkPart"},
         {"$ref": "#/$defs/MessagingEmojiPart"}, {"$ref": "#/$defs/MessagingStickerPart"}, {"$ref": "#/$defs/MessagingImagePart"},
@@ -476,7 +476,7 @@
       "required": ["user_id", "name"]
     },
     "MessagingOutgoing": {
-      "description": "POST conversations/{id}/messages (docs「六、发送」).",
+      "description": "POST conversations/{id}/messages (docs \"6. Sending\").",
       "type": "object",
       "properties": {
         "client_id": {"type": "string", "pattern": "^[0-9a-f-]{8,64}$"},
@@ -786,7 +786,7 @@
       "required": ["source", "id"]
     },
     "MessagingError": {
-      "description": "An error answer. code is one of the codes the apps act on (docs「四、接口」); view comes with input_required.",
+      "description": "An error answer. code is one of the codes the apps act on (docs \"4. API\"); view comes with input_required.",
       "type": "object",
       "properties": {
         "error": {"type": "string", "maxLength": 2000},

@@ -24,7 +24,7 @@
         "publisher": {"type": "string"},
         "homepage": {"type": "string", "pattern": "^https://[^/?#]+"},
         "tags": {
-          "description": "What the market shows and searches (docs「扩展市场」): at most 16, each 1 to 24 characters. Packages and indexes carry the manifest without them (hubs before tags refuse an unknown field); the index entry carries them instead.",
+          "description": "What the market shows and searches (docs \"Extension market\"): at most 16, each 1 to 24 characters. Packages and indexes carry the manifest without them (hubs before tags refuse an unknown field); the index entry carries them instead.",
           "type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 24}
         },
         "engines": {"$ref": "#/$defs/Engines"},
@@ -32,21 +32,86 @@
         "node": {"$ref": "#/$defs/NodeRuntime"},
         "activation_events": {"type": "array", "items": {"$ref": "#/$defs/ActivationEvent"}},
         "contributes": {"$ref": "#/$defs/Contributes"},
-        "off_by_default": {"description": "Contributions (\"<point>/<id>\") that start switched off: at install, and at an upgrade the ones the version before did not have (docs「贡献的开关」). Not a connector or a channel bound to one (their switch is the connector's). Hubs before it refuse the manifest.", "type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9_.-]+/[a-z0-9][a-z0-9_-]*$"}},
+        "off_by_default": {"description": "Contributions (\"<point>/<id>\") that start switched off: at install, and at an upgrade the ones the version before did not have (docs \"Contribution switches\"). Not a connector or a channel bound to one (their switch is the connector's). Hubs before it refuse the manifest.", "type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9_.-]+/[a-z0-9][a-z0-9_-]*$"}},
         "depends": {
-          "description": "Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.",
+          "description": "Extensions it needs installed and on (docs \"Dependencies\"): while one is missing, off or too old it waits in needs_setup.",
           "type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/Dependency"}
         },
         "exports": {"$ref": "#/$defs/Exports"},
         "extension_pack": {
-          "description": "An extension pack (docs「扩展合集」): installing it installs these. A pack has no runtime and no contributes of its own.",
+          "description": "An extension pack (docs \"Extension packs\"): installing it installs these. A pack has no runtime and no contributes of its own.",
           "type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/PackMember"}
         },
-        "configuration": {"description": "The configuration's JSON Schema, in the subset every app draws as a form (docs「配置：表单的子集」)."},
+        "configuration": {"description": "The configuration's JSON Schema, in the subset every app draws as a form (docs \"Configuration: the form subset\")."},
         "secrets": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/SecretSpec"}},
-        "permissions": {"$ref": "#/$defs/Permissions"}
+        "permissions": {"$ref": "#/$defs/Permissions"},
+        "tools": {
+          "description": "Command-line programs the hub installs into the extension's own directory and puts first on its PATH (docs \"Command-line programs (tools)\", #4507). Installing them is a permission. Hubs before them refuse the manifest.",
+          "type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/ToolSpec"}
+        },
+        "auth": {"$ref": "#/$defs/AuthSpec"}
       },
       "required": ["manifest_version", "id", "name", "version"]
+    },
+    "ToolSpec": {
+      "description": "One command-line program. Exactly one of archive and npm.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,31}$", "description": "The command put on PATH."},
+        "title": {"type": "string"},
+        "version": {"type": "string", "minLength": 1, "maxLength": 64, "description": "What is installed, for people."},
+        "requires": {"type": "array", "items": {"type": "string"}, "description": "Other tools of the manifest installed (and on PATH) first."},
+        "check": {"$ref": "#/$defs/ToolCheck"},
+        "archive": {"type": "object", "additionalProperties": {"$ref": "#/$defs/ToolArchive"}, "description": "By <GOOS>-<GOARCH>."},
+        "npm": {"$ref": "#/$defs/ToolNPM"}
+      },
+      "required": ["name", "version"]
+    },
+    "ToolCheck": {
+      "description": "A copy on the hub's PATH (outside the home directory) is used instead of installing one when <name> <args> prints a version (the first x.y.z) of at least min_version.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "args": {"type": "array", "maxItems": 8, "items": {"type": "string"}, "description": "Default --version."},
+        "min_version": {"type": "string", "pattern": "[0-9]+\\.[0-9]+\\.[0-9]+"}
+      }
+    },
+    "ToolArchive": {
+      "description": "A download: a .tar.gz, .tgz or .zip with the program at path, or the program itself.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {"type": "string", "pattern": "^https://"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "path": {"type": "string"},
+        "mirrors": {"type": "array", "maxItems": 4, "items": {"type": "string", "pattern": "^https://"}}
+      },
+      "required": ["url", "sha256"]
+    },
+    "ToolNPM": {
+      "description": "An npm package unpacked as published: no install scripts, no dependencies (a bundled package).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "package": {"type": "string"},
+        "version": {"type": "string"},
+        "integrity": {"type": "string", "pattern": "^sha(256|512)-"},
+        "registry": {"type": "string", "pattern": "^https://", "description": "Default https://registry.npmjs.org."},
+        "bin": {"type": "string", "description": "The key of package.json's bin; default the tool's name."}
+      },
+      "required": ["package", "version", "integrity"]
+    },
+    "AuthSpec": {
+      "description": "The extension signs in: its program answers auth.status, auth.step and auth.logout (docs \"Sign-in (auth)\").",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 40},
+        "description": {"type": "string"},
+        "page": {"type": "string", "description": "An extension_page (plugin_page) ui contribution: its own sign-in page for apps that do not know auth; apps that do leave it out of its pages."}
+      },
+      "required": ["title"]
     },
     "Dependency": {
       "type": "object",
@@ -73,7 +138,7 @@
         "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"},
         "version": {"type": "integer", "minimum": 1},
         "description": {"type": "string"},
-        "schema": {"description": "Each contribution's JSON Schema, in the configuration's subset (docs「配置：表单的子集」); id is always there and required."}
+        "schema": {"description": "Each contribution's JSON Schema, in the configuration's subset (docs \"Configuration: the form subset\"); id is always there and required."}
       },
       "required": ["id", "version"]
     },
@@ -111,7 +176,7 @@
       "required": ["command"]
     },
     "Resources": {
-      "description": "The most a program may use when the hub runs it in a sandbox (docs/extensions.md「沙箱」): memory in MB, CPU in percent of one core. Unset: 1024 MB, 100%.",
+      "description": "The most a program may use when the hub runs it in a sandbox (docs/extensions.md \"Sandbox\"): memory in MB, CPU in percent of one core. Unset: 1024 MB, 100%.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -128,7 +193,7 @@
       ]
     },
     "NodeRuntime": {
-      "description": "The extension's program on computers (docs/extensions.md「在电脑上运行的程序」): one per platform (darwin-* / linux-*), on the machines picked in the configuration field `machines` (an array of format machine, x-os the programs' systems).",
+      "description": "The extension's program on computers (docs/extensions.md \"Programs running on computers\"): one per platform (darwin-* / linux-*), on the machines picked in the configuration field `machines` (an array of format machine, x-os the programs' systems).",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -175,7 +240,10 @@
         "hub": {"type": "array", "description": "The scopes of the hub's API it calls: its token opens their routes only.",
           "items": {"type": "string", "pattern": "^(kb\\.read|kb\\.write|inbox\\.read|inbox\\.write|agents\\.read|agents\\.control|machines\\.read|notify|assistant\\.ask|extensions\\.call:[a-z0-9][a-z0-9_-]{0,31})$"}},
         "launcher_keys": {"type": "boolean"},
-        "gh_login": {"type": "boolean", "description": "It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector), held in its memory only."}
+        "gh_login": {"type": "boolean", "description": "It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector), held in its memory only."},
+        "usage_gateways": {"type": "boolean", "description": "It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts): accounts, status and quota windows, never a key."},
+        "agent_runtimes": {"type": "boolean", "description": "Its program is an agent runtime that connects to this machine's node; in a sandbox it gets a socket in its run directory (PERSONA_RUNTIME_SOCKET) that leads to the node's runtime.sock only. Needs runtime."},
+        "error_reports": {"type": "boolean", "description": "It receives the error and crash reports of the hub and the user's devices, scrubbed (no message text, tokens, user names, machine names or IP addresses). Needed by contributes.error_reports."}
       }
     },
     "Contributes": {
@@ -192,6 +260,7 @@
         "providers": {"type": "array", "items": {"$ref": "#/$defs/ProviderItem"}},
         "api": {"type": "array", "items": {"$ref": "#/$defs/APIItem"}},
         "assistant": {"type": "array", "items": {"$ref": "#/$defs/AssistantItem"}},
+        "mcp_servers": {"type": "array", "items": {"$ref": "#/$defs/MCPServerItem"}},
         "ui": {"type": "array", "items": {"$ref": "#/$defs/UIItem"}},
         "agent_sources": {"type": "array", "items": {"$ref": "#/$defs/AgentSourceItem"}},
         "channel": {"type": "array", "items": {"$ref": "#/$defs/ChannelItem"}},
@@ -203,11 +272,13 @@
         "looks": {"type": "array", "items": {"$ref": "#/$defs/LookItem"}},
         "triage_templates": {"type": "array", "items": {"$ref": "#/$defs/TriageTemplateItem"}},
         "agent_filters": {"type": "array", "items": {"$ref": "#/$defs/AgentFilterItem"}},
+        "tunnels": {"type": "array", "items": {"$ref": "#/$defs/TunnelItem"}},
+        "error_reports": {"type": "array", "items": {"$ref": "#/$defs/ErrorReportsItem"}},
         "messaging": {"type": "array", "items": {"$ref": "messaging.schema.json#/$defs/MessagingItem"}}
       }
     },
     "SkillItem": {
-      "description": "A skill (docs「纯声明贡献」): a directory of the package with SKILL.md, put in with the assistant's skills.",
+      "description": "A skill (docs \"Declarative contributions\"): a directory of the package with SKILL.md, put in with the assistant's skills.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -245,7 +316,7 @@
     },
     "HexColor": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
     "ThemeItem": {
-      "description": "A theme (主题色): the design system's role colors for light and dark; the apps check the contrast and do not offer one that fails.",
+      "description": "A theme (Theme Color): the design system's role colors for light and dark; the apps check the contrast and do not offer one that fails.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -257,7 +328,7 @@
       "required": ["id", "name", "light", "dark"]
     },
     "LookID": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$", "description": "A look's id: also a persona package's (the apps cache by it)."},
-    "BuiltinLook": {"type": "string", "enum": ["persona", "jarvis", "jarvis-circuit"], "description": "A look every app draws itself: 团子 (the default), 面罩, 汇流."},
+    "BuiltinLook": {"type": "string", "enum": ["persona", "jarvis", "jarvis-circuit"], "description": "A look every app draws itself: Mochi (the default), Visor, Circuit."},
     "LookTexts": {
       "description": "A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub checks).",
       "type": "object",
@@ -285,7 +356,7 @@
       "required": ["sizes"]
     },
     "LookPalette": {
-      "description": "An appearance's colors, #RRGGBB (docs/persona.md「色系」, the apps' PersonaPalette).",
+      "description": "An appearance's colors, #RRGGBB (docs/persona.md \"Palettes\", the apps' PersonaPalette).",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -337,7 +408,7 @@
       "required": ["states"]
     },
     "LookItem": {
-      "description": "A look (形象, docs/extensions.md「形象」): Persona's name, face, colors and dot. The hub serves it as a persona package; app_icon_fallback is the built-in look whose icon stands for it where only the app's own icons can be shown.",
+      "description": "A look (docs/extensions.md \"Looks\"): Persona's name, face, colors and dot, served as a persona package. app_icon_fallback is the built-in icon used where only the app's own icons can be shown.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -364,8 +435,28 @@
       },
       "required": ["id", "title", "text"]
     },
+    "ErrorReportsItem": {
+      "description": "It is given the error and crash reports of the hub and the user's devices (error_reports.deliver): needs the program to speak the protocol, on_startup and permissions.error_reports.",
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "sources": {"type": "array", "description": "Only reports from these; omitted: all.", "minItems": 1, "uniqueItems": true,
+          "items": {"$ref": "protocol.schema.json#/$defs/ErrorSource"}}
+      },
+      "required": ["id"]
+    },
+    "TunnelItem": {
+      "description": "A tunnel the apps can reach this hub through when its own addresses do not answer (docs \"In-app tunnels\"): an in-app tunnel core built into the app, going to the configuration's target_host and target_port.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 40}
+      },
+      "required": ["id", "name"]
+    },
     "AgentFilterItem": {
-      "description": "Agent sessions kept out of Agents (docs「Agent 过滤」): a session goes when it is one of agents and any of the matchers fits it.",
+      "description": "Agent sessions kept out of Agents (docs \"Agent filters\"): a session goes when it is one of agents and any of the matchers fits it.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -469,8 +560,23 @@
       },
       "required": ["id"]
     },
+    "MCPServerItem": {
+      "description": "An MCP server for the Claude assistant (docs \"MCP servers\"): a command line on the assistant's machine, its tools as mcp__<id>__<tool>. The command reads its own configuration; Persona adds nothing to its environment. Not a shell or an interpreter.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/ID", "description": "The server's name for the assistant; not jarvis or persona."},
+        "command": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$", "description": "Looked up on PATH, then in ~/bin."},
+        "env": {"type": "string", "pattern": "^PERSONA_[A-Z0-9_]{1,56}$", "description": "A PERSONA_ variable (JARVIS_ read too) that, when set, replaces the lookup: a path, or \"\" / 0 / off / false to leave the server out."},
+        "args": {"type": "array", "items": {"type": "string"}},
+        "requires": {"type": "array", "items": {"type": "string", "minLength": 1}, "description": "Words `<command> --help` must print; otherwise the server is left out."},
+        "allow": {"type": "array", "items": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"}, "description": "Tools that run without asking."},
+        "deny": {"type": "array", "items": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"}, "description": "Tools never callable. Any other tool goes by the conversation's permission mode."}
+      },
+      "required": ["id", "command"]
+    },
     "UIItem": {
-      "description": "A place in the apps the extension draws (docs「UI 插槽」).",
+      "description": "A place in the apps the extension draws (docs \"UI slots\").",
       "type": "object",
       "properties": {
         "id": {"$ref": "#/$defs/ID"},
@@ -531,7 +637,7 @@
       "required": ["id", "subscribe"]
     },
     "ShortcutItem": {
-      "description": "An action of the extension the system runs (docs「系统级位置」): Shortcuts and Siri on iPhone, Mac and Apple Watch. The hub asks the extension shortcut.run with the values.",
+      "description": "An action of the extension the system runs (docs \"System placements\"): Shortcuts and Siri on iPhone, Mac and Apple Watch. The hub asks the extension shortcut.run with the values.",
       "type": "object",
       "properties": {
         "id": {"$ref": "#/$defs/ID"},

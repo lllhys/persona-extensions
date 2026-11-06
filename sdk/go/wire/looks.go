@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-// Looks' files (docs/extensions.md「形象」): what the hub holds a look's pictures to when it installs an extension and
+// Looks' files (docs/extensions.md "Looks"): what the hub holds a look's pictures to when it installs an extension and
 // before it serves them, here so an extension's own tests can hold them to the same (CheckLooks).
 
 const (
@@ -76,6 +76,13 @@ func ReadLookFile(root, name string) ([]byte, error) {
 	return os.ReadFile(resolved)
 }
 
+func darkSizes(l LookItem) map[string]string {
+	if l.Avatar.Dark == nil {
+		return nil
+	}
+	return l.Avatar.Dark.Sizes
+}
+
 // CheckLooks holds the looks of a manifest to what the hub checks of their files in the package at root: an
 // extension's test calls it before it ships (the manifest's own rules: ValidateJSON("Manifest", manifest)).
 func CheckLooks(manifest []byte, root string) error {
@@ -88,38 +95,39 @@ func CheckLooks(manifest []byte, root string) error {
 		return err
 	}
 	for _, l := range m.Contributes.Looks {
-		var total int64
-		read := func(f string) ([]byte, error) {
-			b, err := ReadLookFile(root, f)
-			total += int64(len(b))
-			return b, err
+		// Each key on its own: two sides may name the same file, and each must hold (a map by file would keep one).
+		type pic struct {
+			file       string
+			side, most int
 		}
-		pics := map[string]int{} // file → its side (0: any)
-		most := map[string]int{}
-		for side, f := range l.Avatar.Sizes {
-			pics[f], _ = strconv.Atoi(side)
-			most[f] = lookMaxSide
-		}
-		if l.Avatar.Dark != nil {
-			for side, f := range l.Avatar.Dark.Sizes {
-				pics[f], _ = strconv.Atoi(side)
-				most[f] = lookMaxSide
+		var pics []pic
+		for _, sizes := range []map[string]string{l.Avatar.Sizes, darkSizes(l)} {
+			for side, f := range sizes {
+				n, _ := strconv.Atoi(side)
+				pics = append(pics, pic{f, n, lookMaxSide})
 			}
 		}
 		if d := l.Dot; d != nil {
 			for _, st := range []*LookDotState{&d.States.Idle, d.States.Thinking, d.States.Working, d.States.NeedsYou, d.States.Offline} {
 				if st != nil {
-					pics[st.File], most[st.File] = d.Size, lookMaxDotSide
+					pics = append(pics, pic{st.File, d.Size, lookMaxDotSide})
 				}
 			}
 		}
-		for f, side := range pics {
-			b, err := read(f)
+		read := func(f string) ([]byte, error) { return ReadLookFile(root, f) }
+		counted := map[string]bool{}
+		var total int64
+		for _, p := range pics {
+			b, err := read(p.file)
 			if err != nil {
 				return fmt.Errorf("look %s: %v", l.ID, err)
 			}
-			if err := CheckLookPNG(b, side, most[f]); err != nil {
-				return fmt.Errorf("look %s: %s: %v", l.ID, f, err)
+			if !counted[p.file] {
+				counted[p.file] = true
+				total += int64(len(b))
+			}
+			if err := CheckLookPNG(b, p.side, p.most); err != nil {
+				return fmt.Errorf("look %s: %s: %v", l.ID, p.file, err)
 			}
 		}
 		svgs := []string{l.Avatar.Svg}
@@ -133,6 +141,10 @@ func CheckLooks(manifest []byte, root string) error {
 			b, err := read(f)
 			if err != nil {
 				return fmt.Errorf("look %s: %v", l.ID, err)
+			}
+			if !counted[f] {
+				counted[f] = true
+				total += int64(len(b))
 			}
 			if _, err := CleanSVG(b); err != nil {
 				return fmt.Errorf("look %s: %s: %v", l.ID, f, err)

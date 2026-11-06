@@ -1,4 +1,4 @@
-// Package ext is an extension program's side of the process protocol (docs/extensions.md「进程扩展协议」): it answers
+// Package ext is an extension program's side of the process protocol (docs/extensions.md "Process extension protocol"): it answers
 // initialize, ping and manifest, hands each namespaced call (connector.status, ui.render, …) to its handler, and
 // lets the program call the hub and send it events. It has no dependencies beyond the standard library and the
 // generated wire types, so an extension's repository can carry a copy (scripts/gen/sync-sdk.sh).

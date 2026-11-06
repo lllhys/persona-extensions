@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Environment is what the hub gives a program in its environment (docs/extensions.md「配置和密钥怎么到扩展」).
+// Environment is what the hub gives a program in its environment (docs/extensions.md "How configuration and secrets reach an extension").
 type Environment struct {
 	ID, Dir, Data, Socket string
 	// Config and Secrets are for a program that does not speak the protocol (rpc: none): the protocol hands them

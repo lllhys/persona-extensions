@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kb.schema.json",
+  "title": "Knowledge base",
+  "description": "What an extension's program may ask of the knowledge base directly (docs/extensions.md \"Knowledge base RPC\"): kb.list, kb.get, kb.day, kb.search, kb.owner (permission kb.read) and kb.update (kb.write), and the events event.kb.changed / event.kb.forgotten. Params are strict: no contribution, and an unknown field is invalid_params. A connector hands the knowledge base its conversations, items and posts through the connector calls instead (connector.schema.json). Plugin-side: only the hub and the program speak it.",
+  "x-side": "plugin",
+  "x-methods": {
+    "kb.list": {"from": "program", "params": "KBListParams", "result": "KBListResult"},
+    "kb.get": {"from": "program", "params": "KBGetParams", "result": "KBGetResult"},
+    "kb.day": {"from": "program", "params": "KBDayParams", "result": "KBDayResult"},
+    "kb.search": {"from": "program", "params": "KBSearchParams", "result": "KBSearchResult"},
+    "kb.update": {"from": "program", "params": "KBUpdateParams", "result": "KBUpdateResult"},
+    "kb.owner": {"from": "program", "params": "KBOwnerParams", "result": "KBOwner"}
+  },
+  "x-events": {
+    "event.kb.changed": {"from": "hub", "params": "KBChangedEvent"},
+    "event.kb.forgotten": {"from": "hub", "params": "KBForgottenEvent"}
+  },
+  "$defs": {
+    "KBKind": {
+      "type": "string",
+      "enum": ["projects", "chats", "people", "docs", "meetings", "events", "recordings"]
+    },
+    "KBErrorCode": {
+      "description": "error.code of a knowledge-base call besides permission_denied (data {scope}, the one missing): invalid_params, not_found, assistant_offline (the manager is away), kb_unavailable (not open yet). Both of the last are worth trying again.",
+      "type": "string",
+      "enum": ["invalid_params", "not_found", "assistant_offline", "kb_unavailable"]
+    },
+    "KBHandle": {
+      "description": "An identity clue: kind (phone, email, a source's user id kind…) and the raw value.",
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string"},
+        "value": {"type": "string"}
+      },
+      "required": ["kind", "value"]
+    },
+    "KBListParams": {
+      "description": "kb.list: one kind's entities, ranked; pages are not a snapshot (deduplicate, read again when needed).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"$ref": "#/$defs/KBKind"},
+        "tag": {"type": "string"},
+        "limit": {"type": "integer", "minimum": 0, "maximum": 200, "description": "0 is 30."},
+        "offset": {"type": "integer", "minimum": 0}
+      },
+      "required": ["kind"]
+    },
+    "KBListResult": {
+      "type": "object",
+      "properties": {
+        "items": {"type": "array", "items": {"$ref": "#/$defs/KBEntry"}},
+        "tags": {"type": "array", "items": {"type": "string"}, "description": "The kind's most used tags."},
+        "total": {"type": "integer"},
+        "next_offset": {"type": "integer", "x-go-pointer": true, "description": "Where the next page starts; none at the end."}
+      },
+      "required": ["items", "tags", "total"]
+    },
+    "KBEntry": {
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string"},
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "one_line": {"type": "string"},
+        "importance": {"type": "string", "description": "P0 (critical) … P3 (ignorable)."},
+        "relevance": {"type": "integer", "description": "0–100: how much it concerns the owner."},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "updated": {"type": "string", "format": "date-time"},
+        "extra": {"type": "string", "description": "A project's short / long · status, a chat's dm / group…"}
+      },
+      "required": ["kind", "id", "name", "relevance", "updated"]
+    },
+    "KBGetParams": {
+      "description": "kb.get: one entity, with its most recent messages (recent_chars, none is 12000; 0 leaves them out). Live agents are not in it.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"$ref": "#/$defs/KBKind"},
+        "id": {"type": "string", "minLength": 1},
+        "recent_chars": {"type": "integer", "minimum": 0, "maximum": 20000, "x-go-pointer": true}
+      },
+      "required": ["kind", "id"]
+    },
+    "KBGetResult": {
+      "type": "object",
+      "properties": {
+        "detail": {"$ref": "#/$defs/KBDetail"}
+      },
+      "required": ["detail"]
+    },
+    "KBDetail": {
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string"},
+        "id": {"type": "string"},
+        "path": {"type": "string", "description": "Where it is on the manager's machine, for its own file tools."},
+        "meta": {"description": "The entity's own fields (meta.json)."},
+        "summary": {"type": "string"},
+        "log": {"type": "array", "items": {"type": "string"}},
+        "recent": {"type": "string"},
+        "links": {"type": "array", "items": {"$ref": "#/$defs/KBEntry"}},
+        "moments": {"type": "array", "items": {"$ref": "#/$defs/KBMomentRef"}},
+        "segments": {"type": "array", "items": {"$ref": "#/$defs/KBRecordingSegment"}}
+      },
+      "required": ["kind", "id", "path", "meta"]
+    },
+    "KBMomentRef": {
+      "description": "A feed post linked to a project.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "author": {"type": "string"},
+        "text": {"type": "string"},
+        "at": {"type": "string", "format": "date-time"},
+        "comments": {"type": "integer"},
+        "note": {"type": "string", "description": "How it bears on the project."}
+      },
+      "required": ["id", "author", "text", "at", "comments"]
+    },
+    "KBRecordingSegment": {
+      "description": "A recording's transcript segment, in seconds from its start.",
+      "type": "object",
+      "properties": {
+        "start": {"type": "number"},
+        "end": {"type": "number"},
+        "text": {"type": "string"}
+      },
+      "required": ["start", "end", "text"]
+    },
+    "KBDayParams": {
+      "description": "kb.day: a chat's messages of one day in the knowledge base's time zone.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "day": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+      },
+      "required": ["id", "day"]
+    },
+    "KBDayResult": {
+      "description": "prev and next are the days before and after that have messages (empty: none).",
+      "type": "object",
+      "properties": {
+        "day": {"type": "string"},
+        "messages": {"type": "array", "items": {"$ref": "#/$defs/KBDayMessage"}},
+        "prev": {"type": "string"},
+        "next": {"type": "string"}
+      },
+      "required": ["day", "messages", "prev", "next"]
+    },
+    "KBDayMessage": {
+      "type": "object",
+      "properties": {
+        "n": {"type": "integer", "description": "The message's first line in the day's file, from 1."},
+        "text": {"type": "string"}
+      },
+      "required": ["n", "text"]
+    },
+    "KBSearchParams": {
+      "description": "kb.search: lines that match, messages too unless messages is false.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "query": {"type": "string", "minLength": 1},
+        "messages": {"type": "boolean", "x-go-pointer": true},
+        "limit": {"type": "integer", "minimum": 0, "maximum": 200, "description": "0 is 40."}
+      },
+      "required": ["query"]
+    },
+    "KBSearchResult": {
+      "type": "object",
+      "properties": {
+        "hits": {"type": "array", "items": {"$ref": "#/$defs/KBHit"}}
+      },
+      "required": ["hits"]
+    },
+    "KBHit": {
+      "type": "object",
+      "properties": {
+        "path": {"type": "string", "description": "Relative to the knowledge base."},
+        "line": {"type": "string"}
+      },
+      "required": ["path", "line"]
+    },
+    "KBUpdateParams": {
+      "description": "kb.update: kind and id, and the fields to change (the knowledge base's update API, plus pinned, lock and the remove_* lists). tags replaces (an empty list clears); a field left out is kept. Protected fields and history limits: docs/knowledge.md.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"$ref": "#/$defs/KBKind"},
+        "id": {"type": "string", "minLength": 1},
+        "pinned": {"type": "string", "x-go-pointer": true, "description": "Confirmed facts automatic writes cannot replace; an empty string clears them."},
+        "lock": {"type": "boolean", "x-go-pointer": true, "description": "Whether an importance / relevance given here is kept from automatic tagging (default true)."},
+        "remove_people": {"type": "array", "items": {"type": "string"}},
+        "remove_chats": {"type": "array", "items": {"type": "string"}},
+        "remove_aliases": {"type": "array", "items": {"type": "string"}},
+        "remove_projects": {"type": "array", "items": {"type": "string"}},
+        "name": {"type": "string"},
+        "project_kind": {"type": "string", "description": "A project's: short or long."},
+        "status": {"type": "string"},
+        "goal": {"type": "string"},
+        "my_role": {"type": "string"},
+        "note": {"type": "string"},
+        "importance": {"type": "string"},
+        "relevance": {"type": "integer", "minimum": 0, "maximum": 100, "x-go-pointer": true},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "summary": {"type": "string"},
+        "log": {"type": "string", "description": "A project's: a line appended to its timeline."},
+        "source": {"type": "string", "description": "Who writes the log line."},
+        "aliases": {"type": "array", "items": {"type": "string"}},
+        "chats": {"type": "array", "items": {"type": "string"}},
+        "people": {"type": "array", "items": {"type": "string"}},
+        "dirs": {"type": "array", "items": {"type": "string"}, "description": "A project's code directories, <machine>:<path>."},
+        "projects": {"type": "array", "items": {"type": "string"}},
+        "merge_into": {"type": "string"}
+      },
+      "required": ["kind", "id"]
+    },
+    "KBUpdateResult": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"}
+      },
+      "required": ["id"]
+    },
+    "KBOwnerParams": {
+      "description": "kb.owner takes nothing.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    },
+    "KBOwner": {
+      "description": "kb.owner: the user's name, aliases and identities across sources (raw only through this explicit read).",
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "aliases": {"type": "array", "items": {"type": "string"}},
+        "handles": {"type": "array", "items": {"$ref": "#/$defs/KBHandle"}}
+      },
+      "required": ["name", "aliases", "handles"]
+    },
+    "KBChangedEvent": {
+      "description": "event.kb.changed: an entity changed (what: which part). Read it again if it matters.",
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string"},
+        "id": {"type": "string"},
+        "what": {"type": "string"}
+      },
+      "required": ["kind", "id", "what"]
+    },
+    "KBForgottenEvent": {
+      "description": "event.kb.forgotten: a source's data was removed from the knowledge base.",
+      "type": "object",
+      "properties": {
+        "source": {"type": "string"}
+      },
+      "required": ["source"]
+    }
+  }
+}

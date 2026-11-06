@@ -7,7 +7,7 @@ import (
 	"github.com/nwverse/persona/sdk/go/wire"
 )
 
-// Places outside the app (docs/extensions.md「系统级位置」): widgets are ui contributions with placement widget (Page,
+// Places outside the app (docs/extensions.md "System-level places"): widgets are ui contributions with placement widget (Page,
 // drawn per family); shortcuts are the shortcuts extension point, answered here.
 
 // Shortcut runs one shortcut: r.Values are its params' values (strings). Its result is a sentence Siri says or shows

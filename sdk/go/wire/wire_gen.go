@@ -26,8 +26,9 @@ type Manifest struct {
 	Description     string `json:"description,omitempty"`
 	Publisher       string `json:"publisher,omitempty"`
 	Homepage        string `json:"homepage,omitempty"`
-	// What the market shows and searches (docs「扩展市场」): at most 16, each 1 to 24 characters. Packages and indexes carry
-	// the manifest without them (hubs before tags refuse an unknown field); the index entry carries them instead.
+	// What the market shows and searches (docs "Extension market"): at most 16, each 1 to 24 characters. Packages and
+	// indexes carry the manifest without them (hubs before tags refuse an unknown field); the index entry carries them
+	// instead.
 	Tags             []string     `json:"tags,omitempty"`
 	Engines          *Engines     `json:"engines,omitempty"`
 	Runtime          *Runtime     `json:"runtime,omitempty"`
@@ -35,18 +36,76 @@ type Manifest struct {
 	ActivationEvents []string     `json:"activation_events,omitempty"`
 	Contributes      *Contributes `json:"contributes,omitempty"`
 	// Contributions ("<point>/<id>") that start switched off: at install, and at an upgrade the ones the version before
-	// did not have (docs「贡献的开关」). Not a connector or a channel bound to one (their switch is the connector's). Hubs
-	// before it refuse the manifest.
+	// did not have (docs "Contribution switches"). Not a connector or a channel bound to one (their switch is the
+	// connector's). Hubs before it refuse the manifest.
 	OffByDefault []string `json:"off_by_default,omitempty"`
-	// Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.
+	// Extensions it needs installed and on (docs "Dependencies"): while one is missing, off or too old it waits in
+	// needs_setup.
 	Depends []Dependency `json:"depends,omitempty"`
 	Exports *Exports     `json:"exports,omitempty"`
-	// An extension pack (docs「扩展合集」): installing it installs these. A pack has no runtime and no contributes of its own.
+	// An extension pack (docs "Extension packs"): installing it installs these. A pack has no runtime and no contributes
+	// of its own.
 	ExtensionPack []PackMember `json:"extension_pack,omitempty"`
-	// The configuration's JSON Schema, in the subset every app draws as a form (docs「配置：表单的子集」).
+	// The configuration's JSON Schema, in the subset every app draws as a form (docs "Configuration: the form subset").
 	Configuration json.RawMessage `json:"configuration,omitempty"`
 	Secrets       []SecretSpec    `json:"secrets,omitempty"`
 	Permissions   *Permissions    `json:"permissions,omitempty"`
+	// Command-line programs the hub installs into the extension's own directory and puts first on its PATH (docs
+	// "Command-line programs (tools)", #4507). Installing them is a permission. Hubs before them refuse the manifest.
+	Tools []ToolSpec `json:"tools,omitempty"`
+	Auth  *AuthSpec  `json:"auth,omitempty"`
+}
+
+// ToolSpec: one command-line program. Exactly one of archive and npm.
+type ToolSpec struct {
+	// The command put on PATH.
+	Name  string `json:"name"`
+	Title string `json:"title,omitempty"`
+	// What is installed, for people.
+	Version string `json:"version"`
+	// Other tools of the manifest installed (and on PATH) first.
+	Requires []string   `json:"requires,omitempty"`
+	Check    *ToolCheck `json:"check,omitempty"`
+	// By <GOOS>-<GOARCH>.
+	Archive map[string]ToolArchive `json:"archive,omitempty"`
+	Npm     *ToolNPM               `json:"npm,omitempty"`
+}
+
+// ToolCheck: A copy on the hub's PATH (outside the home directory) is used instead of installing one when <name>
+// <args> prints a version (the first x.y.z) of at least min_version.
+type ToolCheck struct {
+	// Default --version.
+	Args       []string `json:"args,omitempty"`
+	MinVersion string   `json:"min_version,omitempty"`
+}
+
+// ToolArchive: A download: a .tar.gz, .tgz or .zip with the program at path, or the program itself.
+type ToolArchive struct {
+	URL     string   `json:"url"`
+	Sha256  string   `json:"sha256"`
+	Path    string   `json:"path,omitempty"`
+	Mirrors []string `json:"mirrors,omitempty"`
+}
+
+// ToolNPM: an npm package unpacked as published: no install scripts, no dependencies (a bundled package).
+type ToolNPM struct {
+	Package   string `json:"package"`
+	Version   string `json:"version"`
+	Integrity string `json:"integrity"`
+	// Default https://registry.npmjs.org.
+	Registry string `json:"registry,omitempty"`
+	// The key of package.json's bin; default the tool's name.
+	Bin string `json:"bin,omitempty"`
+}
+
+// AuthSpec: the extension signs in: its program answers auth.status, auth.step and auth.logout (docs "Sign-in
+// (auth)").
+type AuthSpec struct {
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	// An extension_page (plugin_page) ui contribution: its own sign-in page for apps that do not know auth; apps that do
+	// leave it out of its pages.
+	Page string `json:"page,omitempty"`
 }
 
 type Dependency struct {
@@ -65,7 +124,8 @@ type ExportedPoint struct {
 	ID          string `json:"id"`
 	Version     int    `json:"version"`
 	Description string `json:"description,omitempty"`
-	// Each contribution's JSON Schema, in the configuration's subset (docs「配置：表单的子集」); id is always there and required.
+	// Each contribution's JSON Schema, in the configuration's subset (docs "Configuration: the form subset"); id is
+	// always there and required.
 	Schema json.RawMessage `json:"schema,omitempty"`
 }
 
@@ -95,8 +155,8 @@ type Runtime struct {
 	Resources *Resources        `json:"resources,omitempty"`
 }
 
-// Resources: the most a program may use when the hub runs it in a sandbox (docs/extensions.md「沙箱」): memory in MB, CPU
-// in percent of one core. Unset: 1024 MB, 100%.
+// Resources: the most a program may use when the hub runs it in a sandbox (docs/extensions.md "Sandbox"): memory in
+// MB, CPU in percent of one core. Unset: 1024 MB, 100%.
 type Resources struct {
 	MemoryMb   int `json:"memory_mb,omitempty"`
 	CpuPercent int `json:"cpu_percent,omitempty"`
@@ -105,9 +165,9 @@ type Resources struct {
 // A path in the package, or one per platform ({"linux-amd64": "bin/x"}).
 type Command = json.RawMessage
 
-// NodeRuntime: the extension's program on computers (docs/extensions.md「在电脑上运行的程序」): one per platform (darwin-* /
-// linux-*), on the machines picked in the configuration field `machines` (an array of format machine, x-os the
-// programs' systems).
+// NodeRuntime: the extension's program on computers (docs/extensions.md "Programs running on computers"): one per
+// platform (darwin-* / linux-*), on the machines picked in the configuration field `machines` (an array of format
+// machine, x-os the programs' systems).
 type NodeRuntime struct {
 	Command     json.RawMessage   `json:"command"`
 	Args        []string          `json:"args,omitempty"`
@@ -146,6 +206,15 @@ type Permissions struct {
 	// It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector),
 	// held in its memory only.
 	GhLogin bool `json:"gh_login,omitempty"`
+	// It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts):
+	// accounts, status and quota windows, never a key.
+	UsageGateways bool `json:"usage_gateways,omitempty"`
+	// Its program is an agent runtime that connects to this machine's node; in a sandbox it gets a socket in its run
+	// directory (PERSONA_RUNTIME_SOCKET) that leads to the node's runtime.sock only. Needs runtime.
+	AgentRuntimes bool `json:"agent_runtimes,omitempty"`
+	// It receives the error and crash reports of the hub and the user's devices, scrubbed (no message text, tokens, user
+	// names, machine names or IP addresses). Needed by contributes.error_reports.
+	ErrorReports bool `json:"error_reports,omitempty"`
 }
 
 // Contributes: contributions by extension point. A point this hub does not know installs with a warning, not taking
@@ -159,6 +228,7 @@ type Contributes struct {
 	Providers       []ProviderItem       `json:"providers,omitempty"`
 	API             []APIItem            `json:"api,omitempty"`
 	Assistant       []AssistantItem      `json:"assistant,omitempty"`
+	McpServers      []MCPServerItem      `json:"mcp_servers,omitempty"`
 	UI              []UIItem             `json:"ui,omitempty"`
 	AgentSources    []AgentSourceItem    `json:"agent_sources,omitempty"`
 	Channel         []ChannelItem        `json:"channel,omitempty"`
@@ -170,6 +240,8 @@ type Contributes struct {
 	Looks           []LookItem           `json:"looks,omitempty"`
 	TriageTemplates []TriageTemplateItem `json:"triage_templates,omitempty"`
 	AgentFilters    []AgentFilterItem    `json:"agent_filters,omitempty"`
+	Tunnels         []TunnelItem         `json:"tunnels,omitempty"`
+	ErrorReports    []ErrorReportsItem   `json:"error_reports,omitempty"`
 	Messaging       []MessagingItem      `json:"messaging,omitempty"`
 	// Extra keys stay at this object's level on the wire; they cannot replace declared fields.
 	AdditionalProperties map[string]json.RawMessage `json:"-"`
@@ -181,7 +253,7 @@ func (v *Contributes) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	declared := map[string]json.RawMessage{}
-	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging"} {
+	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "messaging"} {
 		if value, ok := extra[key]; ok {
 			declared[key] = value
 			delete(extra, key)
@@ -213,7 +285,7 @@ func (v Contributes) MarshalJSON() ([]byte, error) {
 	}
 	for key, value := range v.AdditionalProperties {
 		switch key {
-		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging":
+		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "messaging":
 			continue
 		}
 		fields[key] = value
@@ -221,7 +293,8 @@ func (v Contributes) MarshalJSON() ([]byte, error) {
 	return json.Marshal(fields)
 }
 
-// SkillItem: A skill (docs「纯声明贡献」): a directory of the package with SKILL.md, put in with the assistant's skills.
+// SkillItem: A skill (docs "Declarative contributions"): a directory of the package with SKILL.md, put in with the
+// assistant's skills.
 type SkillItem struct {
 	ID string `json:"id"`
 	// The directory, relative to the package.
@@ -259,8 +332,8 @@ type ThemeColors struct {
 	Ai       string `json:"ai,omitempty"`
 }
 
-// ThemeItem: A theme (主题色): the design system's role colors for light and dark; the apps check the contrast and do
-// not offer one that fails.
+// ThemeItem: A theme (Theme Color): the design system's role colors for light and dark; the apps check the contrast
+// and do not offer one that fails.
 type ThemeItem struct {
 	ID    string      `json:"id"`
 	Name  string      `json:"name"`
@@ -268,7 +341,7 @@ type ThemeItem struct {
 	Dark  ThemeColors `json:"dark"`
 }
 
-// BuiltinLook: A look every app draws itself: 团子 (the default), 面罩, 汇流.
+// BuiltinLook: A look every app draws itself: Mochi (the default), Visor, Circuit.
 const (
 	BuiltinLookPersona       = "persona"
 	BuiltinLookJarvis        = "jarvis"
@@ -347,7 +420,7 @@ type LookAvatar struct {
 	Dark *LookAvatarDark `json:"dark,omitempty"`
 }
 
-// LookPalette: an appearance's colors, #RRGGBB (docs/persona.md「色系」, the apps' PersonaPalette).
+// LookPalette: an appearance's colors, #RRGGBB (docs/persona.md "Palettes", the apps' PersonaPalette).
 type LookPalette struct {
 	Primary    string `json:"primary,omitempty"`
 	Secondary  string `json:"secondary,omitempty"`
@@ -383,9 +456,8 @@ type LookDot struct {
 	States LookDotStates `json:"states"`
 }
 
-// LookItem: A look (形象, docs/extensions.md「形象」): Persona's name, face, colors and dot. The hub serves it as a persona
-// package; app_icon_fallback is the built-in look whose icon stands for it where only the app's own icons can be
-// shown.
+// LookItem: A look (docs/extensions.md "Looks"): Persona's name, face, colors and dot, served as a persona package.
+// app_icon_fallback is the built-in icon used where only the app's own icons can be shown.
 type LookItem struct {
 	ID              string      `json:"id"`
 	Name            string      `json:"name"`
@@ -405,8 +477,23 @@ type TriageTemplateItem struct {
 	Text  string `json:"text"`
 }
 
-// AgentFilterItem: agent sessions kept out of Agents (docs「Agent 过滤」): a session goes when it is one of agents and
-// any of the matchers fits it.
+// ErrorReportsItem: it is given the error and crash reports of the hub and the user's devices
+// (error_reports.deliver): needs the program to speak the protocol, on_startup and permissions.error_reports.
+type ErrorReportsItem struct {
+	ID string `json:"id"`
+	// Only reports from these; omitted: all.
+	Sources []string `json:"sources,omitempty"`
+}
+
+// TunnelItem: A tunnel the apps can reach this hub through when its own addresses do not answer (docs "In-app
+// tunnels"): an in-app tunnel core built into the app, going to the configuration's target_host and target_port.
+type TunnelItem struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// AgentFilterItem: agent sessions kept out of Agents (docs "Agent filters"): a session goes when it is one of agents
+// and any of the matchers fits it.
 type AgentFilterItem struct {
 	ID string `json:"id"`
 	// What the extension's contributions list calls it.
@@ -495,7 +582,27 @@ type AssistantItem struct {
 	Gate         string   `json:"gate,omitempty"`
 }
 
-// UIItem: A place in the apps the extension draws (docs「UI 插槽」).
+// MCPServerItem: an MCP server for the Claude assistant (docs "MCP servers"): a command line on the assistant's
+// machine, its tools as mcp__<id>__<tool>. The command reads its own configuration; Persona adds nothing to its
+// environment. Not a shell or an interpreter.
+type MCPServerItem struct {
+	// The server's name for the assistant; not jarvis or persona.
+	ID string `json:"id"`
+	// Looked up on PATH, then in ~/bin.
+	Command string `json:"command"`
+	// A PERSONA_ variable (JARVIS_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false to
+	// leave the server out.
+	Env  string   `json:"env,omitempty"`
+	Args []string `json:"args,omitempty"`
+	// Words `<command> --help` must print; otherwise the server is left out.
+	Requires []string `json:"requires,omitempty"`
+	// Tools that run without asking.
+	Allow []string `json:"allow,omitempty"`
+	// Tools never callable. Any other tool goes by the conversation's permission mode.
+	Deny []string `json:"deny,omitempty"`
+}
+
+// UIItem: A place in the apps the extension draws (docs "UI slots").
 type UIItem struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`
@@ -548,8 +655,8 @@ type EventsItem struct {
 	Subscribe []string `json:"subscribe"`
 }
 
-// ShortcutItem: an action of the extension the system runs (docs「系统级位置」): Shortcuts and Siri on iPhone, Mac and Apple
-// Watch. The hub asks the extension shortcut.run with the values.
+// ShortcutItem: an action of the extension the system runs (docs "System placements"): Shortcuts and Siri on iPhone,
+// Mac and Apple Watch. The hub asks the extension shortcut.run with the values.
 type ShortcutItem struct {
 	ID          string          `json:"id"`
 	Title       string          `json:"title"`
@@ -623,6 +730,58 @@ const (
 
 // Methods are the values of Method, in order.
 var Methods = []string{"initialize", "ping", "manifest"}
+
+// Values of AuthState.
+const (
+	AuthStateSignedOut = "signed_out"
+	AuthStatePending   = "pending"
+	AuthStateSignedIn  = "signed_in"
+	AuthStateExpired   = "expired"
+	AuthStateError     = "error"
+)
+
+// AuthStates are the values of AuthState, in order.
+var AuthStates = []string{"signed_out", "pending", "signed_in", "expired", "error"}
+
+// AuthStatus: auth.status and auth.logout: the extension's sign-in now (manifest.auth).
+type AuthStatus struct {
+	State   string `json:"state"`
+	Account string `json:"account,omitempty"`
+	// For people: why it is in error, what is signed in.
+	Message   string    `json:"message,omitempty"`
+	ExpiresAt time.Time `json:"expires_at,omitzero"`
+}
+
+// AuthStepParams: auth.step: step "" starts over; values are the fields of the step before.
+type AuthStepParams struct {
+	Step   string            `json:"step"`
+	Values map[string]string `json:"values,omitempty"`
+}
+
+type AuthField struct {
+	Name        string `json:"name"`
+	Label       string `json:"label"`
+	Secret      bool   `json:"secret,omitempty"`
+	Placeholder string `json:"placeholder,omitempty"`
+}
+
+// AuthPrompt: auth.step's answer, the connectors' Prompt: fields to fill, a device code (url to open, user_code to
+// enter) or a QR code (url, scanned with another app), or done. For device_code and qr the app asks the same step
+// again (no values) every interval seconds.
+type AuthPrompt struct {
+	Step   string      `json:"step,omitempty"`
+	Fields []AuthField `json:"fields,omitempty"`
+	// Empty: fields to fill; device_code; qr.
+	Kind      string    `json:"kind,omitempty"`
+	URL       string    `json:"url,omitempty"`
+	UserCode  string    `json:"user_code,omitempty"`
+	Interval  int       `json:"interval,omitempty"`
+	Hint      string    `json:"hint,omitempty"`
+	Error     string    `json:"error,omitempty"`
+	Done      bool      `json:"done,omitempty"`
+	Account   string    `json:"account,omitempty"`
+	ExpiresAt time.Time `json:"expires_at,omitzero"`
+}
 
 // Values of HubRole.
 const (
@@ -795,7 +954,7 @@ type UIPlaces struct {
 	UI []UIPlace `json:"ui"`
 }
 
-// WidgetPlace: A widget an extension draws outside the app (GET …/extensions/-/widgets; docs「系统级位置」).
+// WidgetPlace: A widget an extension draws outside the app (GET …/extensions/-/widgets; docs "System placements").
 type WidgetPlace struct {
 	Extension      string   `json:"extension"`
 	ExtensionName  string   `json:"extension_name,omitempty"`
@@ -895,6 +1054,110 @@ type NotifyActionInput struct {
 	Placeholder string `json:"placeholder,omitempty"`
 }
 
+// ErrorSource: which part of Persona an error report comes from.
+const (
+	ErrorSourceHub     = "hub"
+	ErrorSourceManager = "manager"
+	ErrorSourceWeb     = "web"
+	ErrorSourceAndroid = "android"
+	ErrorSourceIos     = "ios"
+	ErrorSourceMac     = "mac"
+	ErrorSourceWatch   = "watch"
+	ErrorSourceVision  = "vision"
+)
+
+// ErrorSources are the values of ErrorSource, in order.
+var ErrorSources = []string{"hub", "manager", "web", "android", "ios", "mac", "watch", "vision"}
+
+// ErrorKind: what an error report is: a caught exception, a crash (the app died), an ANR (it hung), a Go panic, an
+// error line of a log.
+const (
+	ErrorKindException = "exception"
+	ErrorKindCrash     = "crash"
+	ErrorKindAnr       = "anr"
+	ErrorKindPanic     = "panic"
+	ErrorKindLog       = "log"
+)
+
+// ErrorKinds are the values of ErrorKind, in order.
+var ErrorKinds = []string{"exception", "crash", "anr", "panic", "log"}
+
+// Values of ErrorLevel.
+const (
+	ErrorLevelFatal   = "fatal"
+	ErrorLevelError   = "error"
+	ErrorLevelWarning = "warning"
+)
+
+// ErrorLevels are the values of ErrorLevel, in order.
+var ErrorLevels = []string{"fatal", "error", "warning"}
+
+// ErrorFrame: one frame of a stack trace.
+type ErrorFrame struct {
+	Function string `json:"function,omitempty"`
+	Module   string `json:"module,omitempty"`
+	File     string `json:"file,omitempty"`
+	Line     int    `json:"line,omitempty"`
+	Column   int    `json:"column,omitempty"`
+	// Persona's own code, not a library's or the system's.
+	InApp bool `json:"in_app,omitempty"`
+}
+
+// ErrorException: one exception of a report; frames innermost last (the order Sentry uses).
+type ErrorException struct {
+	Type   string       `json:"type"`
+	Value  string       `json:"value,omitempty"`
+	Frames []ErrorFrame `json:"frames,omitempty"`
+}
+
+// ErrorBreadcrumb: something that happened before the error: a screen opened, a request failed. Code-chosen short
+// text, no user content.
+type ErrorBreadcrumb struct {
+	Time     string `json:"time,omitempty"`
+	Category string `json:"category"`
+	Message  string `json:"message,omitempty"`
+	Level    string `json:"level,omitempty"`
+}
+
+// ErrorReport: an error or crash of the hub or a device (docs/extensions.md "Error reports"). Clients send it to POST
+// /api/v1/error-reports; the manager scrubs it and adds fingerprint, count and received_at before an extension gets
+// it.
+type ErrorReport struct {
+	// Made by the sender; the same id again (a retry) is dropped.
+	ID     string `json:"id"`
+	Source string `json:"source"`
+	Kind   string `json:"kind"`
+	Level  string `json:"level"`
+	// When it happened, RFC 3339.
+	Time      string `json:"time"`
+	Release   string `json:"release,omitempty"`
+	Build     string `json:"build,omitempty"`
+	Commit    string `json:"commit,omitempty"`
+	OS        string `json:"os,omitempty"`
+	OSVersion string `json:"os_version,omitempty"`
+	// The model only, never an id of the device.
+	DeviceModel string            `json:"device_model,omitempty"`
+	Message     string            `json:"message,omitempty"`
+	Exceptions  []ErrorException  `json:"exceptions,omitempty"`
+	Breadcrumbs []ErrorBreadcrumb `json:"breadcrumbs,omitempty"`
+	Tags        map[string]string `json:"tags,omitempty"`
+	// It happened in an earlier run of the app and is sent now.
+	PreviousLaunch bool `json:"previous_launch,omitempty"`
+	// Set by the manager: reports with the same one are the same problem.
+	Fingerprint string `json:"fingerprint,omitempty"`
+	// Set by the manager: how many of this fingerprint it folded into this one (1 or more).
+	Count int `json:"count,omitempty"`
+	// Set by the manager, RFC 3339.
+	ReceivedAt string `json:"received_at,omitempty"`
+}
+
+// ErrorReportsDeliver: error_reports.deliver, sent to an extension with an error_reports contribution: reports,
+// already scrubbed, deduplicated and rate limited. A notification: no answer, not sent again.
+type ErrorReportsDeliver struct {
+	Contribution string        `json:"contribution"`
+	Reports      []ErrorReport `json:"reports"`
+}
+
 // ExtensionNotification: extension_notification in an extension's alert push: whose it is, the page a tap opens (ui
 // with state) and its buttons (category ext.<extension>.<hash of the action ids>, registered by the app as it meets
 // it).
@@ -957,7 +1220,7 @@ const (
 // ButtonRoles are the values of ButtonRole, in order.
 var ButtonRoles = []string{"normal", "destructive"}
 
-// Placement: A slot in the apps an extension draws at (docs「UI 插槽」). extension_page is plugin_page's new name (UI
+// Placement: A slot in the apps an extension draws at (docs "UI slots"). extension_page is plugin_page's new name (UI
 // version 3): the hub takes both and answers the new API with extension_page, the old one with plugin_page.
 const (
 	PlacementPluginPage      = "plugin_page"
@@ -990,8 +1253,8 @@ const (
 // Sizes are the values of Size, in order.
 var Sizes = []string{"compact", "full", "small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"}
 
-// WidgetFamily: A widget's size outside the app (docs「系统级位置」): a home screen widget's small / medium / large, a Lock
-// Screen or watch face complication's accessory_*.
+// WidgetFamily: A widget's size outside the app (docs "System placements"): a home screen widget's small / medium /
+// large, a Lock Screen or watch face complication's accessory_*.
 const (
 	WidgetFamilySmall                = "small"
 	WidgetFamilyMedium               = "medium"
@@ -1250,7 +1513,7 @@ type Tab struct {
 	Badge string `json:"badge,omitempty"`
 }
 
-// Fact: A label and its value in a header (作者 · someone).
+// Fact: A label and its value in a header (Author · someone).
 type Fact struct {
 	Label string `json:"label,omitempty"`
 	Value string `json:"value"`
@@ -1314,8 +1577,8 @@ type Thread struct {
 	Resolve *Action `json:"resolve,omitempty"`
 }
 
-// Comment: A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge (已批准). An
-// event is a quiet line (merged, pushed two commits).
+// Comment: A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge
+// (Approved). An event is a quiet line (merged, pushed two commits).
 type Comment struct {
 	ID     string    `json:"id,omitempty"`
 	Author string    `json:"author"`
@@ -1495,8 +1758,8 @@ type Filter struct {
 	Action  Action   `json:"action"`
 }
 
-// More: A section's last row, 加载更多 (UI version 3): reaching it (or tapping it) calls ui.action with action once; the
-// extension answers the whole view, longer.
+// More: A section's last row, Load More (UI version 3): reaching it (or tapping it) calls ui.action with action once;
+// the extension answers the whole view, longer.
 type More struct {
 	Title  string `json:"title,omitempty"`
 	Action Action `json:"action"`
@@ -1650,8 +1913,8 @@ type CardPart struct {
 	Note  string  `json:"note,omitempty"`
 }
 
-// MessagingCapability: what a source supports (docs「三、能力」). The apps show only what is supported; an unknown one is
-// ignored.
+// MessagingCapability: what a source supports (docs "3. Capabilities"). The apps show only what is supported; an
+// unknown one is ignored.
 const (
 	MessagingCapabilityAccounts          = "accounts"
 	MessagingCapabilityPinned            = "pinned"
@@ -1675,8 +1938,8 @@ const (
 // MessagingCapabilities are the values of MessagingCapability, in order.
 var MessagingCapabilities = []string{"accounts", "pinned", "mentions", "attachments", "attachment_replies", "threads", "topics", "reactions", "read_receipts", "chat_pins", "profiles", "url_previews", "documents", "doc_comments", "posts", "edit_history", "translation"}
 
-// MessagingComposerMode: A message box mode besides plain (docs「七、输入框模式」): what is sent is handled by the extension
-// (encoded, sealed).
+// MessagingComposerMode: A message box mode besides plain (docs "7. Composer modes"): what is sent is handled by the
+// extension (encoded, sealed).
 type MessagingComposerMode struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
@@ -1702,7 +1965,7 @@ type MessagingLink struct {
 	Opens string   `json:"opens"`
 }
 
-// MessagingItem: the manifest's contributes.messaging[]: one messaging source (docs「二、清单」).
+// MessagingItem: the manifest's contributes.messaging[]: one messaging source (docs "2. Manifest").
 type MessagingItem struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -1827,7 +2090,8 @@ type MessagingReaction struct {
 	Users []string `json:"users,omitempty"`
 }
 
-// MessagingDecoration: A small line under a message's body the extension adds (勇攀高峰 · 已解码, 加密消息 · 对外展示).
+// MessagingDecoration: A small line under a message's body the extension adds (Brave Climb · Decoded, Encrypted
+// Message · Public).
 type MessagingDecoration struct {
 	Text string `json:"text"`
 	Icon string `json:"icon,omitempty"`
@@ -1944,8 +2208,9 @@ type MessagingPreview struct {
 	Text       string `json:"text"`
 }
 
-// MessagingPart: A piece of a message's body, told apart by kind (docs「五」). An app that does not know a kind draws
-// its text, or skips it. One struct for every variant: kind says which fields mean something.
+// MessagingPart: A piece of a message's body, told apart by kind (docs "5. Conversations and messages"). An app that
+// does not know a kind draws its text, or skips it. One struct for every variant: kind says which fields mean
+// something.
 type MessagingPart struct {
 	Kind  string         `json:"kind"`
 	Text  string         `json:"text,omitempty"`
@@ -2005,7 +2270,7 @@ type MessagingMention struct {
 	Name   string `json:"name"`
 }
 
-// MessagingOutgoing: POST conversations/{id}/messages (docs「六、发送」).
+// MessagingOutgoing: POST conversations/{id}/messages (docs "6. Sending").
 type MessagingOutgoing struct {
 	ClientID string             `json:"client_id"`
 	Text     string             `json:"text"`
@@ -2265,7 +2530,7 @@ type MessagingConversationRef struct {
 	MentionPosition string `json:"mention_position,omitempty"`
 }
 
-// MessagingError: an error answer. code is one of the codes the apps act on (docs「四、接口」); view comes with
+// MessagingError: an error answer. code is one of the codes the apps act on (docs "4. API"); view comes with
 // input_required.
 type MessagingError struct {
 	Error string `json:"error"`
@@ -2273,183 +2538,1547 @@ type MessagingError struct {
 	View  *View  `json:"view,omitempty"`
 }
 
+// ConnectorErrorCode: error.code a program answers or gets besides the base ErrorCode: rate_limited (tools.call /
+// actions.do; data {retry_after} in seconds, fractional allowed), and why credentials.gh_token has no token.
+const (
+	ConnectorErrorCodeRateLimited = "rate_limited"
+	ConnectorErrorCodeNoMachine   = "no_machine"
+	ConnectorErrorCodeOffline     = "offline"
+	ConnectorErrorCodeNodeTooOld  = "node_too_old"
+	ConnectorErrorCodeNoGh        = "no_gh"
+	ConnectorErrorCodeNotSignedIn = "not_signed_in"
+)
+
+// ConnectorErrorCodes are the values of ConnectorErrorCode, in order.
+var ConnectorErrorCodes = []string{"rate_limited", "no_machine", "offline", "node_too_old", "no_gh", "not_signed_in"}
+
+// ConnectorCapability: what a connector declares (ConnectorItem.capabilities): the hub calls only the methods of
+// declared ones. fallback has no method: every inbox thing promises extra.rule_tier. An extension's connector with
+// one this hub does not know loses only that capability.
+const (
+	ConnectorCapabilityStatus   = "status"
+	ConnectorCapabilityTools    = "tools"
+	ConnectorCapabilityActions  = "actions"
+	ConnectorCapabilityEvents   = "events"
+	ConnectorCapabilityInbox    = "inbox"
+	ConnectorCapabilitySettle   = "settle"
+	ConnectorCapabilityArchive  = "archive"
+	ConnectorCapabilityChats    = "chats"
+	ConnectorCapabilityItems    = "items"
+	ConnectorCapabilityLogin    = "login"
+	ConnectorCapabilityOptions  = "options"
+	ConnectorCapabilityThreads  = "threads"
+	ConnectorCapabilitySnapshot = "snapshot"
+	ConnectorCapabilityGroup    = "group"
+	ConnectorCapabilityMeta     = "meta"
+	ConnectorCapabilityFallback = "fallback"
+	ConnectorCapabilityMachines = "machines"
+)
+
+// ConnectorCapabilities are the values of ConnectorCapability, in order.
+var ConnectorCapabilities = []string{"status", "tools", "actions", "events", "inbox", "settle", "archive", "chats", "items", "login", "options", "threads", "snapshot", "group", "meta", "fallback", "machines"}
+
+// ConnectorState: connectorStatus.state. disabled is the hub's own (the user switched it off); a program never
+// answers it.
+const (
+	ConnectorStateOk            = "ok"
+	ConnectorStateNotConfigured = "not_configured"
+	ConnectorStateNotSignedIn   = "not_signed_in"
+	ConnectorStateNoPermission  = "no_permission"
+	ConnectorStateRateLimited   = "rate_limited"
+	ConnectorStateError         = "error"
+	ConnectorStateDisabled      = "disabled"
+)
+
+// ConnectorStates are the values of ConnectorState, in order.
+var ConnectorStates = []string{"ok", "not_configured", "not_signed_in", "no_permission", "rate_limited", "error", "disabled"}
+
+// ConnectorScope: what changed (ConnectorChangedEvent.scope): the knowledge base's chats or items, or the inbox.
+// Another scope is dropped and logged.
+const (
+	ConnectorScopeChats = "chats"
+	ConnectorScopeItems = "items"
+	ConnectorScopeInbox = "inbox"
+)
+
+// ConnectorScopes are the values of ConnectorScope, in order.
+var ConnectorScopes = []string{"chats", "items", "inbox"}
+
+// ConnectorTier: an inbox thing's tier by the connector's own rules: needs the user, worth knowing, noise. Empty
+// leaves it to the model.
+const (
+	ConnectorTierAction = "action"
+	ConnectorTierFyi    = "fyi"
+	ConnectorTierNoise  = "noise"
+)
+
+// ConnectorTiers are the values of ConnectorTier, in order.
+var ConnectorTiers = []string{"action", "fyi", "noise"}
+
+// ConnectorDone: connectorInboxThing.done: the thread is over without the user (read), or the user answered
+// (replied).
+const (
+	ConnectorDoneRead    = "read"
+	ConnectorDoneReplied = "replied"
+)
+
+// ConnectorDones are the values of ConnectorDone, in order.
+var ConnectorDones = []string{"read", "replied"}
+
+// ConnectorTagKey: connectorTag.key values the hub knows: the user can mute by repo, chat and sender. Others are kept
+// for rules.
+const (
+	ConnectorTagKeyRepo   = "repo"
+	ConnectorTagKeyChat   = "chat"
+	ConnectorTagKeySender = "sender"
+	ConnectorTagKeyBranch = "branch"
+)
+
+// ConnectorTagKeys are the values of ConnectorTagKey, in order.
+var ConnectorTagKeys = []string{"repo", "chat", "sender", "branch"}
+
+// ConnectorPromptKind: connectorPrompt.kind besides fields to fill in (empty): a code to enter on a web page, or a
+// URL to scan as a QR code. For both the app asks the same step again, without values, every interval seconds.
+const (
+	ConnectorPromptKindDeviceCode = "device_code"
+	ConnectorPromptKindQr         = "qr"
+)
+
+// ConnectorPromptKinds are the values of ConnectorPromptKind, in order.
+var ConnectorPromptKinds = []string{"device_code", "qr"}
+
+// ConnectorPostStatus: what connector.posts.put says of each post: first time in the archive, its comment count
+// moved, or refused (no id, or another connector's). An empty string is a post seen unchanged.
+const (
+	ConnectorPostStatusNew     = "new"
+	ConnectorPostStatusChanged = "changed"
+	ConnectorPostStatusRefused = "refused"
+)
+
+// ConnectorPostStatuses are the values of ConnectorPostStatus, in order.
+var ConnectorPostStatuses = []string{"new", "changed", "refused"}
+
+// ConnectorGroupTool: the tools a grouping connector answers in group.tool (the model reads the conversation with
+// them); another may answer unknown_method.
+const (
+	ConnectorGroupToolMessagesBefore = "messages_before"
+	ConnectorGroupToolMessagesAround = "messages_around"
+	ConnectorGroupToolSearch         = "search"
+)
+
+// ConnectorGroupTools are the values of ConnectorGroupTool, in order.
+var ConnectorGroupTools = []string{"messages_before", "messages_around", "search"}
+
+// Empty: an answer with nothing in it: {}.
+type Empty struct {
+}
+
+// ConnectorInitParams: init, the bare opening of protocol 2 without the extension protocol (kept one release; the hub
+// opens with initialize). Answered with ConnectorManifest.
+type ConnectorInitParams struct {
+	Protocol int `json:"protocol"`
+	// The connector's settings.
+	Config json.RawMessage `json:"config,omitempty"`
+}
+
+// ConnectorManifest: what the program says it is: init's answer, and connector.manifest's. The fields are
+// ConnectorItem's (manifest.schema.json) with the protocol.
+type ConnectorManifest struct {
+	Protocol        int      `json:"protocol"`
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	Capabilities    []string `json:"capabilities"`
+	Hosts           []string `json:"hosts,omitempty"`
+	AgentTools      []string `json:"agent_tools,omitempty"`
+	Unlisted        []string `json:"unlisted,omitempty"`
+	ConfirmAlways   []string `json:"confirm_always,omitempty"`
+	PollSeconds     int      `json:"poll_seconds,omitempty"`
+	Kinds           []string `json:"kinds,omitempty"`
+	ArchiveSources  []string `json:"archive_sources,omitempty"`
+	MetaDescription string   `json:"meta_description,omitempty"`
+	CLI             string   `json:"cli,omitempty"`
+}
+
+// ConnectorParams: the params of a call without any of its own (status, tools.list, actions.list, inbox.collect,
+// items.list, logout, options.get, auth.get; secrets.load, secrets.delete).
+type ConnectorParams struct {
+	Contribution string `json:"contribution"`
+}
+
+// ConnectorStatus: connector.status: how the connector is doing, from memory (no network; the hub asks every 30
+// seconds). Only an ok connector offers tools.
+type ConnectorStatus struct {
+	State string `json:"state"`
+	// Who it reads as, for display.
+	Account string `json:"account,omitempty"`
+	// Where the sign-in comes from.
+	Via string `json:"via,omitempty"`
+	// One sentence for people when state is not ok; never a secret.
+	Error string `json:"error,omitempty"`
+	// How to fix it, a step a sentence.
+	Guide     []string  `json:"guide,omitempty"`
+	LastSync  time.Time `json:"last_sync,omitzero"`
+	LastEvent time.Time `json:"last_event,omitzero"`
+}
+
+// ConnectorTool: A read tool (tools.list) or a write (actions.list): its name starts with <connector id>_.
+type ConnectorTool struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// A JSON Schema with type object.
+	InputSchema json.RawMessage `json:"input_schema"`
+	// Words that run the tool in a shell instead (a gated command's); runtimes refuse them in an assistant conversation.
+	Shell []string `json:"shell,omitempty"`
+}
+
+// ConnectorTools: tools.list and actions.list.
+type ConnectorTools struct {
+	Tools []ConnectorTool `json:"tools,omitempty"`
+}
+
+// ConnectorCallParams: tools.call, and actions.describe (what the phone's card says before a write).
+type ConnectorCallParams struct {
+	Contribution string          `json:"contribution"`
+	Name         string          `json:"name"`
+	Args         json.RawMessage `json:"args,omitempty"`
+}
+
+// ConnectorCallResult: tools.call and actions.do.
+type ConnectorCallResult struct {
+	Text string `json:"text,omitempty"`
+}
+
+// ConnectorAction: A write as the card names it: visible says who will see it.
+type ConnectorAction struct {
+	Name    string `json:"name,omitempty"`
+	Visible string `json:"visible,omitempty"`
+}
+
+// ConnectorDescribeResult: actions.describe: the card's action and its full content. No network; an error refuses the
+// call before the user is asked.
+type ConnectorDescribeResult struct {
+	Action  ConnectorAction `json:"action"`
+	Summary string          `json:"summary"`
+}
+
+// ConnectorDoParams: actions.do, only once the hub's gate let the write through: the very args of the card, and the
+// hub's id for this run (the same if it is ever sent again: the program runs it once).
+type ConnectorDoParams struct {
+	Contribution string          `json:"contribution"`
+	Name         string          `json:"name"`
+	Args         json.RawMessage `json:"args,omitempty"`
+	RequestID    string          `json:"request_id"`
+}
+
+// ConnectorThreadParams: thread.page: one page of an inbox thread, oldest first; no before is the newest page.
+type ConnectorThreadParams struct {
+	Contribution string `json:"contribution"`
+	Thread       string `json:"thread"`
+	Before       string `json:"before,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+}
+
+// ConnectorThreadPage: thread.page's answer: before goes back one more page (none: the start).
+type ConnectorThreadPage struct {
+	Chat     ConnectorThreadChat      `json:"chat"`
+	Messages []ConnectorThreadMessage `json:"messages"`
+	Before   string                   `json:"before,omitempty"`
+}
+
+// ConnectorThreadChat: the conversation the thread is. state … body_format are a pull request's or an issue's.
+type ConnectorThreadChat struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// dm, group, channel (bubbles); pr, issue.
+	Kind string `json:"kind"`
+	URL  string `json:"url,omitempty"`
+	// A media ref (thread.media).
+	Avatar  string `json:"avatar,omitempty"`
+	Members int    `json:"members,omitempty"`
+	// The action that answers here, with {chat: <thread>, text, reply_to}; none when the user cannot.
+	Reply string `json:"reply,omitempty"`
+	// open, merged, closed or draft.
+	State  string                 `json:"state,omitempty"`
+	Author *ConnectorThreadPerson `json:"author,omitempty"`
+	Labels []ConnectorThreadLabel `json:"labels,omitempty"`
+	Branch *ConnectorThreadBranch `json:"branch,omitempty"`
+	Body   string                 `json:"body,omitempty"`
+	// Empty or markdown.
+	BodyFormat string `json:"body_format,omitempty"`
+}
+
+type ConnectorThreadMessage struct {
+	ID     string                `json:"id"`
+	At     time.Time             `json:"at"`
+	Sender ConnectorThreadPerson `json:"sender"`
+	Mine   bool                  `json:"mine,omitempty"`
+	// A line of the thread's own (joined, renamed, merged): no bubble.
+	Event bool   `json:"event,omitempty"`
+	Text  string `json:"text,omitempty"`
+	// Empty or markdown.
+	Format  string                 `json:"format,omitempty"`
+	Media   []ConnectorThreadMedia `json:"media,omitempty"`
+	ReplyTo *ConnectorThreadQuote  `json:"reply_to,omitempty"`
+	Edited  bool                   `json:"edited,omitempty"`
+	URL     string                 `json:"url,omitempty"`
+	// Empty for a message; review, code (a comment on a line), check (CI).
+	Kind string `json:"kind,omitempty"`
+	// approved, changes_requested, commented or dismissed.
+	Review string                `json:"review,omitempty"`
+	Code   *ConnectorThreadCode  `json:"code,omitempty"`
+	Check  *ConnectorThreadCheck `json:"check,omitempty"`
+}
+
+type ConnectorThreadPerson struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name"`
+	// A media ref.
+	Avatar string `json:"avatar,omitempty"`
+}
+
+// ConnectorThreadMedia: A picture, sticker, video, voice message or file: ref and thumb are media refs; a file or
+// voice message is only described.
+type ConnectorThreadMedia struct {
+	// image, sticker, video, voice or file.
+	Kind  string `json:"kind"`
+	Ref   string `json:"ref,omitempty"`
+	Thumb string `json:"thumb,omitempty"`
+	Mime  string `json:"mime,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Size  int64  `json:"size,omitempty"`
+	// Seconds.
+	Duration int `json:"duration,omitempty"`
+	Width    int `json:"width,omitempty"`
+	Height   int `json:"height,omitempty"`
+	// A sticker's.
+	Emoji string `json:"emoji,omitempty"`
+}
+
+// ConnectorThreadQuote: the message another one answers, as much as the page could tell.
+type ConnectorThreadQuote struct {
+	ID   string `json:"id"`
+	From string `json:"from,omitempty"`
+	Text string `json:"text,omitempty"`
+}
+
+type ConnectorThreadLabel struct {
+	Name string `json:"name"`
+	// Six hex digits.
+	Color string `json:"color,omitempty"`
+}
+
+type ConnectorThreadBranch struct {
+	Head string `json:"head"`
+	Base string `json:"base"`
+}
+
+// ConnectorThreadCode: the line a code comment is on, and the end of the diff before it.
+type ConnectorThreadCode struct {
+	Path string `json:"path"`
+	Line int    `json:"line,omitempty"`
+	Hunk string `json:"hunk,omitempty"`
+}
+
+// ConnectorThreadCheck: A CI run: success, failure, pending, skipped or cancelled, and a failed one's log end (at
+// most 8 KB).
+type ConnectorThreadCheck struct {
+	Name  string `json:"name"`
+	State string `json:"state"`
+	URL   string `json:"url,omitempty"`
+	Log   string `json:"log,omitempty"`
+}
+
+// ConnectorMediaParams: thread.media and archive.media: a ref the connector made. Refs never change meaning (the app
+// caches them for good).
+type ConnectorMediaParams struct {
+	Contribution string `json:"contribution"`
+	Ref          string `json:"ref"`
+}
+
+// ConnectorMedia: media bytes, base64: at most 4 MB from thread.media, 20 MB from archive.media.
+type ConnectorMedia struct {
+	Mime string `json:"mime"`
+	// Base64.
+	Data string `json:"data"`
+}
+
+// ConnectorCollectResult: inbox.collect, from memory: the threads that may need the user.
+type ConnectorCollectResult struct {
+	Things []ConnectorInboxThing `json:"things,omitempty"`
+}
+
+// ConnectorInboxThing: one thread that may need the user; the hub makes inbox items of them. With group it is a batch
+// of a conversation's new messages instead (docs "Event grouping"); with id and meta it is an event (group.append's
+// answer).
+type ConnectorInboxThing struct {
+	// The connector's stable key of the thread.
+	Thread string `json:"thread"`
+	// One of the manifest's kinds.
+	Kind    string `json:"kind"`
+	Label   string `json:"label,omitempty"`
+	Title   string `json:"title,omitempty"`
+	Sender  string `json:"sender,omitempty"`
+	Preview string `json:"preview,omitempty"`
+	// The thread as text, for triage, drafting and the AI twin.
+	Context string    `json:"context,omitempty"`
+	At      time.Time `json:"at,omitzero"`
+	// Marks the newest move: a different last adds to the open item.
+	Last string `json:"last,omitempty"`
+	URL  string `json:"url,omitempty"`
+	// A link the system opens instead (sms:…).
+	OpenURL string `json:"open_url,omitempty"`
+	// Where a reply goes and who sees it.
+	ReplyTo  string `json:"reply_to,omitempty"`
+	CanReply bool   `json:"can_reply,omitempty"`
+	// ConnectorTier, or empty for the model.
+	Tier string `json:"tier,omitempty"`
+	Why  string `json:"why,omitempty"`
+	// The user's own triage rules for this source or account; when set the model gets them instead of the hub's.
+	Rules string `json:"rules,omitempty"`
+	// ConnectorDone: ends the open item.
+	Done  string               `json:"done,omitempty"`
+	Read  bool                 `json:"read,omitempty"`
+	Tags  []ConnectorTag       `json:"tags,omitempty"`
+	Extra *ConnectorThingExtra `json:"extra,omitempty"`
+	Group *ConnectorThingGroup `json:"group,omitempty"`
+	ID    string               `json:"id,omitempty"`
+	// An event's own state, kept and handed back by the hub as it is.
+	Meta   json.RawMessage       `json:"meta,omitempty"`
+	Parent *ConnectorThingParent `json:"parent,omitempty"`
+}
+
+type ConnectorTag struct {
+	// ConnectorTagKey, or the connector's own.
+	Key   string `json:"key"`
+	Value string `json:"value"`
+	Name  string `json:"name,omitempty"`
+}
+
+// ConnectorThingExtra: fields beyond the generic thing: rule_tier for a fallback connector; the rest only for a
+// connector taking over one of the hub's own (lark, github).
+type ConnectorThingExtra struct {
+	Source      string          `json:"source,omitempty"`
+	Account     string          `json:"account,omitempty"`
+	AccountName string          `json:"account_name,omitempty"`
+	LegacyID    string          `json:"legacy_id,omitempty"`
+	Avatar      string          `json:"avatar,omitempty"`
+	Count       int             `json:"count,omitempty"`
+	StartedAt   time.Time       `json:"started_at,omitzero"`
+	RuleTier    string          `json:"rule_tier,omitempty"`
+	Lark        json.RawMessage `json:"lark,omitempty"`
+	Doc         json.RawMessage `json:"doc,omitempty"`
+	Moment      json.RawMessage `json:"moment,omitempty"`
+}
+
+// ConnectorThingGroup: A batch to relate: its id (the same each time the batch is handed again) and its new messages'
+// ids.
+type ConnectorThingGroup struct {
+	Batch string   `json:"batch"`
+	New   []string `json:"new"`
+}
+
+// ConnectorThingParent: what the thing grew out of: kind inbox (an item's id), todo (a todo's id) or session
+// (<machine>/<session>).
+type ConnectorThingParent struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
+}
+
+// ConnectorInboxReply: inbox.reply: the user pressed Send, itself the confirmation. client_id makes a retry go out
+// once; changes move a document row's status first (text may then be empty).
+type ConnectorInboxReply struct {
+	Contribution string                  `json:"contribution"`
+	Thread       string                  `json:"thread"`
+	ItemID       string                  `json:"item_id,omitempty"`
+	Last         string                  `json:"last,omitempty"`
+	Text         string                  `json:"text,omitempty"`
+	ClientID     string                  `json:"client_id,omitempty"`
+	Changes      []ConnectorStatusChange `json:"changes,omitempty"`
+}
+
+type ConnectorStatusChange struct {
+	Ref   string `json:"ref"`
+	Field string `json:"field"`
+	Value string `json:"value"`
+}
+
+// ConnectorSettleParams: inbox.settle: the threads of the items the hub still has open.
+type ConnectorSettleParams struct {
+	Contribution string   `json:"contribution"`
+	Threads      []string `json:"threads"`
+}
+
+// ConnectorSettled: inbox.settle's answer: why each thread that is over is (the hub files them done).
+type ConnectorSettled struct {
+	Settled map[string]string `json:"settled,omitempty"`
+}
+
+// ConnectorGroupToolParams: group.tool: one of ConnectorGroupTool for the model, args as the model wrote them.
+// Answered with any JSON.
+type ConnectorGroupToolParams struct {
+	Contribution string          `json:"contribution"`
+	Thread       string          `json:"thread"`
+	Name         string          `json:"name"`
+	Args         json.RawMessage `json:"args,omitempty"`
+}
+
+// ConnectorGroupAppendParams: group.append (meta): add messages to one event, an existing one (event and its meta) or
+// a new one (event empty, meta null) that may continue a done one. Answered with the event as a ConnectorInboxThing
+// with id and meta.
+type ConnectorGroupAppendParams struct {
+	Contribution string          `json:"contribution"`
+	Thread       string          `json:"thread"`
+	Event        string          `json:"event"`
+	Meta         json.RawMessage `json:"meta"`
+	Messages     []string        `json:"messages"`
+	Continues    string          `json:"continues,omitempty"`
+}
+
+// ConnectorGroupFallbackParams: group.fallback: group a batch by structure, with the conversation's events.
+type ConnectorGroupFallbackParams struct {
+	Contribution string                `json:"contribution"`
+	Thread       string                `json:"thread"`
+	Batch        string                `json:"batch"`
+	Events       []ConnectorGroupEvent `json:"events"`
+}
+
+type ConnectorGroupEvent struct {
+	ID   string          `json:"id"`
+	Meta json.RawMessage `json:"meta"`
+	Done bool            `json:"done"`
+}
+
+// ConnectorGroupFallback: group.fallback's answer: each new message exactly once, in an open event given (assign) or
+// a new one (new).
+type ConnectorGroupFallback struct {
+	Assign []ConnectorGroupAssign `json:"assign"`
+	New    []ConnectorGroupNew    `json:"new"`
+}
+
+type ConnectorGroupAssign struct {
+	Message string `json:"message"`
+	Event   string `json:"event"`
+}
+
+type ConnectorGroupNew struct {
+	Key      string   `json:"key"`
+	Messages []string `json:"messages"`
+	RuleTier string   `json:"rule_tier,omitempty"`
+	Title    string   `json:"title,omitempty"`
+}
+
+// ConnectorChangesParams: archive.changes: the program's own cursor, kept and handed back as it is (empty the first
+// time).
+type ConnectorChangesParams struct {
+	Contribution string `json:"contribution"`
+	Cursor       string `json:"cursor,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+}
+
+// ConnectorChangesResult: archive.changes' answer: what moved since the cursor, where to go on from, and whether
+// another call has more now.
+type ConnectorChangesResult struct {
+	Batches []ConnectorChatBatch `json:"batches,omitempty"`
+	Next    string               `json:"next,omitempty"`
+	More    bool                 `json:"more,omitempty"`
+}
+
+// ConnectorChatBatch: one conversation's new messages, oldest first, archived as the chat <source>-<chat.id>: no
+// source is the connector's id, else one of the manifest's archive_sources.
+type ConnectorChatBatch struct {
+	Source   string                    `json:"source,omitempty"`
+	Chat     *ConnectorArchiveChat     `json:"chat,omitempty"`
+	Messages []ConnectorArchiveMessage `json:"messages,omitempty"`
+}
+
+type ConnectorArchiveChat struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// dm, group or bot.
+	Kind      string    `json:"kind"`
+	Topic     bool      `json:"topic,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitzero"`
+}
+
+// ConnectorArchiveMessage: one archived message. The archive only appends: a message without at, or without text and
+// media, is dropped.
+type ConnectorArchiveMessage struct {
+	ID         string `json:"id"`
+	Position   string `json:"position,omitempty"`
+	SenderID   string `json:"sender_id,omitempty"`
+	SenderName string `json:"sender_name,omitempty"`
+	Mine       bool   `json:"mine,omitempty"`
+	// TEXT, POST, IMAGE, FILE, CARD, SYSTEM…
+	Type string    `json:"type,omitempty"`
+	Text string    `json:"text,omitempty"`
+	At   time.Time `json:"at,omitzero"`
+	// Refs for archive.media.
+	Media []string `json:"media,omitempty"`
+	// Raw identity clues; the hub keeps only their HMAC.
+	SenderHandles []KBHandle `json:"sender_handles,omitempty"`
+}
+
+// ConnectorItems: items.list: the knowledge base's documents, meetings and events.
+type ConnectorItems struct {
+	Items []ConnectorKBItem `json:"items"`
+}
+
+// ConnectorKBItem: one knowledge-base item. The fields after where are the knowledge base's own (its tagging); a
+// program leaves them out.
+type ConnectorKBItem struct {
+	Kind  string    `json:"kind"`
+	ID    string    `json:"id"`
+	Title string    `json:"title"`
+	URL   string    `json:"url,omitempty"`
+	At    time.Time `json:"at,omitzero"`
+	// Where it came from (a chat id, calendar…).
+	Where        string    `json:"where,omitempty"`
+	Projects     []string  `json:"projects,omitempty"`
+	Note         string    `json:"note,omitempty"`
+	Seen         time.Time `json:"seen,omitzero"`
+	Importance   string    `json:"importance,omitempty"`
+	Relevance    int       `json:"relevance,omitempty"`
+	Tags         []string  `json:"tags,omitempty"`
+	Locked       bool      `json:"locked,omitempty"`
+	TaggedAt     time.Time `json:"tagged_at,omitzero"`
+	Pinned       string    `json:"pinned,omitempty"`
+	LockedFields []string  `json:"locked_fields,omitempty"`
+}
+
+// ConnectorDocTitleParams: items.doc_title: the title of a document link in a chat.
+type ConnectorDocTitleParams struct {
+	Contribution string `json:"contribution"`
+	URL          string `json:"url"`
+}
+
+// ConnectorDocTitle: items.doc_title's answer: empty when it cannot be read.
+type ConnectorDocTitle struct {
+	Title string `json:"title"`
+}
+
+// ConnectorSnapshotParams: snapshot.get: the user's time zone (none: the program's own). The hub waits at most 3
+// seconds.
+type ConnectorSnapshotParams struct {
+	Contribution string `json:"contribution"`
+	TZ           string `json:"tz,omitempty"`
+}
+
+// ConnectorSnapshot: snapshot.get's answer: the unread chats and the rest of today's meetings (not declined, by
+// start); a part not known is left out.
+type ConnectorSnapshot struct {
+	Chats    *ConnectorSnapshotChats    `json:"chats,omitempty"`
+	Meetings []ConnectorSnapshotMeeting `json:"meetings,omitempty"`
+}
+
+type ConnectorSnapshotChats struct {
+	AtMe  []ConnectorSnapshotChat `json:"at_me"`
+	Other []ConnectorSnapshotChat `json:"other"`
+}
+
+type ConnectorSnapshotChat struct {
+	Name   string `json:"name"`
+	Unread int    `json:"unread"`
+	// The newest text's start, for a chat that @ the user.
+	Preview string `json:"preview,omitempty"`
+}
+
+type ConnectorSnapshotMeeting struct {
+	Start time.Time `json:"start"`
+	End   time.Time `json:"end"`
+	Title string    `json:"title"`
+}
+
+// ConnectorLoginParams: login.step: step empty starts over; values are the fields of the step before.
+type ConnectorLoginParams struct {
+	Contribution string            `json:"contribution"`
+	Step         string            `json:"step,omitempty"`
+	Values       map[string]string `json:"values,omitempty"`
+}
+
+// ConnectorPrompt: where a sign-in stands: the next step to fill in, a code or QR code to wait on, or done. error is
+// what was wrong with the values just given (the same step again).
+type ConnectorPrompt struct {
+	Step   string           `json:"step,omitempty"`
+	Fields []ConnectorField `json:"fields,omitempty"`
+	// ConnectorPromptKind, or empty for fields.
+	Kind     string `json:"kind,omitempty"`
+	URL      string `json:"url,omitempty"`
+	UserCode string `json:"user_code,omitempty"`
+	// Seconds between asks of a device_code or qr step.
+	Interval int              `json:"interval,omitempty"`
+	Qr       *ConnectorQRCode `json:"qr,omitempty"`
+	Hint     string           `json:"hint,omitempty"`
+	Error    string           `json:"error,omitempty"`
+	Done     bool             `json:"done,omitempty"`
+	// Who is signed in, once done.
+	Account string `json:"account,omitempty"`
+}
+
+type ConnectorField struct {
+	Name        string `json:"name"`
+	Label       string `json:"label"`
+	Secret      bool   `json:"secret,omitempty"`
+	Placeholder string `json:"placeholder,omitempty"`
+}
+
+// ConnectorQRCode: A qr step's code, size rows of size 0 / 1: the hub fills it in on the way to the app; a program
+// leaves it out.
+type ConnectorQRCode struct {
+	Size int      `json:"size"`
+	Rows []string `json:"rows"`
+}
+
+// ConnectorOptions: options.get's answer: the connector's own settings the user changes in the app.
+type ConnectorOptions struct {
+	Options json.RawMessage `json:"options,omitempty"`
+}
+
+// ConnectorOptionsParams: options.set: the user changed them (an error refuses them), and after every start the ones
+// accepted before.
+type ConnectorOptionsParams struct {
+	Contribution string          `json:"contribution"`
+	Options      json.RawMessage `json:"options"`
+}
+
+// ConnectorMachineParams: machines.online: one of the user's computers just connected. The hub does not wait for the
+// answer.
+type ConnectorMachineParams struct {
+	Contribution string `json:"contribution"`
+	Machine      string `json:"machine"`
+}
+
+// ConnectorAuthSource: auth.set: where the sign-in comes from, as the user chose (after every start too; the program
+// does not keep it).
+type ConnectorAuthSource struct {
+	Contribution string `json:"contribution"`
+	Source       string `json:"source"`
+	Machine      string `json:"machine,omitempty"`
+	MachineName  string `json:"machine_name,omitempty"`
+}
+
+// ConnectorAuth: auth.get and auth.set's answer. scopes only when known (scopes_known).
+type ConnectorAuth struct {
+	Source      string   `json:"source"`
+	Machine     string   `json:"machine,omitempty"`
+	Scopes      []string `json:"scopes,omitempty"`
+	ScopesKnown bool     `json:"scopes_known"`
+}
+
+// ConnectorSecret: connector.secrets.load's answer: the connector's own state (a session, a token), sealed in the
+// hub's database. No data: nothing stored.
+type ConnectorSecret struct {
+	// Base64.
+	Data string `json:"data,omitempty"`
+}
+
+// ConnectorSecretSaveParams: connector.secrets.save: replaces what is stored.
+type ConnectorSecretSaveParams struct {
+	Contribution string `json:"contribution"`
+	// Base64.
+	Data string `json:"data,omitempty"`
+}
+
+// ConnectorGhTokenParams: connector.credentials.gh_token: a computer's gh token, for an extension granted gh_login.
+// Kept in memory only.
+type ConnectorGhTokenParams struct {
+	Contribution string `json:"contribution"`
+	Machine      string `json:"machine"`
+	Host         string `json:"host,omitempty"`
+}
+
+type ConnectorGhToken struct {
+	Token string `json:"token"`
+}
+
+// ConnectorPostsPutParams: connector.posts.put (archive): a feed's public posts into the knowledge base's post
+// archive, at most 200 a call.
+type ConnectorPostsPutParams struct {
+	Contribution string             `json:"contribution"`
+	Posts        []ConnectorPostPut `json:"posts"`
+}
+
+// ConnectorPostPut: A post, with its comments when they were read this time: no comments keeps the archived ones; an
+// empty list is none.
+type ConnectorPostPut struct {
+	Post     ConnectorPost          `json:"post"`
+	Comments []ConnectorPostComment `json:"comments,omitempty"`
+}
+
+// ConnectorPost: one public post. feed names the archive's heading; text over 64 KB is cut.
+type ConnectorPost struct {
+	ID           string    `json:"id"`
+	Feed         string    `json:"feed,omitempty"`
+	Author       string    `json:"author,omitempty"`
+	AuthorID     string    `json:"author_id,omitempty"`
+	Anonymous    bool      `json:"anonymous,omitempty"`
+	Categories   []string  `json:"categories,omitempty"`
+	Text         string    `json:"text"`
+	Images       int       `json:"images,omitempty"`
+	Reactions    int       `json:"reactions,omitempty"`
+	CommentCount int       `json:"comment_count"`
+	At           time.Time `json:"at"`
+	Mine         bool      `json:"mine,omitempty"`
+}
+
+// ConnectorPostComment: A comment as it is to be written: the connector names the user and hides who is anonymous.
+type ConnectorPostComment struct {
+	Author  string    `json:"author,omitempty"`
+	ReplyTo string    `json:"reply_to,omitempty"`
+	Text    string    `json:"text"`
+	At      time.Time `json:"at"`
+}
+
+// ConnectorPostsPut: connector.posts.put's answer: ConnectorPostStatus (or empty) for each post, in order.
+type ConnectorPostsPut struct {
+	Statuses []string `json:"statuses"`
+}
+
+// ConnectorPostsCommentsParams: connector.posts.comments: replace one of its archived posts' comments, read when it
+// had comment_count.
+type ConnectorPostsCommentsParams struct {
+	Contribution string                 `json:"contribution"`
+	ID           string                 `json:"id"`
+	CommentCount int                    `json:"comment_count"`
+	Comments     []ConnectorPostComment `json:"comments"`
+}
+
+// ConnectorPostsPendingParams: connector.posts.pending: the posts whose comments to read again.
+type ConnectorPostsPendingParams struct {
+	Contribution string `json:"contribution"`
+	Limit        int    `json:"limit,omitempty"`
+}
+
+// ConnectorPostsPending: newest first, at most 500.
+type ConnectorPostsPending struct {
+	Posts []ConnectorPendingPost `json:"posts"`
+}
+
+type ConnectorPendingPost struct {
+	ID           string    `json:"id"`
+	CommentCount int       `json:"comment_count"`
+	At           time.Time `json:"at"`
+}
+
+// ConnectorArchiveChatsParams: connector.archive.chats: the chats archived under one of its sources (none: its id),
+// to go on from where they are.
+type ConnectorArchiveChatsParams struct {
+	Contribution string `json:"contribution"`
+	Source       string `json:"source,omitempty"`
+}
+
+type ConnectorArchivedChats struct {
+	Chats []ConnectorArchivedChat `json:"chats"`
+}
+
+// ConnectorArchivedChat: A chat's id at the source, and how far it was archived.
+type ConnectorArchivedChat struct {
+	ID       string    `json:"id"`
+	Name     string    `json:"name,omitempty"`
+	Cursor   string    `json:"cursor,omitempty"`
+	LastAt   time.Time `json:"last_at,omitzero"`
+	Messages int       `json:"messages"`
+}
+
+// ConnectorChangedEvent: the event connector.changed: chats, items or the inbox changed; the hub reads them soon.
+type ConnectorChangedEvent struct {
+	Contribution string `json:"contribution"`
+	Scope        string `json:"scope"`
+}
+
+// ChannelErrorCode: error.code a program answers besides the base ErrorCode: cannot_send, nowhere to send to yet
+// (before the owner's first message). Another failure of channel.send is tried again after 1, 2 and 4 seconds with
+// the same ref.
+const (
+	ChannelErrorCodeCannotSend = "cannot_send"
+)
+
+// ChannelErrorCodes are the values of ChannelErrorCode, in order.
+var ChannelErrorCodes = []string{"cannot_send"}
+
+// ChannelState: channelStatusParams.state: bound and taking messages, not bound or not set up, or in error (say why
+// in error).
+const (
+	ChannelStateConnected    = "connected"
+	ChannelStateNotConnected = "not_connected"
+	ChannelStateError        = "error"
+)
+
+// ChannelStates are the values of ChannelState, in order.
+var ChannelStates = []string{"connected", "not_connected", "error"}
+
+// ChannelSendKind: what a message the hub sends is: the turn's answer, a note of the hub's own, a question (asks:
+// text), a push the owner did not ask for.
+const (
+	ChannelSendKindAnswer = "answer"
+	ChannelSendKindNote   = "note"
+	ChannelSendKindAsk    = "ask"
+	ChannelSendKindPush   = "push"
+)
+
+// ChannelSendKinds are the values of ChannelSendKind, in order.
+var ChannelSendKinds = []string{"answer", "note", "ask", "push"}
+
+// ChannelReceiveParams: channel.receive: one of the owner's messages (only the owner's). Answered once the hub has
+// it, deduplicated by id and queued, not after the turn.
+type ChannelReceiveParams struct {
+	// The channel's id. The hub takes the extension's only channel when it is left out; always send it.
+	Contribution string         `json:"contribution"`
+	Message      ChannelMessage `json:"message"`
+}
+
+// ChannelMessage: at most 4 images of 3 MB and files of 50 MB each; what does not fit is dropped and said in
+// unsupported. A message with nothing in it (no text, images, files, quote, forward or unsupported) is not handed on.
+type ChannelMessage struct {
+	// The chat app's id of the message: the same message delivered again is taken once.
+	ID     string        `json:"id"`
+	Text   string        `json:"text,omitempty"`
+	Images []ChannelBlob `json:"images,omitempty"`
+	Files  []ChannelBlob `json:"files,omitempty"`
+	// The text of the message it quotes.
+	Quote string `json:"quote,omitempty"`
+	// What it forwards, as text.
+	Forward string `json:"forward,omitempty"`
+	// The chat app's id of the message it answers.
+	ReplyTo string `json:"reply_to,omitempty"`
+	// What it had that the channel cannot bring, for people (a voice message, a sticker).
+	Unsupported []string `json:"unsupported,omitempty"`
+}
+
+// ChannelBlob: A picture or a file.
+type ChannelBlob struct {
+	Name string `json:"name,omitempty"`
+	Mime string `json:"mime"`
+	// Base64.
+	Data string `json:"data"`
+}
+
+// ChannelStatusParams: channel.status: how a channel without a connector is doing (one with a connector says it
+// through the connector's status).
+type ChannelStatusParams struct {
+	Contribution string `json:"contribution"`
+	State        string `json:"state"`
+	// One sentence for people; never a secret or a message's body.
+	Error   string          `json:"error,omitempty"`
+	Account *ChannelAccount `json:"account,omitempty"`
+}
+
+// ChannelAccount: who the channel is bound to, for display.
+type ChannelAccount struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name"`
+}
+
+// ChannelSendParams: channel.send: one message to the owner. text is Markdown, already split to the channel's
+// max_text (a plain channel gets plain text). The same ref again is the same message: send it once, answer the same.
+type ChannelSendParams struct {
+	Contribution string `json:"contribution"`
+	Ref          string `json:"ref"`
+	Text         string `json:"text"`
+	// ChannelSendKind.
+	Kind string `json:"kind"`
+	// The owner's message it answers (ChannelMessage.id).
+	ReplyTo string `json:"reply_to,omitempty"`
+}
+
+// ChannelSendResult: channel.send's answer: the chat app's id of what was sent, for channel.edit.
+type ChannelSendResult struct {
+	MessageID string `json:"message_id,omitempty"`
+}
+
+// ChannelTypingParams: channel.typing (capabilities.typing): show typing, or stop.
+type ChannelTypingParams struct {
+	Contribution string `json:"contribution"`
+	On           bool   `json:"on"`
+}
+
+// ChannelEditParams: channel.edit (capabilities.progress): replace the text of a message sent before.
+type ChannelEditParams struct {
+	Contribution string `json:"contribution"`
+	MessageID    string `json:"message_id"`
+	Text         string `json:"text"`
+}
+
+// Values of KBKind.
+const (
+	KBKindProjects   = "projects"
+	KBKindChats      = "chats"
+	KBKindPeople     = "people"
+	KBKindDocs       = "docs"
+	KBKindMeetings   = "meetings"
+	KBKindEvents     = "events"
+	KBKindRecordings = "recordings"
+)
+
+// KBKinds are the values of KBKind, in order.
+var KBKinds = []string{"projects", "chats", "people", "docs", "meetings", "events", "recordings"}
+
+// KBErrorCode: error.code of a knowledge-base call besides permission_denied (data {scope}, the one missing):
+// invalid_params, not_found, assistant_offline (the manager is away), kb_unavailable (not open yet). Both of the last
+// are worth trying again.
+const (
+	KBErrorCodeInvalidParams    = "invalid_params"
+	KBErrorCodeNotFound         = "not_found"
+	KBErrorCodeAssistantOffline = "assistant_offline"
+	KBErrorCodeKbUnavailable    = "kb_unavailable"
+)
+
+// KBErrorCodes are the values of KBErrorCode, in order.
+var KBErrorCodes = []string{"invalid_params", "not_found", "assistant_offline", "kb_unavailable"}
+
+// KBHandle: an identity clue: kind (phone, email, a source's user id kind…) and the raw value.
+type KBHandle struct {
+	Kind  string `json:"kind"`
+	Value string `json:"value"`
+}
+
+// KBListParams: kb.list: one kind's entities, ranked; pages are not a snapshot (deduplicate, read again when needed).
+type KBListParams struct {
+	Kind string `json:"kind"`
+	Tag  string `json:"tag,omitempty"`
+	// 0 is 30.
+	Limit  int `json:"limit,omitempty"`
+	Offset int `json:"offset,omitempty"`
+}
+
+type KBListResult struct {
+	Items []KBEntry `json:"items"`
+	// The kind's most used tags.
+	Tags  []string `json:"tags"`
+	Total int      `json:"total"`
+	// Where the next page starts; none at the end.
+	NextOffset *int `json:"next_offset,omitempty"`
+}
+
+type KBEntry struct {
+	Kind    string `json:"kind"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	OneLine string `json:"one_line,omitempty"`
+	// P0 (critical) … P3 (ignorable).
+	Importance string `json:"importance,omitempty"`
+	// 0–100: how much it concerns the owner.
+	Relevance int       `json:"relevance"`
+	Tags      []string  `json:"tags,omitempty"`
+	Updated   time.Time `json:"updated"`
+	// A project's short / long · status, a chat's dm / group…
+	Extra string `json:"extra,omitempty"`
+}
+
+// KBGetParams: kb.get: one entity, with its most recent messages (recent_chars, none is 12000; 0 leaves them out).
+// Live agents are not in it.
+type KBGetParams struct {
+	Kind        string `json:"kind"`
+	ID          string `json:"id"`
+	RecentChars *int   `json:"recent_chars,omitempty"`
+}
+
+type KBGetResult struct {
+	Detail KBDetail `json:"detail"`
+}
+
+type KBDetail struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
+	// Where it is on the manager's machine, for its own file tools.
+	Path string `json:"path"`
+	// The entity's own fields (meta.json).
+	Meta     json.RawMessage      `json:"meta"`
+	Summary  string               `json:"summary,omitempty"`
+	Log      []string             `json:"log,omitempty"`
+	Recent   string               `json:"recent,omitempty"`
+	Links    []KBEntry            `json:"links,omitempty"`
+	Moments  []KBMomentRef        `json:"moments,omitempty"`
+	Segments []KBRecordingSegment `json:"segments,omitempty"`
+}
+
+// KBMomentRef: A feed post linked to a project.
+type KBMomentRef struct {
+	ID       string    `json:"id"`
+	Author   string    `json:"author"`
+	Text     string    `json:"text"`
+	At       time.Time `json:"at"`
+	Comments int       `json:"comments"`
+	// How it bears on the project.
+	Note string `json:"note,omitempty"`
+}
+
+// KBRecordingSegment: A recording's transcript segment, in seconds from its start.
+type KBRecordingSegment struct {
+	Start float64 `json:"start"`
+	End   float64 `json:"end"`
+	Text  string  `json:"text"`
+}
+
+// KBDayParams: kb.day: a chat's messages of one day in the knowledge base's time zone.
+type KBDayParams struct {
+	ID  string `json:"id"`
+	Day string `json:"day"`
+}
+
+// KBDayResult: prev and next are the days before and after that have messages (empty: none).
+type KBDayResult struct {
+	Day      string         `json:"day"`
+	Messages []KBDayMessage `json:"messages"`
+	Prev     string         `json:"prev"`
+	Next     string         `json:"next"`
+}
+
+type KBDayMessage struct {
+	// The message's first line in the day's file, from 1.
+	N    int    `json:"n"`
+	Text string `json:"text"`
+}
+
+// KBSearchParams: kb.search: lines that match, messages too unless messages is false.
+type KBSearchParams struct {
+	Query    string `json:"query"`
+	Messages *bool  `json:"messages,omitempty"`
+	// 0 is 40.
+	Limit int `json:"limit,omitempty"`
+}
+
+type KBSearchResult struct {
+	Hits []KBHit `json:"hits"`
+}
+
+type KBHit struct {
+	// Relative to the knowledge base.
+	Path string `json:"path"`
+	Line string `json:"line"`
+}
+
+// KBUpdateParams: kb.update: kind and id, and the fields to change (the knowledge base's update API, plus pinned,
+// lock and the remove_* lists). tags replaces (an empty list clears); a field left out is kept. Protected fields and
+// history limits: docs/knowledge.md.
+type KBUpdateParams struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
+	// Confirmed facts automatic writes cannot replace; an empty string clears them.
+	Pinned *string `json:"pinned,omitempty"`
+	// Whether an importance / relevance given here is kept from automatic tagging (default true).
+	Lock           *bool    `json:"lock,omitempty"`
+	RemovePeople   []string `json:"remove_people,omitempty"`
+	RemoveChats    []string `json:"remove_chats,omitempty"`
+	RemoveAliases  []string `json:"remove_aliases,omitempty"`
+	RemoveProjects []string `json:"remove_projects,omitempty"`
+	Name           string   `json:"name,omitempty"`
+	// A project's: short or long.
+	ProjectKind string   `json:"project_kind,omitempty"`
+	Status      string   `json:"status,omitempty"`
+	Goal        string   `json:"goal,omitempty"`
+	MyRole      string   `json:"my_role,omitempty"`
+	Note        string   `json:"note,omitempty"`
+	Importance  string   `json:"importance,omitempty"`
+	Relevance   *int     `json:"relevance,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Summary     string   `json:"summary,omitempty"`
+	// A project's: a line appended to its timeline.
+	Log string `json:"log,omitempty"`
+	// Who writes the log line.
+	Source  string   `json:"source,omitempty"`
+	Aliases []string `json:"aliases,omitempty"`
+	Chats   []string `json:"chats,omitempty"`
+	People  []string `json:"people,omitempty"`
+	// A project's code directories, <machine>:<path>.
+	Dirs      []string `json:"dirs,omitempty"`
+	Projects  []string `json:"projects,omitempty"`
+	MergeInto string   `json:"merge_into,omitempty"`
+}
+
+type KBUpdateResult struct {
+	ID string `json:"id"`
+}
+
+// KBOwnerParams: kb.owner takes nothing.
+type KBOwnerParams struct {
+}
+
+// KBOwner: kb.owner: the user's name, aliases and identities across sources (raw only through this explicit read).
+type KBOwner struct {
+	Name    string     `json:"name"`
+	Aliases []string   `json:"aliases"`
+	Handles []KBHandle `json:"handles"`
+}
+
+// KBChangedEvent: event.kb.changed: an entity changed (what: which part). Read it again if it matters.
+type KBChangedEvent struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
+	What string `json:"what"`
+}
+
+// KBForgottenEvent: event.kb.forgotten: a source's data was removed from the knowledge base.
+type KBForgottenEvent struct {
+	Source string `json:"source"`
+}
+
 // newDef makes a value of each definition, for tests that read examples by definition name.
 var newDef = map[string]func() any{
-	"Manifest":                  func() any { return new(Manifest) },
-	"Dependency":                func() any { return new(Dependency) },
-	"Exports":                   func() any { return new(Exports) },
-	"ExportedPoint":             func() any { return new(ExportedPoint) },
-	"PackMember":                func() any { return new(PackMember) },
-	"Engines":                   func() any { return new(Engines) },
-	"Runtime":                   func() any { return new(Runtime) },
-	"Resources":                 func() any { return new(Resources) },
-	"NodeRuntime":               func() any { return new(NodeRuntime) },
-	"NodePermissions":           func() any { return new(NodePermissions) },
-	"SecretSpec":                func() any { return new(SecretSpec) },
-	"Permissions":               func() any { return new(Permissions) },
-	"Contributes":               func() any { return new(Contributes) },
-	"SkillItem":                 func() any { return new(SkillItem) },
-	"PromptItem":                func() any { return new(PromptItem) },
-	"ThemeColors":               func() any { return new(ThemeColors) },
-	"ThemeItem":                 func() any { return new(ThemeItem) },
-	"LookTexts":                 func() any { return new(LookTexts) },
-	"LookAvatarDark":            func() any { return new(LookAvatarDark) },
-	"LookAvatar":                func() any { return new(LookAvatar) },
-	"LookPalette":               func() any { return new(LookPalette) },
-	"LookColors":                func() any { return new(LookColors) },
-	"LookDotState":              func() any { return new(LookDotState) },
-	"LookDotStates":             func() any { return new(LookDotStates) },
-	"LookDot":                   func() any { return new(LookDot) },
-	"LookItem":                  func() any { return new(LookItem) },
-	"TriageTemplateItem":        func() any { return new(TriageTemplateItem) },
-	"AgentFilterItem":           func() any { return new(AgentFilterItem) },
-	"ConnectorItem":             func() any { return new(ConnectorItem) },
-	"NamedItem":                 func() any { return new(NamedItem) },
-	"QuotaItem":                 func() any { return new(QuotaItem) },
-	"ProviderItem":              func() any { return new(ProviderItem) },
-	"ProviderModel":             func() any { return new(ProviderModel) },
-	"APIItem":                   func() any { return new(APIItem) },
-	"APIReceipt":                func() any { return new(APIReceipt) },
-	"AssistantItem":             func() any { return new(AssistantItem) },
-	"UIItem":                    func() any { return new(UIItem) },
-	"AgentSourceItem":           func() any { return new(AgentSourceItem) },
-	"ChannelItem":               func() any { return new(ChannelItem) },
-	"ChannelCapabilities":       func() any { return new(ChannelCapabilities) },
-	"EventsItem":                func() any { return new(EventsItem) },
-	"ShortcutItem":              func() any { return new(ShortcutItem) },
-	"ShortcutParam":             func() any { return new(ShortcutParam) },
-	"Frame":                     func() any { return new(Frame) },
-	"RPCError":                  func() any { return new(RPCError) },
-	"InitializeParams":          func() any { return new(InitializeParams) },
-	"ExportedContribution":      func() any { return new(ExportedContribution) },
-	"HubInfo":                   func() any { return new(HubInfo) },
-	"ExtensionInfo":             func() any { return new(ExtensionInfo) },
-	"InitializeResult":          func() any { return new(InitializeResult) },
-	"UIParams":                  func() any { return new(UIParams) },
-	"UIMachine":                 func() any { return new(UIMachine) },
-	"UILauncher":                func() any { return new(UILauncher) },
-	"UIInboxItem":               func() any { return new(UIInboxItem) },
-	"BadgeEvent":                func() any { return new(BadgeEvent) },
-	"InvalidateEvent":           func() any { return new(InvalidateEvent) },
-	"UIContext":                 func() any { return new(UIContext) },
-	"UIRequest":                 func() any { return new(UIRequest) },
-	"UIPlace":                   func() any { return new(UIPlace) },
-	"UIPlaces":                  func() any { return new(UIPlaces) },
-	"WidgetPlace":               func() any { return new(WidgetPlace) },
-	"WidgetPlaces":              func() any { return new(WidgetPlaces) },
-	"WidgetRequest":             func() any { return new(WidgetRequest) },
-	"WidgetAnswer":              func() any { return new(WidgetAnswer) },
-	"DeviceWidget":              func() any { return new(DeviceWidget) },
-	"DeviceWidgets":             func() any { return new(DeviceWidgets) },
-	"WidgetPush":                func() any { return new(WidgetPush) },
-	"ShortcutPlace":             func() any { return new(ShortcutPlace) },
-	"ShortcutPlaces":            func() any { return new(ShortcutPlaces) },
-	"ShortcutRequest":           func() any { return new(ShortcutRequest) },
-	"ShortcutRunParams":         func() any { return new(ShortcutRunParams) },
-	"ShortcutResult":            func() any { return new(ShortcutResult) },
-	"NotifyAction":              func() any { return new(NotifyAction) },
-	"NotifyActionInput":         func() any { return new(NotifyActionInput) },
-	"ExtensionNotification":     func() any { return new(ExtensionNotification) },
-	"View":                      func() any { return new(View) },
-	"Section":                   func() any { return new(Section) },
-	"Component":                 func() any { return new(Component) },
-	"Tabs":                      func() any { return new(Tabs) },
-	"Tab":                       func() any { return new(Tab) },
-	"Fact":                      func() any { return new(Fact) },
-	"Crumb":                     func() any { return new(Crumb) },
-	"TreeEntry":                 func() any { return new(TreeEntry) },
-	"LineRange":                 func() any { return new(LineRange) },
-	"Hunk":                      func() any { return new(Hunk) },
-	"Thread":                    func() any { return new(Thread) },
-	"Comment":                   func() any { return new(Comment) },
-	"ComposerButton":            func() any { return new(ComposerButton) },
-	"AssistantView":             func() any { return new(AssistantView) },
-	"ViewAction":                func() any { return new(ViewAction) },
-	"ViewActionInput":           func() any { return new(ViewActionInput) },
-	"AssistantHTMLActionInput":  func() any { return new(AssistantHTMLActionInput) },
-	"AssistantHTMLOpenResult":   func() any { return new(AssistantHTMLOpenResult) },
-	"ViewChangedError":          func() any { return new(ViewChangedError) },
-	"Action":                    func() any { return new(Action) },
-	"Push":                      func() any { return new(Push) },
-	"Search":                    func() any { return new(Search) },
-	"Filter":                    func() any { return new(Filter) },
-	"More":                      func() any { return new(More) },
-	"Avatar":                    func() any { return new(Avatar) },
-	"Thumbnail":                 func() any { return new(Thumbnail) },
-	"TableColumn":               func() any { return new(TableColumn) },
-	"EmptyButton":               func() any { return new(EmptyButton) },
-	"Badge":                     func() any { return new(Badge) },
-	"Choice":                    func() any { return new(Choice) },
-	"ChartSeries":               func() any { return new(ChartSeries) },
-	"ChartPoint":                func() any { return new(ChartPoint) },
-	"Stat":                      func() any { return new(Stat) },
-	"ActionResult":              func() any { return new(ActionResult) },
-	"FileLines":                 func() any { return new(FileLines) },
-	"Review":                    func() any { return new(Review) },
-	"PersonaCard":               func() any { return new(PersonaCard) },
-	"CardAmount":                func() any { return new(CardAmount) },
-	"CardPart":                  func() any { return new(CardPart) },
-	"MessagingComposerMode":     func() any { return new(MessagingComposerMode) },
-	"MessagingLink":             func() any { return new(MessagingLink) },
-	"MessagingItem":             func() any { return new(MessagingItem) },
-	"MessagingSource":           func() any { return new(MessagingSource) },
-	"MessagingSources":          func() any { return new(MessagingSources) },
-	"MessagingStatus":           func() any { return new(MessagingStatus) },
-	"MessagingMe":               func() any { return new(MessagingMe) },
-	"MessagingAccount":          func() any { return new(MessagingAccount) },
-	"MessagingAccounts":         func() any { return new(MessagingAccounts) },
-	"MessagingConversation":     func() any { return new(MessagingConversation) },
-	"MessagingConversationPage": func() any { return new(MessagingConversationPage) },
-	"MessagingPerson":           func() any { return new(MessagingPerson) },
-	"MessagingMembers":          func() any { return new(MessagingMembers) },
-	"MessagingReplyTo":          func() any { return new(MessagingReplyTo) },
-	"MessagingThread":           func() any { return new(MessagingThread) },
-	"MessagingReaction":         func() any { return new(MessagingReaction) },
-	"MessagingDecoration":       func() any { return new(MessagingDecoration) },
-	"MessagingAction":           func() any { return new(MessagingAction) },
-	"MessagingEditVersion":      func() any { return new(MessagingEditVersion) },
-	"MessagingMessage":          func() any { return new(MessagingMessage) },
-	"MessagingMessagePage":      func() any { return new(MessagingMessagePage) },
-	"MessagingMessageAnswer":    func() any { return new(MessagingMessageAnswer) },
-	"MessagingList":             func() any { return new(MessagingList) },
-	"MessagingMediaSize":        func() any { return new(MessagingMediaSize) },
-	"MessagingField":            func() any { return new(MessagingField) },
-	"MessagingPreview":          func() any { return new(MessagingPreview) },
-	"MessagingPart":             func() any { return new(MessagingPart) },
-	"MessagingMention":          func() any { return new(MessagingMention) },
-	"MessagingOutgoing":         func() any { return new(MessagingOutgoing) },
-	"MessagingSendReceipt":      func() any { return new(MessagingSendReceipt) },
-	"MessagingCompose":          func() any { return new(MessagingCompose) },
-	"MessagingComposeAnswer":    func() any { return new(MessagingComposeAnswer) },
-	"MessagingReadReport":       func() any { return new(MessagingReadReport) },
-	"MessagingReadState":        func() any { return new(MessagingReadState) },
-	"MessagingReadStates":       func() any { return new(MessagingReadStates) },
-	"MessagingChatPin":          func() any { return new(MessagingChatPin) },
-	"MessagingChatPins":         func() any { return new(MessagingChatPins) },
-	"MessagingPinTarget":        func() any { return new(MessagingPinTarget) },
-	"MessagingPinTargetAnswer":  func() any { return new(MessagingPinTargetAnswer) },
-	"MessagingPinAnswer":        func() any { return new(MessagingPinAnswer) },
-	"MessagingEmoji":            func() any { return new(MessagingEmoji) },
-	"MessagingEmojiGroup":       func() any { return new(MessagingEmojiGroup) },
-	"MessagingEmojis":           func() any { return new(MessagingEmojis) },
-	"MessagingQuickReactions":   func() any { return new(MessagingQuickReactions) },
-	"MessagingURLPreview":       func() any { return new(MessagingURLPreview) },
-	"MessagingProfileField":     func() any { return new(MessagingProfileField) },
-	"MessagingProfile":          func() any { return new(MessagingProfile) },
-	"MessagingChatOpened":       func() any { return new(MessagingChatOpened) },
-	"MessagingDocBlock":         func() any { return new(MessagingDocBlock) },
-	"MessagingDocPermission":    func() any { return new(MessagingDocPermission) },
-	"MessagingDocument":         func() any { return new(MessagingDocument) },
-	"MessagingCommentReply":     func() any { return new(MessagingCommentReply) },
-	"MessagingCommentThread":    func() any { return new(MessagingCommentThread) },
-	"MessagingCommentThreads":   func() any { return new(MessagingCommentThreads) },
-	"MessagingCommentWrite":     func() any { return new(MessagingCommentWrite) },
-	"MessagingResolve":          func() any { return new(MessagingResolve) },
-	"MessagingPostImage":        func() any { return new(MessagingPostImage) },
-	"MessagingPost":             func() any { return new(MessagingPost) },
-	"MessagingPostComment":      func() any { return new(MessagingPostComment) },
-	"MessagingPostComments":     func() any { return new(MessagingPostComments) },
-	"MessagingChanged":          func() any { return new(MessagingChanged) },
-	"MessagingConversationRef":  func() any { return new(MessagingConversationRef) },
-	"MessagingError":            func() any { return new(MessagingError) },
+	"Manifest":                     func() any { return new(Manifest) },
+	"ToolSpec":                     func() any { return new(ToolSpec) },
+	"ToolCheck":                    func() any { return new(ToolCheck) },
+	"ToolArchive":                  func() any { return new(ToolArchive) },
+	"ToolNPM":                      func() any { return new(ToolNPM) },
+	"AuthSpec":                     func() any { return new(AuthSpec) },
+	"Dependency":                   func() any { return new(Dependency) },
+	"Exports":                      func() any { return new(Exports) },
+	"ExportedPoint":                func() any { return new(ExportedPoint) },
+	"PackMember":                   func() any { return new(PackMember) },
+	"Engines":                      func() any { return new(Engines) },
+	"Runtime":                      func() any { return new(Runtime) },
+	"Resources":                    func() any { return new(Resources) },
+	"NodeRuntime":                  func() any { return new(NodeRuntime) },
+	"NodePermissions":              func() any { return new(NodePermissions) },
+	"SecretSpec":                   func() any { return new(SecretSpec) },
+	"Permissions":                  func() any { return new(Permissions) },
+	"Contributes":                  func() any { return new(Contributes) },
+	"SkillItem":                    func() any { return new(SkillItem) },
+	"PromptItem":                   func() any { return new(PromptItem) },
+	"ThemeColors":                  func() any { return new(ThemeColors) },
+	"ThemeItem":                    func() any { return new(ThemeItem) },
+	"LookTexts":                    func() any { return new(LookTexts) },
+	"LookAvatarDark":               func() any { return new(LookAvatarDark) },
+	"LookAvatar":                   func() any { return new(LookAvatar) },
+	"LookPalette":                  func() any { return new(LookPalette) },
+	"LookColors":                   func() any { return new(LookColors) },
+	"LookDotState":                 func() any { return new(LookDotState) },
+	"LookDotStates":                func() any { return new(LookDotStates) },
+	"LookDot":                      func() any { return new(LookDot) },
+	"LookItem":                     func() any { return new(LookItem) },
+	"TriageTemplateItem":           func() any { return new(TriageTemplateItem) },
+	"ErrorReportsItem":             func() any { return new(ErrorReportsItem) },
+	"TunnelItem":                   func() any { return new(TunnelItem) },
+	"AgentFilterItem":              func() any { return new(AgentFilterItem) },
+	"ConnectorItem":                func() any { return new(ConnectorItem) },
+	"NamedItem":                    func() any { return new(NamedItem) },
+	"QuotaItem":                    func() any { return new(QuotaItem) },
+	"ProviderItem":                 func() any { return new(ProviderItem) },
+	"ProviderModel":                func() any { return new(ProviderModel) },
+	"APIItem":                      func() any { return new(APIItem) },
+	"APIReceipt":                   func() any { return new(APIReceipt) },
+	"AssistantItem":                func() any { return new(AssistantItem) },
+	"MCPServerItem":                func() any { return new(MCPServerItem) },
+	"UIItem":                       func() any { return new(UIItem) },
+	"AgentSourceItem":              func() any { return new(AgentSourceItem) },
+	"ChannelItem":                  func() any { return new(ChannelItem) },
+	"ChannelCapabilities":          func() any { return new(ChannelCapabilities) },
+	"EventsItem":                   func() any { return new(EventsItem) },
+	"ShortcutItem":                 func() any { return new(ShortcutItem) },
+	"ShortcutParam":                func() any { return new(ShortcutParam) },
+	"Frame":                        func() any { return new(Frame) },
+	"RPCError":                     func() any { return new(RPCError) },
+	"AuthStatus":                   func() any { return new(AuthStatus) },
+	"AuthStepParams":               func() any { return new(AuthStepParams) },
+	"AuthField":                    func() any { return new(AuthField) },
+	"AuthPrompt":                   func() any { return new(AuthPrompt) },
+	"InitializeParams":             func() any { return new(InitializeParams) },
+	"ExportedContribution":         func() any { return new(ExportedContribution) },
+	"HubInfo":                      func() any { return new(HubInfo) },
+	"ExtensionInfo":                func() any { return new(ExtensionInfo) },
+	"InitializeResult":             func() any { return new(InitializeResult) },
+	"UIParams":                     func() any { return new(UIParams) },
+	"UIMachine":                    func() any { return new(UIMachine) },
+	"UILauncher":                   func() any { return new(UILauncher) },
+	"UIInboxItem":                  func() any { return new(UIInboxItem) },
+	"BadgeEvent":                   func() any { return new(BadgeEvent) },
+	"InvalidateEvent":              func() any { return new(InvalidateEvent) },
+	"UIContext":                    func() any { return new(UIContext) },
+	"UIRequest":                    func() any { return new(UIRequest) },
+	"UIPlace":                      func() any { return new(UIPlace) },
+	"UIPlaces":                     func() any { return new(UIPlaces) },
+	"WidgetPlace":                  func() any { return new(WidgetPlace) },
+	"WidgetPlaces":                 func() any { return new(WidgetPlaces) },
+	"WidgetRequest":                func() any { return new(WidgetRequest) },
+	"WidgetAnswer":                 func() any { return new(WidgetAnswer) },
+	"DeviceWidget":                 func() any { return new(DeviceWidget) },
+	"DeviceWidgets":                func() any { return new(DeviceWidgets) },
+	"WidgetPush":                   func() any { return new(WidgetPush) },
+	"ShortcutPlace":                func() any { return new(ShortcutPlace) },
+	"ShortcutPlaces":               func() any { return new(ShortcutPlaces) },
+	"ShortcutRequest":              func() any { return new(ShortcutRequest) },
+	"ShortcutRunParams":            func() any { return new(ShortcutRunParams) },
+	"ShortcutResult":               func() any { return new(ShortcutResult) },
+	"NotifyAction":                 func() any { return new(NotifyAction) },
+	"NotifyActionInput":            func() any { return new(NotifyActionInput) },
+	"ErrorFrame":                   func() any { return new(ErrorFrame) },
+	"ErrorException":               func() any { return new(ErrorException) },
+	"ErrorBreadcrumb":              func() any { return new(ErrorBreadcrumb) },
+	"ErrorReport":                  func() any { return new(ErrorReport) },
+	"ErrorReportsDeliver":          func() any { return new(ErrorReportsDeliver) },
+	"ExtensionNotification":        func() any { return new(ExtensionNotification) },
+	"View":                         func() any { return new(View) },
+	"Section":                      func() any { return new(Section) },
+	"Component":                    func() any { return new(Component) },
+	"Tabs":                         func() any { return new(Tabs) },
+	"Tab":                          func() any { return new(Tab) },
+	"Fact":                         func() any { return new(Fact) },
+	"Crumb":                        func() any { return new(Crumb) },
+	"TreeEntry":                    func() any { return new(TreeEntry) },
+	"LineRange":                    func() any { return new(LineRange) },
+	"Hunk":                         func() any { return new(Hunk) },
+	"Thread":                       func() any { return new(Thread) },
+	"Comment":                      func() any { return new(Comment) },
+	"ComposerButton":               func() any { return new(ComposerButton) },
+	"AssistantView":                func() any { return new(AssistantView) },
+	"ViewAction":                   func() any { return new(ViewAction) },
+	"ViewActionInput":              func() any { return new(ViewActionInput) },
+	"AssistantHTMLActionInput":     func() any { return new(AssistantHTMLActionInput) },
+	"AssistantHTMLOpenResult":      func() any { return new(AssistantHTMLOpenResult) },
+	"ViewChangedError":             func() any { return new(ViewChangedError) },
+	"Action":                       func() any { return new(Action) },
+	"Push":                         func() any { return new(Push) },
+	"Search":                       func() any { return new(Search) },
+	"Filter":                       func() any { return new(Filter) },
+	"More":                         func() any { return new(More) },
+	"Avatar":                       func() any { return new(Avatar) },
+	"Thumbnail":                    func() any { return new(Thumbnail) },
+	"TableColumn":                  func() any { return new(TableColumn) },
+	"EmptyButton":                  func() any { return new(EmptyButton) },
+	"Badge":                        func() any { return new(Badge) },
+	"Choice":                       func() any { return new(Choice) },
+	"ChartSeries":                  func() any { return new(ChartSeries) },
+	"ChartPoint":                   func() any { return new(ChartPoint) },
+	"Stat":                         func() any { return new(Stat) },
+	"ActionResult":                 func() any { return new(ActionResult) },
+	"FileLines":                    func() any { return new(FileLines) },
+	"Review":                       func() any { return new(Review) },
+	"PersonaCard":                  func() any { return new(PersonaCard) },
+	"CardAmount":                   func() any { return new(CardAmount) },
+	"CardPart":                     func() any { return new(CardPart) },
+	"MessagingComposerMode":        func() any { return new(MessagingComposerMode) },
+	"MessagingLink":                func() any { return new(MessagingLink) },
+	"MessagingItem":                func() any { return new(MessagingItem) },
+	"MessagingSource":              func() any { return new(MessagingSource) },
+	"MessagingSources":             func() any { return new(MessagingSources) },
+	"MessagingStatus":              func() any { return new(MessagingStatus) },
+	"MessagingMe":                  func() any { return new(MessagingMe) },
+	"MessagingAccount":             func() any { return new(MessagingAccount) },
+	"MessagingAccounts":            func() any { return new(MessagingAccounts) },
+	"MessagingConversation":        func() any { return new(MessagingConversation) },
+	"MessagingConversationPage":    func() any { return new(MessagingConversationPage) },
+	"MessagingPerson":              func() any { return new(MessagingPerson) },
+	"MessagingMembers":             func() any { return new(MessagingMembers) },
+	"MessagingReplyTo":             func() any { return new(MessagingReplyTo) },
+	"MessagingThread":              func() any { return new(MessagingThread) },
+	"MessagingReaction":            func() any { return new(MessagingReaction) },
+	"MessagingDecoration":          func() any { return new(MessagingDecoration) },
+	"MessagingAction":              func() any { return new(MessagingAction) },
+	"MessagingEditVersion":         func() any { return new(MessagingEditVersion) },
+	"MessagingMessage":             func() any { return new(MessagingMessage) },
+	"MessagingMessagePage":         func() any { return new(MessagingMessagePage) },
+	"MessagingMessageAnswer":       func() any { return new(MessagingMessageAnswer) },
+	"MessagingList":                func() any { return new(MessagingList) },
+	"MessagingMediaSize":           func() any { return new(MessagingMediaSize) },
+	"MessagingField":               func() any { return new(MessagingField) },
+	"MessagingPreview":             func() any { return new(MessagingPreview) },
+	"MessagingPart":                func() any { return new(MessagingPart) },
+	"MessagingMention":             func() any { return new(MessagingMention) },
+	"MessagingOutgoing":            func() any { return new(MessagingOutgoing) },
+	"MessagingSendReceipt":         func() any { return new(MessagingSendReceipt) },
+	"MessagingCompose":             func() any { return new(MessagingCompose) },
+	"MessagingComposeAnswer":       func() any { return new(MessagingComposeAnswer) },
+	"MessagingReadReport":          func() any { return new(MessagingReadReport) },
+	"MessagingReadState":           func() any { return new(MessagingReadState) },
+	"MessagingReadStates":          func() any { return new(MessagingReadStates) },
+	"MessagingChatPin":             func() any { return new(MessagingChatPin) },
+	"MessagingChatPins":            func() any { return new(MessagingChatPins) },
+	"MessagingPinTarget":           func() any { return new(MessagingPinTarget) },
+	"MessagingPinTargetAnswer":     func() any { return new(MessagingPinTargetAnswer) },
+	"MessagingPinAnswer":           func() any { return new(MessagingPinAnswer) },
+	"MessagingEmoji":               func() any { return new(MessagingEmoji) },
+	"MessagingEmojiGroup":          func() any { return new(MessagingEmojiGroup) },
+	"MessagingEmojis":              func() any { return new(MessagingEmojis) },
+	"MessagingQuickReactions":      func() any { return new(MessagingQuickReactions) },
+	"MessagingURLPreview":          func() any { return new(MessagingURLPreview) },
+	"MessagingProfileField":        func() any { return new(MessagingProfileField) },
+	"MessagingProfile":             func() any { return new(MessagingProfile) },
+	"MessagingChatOpened":          func() any { return new(MessagingChatOpened) },
+	"MessagingDocBlock":            func() any { return new(MessagingDocBlock) },
+	"MessagingDocPermission":       func() any { return new(MessagingDocPermission) },
+	"MessagingDocument":            func() any { return new(MessagingDocument) },
+	"MessagingCommentReply":        func() any { return new(MessagingCommentReply) },
+	"MessagingCommentThread":       func() any { return new(MessagingCommentThread) },
+	"MessagingCommentThreads":      func() any { return new(MessagingCommentThreads) },
+	"MessagingCommentWrite":        func() any { return new(MessagingCommentWrite) },
+	"MessagingResolve":             func() any { return new(MessagingResolve) },
+	"MessagingPostImage":           func() any { return new(MessagingPostImage) },
+	"MessagingPost":                func() any { return new(MessagingPost) },
+	"MessagingPostComment":         func() any { return new(MessagingPostComment) },
+	"MessagingPostComments":        func() any { return new(MessagingPostComments) },
+	"MessagingChanged":             func() any { return new(MessagingChanged) },
+	"MessagingConversationRef":     func() any { return new(MessagingConversationRef) },
+	"MessagingError":               func() any { return new(MessagingError) },
+	"Empty":                        func() any { return new(Empty) },
+	"ConnectorInitParams":          func() any { return new(ConnectorInitParams) },
+	"ConnectorManifest":            func() any { return new(ConnectorManifest) },
+	"ConnectorParams":              func() any { return new(ConnectorParams) },
+	"ConnectorStatus":              func() any { return new(ConnectorStatus) },
+	"ConnectorTool":                func() any { return new(ConnectorTool) },
+	"ConnectorTools":               func() any { return new(ConnectorTools) },
+	"ConnectorCallParams":          func() any { return new(ConnectorCallParams) },
+	"ConnectorCallResult":          func() any { return new(ConnectorCallResult) },
+	"ConnectorAction":              func() any { return new(ConnectorAction) },
+	"ConnectorDescribeResult":      func() any { return new(ConnectorDescribeResult) },
+	"ConnectorDoParams":            func() any { return new(ConnectorDoParams) },
+	"ConnectorThreadParams":        func() any { return new(ConnectorThreadParams) },
+	"ConnectorThreadPage":          func() any { return new(ConnectorThreadPage) },
+	"ConnectorThreadChat":          func() any { return new(ConnectorThreadChat) },
+	"ConnectorThreadMessage":       func() any { return new(ConnectorThreadMessage) },
+	"ConnectorThreadPerson":        func() any { return new(ConnectorThreadPerson) },
+	"ConnectorThreadMedia":         func() any { return new(ConnectorThreadMedia) },
+	"ConnectorThreadQuote":         func() any { return new(ConnectorThreadQuote) },
+	"ConnectorThreadLabel":         func() any { return new(ConnectorThreadLabel) },
+	"ConnectorThreadBranch":        func() any { return new(ConnectorThreadBranch) },
+	"ConnectorThreadCode":          func() any { return new(ConnectorThreadCode) },
+	"ConnectorThreadCheck":         func() any { return new(ConnectorThreadCheck) },
+	"ConnectorMediaParams":         func() any { return new(ConnectorMediaParams) },
+	"ConnectorMedia":               func() any { return new(ConnectorMedia) },
+	"ConnectorCollectResult":       func() any { return new(ConnectorCollectResult) },
+	"ConnectorInboxThing":          func() any { return new(ConnectorInboxThing) },
+	"ConnectorTag":                 func() any { return new(ConnectorTag) },
+	"ConnectorThingExtra":          func() any { return new(ConnectorThingExtra) },
+	"ConnectorThingGroup":          func() any { return new(ConnectorThingGroup) },
+	"ConnectorThingParent":         func() any { return new(ConnectorThingParent) },
+	"ConnectorInboxReply":          func() any { return new(ConnectorInboxReply) },
+	"ConnectorStatusChange":        func() any { return new(ConnectorStatusChange) },
+	"ConnectorSettleParams":        func() any { return new(ConnectorSettleParams) },
+	"ConnectorSettled":             func() any { return new(ConnectorSettled) },
+	"ConnectorGroupToolParams":     func() any { return new(ConnectorGroupToolParams) },
+	"ConnectorGroupAppendParams":   func() any { return new(ConnectorGroupAppendParams) },
+	"ConnectorGroupFallbackParams": func() any { return new(ConnectorGroupFallbackParams) },
+	"ConnectorGroupEvent":          func() any { return new(ConnectorGroupEvent) },
+	"ConnectorGroupFallback":       func() any { return new(ConnectorGroupFallback) },
+	"ConnectorGroupAssign":         func() any { return new(ConnectorGroupAssign) },
+	"ConnectorGroupNew":            func() any { return new(ConnectorGroupNew) },
+	"ConnectorChangesParams":       func() any { return new(ConnectorChangesParams) },
+	"ConnectorChangesResult":       func() any { return new(ConnectorChangesResult) },
+	"ConnectorChatBatch":           func() any { return new(ConnectorChatBatch) },
+	"ConnectorArchiveChat":         func() any { return new(ConnectorArchiveChat) },
+	"ConnectorArchiveMessage":      func() any { return new(ConnectorArchiveMessage) },
+	"ConnectorItems":               func() any { return new(ConnectorItems) },
+	"ConnectorKBItem":              func() any { return new(ConnectorKBItem) },
+	"ConnectorDocTitleParams":      func() any { return new(ConnectorDocTitleParams) },
+	"ConnectorDocTitle":            func() any { return new(ConnectorDocTitle) },
+	"ConnectorSnapshotParams":      func() any { return new(ConnectorSnapshotParams) },
+	"ConnectorSnapshot":            func() any { return new(ConnectorSnapshot) },
+	"ConnectorSnapshotChats":       func() any { return new(ConnectorSnapshotChats) },
+	"ConnectorSnapshotChat":        func() any { return new(ConnectorSnapshotChat) },
+	"ConnectorSnapshotMeeting":     func() any { return new(ConnectorSnapshotMeeting) },
+	"ConnectorLoginParams":         func() any { return new(ConnectorLoginParams) },
+	"ConnectorPrompt":              func() any { return new(ConnectorPrompt) },
+	"ConnectorField":               func() any { return new(ConnectorField) },
+	"ConnectorQRCode":              func() any { return new(ConnectorQRCode) },
+	"ConnectorOptions":             func() any { return new(ConnectorOptions) },
+	"ConnectorOptionsParams":       func() any { return new(ConnectorOptionsParams) },
+	"ConnectorMachineParams":       func() any { return new(ConnectorMachineParams) },
+	"ConnectorAuthSource":          func() any { return new(ConnectorAuthSource) },
+	"ConnectorAuth":                func() any { return new(ConnectorAuth) },
+	"ConnectorSecret":              func() any { return new(ConnectorSecret) },
+	"ConnectorSecretSaveParams":    func() any { return new(ConnectorSecretSaveParams) },
+	"ConnectorGhTokenParams":       func() any { return new(ConnectorGhTokenParams) },
+	"ConnectorGhToken":             func() any { return new(ConnectorGhToken) },
+	"ConnectorPostsPutParams":      func() any { return new(ConnectorPostsPutParams) },
+	"ConnectorPostPut":             func() any { return new(ConnectorPostPut) },
+	"ConnectorPost":                func() any { return new(ConnectorPost) },
+	"ConnectorPostComment":         func() any { return new(ConnectorPostComment) },
+	"ConnectorPostsPut":            func() any { return new(ConnectorPostsPut) },
+	"ConnectorPostsCommentsParams": func() any { return new(ConnectorPostsCommentsParams) },
+	"ConnectorPostsPendingParams":  func() any { return new(ConnectorPostsPendingParams) },
+	"ConnectorPostsPending":        func() any { return new(ConnectorPostsPending) },
+	"ConnectorPendingPost":         func() any { return new(ConnectorPendingPost) },
+	"ConnectorArchiveChatsParams":  func() any { return new(ConnectorArchiveChatsParams) },
+	"ConnectorArchivedChats":       func() any { return new(ConnectorArchivedChats) },
+	"ConnectorArchivedChat":        func() any { return new(ConnectorArchivedChat) },
+	"ConnectorChangedEvent":        func() any { return new(ConnectorChangedEvent) },
+	"ChannelReceiveParams":         func() any { return new(ChannelReceiveParams) },
+	"ChannelMessage":               func() any { return new(ChannelMessage) },
+	"ChannelBlob":                  func() any { return new(ChannelBlob) },
+	"ChannelStatusParams":          func() any { return new(ChannelStatusParams) },
+	"ChannelAccount":               func() any { return new(ChannelAccount) },
+	"ChannelSendParams":            func() any { return new(ChannelSendParams) },
+	"ChannelSendResult":            func() any { return new(ChannelSendResult) },
+	"ChannelTypingParams":          func() any { return new(ChannelTypingParams) },
+	"ChannelEditParams":            func() any { return new(ChannelEditParams) },
+	"KBHandle":                     func() any { return new(KBHandle) },
+	"KBListParams":                 func() any { return new(KBListParams) },
+	"KBListResult":                 func() any { return new(KBListResult) },
+	"KBEntry":                      func() any { return new(KBEntry) },
+	"KBGetParams":                  func() any { return new(KBGetParams) },
+	"KBGetResult":                  func() any { return new(KBGetResult) },
+	"KBDetail":                     func() any { return new(KBDetail) },
+	"KBMomentRef":                  func() any { return new(KBMomentRef) },
+	"KBRecordingSegment":           func() any { return new(KBRecordingSegment) },
+	"KBDayParams":                  func() any { return new(KBDayParams) },
+	"KBDayResult":                  func() any { return new(KBDayResult) },
+	"KBDayMessage":                 func() any { return new(KBDayMessage) },
+	"KBSearchParams":               func() any { return new(KBSearchParams) },
+	"KBSearchResult":               func() any { return new(KBSearchResult) },
+	"KBHit":                        func() any { return new(KBHit) },
+	"KBUpdateParams":               func() any { return new(KBUpdateParams) },
+	"KBUpdateResult":               func() any { return new(KBUpdateResult) },
+	"KBOwnerParams":                func() any { return new(KBOwnerParams) },
+	"KBOwner":                      func() any { return new(KBOwner) },
+	"KBChangedEvent":               func() any { return new(KBChangedEvent) },
+	"KBForgottenEvent":             func() any { return new(KBForgottenEvent) },
+}
+
+// Call is one call or event of an extension point's protocol (the schemas' x-methods and x-events): who
+// sends it (hub or program), and the definitions its params and its answer hold to (Result "" is any
+// JSON; an event has no answer).
+type Call struct {
+	Name, From, Params, Result string
+	Event                      bool
+}
+
+// Calls are the calls and events the schemas describe, by name as on the wire.
+var Calls = map[string]Call{
+	"connector.status":               {Name: "connector.status", From: "hub", Params: "ConnectorParams", Result: "ConnectorStatus"},
+	"connector.manifest":             {Name: "connector.manifest", From: "hub", Params: "ConnectorParams", Result: "ConnectorManifest"},
+	"connector.tools.list":           {Name: "connector.tools.list", From: "hub", Params: "ConnectorParams", Result: "ConnectorTools"},
+	"connector.tools.call":           {Name: "connector.tools.call", From: "hub", Params: "ConnectorCallParams", Result: "ConnectorCallResult"},
+	"connector.actions.list":         {Name: "connector.actions.list", From: "hub", Params: "ConnectorParams", Result: "ConnectorTools"},
+	"connector.actions.describe":     {Name: "connector.actions.describe", From: "hub", Params: "ConnectorCallParams", Result: "ConnectorDescribeResult"},
+	"connector.actions.do":           {Name: "connector.actions.do", From: "hub", Params: "ConnectorDoParams", Result: "ConnectorCallResult"},
+	"connector.thread.page":          {Name: "connector.thread.page", From: "hub", Params: "ConnectorThreadParams", Result: "ConnectorThreadPage"},
+	"connector.thread.media":         {Name: "connector.thread.media", From: "hub", Params: "ConnectorMediaParams", Result: "ConnectorMedia"},
+	"connector.inbox.collect":        {Name: "connector.inbox.collect", From: "hub", Params: "ConnectorParams", Result: "ConnectorCollectResult"},
+	"connector.inbox.reply":          {Name: "connector.inbox.reply", From: "hub", Params: "ConnectorInboxReply", Result: "Empty"},
+	"connector.inbox.settle":         {Name: "connector.inbox.settle", From: "hub", Params: "ConnectorSettleParams", Result: "ConnectorSettled"},
+	"connector.archive.changes":      {Name: "connector.archive.changes", From: "hub", Params: "ConnectorChangesParams", Result: "ConnectorChangesResult"},
+	"connector.archive.media":        {Name: "connector.archive.media", From: "hub", Params: "ConnectorMediaParams", Result: "ConnectorMedia"},
+	"connector.items.list":           {Name: "connector.items.list", From: "hub", Params: "ConnectorParams", Result: "ConnectorItems"},
+	"connector.items.doc_title":      {Name: "connector.items.doc_title", From: "hub", Params: "ConnectorDocTitleParams", Result: "ConnectorDocTitle"},
+	"connector.snapshot.get":         {Name: "connector.snapshot.get", From: "hub", Params: "ConnectorSnapshotParams", Result: "ConnectorSnapshot"},
+	"connector.group.tool":           {Name: "connector.group.tool", From: "hub", Params: "ConnectorGroupToolParams", Result: ""},
+	"connector.group.append":         {Name: "connector.group.append", From: "hub", Params: "ConnectorGroupAppendParams", Result: "ConnectorInboxThing"},
+	"connector.group.fallback":       {Name: "connector.group.fallback", From: "hub", Params: "ConnectorGroupFallbackParams", Result: "ConnectorGroupFallback"},
+	"connector.login.step":           {Name: "connector.login.step", From: "hub", Params: "ConnectorLoginParams", Result: "ConnectorPrompt"},
+	"connector.logout":               {Name: "connector.logout", From: "hub", Params: "ConnectorParams", Result: "Empty"},
+	"connector.options.get":          {Name: "connector.options.get", From: "hub", Params: "ConnectorParams", Result: "ConnectorOptions"},
+	"connector.options.set":          {Name: "connector.options.set", From: "hub", Params: "ConnectorOptionsParams", Result: "Empty"},
+	"connector.machines.online":      {Name: "connector.machines.online", From: "hub", Params: "ConnectorMachineParams", Result: "Empty"},
+	"connector.auth.get":             {Name: "connector.auth.get", From: "hub", Params: "ConnectorParams", Result: "ConnectorAuth"},
+	"connector.auth.set":             {Name: "connector.auth.set", From: "hub", Params: "ConnectorAuthSource", Result: "ConnectorAuth"},
+	"connector.secrets.load":         {Name: "connector.secrets.load", From: "program", Params: "ConnectorParams", Result: "ConnectorSecret"},
+	"connector.secrets.save":         {Name: "connector.secrets.save", From: "program", Params: "ConnectorSecretSaveParams", Result: "Empty"},
+	"connector.secrets.delete":       {Name: "connector.secrets.delete", From: "program", Params: "ConnectorParams", Result: "Empty"},
+	"connector.posts.put":            {Name: "connector.posts.put", From: "program", Params: "ConnectorPostsPutParams", Result: "ConnectorPostsPut"},
+	"connector.posts.comments":       {Name: "connector.posts.comments", From: "program", Params: "ConnectorPostsCommentsParams", Result: "Empty"},
+	"connector.posts.pending":        {Name: "connector.posts.pending", From: "program", Params: "ConnectorPostsPendingParams", Result: "ConnectorPostsPending"},
+	"connector.archive.chats":        {Name: "connector.archive.chats", From: "program", Params: "ConnectorArchiveChatsParams", Result: "ConnectorArchivedChats"},
+	"connector.credentials.gh_token": {Name: "connector.credentials.gh_token", From: "program", Params: "ConnectorGhTokenParams", Result: "ConnectorGhToken"},
+	"connector.changed":              {Name: "connector.changed", From: "program", Params: "ConnectorChangedEvent", Result: "", Event: true},
+	"channel.receive":                {Name: "channel.receive", From: "program", Params: "ChannelReceiveParams", Result: "Empty"},
+	"channel.status":                 {Name: "channel.status", From: "program", Params: "ChannelStatusParams", Result: "Empty"},
+	"channel.send":                   {Name: "channel.send", From: "hub", Params: "ChannelSendParams", Result: "ChannelSendResult"},
+	"channel.typing":                 {Name: "channel.typing", From: "hub", Params: "ChannelTypingParams", Result: "Empty"},
+	"channel.edit":                   {Name: "channel.edit", From: "hub", Params: "ChannelEditParams", Result: "Empty"},
+	"kb.list":                        {Name: "kb.list", From: "program", Params: "KBListParams", Result: "KBListResult"},
+	"kb.get":                         {Name: "kb.get", From: "program", Params: "KBGetParams", Result: "KBGetResult"},
+	"kb.day":                         {Name: "kb.day", From: "program", Params: "KBDayParams", Result: "KBDayResult"},
+	"kb.search":                      {Name: "kb.search", From: "program", Params: "KBSearchParams", Result: "KBSearchResult"},
+	"kb.update":                      {Name: "kb.update", From: "program", Params: "KBUpdateParams", Result: "KBUpdateResult"},
+	"kb.owner":                       {Name: "kb.owner", From: "program", Params: "KBOwnerParams", Result: "KBOwner"},
+	"event.kb.changed":               {Name: "event.kb.changed", From: "hub", Params: "KBChangedEvent", Result: "", Event: true},
+	"event.kb.forgotten":             {Name: "event.kb.forgotten", From: "hub", Params: "KBForgottenEvent", Result: "", Event: true},
 }

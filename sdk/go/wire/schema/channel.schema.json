@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "channel.schema.json",
+  "title": "Channel protocol",
+  "description": "The channel extension point's calls (docs/channels.md \"4. Contributing a channel\", version 1): the program hands the hub the owner's messages (channel.receive) and, without a connector, its own state (channel.status); the hub sends the answers, notes, questions and pushes back (channel.send), and shows typing (channel.typing) or edits a message it sent (channel.edit) when the channel's capabilities say it can. The program only talks to its chat app: following the turn, splitting the answer and asking are the pipeline's. Every params object carries contribution, the channel's id. Plugin-side: only the hub and the program speak it.",
+  "x-side": "plugin",
+  "x-methods": {
+    "channel.receive": {"from": "program", "params": "ChannelReceiveParams", "result": "Empty"},
+    "channel.status": {"from": "program", "params": "ChannelStatusParams", "result": "Empty"},
+    "channel.send": {"from": "hub", "params": "ChannelSendParams", "result": "ChannelSendResult"},
+    "channel.typing": {"from": "hub", "params": "ChannelTypingParams", "result": "Empty"},
+    "channel.edit": {"from": "hub", "params": "ChannelEditParams", "result": "Empty"}
+  },
+  "$defs": {
+    "ChannelErrorCode": {
+      "description": "error.code a program answers besides the base ErrorCode: cannot_send, nowhere to send to yet (before the owner's first message). Another failure of channel.send is tried again after 1, 2 and 4 seconds with the same ref.",
+      "type": "string",
+      "enum": ["cannot_send"]
+    },
+    "ChannelState": {
+      "description": "ChannelStatusParams.state: bound and taking messages, not bound or not set up, or in error (say why in error).",
+      "type": "string",
+      "enum": ["connected", "not_connected", "error"]
+    },
+    "ChannelSendKind": {
+      "description": "What a message the hub sends is: the turn's answer, a note of the hub's own, a question (asks: text), a push the owner did not ask for.",
+      "type": "string",
+      "enum": ["answer", "note", "ask", "push"]
+    },
+    "ChannelReceiveParams": {
+      "description": "channel.receive: one of the owner's messages (only the owner's). Answered once the hub has it, deduplicated by id and queued, not after the turn.",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string", "description": "The channel's id. The hub takes the extension's only channel when it is left out; always send it."},
+        "message": {"$ref": "#/$defs/ChannelMessage"}
+      },
+      "required": ["contribution", "message"]
+    },
+    "ChannelMessage": {
+      "description": "At most 4 images of 3 MB and files of 50 MB each; what does not fit is dropped and said in unsupported. A message with nothing in it (no text, images, files, quote, forward or unsupported) is not handed on.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "description": "The chat app's id of the message: the same message delivered again is taken once."},
+        "text": {"type": "string"},
+        "images": {"type": "array", "maxItems": 4, "items": {"$ref": "#/$defs/ChannelBlob"}},
+        "files": {"type": "array", "items": {"$ref": "#/$defs/ChannelBlob"}},
+        "quote": {"type": "string", "description": "The text of the message it quotes."},
+        "forward": {"type": "string", "description": "What it forwards, as text."},
+        "reply_to": {"type": "string", "description": "The chat app's id of the message it answers."},
+        "unsupported": {"type": "array", "items": {"type": "string"}, "description": "What it had that the channel cannot bring, for people (a voice message, a sticker)."}
+      },
+      "required": ["id"]
+    },
+    "ChannelBlob": {
+      "description": "A picture or a file.",
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "mime": {"type": "string"},
+        "data": {"type": "string", "description": "Base64."}
+      },
+      "required": ["mime", "data"]
+    },
+    "ChannelStatusParams": {
+      "description": "channel.status: how a channel without a connector is doing (one with a connector says it through the connector's status).",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "state": {"$ref": "#/$defs/ChannelState"},
+        "error": {"type": "string", "description": "One sentence for people; never a secret or a message's body."},
+        "account": {"$ref": "#/$defs/ChannelAccount"}
+      },
+      "required": ["contribution", "state"]
+    },
+    "ChannelAccount": {
+      "description": "Who the channel is bound to, for display.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"}
+      },
+      "required": ["name"]
+    },
+    "ChannelSendParams": {
+      "description": "channel.send: one message to the owner. text is Markdown, already split to the channel's max_text (a plain channel gets plain text). The same ref again is the same message: send it once, answer the same.",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "ref": {"type": "string", "minLength": 1},
+        "text": {"type": "string"},
+        "kind": {"type": "string", "description": "ChannelSendKind."},
+        "reply_to": {"type": "string", "description": "The owner's message it answers (ChannelMessage.id)."}
+      },
+      "required": ["contribution", "ref", "text", "kind"]
+    },
+    "ChannelSendResult": {
+      "description": "channel.send's answer: the chat app's id of what was sent, for channel.edit.",
+      "type": "object",
+      "properties": {
+        "message_id": {"type": "string"}
+      }
+    },
+    "ChannelTypingParams": {
+      "description": "channel.typing (capabilities.typing): show typing, or stop.",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "on": {"type": "boolean"}
+      },
+      "required": ["contribution", "on"]
+    },
+    "ChannelEditParams": {
+      "description": "channel.edit (capabilities.progress): replace the text of a message sent before.",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "message_id": {"type": "string"},
+        "text": {"type": "string"}
+      },
+      "required": ["contribution", "message_id", "text"]
+    }
+  }
+}

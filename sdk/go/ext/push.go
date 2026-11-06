@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona/sdk/go/wire"
 )
 
-// Pages pushed for apps before UI version 3 (docs/extensions.md「声明式 UI」「兼容」): they do not know push and pop and
+// Pages pushed for apps before UI version 3 (docs/extensions.md "Declarative UI" "Compatibility"): they do not know push and pop and
 // call ui.action with the action's id instead. Here an action that pushes gets an id of its own when the view goes to
 // such an app, and that ui.action draws the pushed page in place of this one; a result's push draws the page, a pop
 // the page as it is first drawn. The program writes push and pop once, for every app.

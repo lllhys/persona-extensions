@@ -16,12 +16,12 @@ import (
 //   - One section. A card's title is the section's title (a stat's is its metric's label instead); a subtitle is a
 //     secondary text first.
 //   - Numbers are written grouped, with at most one decimal (2,250 · 7.5), the unit after a space.
-//   - stat: metric {label: title or 数值, value, detail: note}.
-//   - stacked_bar: metric {label: 合计, value: total (else the parts' sum), detail: note}; a stacked bar chart with a
-//     series per part (more than four: the first three and 其他, the rest's sum; the rest part's tone neutral), each one
-//     point labelled title or 合计; then a row per part {title: label, subtitle: note, value}. The unit is total's,
+//   - stat: metric {label: title or the "value" label, value, detail: note}.
+//   - stacked_bar: metric {label: the "total" label, value: total (else the parts' sum), detail: note}; a stacked bar chart with a
+//     series per part (more than four: the first three and "other", the rest's sum; the rest part's tone neutral), each one
+//     point labelled title or "total"; then a row per part {title: label, subtitle: note, value}. The unit is total's,
 //     else the card's.
-//   - line, bar: metric {label: 当前, value} when the card has a value; a chart of that kind with one series of the
+//   - line, bar: metric {label: the "current" label, value} when the card has a value; a chart of that kind with one series of the
 //     points (the last 120), detail: note.
 
 // View is the card as the apps draw it, or nil when they cannot (it stays a code block).
@@ -129,7 +129,7 @@ func or(s, def string) string {
 	return def
 }
 
-// amount is v written grouped with at most one decimal, then the unit: "2,250 kcal", "7.5 小时", "8,432".
+// amount is v written grouped with at most one decimal, then the unit: "2,250 kcal", "7.5 h", "8,432".
 func amount(v float64, unit string) string {
 	s := Number(v)
 	if unit != "" {

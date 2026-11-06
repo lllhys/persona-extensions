@@ -1,6 +1,9 @@
 package wire
 
 import (
+	"bytes"
+	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,5 +37,32 @@ func TestCleanSVGDropsScripts(t *testing.T) {
 	out, err := CleanSVG([]byte(`<svg viewBox="0 0 1 1" onload="x()"><script>x()</script><circle r="1"/></svg>`))
 	if err != nil || strings.Contains(string(out), "x()") || !strings.Contains(string(out), "<circle") {
 		t.Fatalf("%v %s", err, out)
+	}
+}
+
+// Two sides naming one picture: each side is held to it (the hub does the same), every time, not one of them as a
+// map's order falls (#3370).
+func TestCheckLooksEverySide(t *testing.T) {
+	root := t.TempDir()
+	var b bytes.Buffer
+	_ = png.Encode(&b, image.NewRGBA(image.Rect(0, 0, 256, 256)))
+	if err := os.WriteFile(filepath.Join(root, "a.png"), b.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for name, looks := range map[string]string{
+		"light": `{"id": "x", "name": "x", "avatar": {"sizes": {"128": "a.png", "256": "a.png"}}, "app_icon_fallback": "persona"}`,
+		"dark":  `{"id": "x", "name": "x", "avatar": {"sizes": {"256": "a.png"}, "dark": {"sizes": {"128": "a.png"}}}, "app_icon_fallback": "persona"}`,
+		"dot":   `{"id": "x", "name": "x", "avatar": {"sizes": {"256": "a.png"}}, "dot": {"size": 144, "states": {"idle": {"file": "a.png"}}}, "app_icon_fallback": "persona"}`,
+	} {
+		manifest := []byte(`{"contributes": {"looks": [` + looks + `]}}`)
+		for i := 0; i < 20; i++ {
+			if err := CheckLooks(manifest, root); err == nil {
+				t.Fatalf("%s: a 256 px picture passed for another side (run %d)", name, i)
+			}
+		}
+	}
+	ok := []byte(`{"contributes": {"looks": [{"id": "x", "name": "x", "avatar": {"sizes": {"256": "a.png"}, "dark": {"sizes": {"256": "a.png"}}}, "app_icon_fallback": "persona"}]}}`)
+	if err := CheckLooks(ok, root); err != nil {
+		t.Fatal(err)
 	}
 }

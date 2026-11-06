@@ -7,7 +7,7 @@ import (
 	"github.com/nwverse/persona/sdk/go/wire"
 )
 
-// Page is one ui contribution (docs/extensions.md「声明式 UI」): what it draws, and what its buttons do.
+// Page is one ui contribution (docs/extensions.md "Declarative UI"): what it draws, and what its buttons do.
 type Page struct {
 	// Render draws the page for r (its state, the slot, the app's context).
 	Render func(ctx context.Context, r *UIRequest) (*wire.View, error)
