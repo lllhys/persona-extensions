@@ -109,7 +109,7 @@
         "manifest_version": 1,
         "id": "github",
         "name": "GitHub",
-        "version": "0.4.15",
+        "version": "0.4.16",
         "description": "GitHub 进 Persona：收件箱里是请你 review、@ 你、指派给你、你的 PR / issue 有了新评论或 review、CI 失败；和你有关的 PR、issue 归档进知识库；助手能搜、读 PR / issue、看改动和 CI，评论和 review 先在手机上确认。登录用你某台电脑上的 gh 登录或设备码登录，token 加密存在 hub 的数据库里。侧边栏的「GitHub」页：待你 review 的 PR、你的 PR 和 CI、指派 / 提到你的、通知和关注的动态、你的仓库（浏览代码、分支、README），PR 的改动文件、逐文件 diff 和行内评论、全部评论、CI 日志摘要，在这一页上评论、review、合并（先预览、确认后才发）。",
         "publisher": "nwverse",
         "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/github",
@@ -280,9 +280,9 @@
       ],
       "packages": [
         {
-          "url": "release:github-v0.4.15/github-0.4.15.tar.gz",
-          "sha256": "b7fb9480c8609718de6e0fc169278609e9f1ffad5eac1e151fef9c40f097a3c4",
-          "size": 13549090
+          "url": "release:github-v0.4.16/github-0.4.16.tar.gz",
+          "sha256": "5e0907f374e8d2d36c958e42d46fd6817c859989147e9aab1d9db45c1008ce37",
+          "size": 13554270
         }
       ]
     },
@@ -291,7 +291,7 @@
         "manifest_version": 1,
         "id": "homeassistant",
         "name": "Home Assistant",
-        "version": "0.2.1",
+        "version": "0.2.2",
         "description": "接你自己的 Home Assistant：主导航上多一个「家」：总览直接写出每个房间开着什么，房间里按设备列（设备的配置开关收在设备里），灯和开关点一下就开关，点开设备调亮度、空调温度和模式、开关窗帘，看最近 24 小时的变化；「动态」看最近两小时家里的变化，「自动化」运行脚本和场景、启停和触发自动化；助手能查家里的状态、历史、全屋日志、长期统计和能耗，看摄像头画面，列出和运行自动化、脚本，按房间批量操作（跳过设备的配置开关），在音箱上播报，也能新建和修改自动化（每次都在手机上确认，门锁、警戒、改自动化和播报永远要确认）；提醒规则在门开、漏水、设备离线、湿度超标时主动推送到手机或叫助手。用长期访问令牌连 Home Assistant 的 REST 和 WebSocket API。",
         "publisher": "nwverse",
         "engines": {
@@ -400,9 +400,9 @@
       ],
       "packages": [
         {
-          "url": "release:homeassistant-v0.2.1/homeassistant-0.2.1.tar.gz",
-          "sha256": "310042451e65c6d946c4b6c1da0929220ba19dd579a9e394125d503e5c3b57ac",
-          "size": 14119385
+          "url": "release:homeassistant-v0.2.2/homeassistant-0.2.2.tar.gz",
+          "sha256": "6a8710d6a8c99a8aef9887c890f63bc1fe4d7889115fd324901c250786edeb4b",
+          "size": 14122727
         }
       ]
     },
@@ -647,7 +647,7 @@
         "manifest_version": 1,
         "id": "markets",
         "name": "行情",
-        "version": "0.6.2",
+        "version": "0.6.3",
         "description": "行情（加密货币来自 OKX 公开行情接口，A 股、港股、美股来自腾讯行情的网页接口，都不用账号）：主导航上多一个「行情」，搜币、搜股票，看自选的价格和涨跌，点开看 K 线走势和成交量；可以给代码设价格提醒，到了进收件箱；助手能用工具搜代码、查报价和 K 线。hub 去读，手机不用代理。",
         "publisher": "nwverse",
         "engines": {
@@ -799,9 +799,9 @@
       ],
       "packages": [
         {
-          "url": "release:markets-v0.6.2/markets-0.6.2.tar.gz",
-          "sha256": "c1e33f8cb332db34a99a88d77d938091767743e049ec430805f0cf42d3e1dc78",
-          "size": 13048745
+          "url": "release:markets-v0.6.3/markets-0.6.3.tar.gz",
+          "sha256": "9ceb674358c75632a70ba1de5ff84e0d6f66298bf2546897dbb829ed6ba8435b",
+          "size": 13049769
         }
       ]
     },
