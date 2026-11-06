@@ -18,9 +18,16 @@ import (
 // Check does). gotd logs nothing: its logger only feeds a picture's trace (trace.go). Every request goes through g,
 // gotd's own too (its config, the sign-in's).
 func dialGotd(ctx context.Context, c creds, store sessionStore, g *gate, updated func()) (client, error) {
+	proxyFailed := make(chan error, 1)
+	failed := func(err error) {
+		select {
+		case proxyFailed <- err:
+		default:
+		}
+	}
 	cl := telegram.NewClient(c.id, c.hash, telegram.Options{
 		SessionStorage: gotdSession{store},
-		Resolver:       resolver(), // through HTTPS_PROXY when there is one (proxy.go)
+		Resolver:       resolver(failed), // through HTTPS_PROXY when there is one (proxy.go)
 		Middlewares:    []telegram.Middleware{gated(g)},
 		Logger:         traceLog{},
 		OnTransfer:     timedTransfer,
@@ -42,10 +49,12 @@ func dialGotd(ctx context.Context, c creds, store sessionStore, g *gate, updated
 		return pool, nil
 	}}
 	ready := make(chan error, 1)
+	rctx, stop := context.WithCancel(ctx)
 	go func() {
 		defer close(gc.done)
 		defer gc.pools.close()
-		err := cl.Run(ctx, func(ctx context.Context) error {
+		defer stop()
+		err := cl.Run(rctx, func(ctx context.Context) error {
 			ready <- nil
 			<-ctx.Done()
 			return ctx.Err()
@@ -61,6 +70,10 @@ func dialGotd(ctx context.Context, c creds, store sessionStore, g *gate, updated
 			return nil, err
 		}
 		return gc, nil
+	case err := <-proxyFailed: // gotd would only try it again: said now, not as a timeout
+		stop()
+		<-gc.done
+		return nil, err
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
