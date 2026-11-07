@@ -617,8 +617,8 @@
       "packages": [
         {
           "url": "release:larkagentx-v0.1.8/larkagentx-0.1.8.tar.gz",
-          "sha256": "818f41f8d216dc2e05c21a0c2774703f35bf53ecec0c7d23408f71b70a8b8dd9",
-          "size": 12052645
+          "sha256": "6ed5b4173ebef94d948526e24c746cd73ed7c0f3e187877a6995b0e307b4e1b3",
+          "size": 12059880
         }
       ]
     },
