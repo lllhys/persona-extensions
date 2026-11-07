@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { connect } from "@persona/extension";
-import { Renderer } from "@persona/extension/ui";
-import { createPage, createCard, createWidget, createShortcut, snapshot, componentCount } from "./ui.tsx";
+import { Renderer, View, Section, Progress, Code, Table, FileTree, CommentThread } from "@persona/extension/ui";
+import { createRoot as createPage, createCard, createWidget, createShortcut, snapshot, componentCount } from "./ui.tsx";
 import { ShowcaseStore, runShortcut, summarize, type Clock, type PageState } from "./services.ts";
 import { catalog } from "./examples.tsx";
 import { locales, translator, locale } from "./locale.ts";
@@ -40,6 +40,16 @@ function normalize(value: any): any {
   return value;
 }
 const staticPages = ["text", "metric", "progress", "row", "button", "link", "field", "chart", "stat_grid", "markdown", "table", "empty", "loading", "divider"];
+test("official canonical View JSON fixtures preserve zero and required empty native values on Node and Bun", () => {
+  const canonical = (name: string) => JSON.parse(readFileSync(new URL(`../../../sdk/ts/fixtures/UIStreamSnapshot.${name}.json`, import.meta.url), "utf8")).view;
+  assert.deepEqual(snapshot(<View key="page" title="Example"><Section key="main">
+    <Progress key="counter" label="Count" ratio={0} />
+  </Section></View>), canonical("keyed"));
+  assert.deepEqual(snapshot(<View key="page"><Section key="main">
+    <Code key="code" text="" /><Table key="table" columns={[{ title: "Name" }]} rows={[]} />
+    <FileTree key="files" entries={[]} /><CommentThread key="thread" comments={[]} />
+  </Section></View>), canonical("required-empty"));
+});
 for (const page of staticPages) test(`JSX preserves every ${page} example and state`, () => {
   const renderer = mount({ p: page });
   try { assert.deepEqual(normalize(renderer.current().view), normalize(fixture(page))); } finally { renderer.dispose(); }
@@ -185,6 +195,7 @@ test("confirmation, submit and opaque event replay semantics are preserved", asy
 });
 test("locales are complete, deterministic, synthetic and negotiated", () => {
   for (const language of ["en", "zh-Hans", "ja"] as const) {
+    assert.equal(Object.keys(locales[language]).length, 232);
     assert.deepEqual(Object.keys(locales[language]).sort(), Object.keys(locales.en).sort());
     for (const page of catalog(translator(language))) {
       const renderer = mount({ p: page.id }, new ShowcaseStore(), 3, language);
@@ -263,7 +274,7 @@ test("non-list pages never scan the list collection", () => {
   }
   store.dispose();
 });
-test("official connect serves localized services/system snapshots but does not claim the pending navigation bridge", async () => {
+test("official connect advertises full localized source contributions and the owner-bound navigation bridge", async () => {
   const answers: any[] = [], conn = connect(createProgram(), line => answers.push(JSON.parse(line)));
   async function request(method: string, params: unknown) {
     const id = String(answers.length + 1); conn.line(JSON.stringify({ id, method, params })); await conn.drain(); return answers.at(-1);
@@ -271,13 +282,15 @@ test("official connect serves localized services/system snapshots but does not c
   try {
     assert.equal((await request("ping", {})).error.code, "not_initialized");
     const init = await request("initialize", { protocol: 1, extension: { id: "showcase", version: "0.1.3" }, hub: { locale: "ja", build: 1, extension_points: {} }, granted: {} });
-    assert.equal(init.result.contributes.ui.length, 2);
-    assert.ok(init.result.contributes.ui.every((ui: any) => ui.id !== "showcase" && ui.opens === undefined));
-    assert.ok(init.result.contributes.shortcuts.every((shortcut: any) => shortcut.ui === undefined));
+    assert.equal(init.result.contributes.ui.length, 3);
+    assert.equal(init.result.contributes.ui[0].placement, "nav_page");
+    assert.ok(init.result.contributes.ui.slice(1).every((ui: any) => ui.opens === "showcase"));
+    assert.equal(init.result.contributes.shortcuts[0].ui, "showcase");
+    assert.deepEqual((await request("ui.page.supported", {})).result, { contributions: ["showcase"] });
     assert.equal((await request("shortcut.run", { contribution: "showcase-echo", values: { text: "Demo" } })).result.text, "入力：Demo");
     const card = await request("ui.render", { contribution: "showcase-card", ui_version: 3, size: "compact" });
     assert.equal(card.result.sections[0].items[0].stats[0].label, "コンポーネント");
-    assert.equal((await request("ui.render", { contribution: "showcase", ui_version: 3 })).error.code, "no_contribution");
+    assert.equal((await request("ui.render", { contribution: "showcase", ui_version: 3 })).error.code, "unsupported");
     assert.equal((await request("shortcut.run", { contribution: "missing" })).error.code, "no_contribution");
   } finally { conn.close(); }
 });

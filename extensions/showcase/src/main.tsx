@@ -1,35 +1,54 @@
-import type { Program } from "@persona/extension";
+import { componentPage, decodeState, type Program } from "@persona/extension";
 import manifest from "../persona-extension.json";
-import { createCard, createWidget, createShortcut, snapshot } from "./ui.tsx";
+import { createRoot, createCard, createWidget, createShortcut, snapshot, type PageInput } from "./ui.tsx";
+import { ShowcaseStore, type PageState } from "./services.ts";
+import { configuredMedia } from "./media.ts";
 
-export { createPage, createCard, createWidget, createShortcut, ShowcaseRoot } from "./ui.tsx";
+export { createRoot, createCard, createWidget, createShortcut, ShowcaseRoot } from "./ui.tsx";
 export { ShowcaseStore } from "./services.ts";
 
-// Until navigation is served, system surfaces must not advertise links to it.
-export const sourceContributions = {
-  ui: manifest.contributes.ui.filter(ui => ui.id !== "showcase").map(({ opens: _opens, ...ui }) => ui),
-  shortcuts: manifest.contributes.shortcuts.map(shortcut => {
-    const { ui: _ui, ...item } = shortcut as typeof shortcut & { ui?: string };
-    return item;
-  }),
-};
+export const sourceContributions = manifest.contributes;
 
-/** Source-host default export. Navigation is deliberately not advertised before the manager bridge lands. */
-export function createProgram(sourceManifest?: unknown): Program {
-  let language = "zh-Hans";
+function pageState(request: { state?: string }): PageState {
+  const decoded = decodeState<Record<string, unknown>>(request, {}), state: PageState = {};
+  for (const key of ["p", "q", "kind", "id", "range", "answer"] as const) {
+    if (typeof decoded[key] === "string") state[key] = decoded[key];
+  }
+  if (typeof decoded.shown === "number" && Number.isSafeInteger(decoded.shown) && decoded.shown > 0) state.shown = decoded.shown;
+  return state;
+}
+
+/** Each host session gets its own root/hooks and the renderer from this bundle's SDK instance. */
+export function createPage(store: ShowcaseStore, defaults: () => PageInput = () => ({})) {
+  return componentPage(request => {
+    const input = defaults();
+    return createRoot(store, {
+      ...input, state: pageState(request),
+      language: request.locale || input.language,
+      uiVersion: request.ui_version ?? 3, timeZone: request.tz || input.timeZone,
+    });
+  });
+}
+
+/** Unreleased source profile; the independently released Go package is not changed. */
+export function createProgram(sourceManifest?: unknown, store = new ShowcaseStore()): Program {
+  let input: PageInput = { language: "zh-Hans" };
   return {
     id: manifest.id, version: manifest.version, manifest: sourceManifest,
-    init(input) {
-      language = input.hub?.locale || "zh-Hans";
+    init(init, hub) {
+      input = { language: init.hub?.locale || "zh-Hans", timeZone: init.hub?.timezone, media: configuredMedia(init.config) };
+      // Service data remains shared while the manager owns page visibility and subscriptions.
+      store.subscribe(() => { if (hub.closed) store.dispose(); else hub.invalidate("showcase"); });
       return sourceContributions;
     },
     ui: {
-      "showcase-card": { render: req => snapshot(createCard(req.locale || language)) },
-      "showcase-widget": { render: req => snapshot(createWidget(req.size || "medium", req.locale || language)) },
+      showcase: createPage(store, () => input),
+      "showcase-card": { render: req => snapshot(createCard(req.locale || input.language)) },
+      "showcase-widget": { render: req => snapshot(createWidget(req.size || "medium", req.locale || input.language)) },
     },
     shortcuts: {
-      "showcase-echo": req => createShortcut("run", req.contribution, req.values, req.locale || language),
-      "showcase-count": req => createShortcut("run", req.contribution, req.values, req.locale || language),
+      "showcase-echo": req => createShortcut("run", req.contribution, req.values, req.locale || input.language),
+      "showcase-count": req => createShortcut("run", req.contribution, req.values, req.locale || input.language),
     },
   };
 }

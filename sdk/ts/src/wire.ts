@@ -361,10 +361,10 @@ export interface ThemeItem {
 }
 
 /**
- * A look every app draws itself: Mochi (the default), Visor, Circuit.
+ * The look every app draws itself: Mochi (the default).
  */
-export type BuiltinLook = "persona" | "persona-visor" | "persona-circuit" | (string & {});
-export const BUILTIN_LOOKS = ["persona", "persona-visor", "persona-circuit"] as const;
+export type BuiltinLook = "persona" | (string & {});
+export const BUILTIN_LOOKS = ["persona"] as const;
 
 /**
  * A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub
@@ -3191,6 +3191,13 @@ export interface ConnectorCallParams {
  */
 export interface ConnectorCallResult {
   text?: string;
+  /**
+   * actions.do only (tools.call ignores it): the id, on the other side, of the message the write made, when the
+   * service gave one (a comment's id, a mail's Message-ID, a chat message's id). The hub trims it and keeps it as the
+   * sent-as-user ledger row's message_ref; one longer than 200 characters is dropped (the row has none), not cut.
+   * Leave it out when there is none.
+   */
+  message_ref?: string;
 }
 
 /**
@@ -3861,7 +3868,10 @@ export interface ConnectorSentRecordParams {
    * cut to 200 characters.
    */
   machine_id?: string;
-  /** The sent message's id on the other side, when the service gave one; cut to 200 characters. */
+  /**
+   * The sent message's id on the other side, when the service gave one. The hub trims it; one longer than 200
+   * characters is dropped (the row has none), not cut.
+   */
   message_ref?: string;
   /**
    * The extension's setting (config key) that let it send without asking, when there is one; cut to 200 characters.
@@ -4577,8 +4587,9 @@ export interface UIStreamSnapshot {
 }
 
 /**
- * Atomic batch, at most 256 operations. Empty batch is explicit and keeps the version. Validate against a staged
- * whole tree before committing. Ordering/equality are reducer checks.
+ * Atomic batch, at most 256 operations. An explicit empty batch keeps the version for a non-event no-op or advances
+ * exactly one revision as an accepted or ambiguous callback fence. Validate against a staged whole tree before
+ * committing. Ordering/equality are reducer checks.
  */
 export interface UIStreamDelta {
   protocol: 1;

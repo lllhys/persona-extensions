@@ -7,12 +7,12 @@ Local-only examples of every extension view component and state, widgets and sho
 - [Development and tests](../../docs/development.md)
 - [Manifest](persona-extension.json)
 
-## Server-only TypeScript/JSX source (draft)
+## Server-only TypeScript/JSX source (unreleased profile)
 
 The released `0.1.3` manifest and Go process package are unchanged. The source
-port for issue #303 is staged alongside them, not a release or a production
-migration. Do not bump the version or publish the source draft until the
-manager bridge and compatibility gates below have been verified.
+profile for issue #303 is an independently installable authoring artifact, not
+a market release, automatic upgrade or production migration. No version bump,
+release, signing or deployment is part of this tooling change.
 
 - `src/examples.tsx` uses the official schema-derived native JSX components for
   every existing component/state example. `src/ui.tsx` exports pure page,
@@ -28,24 +28,26 @@ manager bridge and compatibility gates below have been verified.
   through credential-free HTTPS URLs, including one deliberately missing file
   for native load-failure fallback. `scripts/make-demo-media.py` reproduces the
   assets without dependencies. A page caller can supply actual HTTPS media URLs
-  through `PageInput.media` for an isolated acceptance environment; this is not
-  a newly invented hub media API. The defaults become fetchable when these
-  assets merge to the public repository. Native wire validation and real
-  network/image-load acceptance are separate checks. No network or secret
-  permission was added. Links retain HTTPS targets for native in-app opening,
-  not extension network access.
+  through `PageInput.media` or the source profile's optional `media` configuration.
+  This is not a hub media API: native images still require HTTPS and network
+  availability, while the source runtime itself is fully offline. The defaults
+  become fetchable when the assets merge to the public repository. No network
+  or secret permission was added. Links retain HTTPS targets for native in-app
+  opening, not extension network access.
 - `src/legacy-snapshots/` preserves all existing APP fixtures byte-for-byte.
   Semantic tests compare every source page/system surface with those fixtures,
   allowing only stable JSX keys, opaque action ids and the synthetic image
   substitution. Serialized navigation state is compared after decoding. The
   original Go snapshot tests remain.
-- `src/main.tsx` default-exports an official stdio `Program` for the shortcuts
-  and system snapshot surfaces. It deliberately does **not** advertise the
-  navigation page before the committed manager/component-page bridge exists.
-  The source host supplies the packaged source manifest; the Program does not
-  answer the transitional process manifest as its runtime contract.
+- `src/main.tsx` default-exports the complete stdio `Program`: navigation,
+  overview card, every widget family and both shortcuts. `createPage` uses
+  `componentPage`, capturing the Renderer from the same bundled SDK instance.
+  Each page owns its hooks; one store shares service edits and delayed arrivals.
+  The manager owns authorization, presentation gates, push/pop, visibility,
+  snapshots and stream negotiation. Snapshot-only clients retain opaque host
+  checkpoints; they do not receive or execute source callbacks.
 
-### Local verification and offline draft packaging
+### Local verification and offline source packaging
 
 From this extension directory:
 
@@ -66,10 +68,15 @@ hooks, services, system snapshots and the official transport-independent
 
 `build:source` bundles all code and localization into one self-contained ESM
 artifact, checks that it has no runtime imports or dependency resolution, and
-writes a draft archive under `.source-dist/`. The draft manifest follows
-`runtime.mode = deno` and `runtime.source = {entry, bundle, sha256}`. It does not
-modify the released manifest, indexes, signatures or any hub configuration.
-The source package does not install or download dependencies at runtime.
+writes `.source-dist/showcase-source.tar.gz`. The generated profile manifest
+uses `runtime.mode = deno` and `runtime.source = {entry, bundle, sha256}` with
+contained paths and the exact bounded artifact digest. It retains every native
+and system contribution and includes authoring sources, all locale resources,
+synthetic PNGs and dependency provenance. It does not modify the released
+manifest, indexes, signatures or hub configuration. Dependencies are not
+installed or downloaded at runtime. Use this archive only in a separately
+configured source-capable hub; do not replace a working released installation
+as part of source development.
 
 The copied SDK is owned upstream and includes its declared development configs,
 scripts, typecheck fixtures and canonical conformance fixtures. The official
@@ -78,27 +85,26 @@ checks work after installing the SDK's own locked development dependencies;
 those are build-time dependencies, never source-runtime resolution. Do not
 repair the generated SDK locally; use the official synchronization script.
 
-### Acceptance gates before a release
+### Release and compatibility boundaries
 
-1. Integrate the landed component-page/process bridge with `createPage` and a
-   per-extension store; the manager owns authorization, subscriptions, native
-   push/pop, visibility and stream negotiation. Connect service disposal to
-   process shutdown. Never replace host authorization with a test fixture.
-   Page factories and their Renderer must use the same bundled SDK instance:
-   element symbols and hook contexts are instance-specific. The copied SDK now
-   safely handles parsed null frames, unreachable hub calls at EOF and public
-   error identity across bundles. The source adapter must adopt the verified
-   shutdown order and preserve the module-owned Renderer during bridge mounting.
-2. Run the actual pinned Deno bundle through the sanctioned independently
-   isolated host, manager and WebSocket/client path. Verify every navigation,
-   search, filter, pagination, edit, delayed update and system surface. Obtain
-   real Web/Android dark/light evidence. No screenshot or E2E acceptance is
-   claimed by the source unit fixtures.
-3. Verify manifest schema support, offline bundle integrity and compatible
-   engine selection in install and auto-upgrade. Protocol version 1 alone is
-   **not** a source-runtime or UI-stream capability gate. Older hubs must not
-   select an unsupported source package. Generic source release packaging is
-   still separate from `scripts/package.sh` and market signing.
-4. Only after those gates, switch the shipped runtime and bump the version in
-   an authorized release PR. Keep the process implementation and APP fixtures
-   until the fallback and upgrade behavior is verified.
+Legacy HTTP acceptance requires the upstream adapter repair in
+`nwverse/persona#6305`: preserve the client's UI version for the source root
+while fitting the host's private callback tree canonically. Without that repair,
+UI versions 1–2 mount a modern page and drop native push/pop without applying
+navigation to the snapshot-only session. The actual default Program and archive
+are verified against the repaired backend; unit/bridge fixtures alone do not
+establish this compatibility.
+
+- Production source execution still requires the host's independent kernel
+  confinement. An explicit development-resource build and opt-in can verify an
+  isolated profile, but does not establish production resource isolation or
+  authorize deployment. Keep native, egress, presentation and grant gates intact.
+- Protocol version 1 is **not** a source-runtime or UI-stream capability gate.
+  Pre-source hubs reject the unknown `runtime.mode` field before version
+  selection; the profile has no executable command or JavaScript fallback. A failed preview or
+  upgrade must preserve the working Go installation. No unverified minimum
+  hub version or market selection gate is added here.
+- `scripts/package.sh` and the default manifest continue to package Go. Source
+  packaging is extension-owned, unreleased tooling; no market entry or automatic
+  upgrade selects it. Production confinement and an explicitly authorized
+  release/upgrade policy remain prerequisites for switching the shipped runtime.

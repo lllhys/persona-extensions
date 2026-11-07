@@ -13,8 +13,8 @@ export const days = ["10-30", "10-31", "11-01", "11-02", "11-03", "11-04", "11-0
 export function usage(t: Translate): ChartSeries {
   return { name: t("usage"), points: [3, 5, 2, 8, 6, 4, 7].map((value, index) => ({ label: days[index], value })) };
 }
-/** Root/page factory only. The committed manager bridge will own mounting, authorization and native navigation. */
-export function createPage(store: ShowcaseStore, input: PageInput = {}): Node {
+/** A fresh root for each manager-owned interactive session. */
+export function createRoot(store: ShowcaseStore, input: PageInput = {}): Node {
   return <ShowcaseRoot key="showcase-root" store={store} input={input} />;
 }
 export function ShowcaseRoot({ store, input }: { store: ShowcaseStore; input: PageInput }) {
