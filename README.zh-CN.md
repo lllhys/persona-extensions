@@ -4,6 +4,10 @@
 
 Persona 的公开扩展：接入数据源，为助手添加工具和技能，并贡献由各端 App 渲染的界面。本仓库也是一个扩展市场，版本化安装包发布在 GitHub Releases 中。
 
+[![Persona Extensions 宣传片：加一行地址，再挑需要的扩展](docs/assets/promo-preview-zh.webp)](https://github.com/nwverse/persona-extensions/releases/download/promo-persona-extensions-v1/persona-extensions-zh.mp4)
+
+[观看完整视频（含配音）](https://github.com/nwverse/persona-extensions/releases/download/promo-persona-extensions-v1/persona-extensions-zh.mp4)
+
 ## 快速开始
 
 在 Persona App 中打开 **设置 → 扩展 → 扩展市场 → 添加**，输入：

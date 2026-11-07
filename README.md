@@ -4,6 +4,10 @@
 
 Public extensions for Persona: connect data sources, add assistant tools and skills, and contribute views rendered by the apps. This repository is also an extension market, with versioned packages published in GitHub Releases.
 
+[![Persona Extensions promo: add the market with one line, then pick the extensions you need](docs/assets/promo-preview.webp)](https://github.com/nwverse/persona-extensions/releases/download/promo-persona-extensions-v1/persona-extensions-en.mp4)
+
+[Watch the full video (with voice-over)](https://github.com/nwverse/persona-extensions/releases/download/promo-persona-extensions-v1/persona-extensions-en.mp4)
+
 ## Quick start
 
 In the Persona app, open **Settings → Extensions → Extension markets → Add** and enter:
