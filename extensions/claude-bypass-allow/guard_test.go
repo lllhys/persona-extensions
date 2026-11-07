@@ -80,6 +80,16 @@ func TestPersonOnly(t *testing.T) {
 		`git -c core.editor="sh -c 'rm -rf v'" commit --amend`, "git -c credential.helper='!rm -rf v' fetch",
 		"git bisect run rm -rf v",
 		"git submodule foreach 'rm -rf v'", "git submodule foreach --recursive 'rm -rf v'",
+		// the environment variables git runs through the shell like those -c values, before git or after env
+		"GIT_SSH_COMMAND='rm -rf v' git fetch", "GIT_EDITOR='rm -rf v' git commit --amend",
+		"GIT_SEQUENCE_EDITOR='rm -rf v' git rebase -i HEAD~2", "GIT_EXTERNAL_DIFF='rm -rf v' git diff",
+		"GIT_PAGER='rm -rf v' git -p log", "PAGER='rm -rf v' git log", "EDITOR='rm -rf v' git commit",
+		"FOO=1 VISUAL='rm -rf v' git commit", "env GIT_SSH_COMMAND='rm -rf v' git fetch",
+		"sudo env GIT_EDITOR='rm -rf v' git commit", "env -u X GIT_PAGER='rm -rf v' git log",
+		"export GIT_SSH_COMMAND='rm -rf v'; git fetch", "declare -x GIT_EDITOR='rm -rf v' && git commit",
+		"GIT_SSH_COMMAND='rm -rf v' Git fetch", "ENV GIT_EDITOR='rm -rf v' git commit",
+		"GIT_SSH_COMMAND+='rm -rf v' git fetch", "GIT_EDITOR+='rm -rf v' git commit", "env VISUAL+='rm -rf v' git commit",
+		"export GIT_SSH_COMMAND+='rm -rf v'; git fetch", "declare GIT_PAGER+='rm -rf v'; git log",
 		// git global options that take the next word as their value, and -c aliases without ! (git arguments)
 		"git --namespace x clean -fdx", "git --namespace x reset --hard", "git --namespace x push --force origin main",
 		"git --config-env core.x=Y clean -fdx", "git --attr-source HEAD clean -fdx", "git --super-prefix x/ rm -r d",
@@ -177,6 +187,8 @@ func TestPersonOnly(t *testing.T) {
 		"git --namespace x status", "git --config-env core.x=Y log", "git -c alias.co=checkout co main",
 		"git -c alias.l='log --oneline' l -5", "git -c alias.x=clean status",
 		"git -c user.name='A B' commit -m x", "git -c core.pager='less -R' log", "git -c core.sshCommand='ssh -i k' fetch",
+		"GIT_SSH_COMMAND='ssh -i k' git fetch", "GIT_EDITOR=vim git commit", "env GIT_PAGER='less -R' git log",
+		"export GIT_SSH_COMMAND='ssh -i k'; git fetch", "GIT_SSH_COMMAND+=' -v' git fetch",
 		// a heredoc fed to sudo without its shell options is data, and a benign command in another shell still goes
 		"sudo -u me cat <<EOF\nrm x\nEOF", "sudo -g staff -E cat <<EOF\nrm x\nEOF", "csh -c 'ls -la'", "tcsh <<EOF\necho hi\nEOF",
 	}
