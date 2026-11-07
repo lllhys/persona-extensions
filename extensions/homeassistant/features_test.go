@@ -597,6 +597,13 @@ func TestStatistics(t *testing.T) {
 	}
 	contains(t, callT(t, a, id+"_statistics", map[string]any{"entity_id": "sensor.grid_import", "period": "month"}), "按月")
 	contains(t, callT(t, a, id+"_statistics", map[string]any{"entity_id": "sensor.grid_import", "period": "hour", "days": 30}), "ERR 按小时最多 14 天")
+	// by hour, start / end are held to 14 days too, before the recorder is asked
+	n := len(r.asked("recorder/statistics_during_period"))
+	contains(t, callT(t, a, id+"_statistics", map[string]any{"entity_id": "sensor.grid_import", "period": "hour", "start": "2024-11-08", "end": "2026-11-07"}), "ERR 按小时最多 14 天")
+	if more := r.asked("recorder/statistics_during_period")[n:]; len(more) > 0 {
+		t.Fatalf("two years by hour asked %v", more)
+	}
+	contains(t, callT(t, a, id+"_statistics", map[string]any{"entity_id": "sensor.grid_import", "period": "hour", "start": "2025-12-01", "end": "2025-12-15"}), "2025-12-01 到 2025-12-15，按小时")
 	contains(t, callT(t, a, id+"_statistics", map[string]any{"entity_id": "sensor.x", "period": "year"}), "ERR period 要是")
 	contains(t, callT(t, a, id+"_statistics", nil), "ERR entity_id 要有 1 到 5 个")
 
@@ -613,6 +620,19 @@ func TestStatistics(t *testing.T) {
 	got = callT(t, a, id+"_energy", map[string]any{"period": "week", "days": 60})
 	contains(t, got, "按周", "- 从电网用电（sensor.grid_import）：30.75 kWh", "## 各设备\n- sensor.ac_energy（sensor.ac_energy）：9 kWh\n- 冰箱（sensor.fridge_energy）：1 kWh",
 		"## 每周的从电网用电", "12-02 起的一周：10.5 kWh")
+	contains(t, callT(t, a, id+"_energy", map[string]any{"period": "hour", "start": "2025-11-01", "end": "2025-12-01"}), "ERR 按小时最多 14 天")
+
+	// by hour, 14 days on a calendar with clock changes: 337 hours across the autumn one
+	berlin, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.mu.Lock()
+	a.tz = berlin
+	a.mu.Unlock()
+	contains(t, callT(t, a, id+"_statistics", map[string]any{"entity_id": "sensor.grid_import", "period": "hour", "start": "2025-10-20", "end": "2025-11-03"}), "2025-10-20 到 2025-11-03，按小时")
+	contains(t, callT(t, a, id+"_statistics", map[string]any{"entity_id": "sensor.grid_import", "period": "hour", "start": "2025-10-20", "end": "2025-11-03 01:00"}), "ERR 按小时最多 14 天")
+	contains(t, callT(t, a, id+"_energy", map[string]any{"period": "hour", "days": 14}), "按小时（时区 Europe/Berlin）")
 }
 
 // ---- 6. speakers ----

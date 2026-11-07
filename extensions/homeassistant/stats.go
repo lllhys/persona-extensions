@@ -103,10 +103,20 @@ func (s *statArgs) clean() error {
 	if s.Days > 730 {
 		s.Days = 730
 	}
-	if s.Period == "hour" && s.Days > 14 {
-		return fmt.Errorf("按小时最多 14 天；更长的用 day、week 或 month")
-	}
 	return nil
+}
+
+// span is the args' stretch of time: up to two years, by hour up to 14 days, whether from days or from start / end.
+func (s *statArgs) span(loc *time.Location) (time.Time, time.Time, error) {
+	from, to, err := span(loc, s.Start, s.End, s.Days*24, 0, 731*24*time.Hour)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	// 14 days on the hub's calendar too: those across the autumn clock change are 337 hours
+	if s.Period == "hour" && to.Sub(from) > 14*24*time.Hour && to.After(from.In(loc).AddDate(0, 0, 14)) {
+		return time.Time{}, time.Time{}, fmt.Errorf("按小时最多 14 天；更长的用 day、week 或 month")
+	}
+	return from, to, nil
 }
 
 func (a *app) toolStatistics(ctx context.Context, args statArgs) (string, error) {
@@ -117,7 +127,7 @@ func (a *app) toolStatistics(ctx context.Context, args statArgs) (string, error)
 		return "", fmt.Errorf("entity_id 要有 1 到 5 个（传感器的实体 id，或统计 id）")
 	}
 	loc := a.loc()
-	from, to, err := span(loc, args.Start, args.End, args.Days*24, 0, 731*24*time.Hour)
+	from, to, err := args.span(loc)
 	if err != nil {
 		return "", err
 	}
@@ -300,7 +310,7 @@ func (a *app) toolEnergy(ctx context.Context, args statArgs) (string, error) {
 		return "", err
 	}
 	loc := a.loc()
-	from, to, err := span(loc, args.Start, args.End, args.Days*24, 0, 731*24*time.Hour)
+	from, to, err := args.span(loc)
 	if err != nil {
 		return "", err
 	}
