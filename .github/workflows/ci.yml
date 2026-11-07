@@ -4,7 +4,7 @@
 # (else since the push's "before"), update both indexes and commit them.
 # A manual run releases the extensions named (a version merged earlier and held back until now).
 # Both jobs run on GitHub-hosted ubuntu-latest (a public repository: no self-hosted runner, no runner variable).
-# When Actions can't run here, run scripts/ci.sh on your machine and say so in the pull request.
+# Pull requests must pass the required aggregate check before merging.
 name: ci
 on:
   pull_request:
@@ -16,7 +16,7 @@ on:
         description: Extension ids to release, separated by spaces
         required: true
 permissions:
-  contents: write
+  contents: read
 # A pull request's new push cancels its older run. A push to main is never cancelled here: its run gets a group of
 # its own, and its release job waits in the release group below.
 concurrency:
@@ -33,7 +33,24 @@ jobs:
           go-version-file: pluginkit/go.mod
           cache-dependency-path: "**/go.sum"
       - run: scripts/ci.sh
+  ci-required:
+    name: CI required
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    needs: [check]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require successful checks
+        env:
+          CHECK_RESULT: ${{ needs.check.result }}
+        run: |
+          if [ "$CHECK_RESULT" != success ]; then
+            printf 'Required check did not succeed: %s\n' "$CHECK_RESULT"
+            exit 1
+          fi
   release:
+    permissions:
+      contents: write
     if: github.event_name != 'pull_request'
     # One release at a time per branch, and a running one is never cancelled. GitHub still keeps only one waiting
     # run per group (a newer one replaces it), so a release diffs from the last commit CI released for, not only from
@@ -48,6 +65,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: pluginkit/go.mod
@@ -104,12 +122,28 @@ jobs:
         env:
           BRANCH: ${{ github.ref_name }}
           NAMED: ${{ inputs.extensions }}
+          INDEX_DEPLOY_KEY: ${{ secrets.EXTENSION_INDEX_DEPLOY_KEY }}
         run: |
           files="persona-extensions.json persona-plugins.json persona-extensions.json.sig persona-plugins.json.sig"
           for f in $files; do
             if [ -e "$f" ]; then git add "$f"; fi
           done
           if git diff --cached --quiet; then exit 0; fi
+          # Only this step receives the deploy key. Keep it in ssh-agent memory, never in a key file.
+          if [ -z "$INDEX_DEPLOY_KEY" ]; then
+            printf '%s\n' '::error::EXTENSION_INDEX_DEPLOY_KEY is required to push the signed index'
+            exit 1
+          fi
+          key="$INDEX_DEPLOY_KEY"
+          unset INDEX_DEPLOY_KEY
+          eval "$(ssh-agent -s)" >/dev/null
+          trap 'ssh-agent -k >/dev/null 2>&1 || true' EXIT
+          printf '%s\n' "$key" | ssh-add - >/dev/null 2>&1
+          unset key
+          # GitHub's host keys come from its authenticated HTTPS API, not an unauthenticated key scan.
+          gh api meta --jq '.ssh_keys[] | "github.com " + .' > "$RUNNER_TEMP/index-known-hosts"
+          git config core.sshCommand "ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/index-known-hosts"
+          git remote set-url --push origin "git@github.com:${GITHUB_REPOSITORY}.git"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # "market: index after <sha>" marks what a push's release covered (scripts/manifest.py last-released); a

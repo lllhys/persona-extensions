@@ -20,11 +20,13 @@ Package locations use `release:<tag>/<file>` in the index. [scripts/index.py](..
 
 ## Automated releases
 
-[CI](../.github/workflows/ci.yml) runs [scripts/ci.sh](../scripts/ci.sh) for pull requests. On a push to `main`, it releases the extensions whose manifest version changed since the last commit a release run finished for (or, before any, since the push's previous head), including new extensions, so versions from a run that was dropped while it waited go out with the next one.
+[CI](../.github/workflows/ci.yml) runs [scripts/ci.sh](../scripts/ci.sh) for pull requests. Its `CI required` aggregate depends on the check job and fails unless that job succeeds; failed, skipped or cancelled checks cannot satisfy the merge requirement. Local checks do not replace required hosted CI. On a push to `main`, it releases the extensions whose manifest version changed since the last commit a release run finished for (or, before any, since the push's previous head), including new extensions, so versions from a run that was dropped while it waited go out with the next one.
 
 A version is released once: CI skips an existing release (and only puts it into the index when an earlier index commit was lost, #59); `scripts/release.sh` refuses to overwrite it. Do not rewrite published tags or historical commits to change documentation language.
 
-After packaging and creating releases, CI updates both indexes, signs them and commits the indexes and signatures. Its index commit message is already English. A manual workflow run takes extension ids and can release a version merged earlier but deliberately held back. An argument that is neither an extension id (`extensions/<id>` works too) nor a git commit stops the release before anything is released. A push without a usable previous ref runs checks only.
+After packaging and creating releases, CI updates both indexes, signs them and commits the indexes and signatures. The index commit is pushed with the write-enabled deploy key in `EXTENSION_INDEX_DEPLOY_KEY`, not the workflow token. Only the index commit step receives that key, loads it into an in-memory SSH agent and removes the agent on exit. The default-branch ruleset permits that deploy key to publish indexes; people and pull requests have no bypass. Deploy keys must be enabled by the organization before this authentication can be configured.
+
+Its index commit message is already English. A manual workflow run takes extension ids and can release a version merged earlier but deliberately held back. An argument that is neither an extension id (`extensions/<id>` works too) nor a git commit stops the release before anything is released. A push without a usable previous ref runs checks only.
 
 If the CI environment is unavailable, maintainers can run the checks locally and describe that limitation in the PR. Do not report checks that did not run as passing.
 
@@ -63,6 +65,19 @@ scripts/sign-index.py verify
 Without a key, the signing command prints `unsigned` and exits successfully, warning if existing signatures are stale. This does **not** make a changed index safe to publish: `scripts/ci.sh` fails if its existing signatures no longer match. Sign after updating indexes.
 
 The current verifier checks signatures that exist; it skips an absent `.sig` file. Therefore, success alone is not proof that both signatures are present. Confirm both files are included before publishing.
+
+## Signing-key rotation on 2026-11-08
+
+The market's public signing key was rotated during the approved repository cleanup. The current key id is `3cce0f471911a1cf`; verify it against the committed `market.pub`. Current indexes are signed with the new key. Historical signature files are retained as archival data and are not re-signed after historical content cleanup; hubs verify the current index.
+
+Existing hubs show `key_changed` after the publisher switches repositories. After checking the current public key and both index signatures, the hub owner runs:
+
+```sh
+personad extension market list
+personad extension market trust <market-id>
+```
+
+Use the id returned by the first command for this market. This is an explicit owner trust decision, not an automatic migration step. Hub versions with a pinned official-market public key also need their publisher-provided key pin updated for fresh registration; this repository does not silently change hub trust.
 
 ## Verification without a private key
 
