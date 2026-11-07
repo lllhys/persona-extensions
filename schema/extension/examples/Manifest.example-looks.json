@@ -43,7 +43,7 @@
         "name": "石子",
         "names": {"en": "Pebble", "ja": "こいし"},
         "avatar": {"sizes": {"256": "looks/pebble/avatar-256.png"}, "svg": "looks/pebble/avatar.svg"},
-        "app_icon_fallback": "jarvis-circuit"
+        "app_icon_fallback": "persona"
       }
     ]
   }
