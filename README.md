@@ -4,9 +4,9 @@
 
 Public extensions for Persona: connect data sources, add assistant tools and skills, and contribute views rendered by the apps. This repository is also an extension market, with versioned packages published in GitHub Releases.
 
-[![Persona Extensions promo: add the market with one line, then pick the extensions you need](docs/assets/promo-preview.webp)](https://github.com/nwverse/persona-extensions/releases/download/promo-persona-extensions-v1/persona-extensions-en.mp4)
+[![Persona Extensions promo: add the market with one line, then pick the extensions you need](docs/assets/promo-preview.webp)](#video-tour)
 
-[Watch the full video (with voice-over)](https://github.com/nwverse/persona-extensions/releases/download/promo-persona-extensions-v1/persona-extensions-en.mp4)
+[Watch the video tour (with voice-over)](#video-tour)
 
 ## Quick start
 
@@ -25,6 +25,12 @@ personad extension market add github:nwverse/persona-extensions
 ```
 
 See [installation](docs/installation.md) for local packages, older hubs and extension-specific setup.
+
+## Video tour
+
+https://github.com/user-attachments/assets/0198ecd2-1e5f-4ca1-95f4-0473b0488670
+
+[Download the HD version and subtitles](https://github.com/nwverse/persona-extensions/releases/tag/promo-persona-extensions-v1)
 
 ## Extensions
 
