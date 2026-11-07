@@ -68,7 +68,8 @@ func TestPersonOnly(t *testing.T) {
 		"unshare rm -rf v", "taskset 1 rm -rf v",
 		// other shells (csh and tcsh ship in macOS's /bin), and sudo -s/-i or doas -s, which start one that reads its input
 		`csh -c 'rm -rf "$d"'`, `tcsh -c 'rm -rf "$d"'`, "mksh -c 'rm -rf v'", "busybox ash -c 'rm -rf v'", "yash -c 'rm -rf v'",
-		"pwsh -c 'rm -rf v'", "tcsh <<EOF\nrm -rf \"$d\"\nEOF", "sudo -s <<EOF\nrm -rf \"$d\"\nEOF",
+		"pwsh -c 'rm -rf v'", "tcsh <<EOF\nrm -rf \"$d\"\nEOF", "sudo -s <<EOF\nrm -rf \"$d\"\nEOF", "sudo FOO=bar -i 'rm -rf /etc/x'", "sudo FOO=bar -s 'rm -rf /etc/x'",
+		"sudo FOO=bar --login 'rm -rf /etc/x'",
 		"sudo -i <<'EOF'\nrm -rf /var/x/*\nEOF", "sudo -u root -s <<EOF\nrm -rf v\nEOF", "sudo -Hi <<EOF\nrm -rf v\nEOF",
 		"sudo --login <<EOF\nrm -rf v\nEOF", "doas -s <<EOF\nrm -rf v\nEOF",
 		"sudo --user root -s <<EOF\nrm -rf v\nEOF", "sudo --group staff -i <<EOF\nrm -rf v\nEOF",

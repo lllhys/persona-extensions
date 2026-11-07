@@ -3,6 +3,7 @@ package main
 import (
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 )
@@ -38,27 +39,40 @@ var shells = map[string]bool{"bash": true, "sh": true, "zsh": true, "dash": true
 	"flock": true, "script": true, "sg": true, "npx": true, "trap": true, "coproc": true}
 
 // sudoShell says whether the options after sudo or doas start a shell (-s/--shell, -i/--login), which runs a
-// quoted argument or its input as commands. It reads options up to the first word that is not one, skipping the
-// values of options that take one.
+// quoted argument or its input as commands.
 func sudoShell(args []string) bool {
+	return sudoOption(args, "si", "--shell", "--login")
+}
+
+// sudoOption says whether the options after sudo or doas include one of the short letters (alone or combined, as
+// in -iu bob) or long names. A long option counts by any prefix of its name, as sudo reads a shortened one
+// (--chd /etc is --chdir /etc); an ambiguous one makes sudo stop, so counting it only asks more. It reads options up
+// to the first word that is not one, skipping the values of options that take one and VAR=value words, which sudo
+// reads options after too (sudo FOO=bar -i).
+func sudoOption(args []string, short string, long ...string) bool {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
+		if name, _, ok := strings.Cut(a, "="); ok && identifier.MatchString(name) {
+			continue
+		}
 		switch {
-		case a == "--shell" || a == "--login":
-			return true
 		case a == "--" || !strings.HasPrefix(a, "-") || len(a) < 2:
 			return false
 		case strings.HasPrefix(a, "--"):
-			if sudoLongValue[a] { // --user root: the next word is its value
+			name, _, value := strings.Cut(a, "=")
+			if slices.ContainsFunc(long, func(l string) bool { return strings.HasPrefix(l, name) }) {
+				return true
+			}
+			if !value && sudoTakesValue(name) { // --user root: the next word is its value
 				i++
 			}
 			continue
 		}
 		for j := 1; j < len(a); j++ {
-			if a[j] == 's' || a[j] == 'i' {
+			if strings.IndexByte(short, a[j]) >= 0 {
 				return true
 			}
-			if strings.IndexByte("CDghpRrTtUu", a[j]) >= 0 { // the rest of the word, or the next one, is its value
+			if strings.IndexByte("CDghpRrTtUuac", a[j]) >= 0 { // the rest of the word, or the next one, is its value
 				if j == len(a)-1 {
 					i++
 				}
@@ -72,7 +86,32 @@ func sudoShell(args []string) bool {
 // sudoLongValue are sudo's long options that take a value, which is the next word unless it follows "=".
 var sudoLongValue = map[string]bool{"--close-from": true, "--chdir": true, "--group": true, "--host": true,
 	"--prompt": true, "--chroot": true, "--role": true, "--type": true, "--command-timeout": true,
-	"--other-user": true, "--user": true}
+	"--other-user": true, "--user": true, "--auth-type": true, "--login-class": true}
+
+// sudoTakesValue says whether a long option, or a prefix sudo reads as one, takes a value: the exact name, or a
+// prefix of only options that take one.
+func sudoTakesValue(name string) bool {
+	if sudoLongValue[name] {
+		return true
+	}
+	found := false
+	for _, l := range sudoLongNames {
+		if strings.HasPrefix(l, name) {
+			if !sudoLongValue[l] {
+				return false
+			}
+			found = true
+		}
+	}
+	return found
+}
+
+// sudoLongNames are all of sudo's long options.
+var sudoLongNames = []string{"--askpass", "--auth-type", "--background", "--bell", "--close-from", "--chdir",
+	"--preserve-env", "--edit", "--group", "--set-home", "--help", "--host", "--login", "--login-class",
+	"--remove-timestamp", "--reset-timestamp", "--list", "--no-update", "--non-interactive", "--preserve-groups", "--prompt",
+	"--chroot", "--role", "--stdin", "--shell", "--type", "--command-timeout", "--other-user", "--user", "--version",
+	"--validate"}
 
 // sqlClients run SQL given as an argument or on their input.
 var sqlClients = map[string]bool{"psql": true, "mysql": true, "mariadb": true, "sqlite3": true, "sqlcmd": true,

@@ -670,10 +670,15 @@ func (g *guard) scratchTargets(before, targets []string) bool {
 	if g.roots == nil || g.sv == nil || len(targets) == 0 {
 		return false
 	}
-	for _, w := range before {
+	for i, w := range before {
 		b := progName(w)
 		if (wrappers[w] || wrappers[b]) && !scratchWrappers[b] {
 			return false // xargs, find -exec, ssh, eval…: the targets are not what they look like
+		}
+		if (b == "sudo" || b == "doas") && sudoOption(before[i+1:], "iDR", "--login", "--chdir", "--chroot") {
+			// sudo -i: a login shell, which starts in the target user's home; sudo -D/etc, -bD /etc, --chd /etc:
+			// another directory; sudo -R: another root, where the command starts at /
+			return false
 		}
 		if runners[b] {
 			return false // uv run --directory x, poetry -C x run: another directory

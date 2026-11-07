@@ -71,7 +71,7 @@ func TestScratchDeletions(t *testing.T) {
 		"rm -rf build", "rm -rf ./dist node_modules", "cd sub && rm -f out/*", "rm -rf {project}/build",
 		"X={tmp}/a; rm -rf \"$X\"/b", "X={tmp}/a\nrm -rf \"${X}/b\"", "S={tmp}; for v in a b c; do rm -rf $S/$v; done",
 		"S={tmp}/a && rm -rf $S/b", "rm -rf {root}/r/.claude/worktrees/w", "rm -rf ~/.claude/worktrees/w/sub",
-		"rmdir {tmp}/empty", "unlink {tmp}/f", "sudo rm -rf {tmp}/x", "timeout 10 rm -rf {tmp}/x", "if true; then rm -rf {tmp}/x; fi",
+		"rmdir {tmp}/empty", "unlink {tmp}/f", "sudo rm -rf {tmp}/x", "sudo -u bob rm -rf build", "sudo --user=bob rm -rf build", "sudo --us bob rm -rf build", "sudo -u i rm -rf build", "sudo FOO=bar rm -rf {tmp}/x", "timeout 10 rm -rf {tmp}/x", "if true; then rm -rf {tmp}/x; fi",
 		"mv {tmp}/a {tmp}/b", "mv -t {tmp}/d {tmp}/a", "cp -f {tmp}/a build/b", "echo x > build/out.json", "go test > ~/ag-work/v1/log 2>&1",
 		"tee build/x.log", "truncate -s 0 {tmp}/log", "find {tmp}/x -name '*.o' -delete", "find . -name '*.o' -delete",
 		"find . -name '*.go' -fprint {tmp}/list", "find {tmp}/x -delete -fls {tmp}/x.log",
@@ -111,7 +111,19 @@ func TestScratchDeletions(t *testing.T) {
 		// wrappers that take the targets elsewhere
 		"ssh host 'rm -rf {tmp}/x'", "docker exec c sh -c 'rm -rf {tmp}/x'", "sh -c 'rm -rf x'",
 		"find {tmp} -exec rm -rf {} +", "ls | xargs rm -rf", "ssh host rm -rf {tmp}/x", "eval rm -rf {tmp}/x",
-		"env -C /etc rm -rf x", "sudo -D /etc rm -rf x", "find -L {tmp}/x -delete", "rsync -a --delete src/ host:{tmp}/d",
+		"env -C /etc rm -rf x", "sudo -D /etc rm -rf x", "sudo -D/etc rm -rf x", "sudo -bD /etc rm -rf x",
+		// a login shell starts in the target user's home
+		"sudo -i rm -rf build", "sudo -u bob -i rm -rf build", "sudo -iu bob rm -rf build", "sudo --login rm -rf .ssh/x",
+		// a shortened long option is read as sudo reads it, and a chroot starts the command at its /
+		"sudo --chd /etc rm -rf x", "sudo --chd=/etc rm -rf x", "sudo --chdir=/etc rm -rf x", "sudo -R /c rm -rf build",
+		"sudo -R/c rm -rf build", "sudo --chroot /c rm -rf build", "sudo --chroot=/c rm -rf build", "sudo --chr /c rm -rf build",
+		"sudo -a pam -i rm -rf build", "sudo -c staff -i rm -rf build", "sudo --auth-type pam -i rm -rf build",
+		"sudo --login-class staff -i rm -rf build", "sudo --us bob -i rm -rf build",
+		// sudo reads its options after a VAR=value too
+		"sudo FOO=bar -i rm -rf build", "sudo -u root FOO=bar -i rm -rf build", "sudo FOO=bar --login rm -rf build",
+		"sudo FOO=bar -D/etc rm -rf x", "sudo FOO=bar -bD /etc rm -rf x", "sudo FOO=bar --chd /etc rm -rf x",
+		"sudo FOO=bar -R /c rm -rf build", "sudo FOO=bar --chroot /c rm -rf build",
+		"find -L {tmp}/x -delete", "rsync -a --delete src/ host:{tmp}/d",
 		"rsync -a --delete src/ ~/notes/", "rmdir -p {tmp}/a/b", "mv {tmp}/a ~/notes", "cp -f {tmp}/a ~/notes",
 		// what scratch never covers
 		"chmod -R 777 {tmp}/x", "rm -rf {tmp}/x && chmod 777 y", "rm -rf {tmp}/x; git push --force", "dd if=/dev/zero of={tmp}/x",
