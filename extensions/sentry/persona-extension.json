@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "sentry",
   "name": "Sentry",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "把 Persona 各端（hub、网页、安卓、之后的 iOS / Mac）的错误和崩溃发到你的 Sentry 项目，方便持续发现和修问题。报告先经 hub 脱敏：不含消息正文、token、用户名、机器名和 IP 地址。填好 DSN 才开始上报；没有填就什么都不发。",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/blob/main/docs/extensions/sentry.md",

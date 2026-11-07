@@ -82,7 +82,10 @@ func Event(r wire.ErrorReport, o Options) map[string]any {
 		"environment": o.Environment,
 		"tags":        tags(r),
 		"extra":       map[string]any{"count": r.Count, "previous_launch": r.PreviousLaunch, "received_at": r.ReceivedAt},
-		"sdk":         map[string]any{"name": "persona.sentry", "version": strings.TrimPrefix(o.Client, "persona-sentry/")},
+		// infer_ip never: without it Sentry stores the sender's address (the hub's) as the user's IP on javascript
+		// and cocoa events.
+		"sdk": map[string]any{"name": "persona.sentry", "version": strings.TrimPrefix(o.Client, "persona-sentry/"),
+			"settings": map[string]any{"infer_ip": "never"}},
 	}
 	if r.Release != "" {
 		rel := "persona-" + r.Source + "@" + r.Release

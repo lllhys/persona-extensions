@@ -24,7 +24,7 @@ Each event carries:
 - `fingerprint`: the hub's, so Sentry groups by the same problem the hub folds by;
 - `extra`: `count` (how many the hub folded into it), `previous_launch`, `received_at`.
 
-No `server_name` and no user are set.
+No `server_name` and no user are set, and `sdk.settings.infer_ip` is `never`, so Sentry doesn't store the sending address (the hub's) as the user's IP. Sentry may still look up a coarse location (country, region, city) from that address and show it as the user's geo, even with the project setting "Prevent Storing of IP Addresses" on.
 
 ## Settings
 

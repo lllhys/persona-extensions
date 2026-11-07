@@ -110,6 +110,27 @@ func TestEvent(t *testing.T) {
 	}
 }
 
+// Without sdk.settings.infer_ip, Sentry (Relay) stores the sender's address, the hub's, as user.ip_address on
+// javascript and cocoa events.
+func TestEventInfersNoIP(t *testing.T) {
+	for _, source := range wire.ErrorSources {
+		r := sample()
+		r.Source = source
+		raw, _ := json.Marshal(Event(r, Options{Environment: "production", Client: "persona-sentry/0.1.1"})["sdk"])
+		var got struct {
+			Settings struct {
+				InferIP string `json:"infer_ip"`
+			} `json:"settings"`
+		}
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Settings.InferIP != "never" {
+			t.Errorf("%s: sdk without infer_ip never: %s", source, raw)
+		}
+	}
+}
+
 func TestLimitedUntil(t *testing.T) {
 	now := time.Date(2026, 11, 6, 9, 0, 0, 0, time.UTC)
 	resp := &http.Response{StatusCode: 200, Header: http.Header{"X-Sentry-Rate-Limits": {"60:transaction:key, 120:error;default:organization"}}}
