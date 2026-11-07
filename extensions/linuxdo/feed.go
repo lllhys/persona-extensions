@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -234,11 +235,11 @@ func ago(d time.Duration) string {
 
 func oneLine(s string) string { return strings.TrimSpace(spaceRE.ReplaceAllString(s, " ")) }
 
-// clip cuts s to at most n characters, marking the cut.
+// clip cuts s to at most n characters, marking the cut; leading spaces (a code line's indentation) stay.
 func clip(s string, n int) string {
 	if utf8.RuneCountInString(s) <= n {
 		return s
 	}
 	r := []rune(s)
-	return strings.TrimSpace(string(r[:n])) + "…"
+	return strings.TrimRightFunc(string(r[:n]), unicode.IsSpace) + "…"
 }
