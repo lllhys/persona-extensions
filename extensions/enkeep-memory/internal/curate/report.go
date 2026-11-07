@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/nwverse/persona-extensions/extensions/enkeep-memory/internal/memory"
 	"github.com/nwverse/persona-extensions/extensions/enkeep-memory/internal/store"
 	"github.com/nwverse/persona-extensions/extensions/enkeep-memory/internal/verify"
 )
@@ -52,6 +53,9 @@ func (c *Curator) dailyReport(day string, run *store.Run, f store.Funnel) string
 		fmt.Fprintf(&b, " %s %d", k, f.Sources[k])
 	}
 	b.WriteString("\n\n## 摘要和条目\n\n")
+	fmt.Fprintf(&b, "记忆：读了 %d 个，引文 %d 句，拒绝 %d 条；用户确认 %d、否定 %d；矛盾 %d 组；照做回补 %d（只是口头附和、不算的 %d）。\n",
+		run.Counts["memory_units"], run.Counts["memory_evidence"], run.Counts["memory_rejected"], run.Counts["memory_confirmed"],
+		run.Counts["memory_rejected_by_user"], run.Counts["memory_contradictions"], run.Counts["memory_follow_ups"], run.Counts["memory_follow_ups_verbal"])
 	fmt.Fprintf(&b, "摘要 %d 个；事实 %d、做事方式 %d、知识 %d；通过 %d、标记 %d、拒绝 %d；图谱新关系 %d、补证据 %d、取代 %d、冲突 %d。模型调用 %d 次，约 %d token。\n",
 		run.Counts["digested"], run.Counts[store.Fact], run.Counts[store.Practice], run.Counts[store.Knowledge],
 		run.Counts["passed"], run.Counts["flagged"], run.Counts["rejected"],
@@ -128,6 +132,7 @@ func (c *Curator) weeklyReport(week string, days []string, run *store.Run, findi
 			}
 		}
 	}
+	c.memoryReport(&b, days)
 	if len(findings) > 0 {
 		b.WriteString("\n## 体检\n\n")
 		for _, f := range findings {
@@ -139,4 +144,83 @@ func (c *Curator) weeklyReport(week string, days []string, run *store.Run, findi
 	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+var (
+	layerLabel = map[memory.Layer]string{memory.Principle: "原则", memory.Guideline: "准则", memory.Experience: "经验", memory.Fact: "事实型"}
+	stateLabel = map[memory.State]string{memory.Candidate: "候选", memory.Active: "生效", memory.Dormant: "休眠", memory.Obsolete: "过时", memory.Dropped: "不收"}
+	levelLabel = map[memory.Level]string{memory.Resident: "常驻", memory.Recall: "召回", memory.Search: "只检索", memory.None: "不注入"}
+)
+
+// memoryReport is the weekly memory section (design 6.13, 6.17): states by layer, what became active, moved up a
+// layer, went dormant or lost this week, and the injection levels. The user may confirm (to speed up) or reject
+// (to void) any of them; nothing waits for them. Private entries are counted, never shown. Follow-throughs are not
+// listed: they are backfilled automatically and are not the user's to referee.
+func (c *Curator) memoryReport(b *strings.Builder, days []string) {
+	book := c.St.S.Memory
+	if len(book.Entries) == 0 {
+		return
+	}
+	p := c.Cfg.Memory
+	b.WriteString("\n## 记忆\n\n| 层级 | 生效 | 候选 | 休眠 | 过时 |\n| --- | --- | --- | --- | --- |\n")
+	count := map[memory.Layer]map[memory.State]int{}
+	type moved struct{ what, text string }
+	var moves []moved
+	private := 0
+	before := addDays(days[0], -1)
+	for _, id := range sortedKeys(book.Entries) {
+		e := book.Entries[id]
+		st := e.Status
+		layer := st.Layer
+		if st.Descriptive {
+			layer = memory.Fact
+		}
+		if count[layer] == nil {
+			count[layer] = map[memory.State]int{}
+		}
+		count[layer][st.State]++
+		was := memory.Evaluate(e, before, p)
+		var what string
+		switch {
+		case st.Lost && !was.Lost:
+			what = "矛盾里判输"
+		case st.State == memory.Active && was.State != memory.Active:
+			what = "新生效的" + layerLabel[st.Layer]
+		case st.State == memory.Active && was.State == memory.Active && rank(st.Layer) > rank(was.Layer):
+			what = "升为" + layerLabel[st.Layer]
+		case st.State == memory.Dormant && was.State != memory.Dormant:
+			what = "休眠"
+		default:
+			continue
+		}
+		if whole, _ := memory.Privacy(e); whole {
+			private++
+			continue
+		}
+		_, text := memory.Privacy(e)
+		moves = append(moves, moved{what, text})
+	}
+	for _, l := range []memory.Layer{memory.Principle, memory.Guideline, memory.Experience, memory.Fact} {
+		n := count[l]
+		fmt.Fprintf(b, "| %s | %d | %d | %d | %d |\n", layerLabel[l], n[memory.Active], n[memory.Candidate], n[memory.Dormant], n[memory.Obsolete])
+	}
+	levels := memory.Levels(memory.Inject(book, p))
+	fmt.Fprintf(b, "\n注入：常驻 %d、召回 %d、只检索 %d、不注入 %d。\n", levels[memory.Resident], levels[memory.Recall], levels[memory.Search], levels[memory.None])
+	if len(moves) > 0 || private > 0 {
+		b.WriteString("\n本周变化（不对的可以否定，一票作废；想让它马上生效可以确认）：\n\n")
+		for i, m := range moves {
+			if i >= 30 {
+				fmt.Fprintf(b, "- ……另有 %d 条\n", len(moves)-i)
+				break
+			}
+			fmt.Fprintf(b, "- %s：%s\n", m.what, m.text)
+		}
+		if private > 0 {
+			fmt.Fprintf(b, "- 隐私条目 %d 条（只计数，不写内容）\n", private)
+		}
+	}
+}
+
+func rank(l memory.Layer) int {
+	return map[memory.Layer]int{memory.Experience: 1, memory.Guideline: 2, memory.Principle: 3}[l]
 }

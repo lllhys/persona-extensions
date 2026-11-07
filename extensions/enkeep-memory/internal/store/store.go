@@ -1,5 +1,5 @@
 // Package store is the curator's own state, all of it in its data directory: the ledger of what was processed,
-// the curated items, the graph, the proposals, the log of every write to the knowledge base, and spending.
+// the curated items, the graph, the memory, the proposals, the log of every write to the knowledge base, and spending.
 //
 // It is one JSON document written atomically (temp file, fsync, rename) after every step, plus one file per raw
 // model answer under raw/. At the scale the curator works at (tens of thousands of items a year) that is a few
@@ -14,6 +14,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/nwverse/persona-extensions/extensions/enkeep-memory/internal/memory"
 )
 
 // Evidence anchors a claim to one message line.
@@ -193,6 +195,7 @@ type State struct {
 	Graph       *Graph                `json:"graph"`
 	Funnel      map[string]Funnel     `json:"funnel"`  // day → triage funnel
 	Samples     map[string][]string   `json:"samples"` // ISO week → items picked for the spot check
+	Memory      *memory.Book          `json:"memory"`  // the user's memory (design chapter 6): conclusions and facts with their evidence
 	NextProp    int                   `json:"next_proposal"`
 	NextApplied int                   `json:"next_applied"`
 }
@@ -260,6 +263,10 @@ func (s *State) init(now time.Time) {
 	if s.Graph == nil {
 		s.Graph = &Graph{}
 	}
+	if s.Memory == nil {
+		s.Memory = memory.NewBook()
+	}
+	s.Memory.Init()
 	s.Graph.init()
 }
 

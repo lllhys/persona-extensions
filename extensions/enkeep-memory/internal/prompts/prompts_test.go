@@ -18,7 +18,8 @@ func TestGolden(t *testing.T) {
 		text    string
 		version string
 		schema  []byte
-	}{"triage": {Triage, schema.TriagePrompt, TriageSchema}, "daily": {Daily, schema.DailyPrompt, DailySchema}, "weekly": {Weekly, schema.WeeklyPrompt, WeeklySchema}} {
+	}{"triage": {Triage, schema.TriagePrompt, TriageSchema}, "daily": {Daily, schema.DailyPrompt, DailySchema}, "weekly": {Weekly, schema.WeeklyPrompt, WeeklySchema},
+		"memory": {Memory, schema.MemoryPrompt, MemorySchema}} {
 		var v any
 		if err := json.Unmarshal(p.schema, &v); err != nil {
 			t.Errorf("%s schema: %v", name, err)

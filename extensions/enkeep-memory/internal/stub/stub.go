@@ -1,5 +1,5 @@
 // Package stub is a stand-in model for dry runs and tests while the hub has no model.complete: it answers the
-// curator's three calls from simple keyword rules over the input it is given, quoting lines verbatim. It is not
+// curator's four calls from simple keyword rules over the input it is given, quoting lines verbatim. It is not
 // meant to be good, only deterministic, honest about its quotes, and shaped like a real answer.
 package stub
 
@@ -48,6 +48,12 @@ func (m *Model) Complete(_ context.Context, r model.Request) (model.Response, er
 			return model.Response{}, err
 		}
 		out = daily(in)
+	case "memory":
+		var in schema.MemoryInput
+		if err := json.Unmarshal([]byte(r.User), &in); err != nil {
+			return model.Response{}, err
+		}
+		out = memory(in)
 	case "weekly":
 		var in schema.WeeklyInput
 		if err := json.Unmarshal([]byte(r.User), &in); err != nil {
@@ -181,4 +187,49 @@ type Scripted func(r model.Request) (string, error)
 func (s Scripted) Complete(_ context.Context, r model.Request) (model.Response, error) {
 	t, err := s(r)
 	return model.Response{Text: t, InTokens: 100, OutTokens: 50}, err
+}
+
+var (
+	ruleRe    = regexp.MustCompile(`以后|不要|别再|必须|每次|一律|always|never`)
+	suggestRe = regexp.MustCompile(`可以试试|要不|不妨|建议`)
+	doneRe    = regexp.MustCompile(`已经|按你说的|搞定了|done`)
+)
+
+// memory: the owner's lines with a rule word are guidelines (said in a work discussion, with a requirement); with a
+// suggestion word, suggestions; a waiting suggestion is carried out when a later line says it was done and shares
+// words with it.
+func memory(in schema.MemoryInput) schema.MemoryOutput {
+	out := schema.MemoryOutput{Conclusions: []schema.MemoryConclusion{}, FollowUps: []schema.MemoryFollowUp{},
+		Confirms: []schema.MemoryVote{}, Rejects: []schema.MemoryVote{}}
+	for _, l := range in.Lines {
+		if l.Speaker != norm.Me {
+			continue
+		}
+		ev := schema.MemoryEvidence{N: l.N, Quote: cut(l.Text, 40), Scene: "work", HoldsStance: true, Support: "direct"}
+		switch {
+		case ruleRe.MatchString(l.Text):
+			ev.Expression, ev.Stance = "claim", "requirement"
+		case suggestRe.MatchString(l.Text):
+			ev.Expression, ev.Stance = "suggest", "requirement"
+		default:
+			continue
+		}
+		mc := schema.MemoryConclusion{Text: cut(l.Text, 60), Subject: "self", Layer: "guideline", ThingType: "计划与执行",
+			LifeAreas: []string{"工作"}, Evidence: []schema.MemoryEvidence{ev}}
+		for _, k := range in.Known {
+			if norm.Jaccard(k.Text, l.Text) >= 0.6 {
+				mc.Match = k.ID
+			}
+		}
+		out.Conclusions = append(out.Conclusions, mc)
+	}
+	for _, w := range in.Waiting {
+		for _, l := range in.Lines {
+			if doneRe.MatchString(l.Text) && norm.Jaccard(w.Text, l.Text) >= 0.2 {
+				out.FollowUps = append(out.FollowUps, schema.MemoryFollowUp{Entry: w.ID, Kind: "stated", N: l.N, Quote: cut(l.Text, 30)})
+				break
+			}
+		}
+	}
+	return out
 }

@@ -105,6 +105,15 @@ func (c *Curator) RunDaily(ctx context.Context, day string, dry bool) (*store.Ru
 			run.Counts["digest_errors"]++
 			continue
 		}
+		// The memory pass on the same lines: conclusions and facts about the user, every sentence judged.
+		if err := c.remember(ctx, m, u, d, owner, run); err != nil {
+			if errors.Is(err, model.ErrUnavailable) {
+				modelDown = true
+				continue
+			}
+			run.Notes = append(run.Notes, fmt.Sprintf("%s（记忆）：%v", u.Meta.Name, err))
+			run.Counts["memory_errors"]++
+		}
 		if !dry {
 			if err := c.St.Save(); err != nil { // checkpoint after every unit
 				return nil, err
@@ -114,7 +123,10 @@ func (c *Curator) RunDaily(ctx context.Context, day string, dry bool) (*store.Ru
 	if modelDown && !slices.ContainsFunc(run.Notes, func(n string) bool { return strings.Contains(n, "模型不可用") }) {
 		run.Notes = append(run.Notes, "模型不可用：只做了分拣和确定性检查")
 	}
-	// 3. Proposals that a day can already make, and the queue's upkeep.
+	// 3. The memory as of the day: contradictions compared once a day, decay, states (every day, with or without a
+	// model: the scores move with time).
+	c.settleMemory(day, run)
+	// 4. Proposals that a day can already make, and the queue's upkeep.
 	c.expire()
 	if metered != nil {
 		run.Counts["model_calls"] = metered.Calls

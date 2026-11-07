@@ -1,4 +1,4 @@
-// Package prompts holds the curator's three prompts and the JSON schemas of their answers, one file each, embedded
+// Package prompts holds the curator's four prompts and the JSON schemas of their answers, one file each, embedded
 // in the program. Their versions are in the schema package; golden tests pin their text.
 package prompts
 
@@ -13,6 +13,9 @@ var Daily string
 //go:embed weekly.md
 var Weekly string
 
+//go:embed memory.md
+var Memory string
+
 //go:embed triage.schema.json
 var TriageSchema []byte
 
@@ -21,3 +24,6 @@ var DailySchema []byte
 
 //go:embed weekly.schema.json
 var WeeklySchema []byte
+
+//go:embed memory.schema.json
+var MemorySchema []byte

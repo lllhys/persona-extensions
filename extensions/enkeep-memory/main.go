@@ -1,4 +1,5 @@
-// enkeep-memory: curates the Persona knowledge base daily and weekly, in the manner of a provenance-checked pipeline.
+// enkeep-memory: the user's memory, and the Persona knowledge base curated daily and weekly, in the manner of a
+// provenance-checked pipeline.
 // Every source goes through one triage; admitted material is digested into facts, practices and knowledge with
 // citations a program checks; a typed entity graph is built alongside; changes to the knowledge base are proposals
 // that a person (or, once proven, the curator itself) applies, each one logged and undoable.
@@ -7,6 +8,9 @@
 //	enkeep-memory dryrun -fixture DIR -from YYYY-MM-DD -to YYYY-MM-DD [-week] [-out DIR] [-state DIR]
 //	                                       run the pipeline over a synthetic knowledge base with the stub model;
 //	                                       nothing is written anywhere but -out and -state
+//	enkeep-memory import-enkeep -file EXPORT.json -state DIR -day YYYY-MM-DD
+//	                                       the one-off migration of enkeep's rules, patterns, knowledge and profile
+//	                                       into the memory, with the extension stopped
 package main
 
 import (
@@ -25,6 +29,13 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "dryrun" {
 		if err := dryrun(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "enkeep-memory dryrun:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "import-enkeep" {
+		if err := importEnkeep(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "enkeep-memory import-enkeep:", err)
 			os.Exit(1)
 		}
 		return

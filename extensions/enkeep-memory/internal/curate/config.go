@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/nwverse/persona-extensions/extensions/enkeep-memory/internal/memory"
 	"github.com/nwverse/persona-extensions/extensions/enkeep-memory/internal/model"
 	"github.com/nwverse/persona-extensions/extensions/enkeep-memory/internal/triage"
 )
@@ -41,6 +42,10 @@ type Config struct {
 	ProposalExpiryDays    int      `json:"proposal_expiry_days"`     // 14
 	BackfillDays          int      `json:"backfill_days"`            // 0: no one-off history pass
 	StaleDays             int      `json:"stale_days"`               // 30
+
+	// Memory is every number of the memory model (weights, lines, decay, budgets) in one place. It is not a
+	// setting in the manifest: the defaults are the design's, and a retune changes memory.DefaultParams.
+	Memory memory.Params `json:"memory"`
 }
 
 // Defaults are the settings when nothing is set.
@@ -50,6 +55,7 @@ func Defaults() Config {
 		DailyTier: "small", WeeklyTier: "medium",
 		ActivityDays: 3, MentionWindow: 15, AdmitAllBelowTokens: 20000, AIMinRelevance: 60,
 		Graph: true, AutoApplyMinPrecision: 0.95, ProposalExpiryDays: 14, StaleDays: 30,
+		Memory: memory.DefaultParams(),
 	}
 }
 

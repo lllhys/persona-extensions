@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona-extensions/extensions/enkeep-memory/internal/curate"
+	"github.com/nwverse/persona-extensions/extensions/enkeep-memory/internal/memory"
 	"github.com/nwverse/persona-extensions/extensions/enkeep-memory/internal/store"
 	"github.com/nwverse/persona/sdk/go/ext"
 	"github.com/nwverse/persona/sdk/go/wire"
@@ -21,7 +22,7 @@ type page struct {
 	Class string `json:"class,omitempty"` //
 }
 
-var tabs = []wire.Tab{{Value: "review", Title: "待确认"}, {Value: "fact", Title: "事实"}, {Value: "practice", Title: "做事方式"},
+var tabs = []wire.Tab{{Value: "review", Title: "待确认"}, {Value: "memory", Title: "记忆"}, {Value: "fact", Title: "事实"}, {Value: "practice", Title: "做事方式"},
 	{Value: "knowledge", Title: "知识"}, {Value: "graph", Title: "图谱"}, {Value: "reports", Title: "报告"}}
 
 var statusLabel = map[string]string{
@@ -63,6 +64,8 @@ func (a *app) home(ctx context.Context, r *ext.UIRequest) (*wire.View, error) {
 		v = a.itemPage(s)
 	case strings.HasPrefix(s.Open, "n-") || s.Open == "me":
 		v = a.nodePage(s)
+	case strings.HasPrefix(s.Open, "m-") || strings.HasPrefix(s.Open, "ek-"):
+		v = a.memoryPage(s)
 	case s.Open != "":
 		v = a.runPage(s)
 	default:
@@ -146,6 +149,14 @@ func (a *app) listPage(s page) *wire.View {
 			}
 			rows = append(rows, wire.Component{Type: wire.ComponentRow, Title: x.n.Name, Subtitle: fmt.Sprintf("%s · %d 条关系", x.n.Type, x.k),
 				Action: ext.Open("open:"+x.n.ID, "", page{Tab: s.Tab, Open: x.n.ID}, x.n.Name)})
+		}
+	case "memory":
+		for _, m := range c.MemoryView() {
+			if len(rows) >= 200 {
+				break
+			}
+			rows = append(rows, wire.Component{Type: wire.ComponentRow, Title: short(m.Text, 60), Subtitle: m.Sub,
+				Badge: &wire.Badge{Text: m.Level}, Action: ext.Open("open:"+m.ID, "", page{Tab: s.Tab, Open: m.ID}, short(m.Text, 20))})
 		}
 	case "reports":
 		for i := len(c.St.S.Runs) - 1; i >= 0 && len(rows) < 30; i-- {
@@ -353,6 +364,10 @@ func (a *app) homeAction(ctx context.Context, r *ext.UIRequest) (*wire.ActionRes
 		s.Tab, s.Open = r.Values["tab"], ""
 	case act == "back":
 		s.Open = ""
+	case act == "mem:confirm" || act == "mem:reject":
+		if err = c.Vote(s.Open, act == "mem:confirm"); err == nil {
+			toast = map[bool]string{true: "确认了：今天起生效", false: "否定了：这一条作废，以后同样的话也不再记"}[act == "mem:confirm"]
+		}
 	case strings.HasPrefix(act, "judge:"):
 		err = c.Judge(s.Open, strings.TrimPrefix(act, "judge:"))
 		toast = "记下了"
@@ -522,4 +537,56 @@ func last(ss []string) string {
 		return ""
 	}
 	return ss[len(ss)-1]
+}
+
+// memoryPage is one memory entry: what it is, why it stands where it stands, and its evidence.
+func (a *app) memoryPage(s page) *wire.View {
+	c := a.c
+	c.St.Lock()
+	defer c.St.Unlock()
+	var row *curate.MemoryRow
+	for _, m := range c.MemoryView() {
+		if m.ID == s.Open {
+			row = &m
+			break
+		}
+	}
+	if row == nil {
+		return &wire.View{Title: "不见了", Sections: []wire.Section{{Items: []wire.Component{{Type: wire.ComponentEmpty, Title: "这一条不见了"}}}}}
+	}
+	e, st := row.Entry, row.Entry.Status
+	info := []wire.Component{text(row.Text), secondary(row.Sub + " · " + row.Level)}
+	var facts []string
+	if e.ThingType != "" {
+		facts = append(facts, e.ThingType)
+	}
+	facts = append(facts, e.LifeAreas...)
+	if e.SelfSubnode != "" {
+		facts = append(facts, e.SelfSubnode)
+	}
+	if len(st.Weeks) > 0 {
+		facts = append(facts, fmt.Sprintf("出现在 %d 个周", len(st.Weeks)))
+	}
+	if st.LastSeen != "" {
+		facts = append(facts, "最近 "+st.LastSeen)
+	}
+	if st.Floor {
+		facts = append(facts, "护栏规则：衰减到生效线就停住")
+	}
+	if st.Lost {
+		facts = append(facts, "矛盾里判输，不再注入")
+	}
+	if len(facts) > 0 {
+		info = append(info, secondary(strings.Join(facts, " · ")))
+	}
+	var ev []wire.Component
+	for _, x := range e.Evidence {
+		who := map[memory.Speaker]string{memory.SpeakerUser: "你", memory.SpeakerOther: "别人", memory.SpeakerAI: "AI 概括", memory.SpeakerLegacy: "旧导入"}[x.Speaker]
+		ev = append(ev, wire.Component{Type: wire.ComponentRow, Title: short(x.Quote, 80), Subtitle: x.Day + " · " + who + " · " + x.Anchor})
+	}
+	if len(ev) == 0 {
+		ev = append(ev, secondary("没有原话"))
+	}
+	return &wire.View{Title: "记忆", Sections: []wire.Section{{Items: info}, {Title: "依据", Items: ev},
+		{Title: "你说了算", Items: []wire.Component{button("确认", "mem:confirm", ""), button("否定", "mem:reject", "否定以后这一条作废，同样的话以后也不再记。确定？")}}}}
 }

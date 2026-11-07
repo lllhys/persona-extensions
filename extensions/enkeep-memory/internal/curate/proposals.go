@@ -567,6 +567,7 @@ func (c *Curator) forget(from func(ref string) bool) (removed int) {
 			it.Sources = sources(it.Evidence)
 		}
 	}
+	removed += forgetMemory(c.St.S.Memory, from)
 	for k, d := range c.St.S.Digests {
 		if from(d.Chat) {
 			delete(c.St.S.Digests, k)

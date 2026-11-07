@@ -11,7 +11,7 @@ It keeps its own state in its data directory and touches the knowledge base only
 
 | Extension point | Contribution | Behavior |
 | --- | --- | --- |
-| `ui` | `enkeep-memory` (`nav_page`) | Tabs: proposals to review, facts, practices, knowledge, the graph, and run reports. Each item opens with its citations. Proposals can be accepted, edited, rejected or postponed. Accepted proposals can be undone. |
+| `ui` | `enkeep-memory` (`nav_page`) | Tabs: proposals to review, the memory (every conclusion and fact with its layer, state, score and injection level; confirm or reject one), facts, practices, knowledge, the graph, and run reports. Each item opens with its citations. Proposals can be accepted, edited, rejected or postponed. Accepted proposals can be undone. |
 | `ui` | `enkeep-memory-today` (`overview_card`) | Pending proposals and active items at a glance. |
 | `ui` | `enkeep-memory-health` (`extension_page`) | Who "I" am (the names used to recognize you), the latest triage funnel, and buttons to run a pass now. |
 | `events` | `enkeep-memory-kb`: `kb.changed`, `kb.forgotten` | A forgotten source's derived data (items, digests, raw answers, graph evidence) is deleted at once; the weekly pass also reconciles against entities that no longer exist. |
@@ -61,6 +61,40 @@ It keeps its own state in its data directory and touches the knowledge base only
 
    A ledger keyed by content (unit, admitted lines, prompt version) makes the pass idempotent. Raw answers are kept, so a change to the checks can be replayed without calling the model again.
 
+## Memory
+
+From everything you say (chats, your corrections of the AI, documents, meetings, and what enkeep held before), the extension keeps what you hold: principles, guidelines, experiences, how you are, and facts. The model extracts them and tags every sentence they rest on; everything after that is deterministic and lives in `internal/memory`, with every number in one place (`memory.Params`).
+
+**What an entry is.**
+
+- **Layer**: principle (holds across kinds of matter), guideline (within one kind), experience (one matter), or fact. Facts have a category: attribute, decision, event, progress, to-do, knowledge, opinion, intent.
+- **Subject**: your own conclusion, a requirement on the AI, a team rule, or someone else's view. Only the first two can be principles, guidelines or experiences; team rules and others' views are facts on the team, project or person.
+- **Use**: for the AI to follow, to help the AI understand you, or for reference. How you usually are or do is a descriptive attribute (a fact), never one of the three layers.
+- Labels: one of nine kinds of matter, one or two of twelve life areas, and for facts about you one of eight sub-nodes.
+
+**Rule D: setting × expression.** Each of your sentences is tagged with the setting it was said in (a review, a work discussion, an assignment, a correction of the AI, small talk) and how it was said (a definite position, a suggestion, a question, venting, a joke, an aside), and with flags: whether you really hold the stance behind it, whether it expresses a requirement or a position, whether a question proposes something, what it says about you, and whether it actually supports the entry it is attached to. The pair decides the weight: high (60), mid (35), low (15) or none.
+
+- A position in a serious setting is high. A correction of the AI is high whatever its wording: "I was discussing my judgement, not changing your conclusion" counts like "always check first". Venting while correcting the AI is high too, because you mean it.
+- A suggestion is mid; an assignment is a one-off experience until the same meaning comes again.
+- Small talk adds nothing to the three layers, only to descriptive attributes. A joke's literal words are never a fact; only its attitude counts. A proposal put as a question becomes an intent, for retrieval only.
+- Other people's words, AI summaries and old imports are low. Facts start elsewhere: 50 for a quote, 25 for an AI summary, 15 for an old import, 35 for an intent.
+
+**Rule B: by stance, not by wording.** A guideline needs one sentence that expresses a requirement or a position, said in a serious setting, that supports it. There is no list of normative words and no special threshold for corrections stated as facts: they accumulate like any other evidence. Only venting that asks for nothing ("this is so hard to use") cannot set up a guideline. A suggestion repeated in a second week, a confirmation, a follow-through, or a rule confirmed in enkeep also satisfy rule B.
+
+**Confidence.** Every independent occurrence (one per day and session; the same words copied into another session count once) adds `weight × k × (1 − score/100)`, with `k = 1` in a week the entry was not seen in and `0.5` otherwise. After 7 days without an occurrence the score halves every `14 × (1 + weeks seen)` days, at most 84. Facts do not decay.
+
+- **States**: candidate; active at 50 with a high source or two weeks (descriptive attributes: two weeks; principles: 70, three weeks, two settings and one sentence of yours that satisfies rule B); dormant under 15; obsolete when rejected, replaced, or lost and gone.
+- **Guard rails**: an active "don't" rule or hard rule for the AI stops decaying at 50.
+- **You decide only when you want to**: a confirmation counts as a high occurrence and makes the entry active that day; a rejection zeroes it, makes it obsolete, and later evidence for it is ignored.
+- **Contradictions**: compared once a day; the newer side wins once its score is above the older one's (a tie for facts). Until then it is held as a candidate; the loser stops being injected and decays four times faster.
+- **Follow-throughs**: a suggestion later carried out is backfilled to the serious band on that day, automatically, but only when someone states it was done or it shows in a work product (a document, a code change). Words of agreement do not count, and follow-throughs are not put in the report for you to confirm.
+
+**Privacy (rule C).** A sentence that gives away a specific matter of health, finance, relationships or beliefs is never injected; the rest of the entry is. A guard rule for the AI is not private for its topic.
+
+**Injection.** Resident (active principles, the top 25 within 1,500 characters; active global hard rules for the AI, within 2,000), recalled by setting (other active guidelines, descriptive attributes), retrieval only (experiences and facts), or none (private, candidate, dormant, obsolete, lost). Persona cannot yet take dynamic instructions or search an extension's data, so the levels are computed and shown in the extension and the reports; delivering them to the assistant waits for those hub interfaces.
+
+**From enkeep, once.** `enkeep-memory import-enkeep -file export.json -state <data dir> -day <YYYY-MM-DD>` reads an export of enkeep's rules, patterns, knowledge entries, profile facts and workspace state. Their history is accumulated with the same weights, without decay before the import day. States carry over: confirmed rules are guidelines even when their evidence is only venting (the migration exemption, once); what enkeep retired comes in obsolete and stays so; a rejection carries its veto; legacy imports without quotes start at 15 and fall dormant on their own.
+
 ## Weekly pass
 
 - **Promote and age items.** A fact nobody has mentioned for `stale_days` becomes stale. A practice unseen for eight weeks becomes dormant. Knowledge does not age; it is only replaced.
@@ -91,7 +125,7 @@ It keeps its own state in its data directory and touches the knowledge base only
 
 ## Model calls
 
-The curator asks the hub to run models through `model.complete` (permission `models`). The hub runs each call on the curator's own model purpose in Settings › Model configuration ("enkeep 记忆" under Extensions), which follows "Information processing" until you pick another model for it; the curator never holds a key. Answers come back checked against each call's JSON schema. When the hub has no model for it (an older hub, nothing set up, the connection paused for quota), the curator runs only its deterministic steps (triage rules, health checks, reconciliation) and the report says why. There is no budget cap: usage is recorded per day and step and shown in the reports. Prompts live in `internal/prompts`, one file per call, with versions pinned by a golden test.
+The curator asks the hub to run models through `model.complete` (permission `models`): the triage tag, the daily digest, the daily memory pass and the weekly consolidation. The hub runs each call on the curator's own model purpose in Settings › Model configuration ("enkeep 记忆" under Extensions), which follows "Information processing" until you pick another model for it; the curator never holds a key. Answers come back checked against each call's JSON schema. When the hub has no model for it (an older hub, nothing set up, the connection paused for quota), the curator runs only its deterministic steps (triage rules, health checks, reconciliation) and the report says why. There is no budget cap: usage is recorded per day and step and shown in the reports. Prompts live in `internal/prompts`, one file per call, with versions pinned by a golden test.
 
 ## Configuration
 

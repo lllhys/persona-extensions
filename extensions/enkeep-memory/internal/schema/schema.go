@@ -1,5 +1,5 @@
-// Package schema holds what goes to the model and what must come back, for each of the three calls: the triage
-// tag, the daily digest and the weekly consolidation. Inputs are JSON so the prompt text stays fixed and
+// Package schema holds what goes to the model and what must come back, for each of the four calls: the triage
+// tag, the daily digest, the weekly consolidation and the daily memory pass. Inputs are JSON so the prompt text stays fixed and
 // versioned; answers are JSON held to a schema, then to the verify package's checks.
 package schema
 
@@ -11,6 +11,7 @@ const (
 	TriagePrompt = "triage/2"
 	DailyPrompt  = "daily/3"
 	WeeklyPrompt = "weekly/2"
+	MemoryPrompt = "memory/1"
 )
 
 // Ruleset is the version of the deterministic checks: raising it lets stored raw answers be verified again
@@ -175,6 +176,101 @@ type Merge struct {
 type Conflict struct {
 	IDs    []string `json:"ids"`
 	Reason string   `json:"reason"`
+}
+
+// MemoryInput is one admitted unit for the memory pass (design chapter 6): what the user said, judged sentence by
+// sentence.
+type MemoryInput struct {
+	Day          string        `json:"day"`
+	Chat         string        `json:"chat"`
+	ChatName     string        `json:"chat_name"`
+	Kind         string        `json:"kind"`
+	Members      int           `json:"members"`
+	Owner        []string      `json:"owner_names"`
+	Lines        []MsgLine     `json:"lines"`
+	Known        []MemoryKnown `json:"known_entries"`
+	Waiting      []MemoryKnown `json:"waiting_suggestions"`
+	ThingTypes   []string      `json:"thing_types"`
+	LifeAreas    []string      `json:"life_areas"`
+	SelfSubnodes []string      `json:"self_subnodes"`
+	Language     string        `json:"language"`
+}
+
+// MemoryKnown is an entry as the memory pass shows it.
+type MemoryKnown struct {
+	ID      string `json:"id"`
+	Text    string `json:"text"`
+	Layer   string `json:"layer,omitempty"`
+	Subject string `json:"subject,omitempty"`
+	When    string `json:"when,omitempty"`  // waiting suggestions: the day
+	Quote   string `json:"quote,omitempty"` // waiting suggestions: what was said
+}
+
+// MemoryOutput is the memory pass's answer.
+type MemoryOutput struct {
+	Conclusions []MemoryConclusion `json:"conclusions"`
+	FollowUps   []MemoryFollowUp   `json:"follow_ups"`
+	Confirms    []MemoryVote       `json:"confirms"`
+	Rejects     []MemoryVote       `json:"rejects"`
+}
+
+// MemoryConclusion is a conclusion or a fact, with every sentence it rests on tagged.
+type MemoryConclusion struct {
+	Match        string           `json:"match,omitempty"`
+	Text         string           `json:"text"`
+	Sentences    []string         `json:"sentences,omitempty"`
+	Subject      string           `json:"subject"`
+	Layer        string           `json:"layer"`
+	Descriptive  bool             `json:"descriptive,omitempty"`
+	FactCategory string           `json:"fact_category,omitempty"`
+	ThingType    string           `json:"thing_type,omitempty"`
+	LifeAreas    []string         `json:"life_areas,omitempty"`
+	SelfSubnode  string           `json:"self_subnode,omitempty"`
+	Owner        string           `json:"owner,omitempty"`
+	Global       bool             `json:"global,omitempty"`
+	Hard         bool             `json:"hard,omitempty"`
+	Prohibition  bool             `json:"prohibition,omitempty"`
+	OneOff       bool             `json:"one_off,omitempty"`
+	Private      []MemoryPrivate  `json:"private_sentences,omitempty"`
+	Contradicts  string           `json:"contradicts,omitempty"`
+	Evidence     []MemoryEvidence `json:"evidence"`
+}
+
+// MemoryPrivate marks a sentence private (rule C).
+type MemoryPrivate struct {
+	I        int    `json:"i"`
+	Category string `json:"category"`
+}
+
+// MemoryEvidence is a citation with rule D's tags.
+type MemoryEvidence struct {
+	N                int    `json:"n"`
+	Quote            string `json:"quote"`
+	Speaker          string `json:"speaker,omitempty"`
+	Scene            string `json:"scene"`
+	Expression       string `json:"expression"`
+	HoldsStance      bool   `json:"holds_stance"`
+	Stance           string `json:"stance"`
+	ProposalQuestion bool   `json:"proposal_question,omitempty"`
+	DescriptiveValue string `json:"descriptive_value,omitempty"`
+	Attitude         string `json:"attitude,omitempty"`
+	Support          string `json:"support"`
+	LongTerm         bool   `json:"long_term,omitempty"`
+}
+
+// MemoryFollowUp: a waiting suggestion carried out (stated, artifact) or only agreed to (verbal).
+type MemoryFollowUp struct {
+	Entry string `json:"entry"`
+	Kind  string `json:"kind"`
+	N     int    `json:"n"`
+	Quote string `json:"quote"`
+}
+
+// MemoryVote is the user confirming or rejecting a known entry.
+type MemoryVote struct {
+	Entry string `json:"entry"`
+	N     int    `json:"n"`
+	Quote string `json:"quote"`
 }
 
 // Must marshals v, for inputs that cannot fail.

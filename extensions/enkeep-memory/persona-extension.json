@@ -3,7 +3,7 @@
   "id": "enkeep-memory",
   "name": "enkeep 记忆",
   "version": "0.1.0",
-  "description": "每天、每周整理知识库：所有来源统一分拣，带原文出处地提取事实、做事方式和知识，建实体关系图谱；改知识库的地方都是提议，确认后合入，能撤销。前两周只提议不改。",
+  "description": "记住你的原则、准则、经验、偏好和事实：每句话按场合和说法定分量，按独立出现累计置信度、随时间衰减，分级给助手用。每天、每周整理知识库：所有来源统一分拣，带原文出处地提取事实、做事方式和知识，建实体关系图谱；改知识库的地方都是提议，确认后合入，能撤销。前两周只提议不改。",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/enkeep-memory",
   "tags": [

@@ -60,6 +60,9 @@ func (c *Curator) RunWeekly(ctx context.Context, week string, dry bool) (*store.
 		}
 	}
 
+	// The memory as of the week's last day (design 6.18): its states feed the report's memory section.
+	c.settleMemory(today, run)
+
 	// 2. Consolidation: clusters of alike items, judged by the model (or merged only when near-identical).
 	var m model.Model
 	var metered *model.Metered
