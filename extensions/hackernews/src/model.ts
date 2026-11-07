@@ -31,7 +31,7 @@ export function filter(items: Item[], f: Filter): Item[] {
 export const active = (f: Filter) => !!(words(f.keywords).length || words(f.exclude_keywords).length || f.min_score > 0);
 export const oneLine = (s: string) => s.trim().replace(/\s+/g, " ");
 export function clip(s: string, n: number): string {
-  const chars = Array.from(s); return chars.length <= n ? s : chars.slice(0, n - 1).join("").trim() + "…";
+  const chars = Array.from(s); return chars.length <= n ? s : chars.slice(0, n - 1).join("").trimEnd() + "…";
 }
 export function chunks(s: string, n = 1800): string[] {
   const chars = Array.from(s), out: string[] = [];
@@ -41,14 +41,14 @@ export function chunks(s: string, n = 1800): string[] {
     const piece = chars.splice(0, cut).join("").replace(/\n+$/, "");
     if (piece.trim()) out.push(piece);
   }
-  const rest = chars.join("").trim(); if (rest) out.push(rest); return out;
+  const rest = chars.join("").replace(/^\n+|\n+$/g, ""); if (rest.trim()) out.push(rest); return out;
 }
 // Decode after stripping tags: escaped markup stays literal native text, never HTML.
 export function plain(s: string): string {
   return decodeHTML(s.replace(/<pre><code>(.*?)<\/code><\/pre>/gis, (_, code: string) => `\n\n${code.replace(/\n+$/, "")}\n\n`)
     .replace(/<a\s[^>]*href="([^"]*)"[^>]*>.*?<\/a>/gis, "$1")
     .replace(/<p>/gi, "\n\n").replace(/<[^>]*>/gs, ""))
-    .replace(/\n{3,}/g, "\n\n").trim();
+    .replace(/\n{3,}/g, "\n\n").replace(/^\n+/, "").trimEnd();
 }
 export function itemID(value: unknown): number {
   const s = typeof value === "string" || typeof value === "number" ? String(value).trim() : "";

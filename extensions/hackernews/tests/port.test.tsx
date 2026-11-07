@@ -176,8 +176,9 @@ test("locale resource parity and fallback, Unicode text helpers, state transitio
   }
   for (const locale of ["", "fr", "zh-Hans"]) assert.equal(textsFor(locale), resources["zh-Hans"]);
   assert.equal(textsFor("en_US"), resources.en); assert.equal(ago(resources.en, 10_800_000), "3h ago");
-  assert.equal(plain("a<p>b &amp; &#x27;q&#x27;"), "a\n\nb & 'q'"); assert.equal(plain("<pre><code>  a\n  b\n</code></pre>"), "a\n  b");
+  assert.equal(plain("a<p>b &amp; &#x27;q&#x27;"), "a\n\nb & 'q'"); assert.equal(plain("<pre><code>  a\n  b\n</code></pre>"), "  a\n  b");
   assert.equal(clip("😀".repeat(5), 3), "😀😀…"); assert.ok(chunks("😀".repeat(5000)).every(c => Array.from(c).length <= 1800));
+  assert.deepEqual(chunks("  a:\n    b\n  c:\n    d", 12), ["  a:\n    b", "  c:\n    d"]); assert.equal(clip("  a:\n    b", 6), "  a:…");
   const { service } = setup({ list: "ask" }); assert.equal(readState('{"l":"jobs"}', service).l, "ask");
   const state = readState(null, service); assert.equal(transition(state, "list", { list: "show" }).l, "show");
   assert.equal(transition(state, "story:2").s, 2); assert.equal(transition({ ...state, s: 2 }, "back").s, 0); assert.equal(transition(state, "all").a, true);
@@ -340,6 +341,6 @@ test("service replacement publishes loading rather than the previous service's d
 });
 test("manifest stays transitional, unchanged version and read-only egress", async () => {
   const manifest = JSON.parse(await readFile("persona-extension.json", "utf8"));
-  assert.equal(manifest.version, "0.1.0"); assert.deepEqual(manifest.permissions.network, ["hacker-news.firebaseio.com"]);
+  assert.equal(manifest.version, "0.1.1"); assert.deepEqual(manifest.permissions.network, ["hacker-news.firebaseio.com"]);
   assert.ok(manifest.runtime.command); assert.equal(manifest.runtime.source, undefined);
 });

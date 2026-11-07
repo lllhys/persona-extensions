@@ -24,7 +24,7 @@ export function createProgram(fetch: FetchAdapter = (input, init) => globalThis.
     return service;
   };
   return {
-    id: "hackernews", version: "0.1.0",
+    id: "hackernews", version: "0.1.1",
     init: init => { service = new HackerNews(fetch, (init.config ?? {}) as Config); },
     namespaces: { connector: (method, params) => connector(current())(method, params) },
     ui: {

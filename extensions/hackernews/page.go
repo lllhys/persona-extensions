@@ -236,7 +236,7 @@ func chunks(s string, n int) []string {
 		}
 		r = r[cut:]
 	}
-	if rest := strings.TrimSpace(string(r)); rest != "" {
+	if rest := strings.Trim(string(r), "\n"); strings.TrimSpace(rest) != "" {
 		out = append(out, rest)
 	}
 	return out

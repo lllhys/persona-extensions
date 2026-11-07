@@ -248,7 +248,7 @@ func TestPlain(t *testing.T) {
 		"a<p>b":                            "a\n\nb",
 		"x &amp; y &#x27;z&#x27; <i>w</i>": "x & y 'z' w",
 		`see <a href="https://e.com/full">https://e.com/...</a>`: "see https://e.com/full",
-		"<pre><code>  a\n  b\n</code></pre>":                     "a\n  b",
+		"<pre><code>  a\n  b\n</code></pre>":                     "  a\n  b",
 		"<p><p><p>q":                                             "q",
 	} {
 		if got := plain(in); got != want {
@@ -428,6 +428,36 @@ func TestLongStoryStaysInBounds(t *testing.T) {
 	}
 	if !strings.Contains(joined(v), "First 15 top-level comments of 40") {
 		t.Fatalf("long:\n%s", joined(v))
+	}
+}
+
+// Hacker News sends every line of a code block indented by two or more spaces. The first line keeps them like the
+// others when the code starts a comment or the story's last text item, or a cut ends it.
+func TestCodeBlockKeepsIndentation(t *testing.T) {
+	f := newFakeSite(t)
+	prose := strings.Repeat("Some words of prose. ", 85) + "Extra" // 1,790 characters: the code goes to the last text item
+	f.item(map[string]any{"id": 7, "type": "story", "by": "u", "time": testNow, "title": "Ask HN: YAML?", "descendants": 1, "kids": []int{71},
+		"text": prose + "<p><pre><code>  server:\n    port: 80\n</code></pre>"})
+	f.item(map[string]any{"id": 71, "type": "comment", "by": "c", "time": testNow, "text": "<pre><code>  def f():\n      return 1\n</code></pre>"})
+	a := testApp(t, f, Config{})
+	v, _ := a.render(context.Background(), req("en", 3, pageState{Story: 7}, "", nil))
+	checkView(t, v)
+	var body []string
+	for _, s := range v.Sections {
+		for _, c := range s.Items {
+			if c.Style == wire.TextStyleBody {
+				body = append(body, c.Text)
+			}
+		}
+	}
+	if want := []string{"  server:\n    port: 80", "  def f():\n      return 1"}; len(body) != 3 || !slices.Equal(body[1:], want) {
+		t.Errorf("body items after the prose %q, want %q", body[min(1, len(body)):], want)
+	}
+	if got := chunks("  a:\n    b\n  c:\n    d", 12); !slices.Equal(got, []string{"  a:\n    b", "  c:\n    d"}) {
+		t.Errorf("chunks %q", got)
+	}
+	if got := clip("  a:\n    b", 6); got != "  a:…" {
+		t.Errorf("clip %q", got)
 	}
 }
 
