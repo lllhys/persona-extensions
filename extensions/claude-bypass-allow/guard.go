@@ -294,21 +294,63 @@ var sshClients = map[string]bool{"ssh": true, "autossh": true, "scp": true, "sft
 // sshOptionCommands are the ssh_config keywords whose value ssh runs as a command.
 var sshOptionCommands = map[string]bool{"remotecommand": true, "proxycommand": true, "localcommand": true, "knownhostscommand": true}
 
-// sshOptionCommand returns the command of an -o value that runs one: -o Key=command, -oKey=command, and the
-// "Key command" and "Key = command" spellings ssh_config accepts too. ssh skips an = before the key, so
-// -o=Key=command and -o '=Key=command' run it as well.
+// sshOptionCommand returns the command of an -o value that runs one. The value is a word of its own (-o Key=command)
+// or the rest of a word after an o among one-letter options (-oKey=command, -qoKey=command, -4oKey=command): which
+// letters before it take a value differs between ssh, scp and sftp, so every o counts, up to the first character that
+// is not a letter or digit, where ssh stops with an error (so a $(…) there is still read as a substitution).
 func sshOptionCommand(w string) (string, bool) {
-	w = strings.TrimLeft(strings.TrimPrefix(w, "-o"), "= \t")
-	i := strings.IndexAny(w, "= \t")
-	if i < 0 || !sshOptionCommands[strings.ToLower(w[:i])] {
+	if !strings.HasPrefix(w, "-") {
+		return sshConfigCommand(w)
+	}
+	for j := 1; j < len(w); j++ {
+		c := w[j]
+		if !('a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9') {
+			break
+		}
+		if c == 'o' {
+			if command, ok := sshConfigCommand(w[j+1:]); ok {
+				return command, true
+			}
+		}
+	}
+	return "", false
+}
+
+// sshConfigCommand returns the command of an ssh_config line whose keyword runs one: Key=command, "Key command",
+// "Key = command", Key==command, "Key"=command and =Key=command all run it. ssh skips an empty first word ("") once,
+// and every whitespace and = between the keyword and the command.
+func sshConfigCommand(line string) (string, bool) {
+	key, rest := sshConfigWord(line)
+	if key == "" {
+		key, rest = sshConfigWord(rest)
+	}
+	if !sshOptionCommands[strings.ToLower(key)] {
 		return "", false
 	}
-	command := strings.TrimLeft(w[i:], " \t")
-	if strings.HasPrefix(command, "=") {
-		command = strings.TrimLeft(command[1:], " \t")
-	}
-	return command, true
+	return strings.TrimLeft(rest, sshSpace+"="), true
 }
+
+// sshConfigWord splits the first word off an ssh_config line the way ssh's strdelim does, after the whitespace and =
+// before it: the word ends at whitespace or =, or at the quote that closes a double-quoted part, and its quotes are
+// dropped (Proxy"Command"=… is ProxyCommand). ssh ignores a line whose quote is not closed.
+func sshConfigWord(line string) (word, rest string) {
+	line = strings.TrimLeft(line, sshSpace+"=")
+	i := strings.IndexAny(line, sshSpace+`="`)
+	switch {
+	case i < 0:
+		return line, ""
+	case line[i] != '"':
+		return line[:i], line[i:]
+	}
+	end := strings.IndexByte(line[i+1:], '"')
+	if end < 0 {
+		return "", ""
+	}
+	return line[:i] + line[i+1:i+1+end], line[i+2+end:]
+}
+
+// sshSpace is the whitespace ssh splits an ssh_config line at.
+const sshSpace = " \t\r\n"
 
 // sftpServerCommands returns the values of sftp's -D options, each a command and its arguments that sftp runs on this
 // computer as its server: -D command, -Dcommand, and -D in a group of short options (-qD command). sftp runs the last
