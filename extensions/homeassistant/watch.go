@@ -362,6 +362,7 @@ func (w *watcher) setSettings(lines []string) {
 	}
 	w.mu.Lock()
 	w.settings, w.errs = rules, errs
+	w.drop()
 	w.mu.Unlock()
 	w.poke()
 }
@@ -401,6 +402,23 @@ func (w *watcher) rules() []Rule {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return append(slices.Clone(w.settings), w.mine...)
+}
+
+// has says whether a rule is still kept (w.mu held).
+func (w *watcher) has(rid string) bool {
+	is := func(r Rule) bool { return r.ID == rid }
+	return slices.ContainsFunc(w.settings, is) || slices.ContainsFunc(w.mine, is)
+}
+
+// drop stops the holds and drops the queued firings of rules no longer kept (w.mu held).
+func (w *watcher) drop() {
+	for key, t := range w.timers {
+		if rid, _, _ := strings.Cut(key, "|"); !w.has(rid) {
+			t.Stop()
+			delete(w.timers, key)
+		}
+	}
+	w.queue = slices.DeleteFunc(w.queue, func(f firing) bool { return !w.has(f.Rule.ID) })
 }
 
 func (w *watcher) poke() {
@@ -607,8 +625,12 @@ func (w *watcher) change(entity string, old *State, s State) {
 	}
 }
 
-// fire queues a firing (w.mu held), unless the rule told about the entity within its cooldown.
+// fire queues a firing (w.mu held), unless the rule is no longer kept (removed while a hold's callback or a change was
+// under way) or told about the entity within its cooldown.
 func (w *watcher) fire(r Rule, s State) {
+	if !w.has(r.ID) {
+		return
+	}
 	key := r.ID + "|" + s.EntityID
 	if t, ok := w.sent[key]; ok && time.Since(t) < r.cooldown() {
 		return
@@ -840,6 +862,7 @@ func (w *watchWrite) run(_ context.Context, a *app) (string, error) {
 		}
 	case "remove":
 		wt.mine = slices.DeleteFunc(wt.mine, func(x Rule) bool { return x.ID == w.Rule.ID })
+		wt.drop()
 	}
 	wt.mu.Unlock()
 	if err := wt.save(); err != nil {
