@@ -4,9 +4,9 @@
 
 Persona 的公开扩展：接入数据源，为助手添加工具和技能，并贡献由各端 App 渲染的界面。本仓库也是一个扩展市场，版本化安装包发布在 GitHub Releases 中。
 
-[![Persona Extensions 宣传片：加一行地址，再挑需要的扩展](docs/assets/promo-preview-zh.webp)](https://github.com/nwverse/persona-extensions/releases/download/promo-persona-extensions-v1/persona-extensions-zh.mp4)
+[![Persona Extensions 宣传片：加一行地址，再挑需要的扩展](docs/assets/promo-preview-zh.webp)](#视频介绍)
 
-[观看完整视频（含配音）](https://github.com/nwverse/persona-extensions/releases/download/promo-persona-extensions-v1/persona-extensions-zh.mp4)
+[观看视频介绍（含配音）](#视频介绍)
 
 ## 快速开始
 
@@ -25,6 +25,12 @@ personad extension market add github:nwverse/persona-extensions
 ```
 
 本地安装包、旧版 hub 兼容以及扩展特有的设置见[安装说明](docs/installation.md)（英文）。
+
+## 视频介绍
+
+https://github.com/user-attachments/assets/172bb2bb-6c28-401e-aae2-695f67e8356d
+
+[下载高清版和字幕](https://github.com/nwverse/persona-extensions/releases/tag/promo-persona-extensions-v1)
 
 ## 扩展
 
