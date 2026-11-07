@@ -109,7 +109,8 @@ func (c *Curator) units(ctx context.Context, day string) ([]Unit, error) {
 	if err != nil {
 		return nil, err
 	}
-	end := start.Add(24 * time.Hour)
+	// The next local midnight, not start+24h: a day is 23 or 25 hours long when daylight saving time changes.
+	end := start.AddDate(0, 0, 1)
 	entries, err := c.Src.Recent(ctx, start, time.Time{})
 	if err != nil {
 		return nil, fmt.Errorf("kb.recent: %w", err)
