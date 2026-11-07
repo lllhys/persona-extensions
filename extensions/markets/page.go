@@ -809,8 +809,10 @@ func (p *plugin) instPage(ctx context.Context, d draw, st pageState, r Ref) plug
 	v.Sections = append(v.Sections, kline)
 
 	// the period's figures, and a stock's further ones
-	figures := []pluginkit.Stat{{Label: q.Period + " 最高", Value: q.Price(q.High)}, {Label: q.Period + " 最低", Value: q.Price(q.Low)},
-		{Label: q.Period + " 成交额", Value: fmtCompactFloat(q.Turnover) + " " + q.Currency}}
+	figures := []pluginkit.Stat{{Label: q.Period + " 最高", Value: q.Price(q.High)}, {Label: q.Period + " 最低", Value: q.Price(q.Low)}}
+	if q.Turnover > 0 { // unknown (a US index's) is left out
+		figures = append(figures, pluginkit.Stat{Label: q.Period + " 成交额", Value: fmtCompactFloat(q.Turnover) + " " + q.Currency})
+	}
 	var facts []pluginkit.Stat
 	for _, f := range q.Facts {
 		facts = append(facts, pluginkit.Stat{Label: f.Label, Value: f.Value})

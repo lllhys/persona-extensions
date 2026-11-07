@@ -199,6 +199,46 @@ func TestTencentQuotes(t *testing.T) {
 	}
 }
 
+// An index's turnover is its members' traded value: a Hong Kong index's comes in 万 (and field 6 is the same
+// figure, not a volume), a US index's field 37 is volume × points and means nothing.
+func TestTencentIndexTurnover(t *testing.T) {
+	_, _, hk, us := txSources(t)
+	ctx := context.Background()
+	hsi, err := hk.Quote(ctx, "HSI", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hsi.Turnover < 1.37e11 || hsi.Turnover > 1.38e11 { // 13725422.409 万 in the sample; 00700 alone traded 6.8e9
+		t.Errorf("HSI turnover %.0f", hsi.Turnover)
+	}
+	for _, f := range hsi.Facts {
+		if f.Label == "成交量" {
+			t.Errorf("HSI has no share volume: %v", hsi.Facts)
+		}
+	}
+	u, err := us.Quotes(ctx, []string{"AAPL", ".DJI"}, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dji := u[".DJI"]; dji.Turnover != 0 || !hasFact(dji.Facts, "成交量", "8.55亿") {
+		t.Errorf(".DJI turnover %.0f, facts %v", dji.Turnover, dji.Facts)
+	} else if l := quoteLine(Ref{"us", ".DJI"}, dji); strings.Contains(l, "成交额") { // unknown is left out, not 0
+		t.Errorf(".DJI line: %s", l)
+	}
+	if a := u["AAPL"]; a.Turnover < 2.6e10 || a.Turnover > 2.7e10 {
+		t.Errorf("AAPL turnover %.0f", a.Turnover)
+	}
+}
+
+func hasFact(fs []Fact, label, value string) bool {
+	for _, f := range fs {
+		if f.Label == label && f.Value == value {
+			return true
+		}
+	}
+	return false
+}
+
 func TestTencentSearch(t *testing.T) {
 	f, cn, hk, us := txSources(t)
 	ctx := context.Background()

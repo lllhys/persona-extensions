@@ -360,6 +360,12 @@ func (s *txMarket) parseQuote(sym string, f []string) (Quote, bool) {
 			kind = "ZS"
 		}
 	}
+	switch { // an index's 37 is in 万 in Hong Kong, and in the US volume × points, not a value (left unknown)
+	case kind == "ZS" && s.m == mHK:
+		q.Turnover *= 1e4
+	case kind == "ZS" && s.m == mUS:
+		q.Turnover = 0
+	}
 	if q.Currency == "" {
 		q.Currency = map[market]string{mCN: "CNY", mHK: "HKD", mUS: "USD"}[s.m]
 	}
@@ -375,10 +381,10 @@ func (s *txMarket) parseQuote(sym string, f []string) (Quote, bool) {
 
 // facts are a quote's further figures. Where Tencent keeps them (checked against live answers: the 52-week range
 // against a year of daily bars, turnover rates against volume over shares): 5 open, 4 previous close, 6 volume (A-share
-// lots), 43 the day's range as a percentage of the previous close, 39 P/E, 45 market value in 亿; A-shares 38 turnover
-// rate, 47 / 48 the limit-up and limit-down prices, 67 / 68 the 52-week high and low; Hong Kong 59 turnover rate,
-// 48 / 49 the 52-week range; US 38 turnover rate, 48 / 49 the 52-week range. Unknown (zero or negative) ones are left
-// out, and an index has no valuation, turnover rate or limits.
+// lots; a Hong Kong index's is its turnover in 万, left out), 43 the day's range as a percentage of the previous close,
+// 39 P/E, 45 market value in 亿; A-shares 38 turnover rate, 47 / 48 the limit-up and limit-down prices, 67 / 68 the
+// 52-week high and low; Hong Kong 59 turnover rate, 48 / 49 the 52-week range; US 38 turnover rate, 48 / 49 the 52-week
+// range. Unknown (zero or negative) ones are left out, and an index has no valuation, turnover rate or limits.
 func (s *txMarket) facts(q Quote, num func(int) float64) []Fact {
 	var out []Fact
 	add := func(label string, v float64, write func(float64) string) {
@@ -388,11 +394,13 @@ func (s *txMarket) facts(q Quote, num func(int) float64) []Fact {
 	}
 	pct := func(v float64) string { return strconv.FormatFloat(v, 'f', 2, 64) + "%" }
 	plain := func(v float64) string { return strconv.FormatFloat(v, 'f', 2, 64) }
+	index := q.Kind == "指数"
 	vol := num(6)
 	if s.m == mCN {
 		vol *= 100
+	} else if s.m == mHK && index {
+		vol = 0
 	}
-	index := q.Kind == "指数"
 	turn, hi52, lo52 := map[market]int{mCN: 38, mHK: 59, mUS: 38}[s.m], 48, 49
 	if s.m == mCN {
 		hi52, lo52 = 67, 68
