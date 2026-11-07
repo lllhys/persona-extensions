@@ -1,0 +1,80 @@
+{
+  "title": "输入",
+  "sections": [
+    {
+      "title": "五种输入",
+      "items": [
+        {
+          "type": "field",
+          "label": "文字",
+          "value": "预填的文字",
+          "name": "text",
+          "kind": "text",
+          "placeholder": "写点什么"
+        },
+        {
+          "type": "field",
+          "label": "空的文字",
+          "name": "empty",
+          "kind": "text",
+          "placeholder": "占位提示"
+        },
+        {
+          "type": "field",
+          "label": "密钥",
+          "name": "secret",
+          "kind": "secret",
+          "placeholder": "不回显、不预填"
+        },
+        {
+          "type": "field",
+          "label": "数字",
+          "value": "42",
+          "name": "number",
+          "kind": "number"
+        },
+        {
+          "type": "field",
+          "label": "开关",
+          "value": "true",
+          "name": "toggle",
+          "kind": "toggle"
+        },
+        {
+          "type": "field",
+          "label": "选择",
+          "value": "b",
+          "name": "choice",
+          "kind": "choice",
+          "choices": [
+            {
+              "value": "a",
+              "title": "选项一"
+            },
+            {
+              "value": "b",
+              "title": "选项二"
+            },
+            {
+              "value": "c",
+              "title": "选项三"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "items": [
+        {
+          "type": "button",
+          "title": "提交",
+          "action": {
+            "id": "submit",
+            "submit": true
+          }
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"field\"}"
+}

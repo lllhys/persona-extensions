@@ -1,0 +1,90 @@
+{
+  "title": "分段选择",
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "segmented",
+          "value": "7d",
+          "action": {
+            "id": "range"
+          },
+          "name": "range",
+          "choices": [
+            {
+              "value": "1d",
+              "title": "今天"
+            },
+            {
+              "value": "7d",
+              "title": "7 天"
+            },
+            {
+              "value": "30d",
+              "title": "30 天"
+            }
+          ]
+        },
+        {
+          "type": "chart",
+          "detail": "选的是 7d",
+          "kind": "bar",
+          "series": [
+            {
+              "name": "用量",
+              "points": [
+                {
+                  "label": "10-30",
+                  "value": 3
+                },
+                {
+                  "label": "10-31",
+                  "value": 5
+                },
+                {
+                  "label": "11-01",
+                  "value": 2
+                },
+                {
+                  "label": "11-02",
+                  "value": 8
+                },
+                {
+                  "label": "11-03",
+                  "value": 6
+                },
+                {
+                  "label": "11-04",
+                  "value": 4
+                },
+                {
+                  "label": "11-05",
+                  "value": 7
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "segmented",
+          "value": "yes",
+          "action": {
+            "id": "answer"
+          },
+          "name": "answer",
+          "choices": [
+            {
+              "value": "yes",
+              "title": "是"
+            },
+            {
+              "value": "no",
+              "title": "否"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"segmented\"}"
+}

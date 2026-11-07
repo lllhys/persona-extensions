@@ -1,0 +1,13 @@
+{
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "metric",
+          "label": "组件展示",
+          "value": "17 页"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "request": "suspend",
+  "protocol": 1,
+  "request_id": "request-suspend",
+  "session": "session-a",
+  "epoch": "epoch-a"
+}

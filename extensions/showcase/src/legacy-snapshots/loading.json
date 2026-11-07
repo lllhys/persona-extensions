@@ -1,0 +1,23 @@
+{
+  "title": "加载中",
+  "sections": [
+    {
+      "title": "有字",
+      "items": [
+        {
+          "type": "loading",
+          "title": "正在同步"
+        }
+      ]
+    },
+    {
+      "title": "没字",
+      "items": [
+        {
+          "type": "loading"
+        }
+      ]
+    }
+  ],
+  "state": "{\"p\":\"loading\"}"
+}

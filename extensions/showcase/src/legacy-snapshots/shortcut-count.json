@@ -1,0 +1,14 @@
+{
+  "sections": [
+    {
+      "items": [
+        {
+          "type": "metric",
+          "label": "数到",
+          "value": "3",
+          "detail": "颗星星"
+        }
+      ]
+    }
+  ]
+}

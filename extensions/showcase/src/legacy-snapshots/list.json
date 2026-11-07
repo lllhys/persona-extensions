@@ -1,0 +1,348 @@
+{
+  "title": "列表",
+  "sections": [
+    {
+      "title": "60 条，显示 20 条",
+      "items": [
+        {
+          "type": "row",
+          "key": "item-1",
+          "title": "示例条目 01",
+          "subtitle": "文档",
+          "action": {
+            "id": "detail:1",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"1\"}",
+              "title": "示例条目 01"
+            }
+          },
+          "icon": "doc"
+        },
+        {
+          "type": "row",
+          "key": "item-2",
+          "title": "示例条目 02",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:2",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"2\"}",
+              "title": "示例条目 02"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-3",
+          "title": "示例条目 03",
+          "subtitle": "邮件",
+          "action": {
+            "id": "detail:3",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"3\"}",
+              "title": "示例条目 03"
+            }
+          },
+          "icon": "mail"
+        },
+        {
+          "type": "row",
+          "key": "item-4",
+          "title": "示例条目 04",
+          "subtitle": "文档",
+          "badge": {
+            "text": "完成",
+            "tone": "positive"
+          },
+          "action": {
+            "id": "detail:4",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"4\"}",
+              "title": "示例条目 04"
+            }
+          },
+          "icon": "doc"
+        },
+        {
+          "type": "row",
+          "key": "item-5",
+          "title": "示例条目 05",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:5",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"5\"}",
+              "title": "示例条目 05"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-6",
+          "title": "示例条目 06",
+          "subtitle": "邮件",
+          "action": {
+            "id": "detail:6",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"6\"}",
+              "title": "示例条目 06"
+            }
+          },
+          "icon": "mail"
+        },
+        {
+          "type": "row",
+          "key": "item-7",
+          "title": "示例条目 07",
+          "subtitle": "文档",
+          "action": {
+            "id": "detail:7",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"7\"}",
+              "title": "示例条目 07"
+            }
+          },
+          "icon": "doc"
+        },
+        {
+          "type": "row",
+          "key": "item-8",
+          "title": "示例条目 08",
+          "subtitle": "聊天",
+          "badge": {
+            "text": "完成",
+            "tone": "positive"
+          },
+          "action": {
+            "id": "detail:8",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"8\"}",
+              "title": "示例条目 08"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-9",
+          "title": "示例条目 09",
+          "subtitle": "邮件",
+          "action": {
+            "id": "detail:9",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"9\"}",
+              "title": "示例条目 09"
+            }
+          },
+          "icon": "mail"
+        },
+        {
+          "type": "row",
+          "key": "item-10",
+          "title": "示例条目 10",
+          "subtitle": "文档",
+          "action": {
+            "id": "detail:10",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"10\"}",
+              "title": "示例条目 10"
+            }
+          },
+          "icon": "doc"
+        },
+        {
+          "type": "row",
+          "key": "item-11",
+          "title": "示例条目 11",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:11",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"11\"}",
+              "title": "示例条目 11"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-12",
+          "title": "示例条目 12",
+          "subtitle": "邮件",
+          "badge": {
+            "text": "完成",
+            "tone": "positive"
+          },
+          "action": {
+            "id": "detail:12",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"12\"}",
+              "title": "示例条目 12"
+            }
+          },
+          "icon": "mail"
+        },
+        {
+          "type": "row",
+          "key": "item-13",
+          "title": "示例条目 13",
+          "subtitle": "文档",
+          "action": {
+            "id": "detail:13",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"13\"}",
+              "title": "示例条目 13"
+            }
+          },
+          "icon": "doc"
+        },
+        {
+          "type": "row",
+          "key": "item-14",
+          "title": "示例条目 14",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:14",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"14\"}",
+              "title": "示例条目 14"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-15",
+          "title": "示例条目 15",
+          "subtitle": "邮件",
+          "action": {
+            "id": "detail:15",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"15\"}",
+              "title": "示例条目 15"
+            }
+          },
+          "icon": "mail"
+        },
+        {
+          "type": "row",
+          "key": "item-16",
+          "title": "示例条目 16",
+          "subtitle": "文档",
+          "badge": {
+            "text": "完成",
+            "tone": "positive"
+          },
+          "action": {
+            "id": "detail:16",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"16\"}",
+              "title": "示例条目 16"
+            }
+          },
+          "icon": "doc"
+        },
+        {
+          "type": "row",
+          "key": "item-17",
+          "title": "示例条目 17",
+          "subtitle": "聊天",
+          "action": {
+            "id": "detail:17",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"17\"}",
+              "title": "示例条目 17"
+            }
+          },
+          "icon": "chat"
+        },
+        {
+          "type": "row",
+          "key": "item-18",
+          "title": "示例条目 18",
+          "subtitle": "邮件",
+          "action": {
+            "id": "detail:18",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"18\"}",
+              "title": "示例条目 18"
+            }
+          },
+          "icon": "mail"
+        },
+        {
+          "type": "row",
+          "key": "item-19",
+          "title": "示例条目 19",
+          "subtitle": "文档",
+          "action": {
+            "id": "detail:19",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"19\"}",
+              "title": "示例条目 19"
+            }
+          },
+          "icon": "doc"
+        },
+        {
+          "type": "row",
+          "key": "item-20",
+          "title": "示例条目 20",
+          "subtitle": "聊天",
+          "badge": {
+            "text": "完成",
+            "tone": "positive"
+          },
+          "action": {
+            "id": "detail:20",
+            "push": {
+              "state": "{\"p\":\"detail\",\"id\":\"20\"}",
+              "title": "示例条目 20"
+            }
+          },
+          "icon": "chat"
+        }
+      ],
+      "more": {
+        "action": {
+          "id": "more"
+        }
+      }
+    }
+  ],
+  "state": "{\"p\":\"list\"}",
+  "search": {
+    "placeholder": "条目名",
+    "action": {
+      "id": "search"
+    }
+  },
+  "filter": {
+    "name": "kind",
+    "title": "种类",
+    "choices": [
+      {
+        "value": "all",
+        "title": "全部"
+      },
+      {
+        "value": "doc",
+        "title": "文档"
+      },
+      {
+        "value": "chat",
+        "title": "聊天"
+      },
+      {
+        "value": "mail",
+        "title": "邮件"
+      }
+    ],
+    "value": "all",
+    "action": {
+      "id": "kind"
+    }
+  }
+}

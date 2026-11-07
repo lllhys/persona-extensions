@@ -1,0 +1,15 @@
+{
+  "protocol": 1,
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "version": 1,
+  "event_id": "event-map",
+  "key": "counter",
+  "action": "cb.example",
+  "event": "change",
+  "value": {
+    "__proto__": false,
+    "constructor": 0,
+    "selected": "demo"
+  }
+}

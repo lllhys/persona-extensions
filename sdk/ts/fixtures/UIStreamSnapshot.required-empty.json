@@ -1,0 +1,18 @@
+{
+  "protocol": 1,
+  "session": "session-a",
+  "epoch": "epoch-a",
+  "version": 1,
+  "root_key": "page",
+  "view": {
+    "sections": [{
+      "key": "main",
+      "items": [
+        {"type": "code", "key": "code", "text": ""},
+        {"type": "table", "key": "table", "columns": [{"title": "Name"}], "rows": []},
+        {"type": "file_tree", "key": "files", "entries": []},
+        {"type": "comment_thread", "key": "thread", "comments": []}
+      ]
+    }]
+  }
+}
