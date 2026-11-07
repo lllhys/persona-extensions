@@ -57,6 +57,8 @@ func TestPersonOnly(t *testing.T) {
 		// other command wrappers: eval runs its words in this shell, autossh execs ssh, busybox runs its applet
 		"eval rm -rf /x", "eval git push --force", "autossh -M 0 host rm -rf /x",
 		"busybox rm -rf /x", "busybox sh -c 'rm -rf /x'",
+		"toybox rm -rf /x", "torsocks rm -rf /x", "proxychains rm -rf /x", "proxychains4 rm -rf /x",
+		"firejail rm -rf /x", "bwrap --ro-bind / / -- rm -rf /x", "bwrap rm -rf /x",
 		// command runners and wrappers: env -S/--split-string, flock/script/sg/npx -c, trap, coproc, unshare, taskset
 		"env -S 'rm -rf v'", "env --split-string='rm -rf v'", `env -S"rm -rf v"`,
 		"flock /tmp/l -c 'rm -rf v'", "script -qc 'rm -rf v' /dev/null", "script -c 'rm -rf v'",
@@ -154,6 +156,8 @@ func TestPersonOnly(t *testing.T) {
 		"ssh -L 8080:localhost:80 -N host", "ssh host 'echo chmod 755 in text'",
 		// benign words after the other wrappers still go through (eval "$(ssh-agent)" is a common shell init line)
 		"eval echo hi", "busybox ls -la", "busybox true", "autossh -M 0 host", `eval "$(ssh-agent -s)"`,
+		"toybox ls -la", "torsocks curl -s https://example.com", "proxychains curl -s https://example.com",
+		"proxychains4 curl -s https://example.com", "firejail ls -la", "bwrap --ro-bind / / -- ls -la",
 		// git options that are not shortenings of a destructive one, and a checkout of one branch or commit
 		"git push --dry-run origin x", "git push --porcelain", "git push --progress origin x", "git reset --soft HEAD~1",
 		"git checkout -b feat/x origin/main", "git checkout --orphan new main",
@@ -180,6 +184,56 @@ func TestPersonOnly(t *testing.T) {
 		if why := personOnly(c); why != "" {
 			t.Errorf("%q: %s, should go through", c, why)
 		}
+	}
+}
+
+func TestSSHOptionCommands(t *testing.T) {
+	for _, c := range []struct {
+		command string
+		blocked bool
+	}{
+		{`ssh -o 'RemoteCommand=rm -rf /x' host`, true},
+		{`ssh -o ProxyCommand='rm -rf /x' host`, true},
+		{`ssh -oRemoteCommand='rm -rf /x' host`, true},
+		{`ssh -oProxyCommand='rm -rf /x' host`, true},
+		{`ssh -o 'remotecommand=rm -rf /x' host`, true},
+		{`ssh -o 'PROXYCOMMAND=rm -rf /x' host`, true},
+		{`sudo /usr/bin/ssh -o 'RemoteCommand=rm -rf /x' host`, true},
+		{`autossh -M 0 -o 'ProxyCommand=rm -rf /x' host`, true},
+		{`ssh -o 'ProxyCommand=sh -c "rm -rf /x"' host`, true},
+		{`ssh -o RemoteCommand=rm host`, true},
+		{`ssh -o 'RemoteCommand=rm -rf /tmp/x' host`, true},
+		{`ssh -o 'ProxyCommand rm -rf /x' host`, true},
+		{`ssh -o 'RemoteCommand rm -rf /x' host`, true},
+		{`ssh -o 'ProxyCommand = rm -rf /x' host`, true},
+		{`ssh -o PermitLocalCommand=yes -o 'LocalCommand=rm -rf /x' host`, true},
+		{`ssh -o 'KnownHostsCommand=rm -rf /x' host`, true},
+		{`scp -o 'ProxyCommand=rm -rf /x' a host:b`, true},
+		{`sftp -o 'ProxyCommand=rm -rf /x' host`, true},
+		{`sftp -oProxyCommand='rm -rf /x' host`, true},
+		{`ssh -o '=ProxyCommand=rm -rf /x' host`, true},
+		{`ssh '-o=ProxyCommand=rm -rf /x' host`, true},
+		{`ssh -o ' =ProxyCommand=rm -rf /x' host`, true},
+		{`ssh -o=ProxyCommand="rm -rf /x" host`, true},
+		{`ssh -o '=RemoteCommand=rm -rf /x' host`, true},
+		{`scp '-o=ProxyCommand=rm -rf /x' a host:b`, true},
+		{`ssh -o ConnectTimeout=5 host`, false},
+		{`ssh -oConnectTimeout=5 host`, false},
+		{`ssh -o 'RemoteCommand=ls -la' host`, false},
+		{`ssh -o 'ProxyCommand=nc %h %p' host`, false},
+		{`ssh -o ProxyCommand=none host`, false},
+		{`ssh -o 'ProxyCommand nc %h %p' host`, false},
+		{`scp -o ConnectTimeout=5 a host:b`, false},
+		{`ssh -o=ConnectTimeout=5 host`, false},
+		{`echo 'RemoteCommand=rm -rf /x'`, false},
+	} {
+		t.Run(c.command, func(t *testing.T) {
+			// Remote commands must not inherit the local scratch-directory exemption.
+			g := newGuard("/home/me/project", false)
+			if why := g.personOnly(c.command); (why != "") != c.blocked {
+				t.Errorf("personOnly() = %q, want blocked %v", why, c.blocked)
+			}
+		})
 	}
 }
 

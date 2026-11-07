@@ -253,7 +253,8 @@ func topicMeta(t topicDoc, loc *time.Location) string {
 	return strings.Join(parts, " · ")
 }
 
-// chunks cuts s into pieces of at most n characters, at a line break when there is one.
+// chunks cuts s into pieces of at most n characters, at a line break when there is one. Only line breaks are
+// trimmed from a piece, so a code block's first line keeps its indentation.
 func chunks(s string, n int) []string {
 	var out []string
 	r := []rune(s)
@@ -270,7 +271,7 @@ func chunks(s string, n int) []string {
 		}
 		r = r[cut:]
 	}
-	if rest := strings.TrimSpace(string(r)); rest != "" {
+	if rest := strings.Trim(string(r), "\n"); strings.TrimSpace(rest) != "" {
 		out = append(out, rest)
 	}
 	return out

@@ -499,6 +499,29 @@ func TestManyCodeBlocksFitThePage(t *testing.T) {
 	}
 }
 
+// A code block keeps its first line's indentation, also when it is split into items or cut at the budget.
+func TestCodeBlockKeepsIndentation(t *testing.T) {
+	f := newFakeSite(t)
+	f.topics[9] = topicJSON(9, "配置", "<p>config:</p><pre><code>  server:\n    port: 80\n</code></pre>")
+	p := testPlugin(t, f, nil)
+	v, _ := act(t, p, "", "topic:9")
+	var code []string
+	for _, e := range v.Sections[0].Items {
+		if e.Style == "code" {
+			code = append(code, e.Text)
+		}
+	}
+	if len(code) != 1 || code[0] != "  server:\n    port: 80" {
+		t.Fatalf("code items %q", code)
+	}
+	if got := chunks("  a:\n    b\n  c:\n    d", 12); len(got) != 2 || got[0] != "  a:\n    b" || got[1] != "  c:\n    d" {
+		t.Fatalf("chunks %q", got)
+	}
+	if got := clip("  a:\n    b", 6); got != "  a:…" {
+		t.Fatalf("clip %q", got)
+	}
+}
+
 // A hot reply that renders to no words (only an emoji image, or only a video/audio upload) is skipped:
 // it would be an empty text item, which the host's view check refuses, and the whole topic page must still open.
 // A plain picture reply still renders the [图片] placeholder, so it is not over-filtered.
