@@ -162,6 +162,46 @@ func TestScratchDeletions(t *testing.T) {
 	}
 }
 
+// A > or tee into /tmp/… is read where it lands: /tmp is itself a link on macOS (/private/tmp), and a link in it
+// may lead elsewhere in /tmp or out of it. The directory is under the real /tmp, as the hook sees one.
+func TestScratchRedirectThroughLinks(t *testing.T) {
+	d, err := os.MkdirTemp("/tmp", "cba-redirect-")
+	if err != nil {
+		t.Skip(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(d) })
+	for _, dir := range []string{d + "/sub", d + "/real/sub"} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(d+"/real", d+"/lnk"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/usr", d+"/out"); err != nil {
+		t.Fatal(err)
+	}
+	cmd := func(c string) string { return strings.ReplaceAll(c, "{d}", d) }
+	for _, c := range []string{
+		"echo x > {d}/sub/../x", "echo x > {d}/lnk/sub/../x", "tee {d}/lnk/sub/../x", "echo x > {d}/lnk/x", "tee {d}/x",
+	} {
+		for _, g := range []*guard{{}, newGuard("", false)} {
+			if why := g.personOnly(cmd(c)); why != "" {
+				t.Errorf("%q: %s, should go through", cmd(c), why)
+			}
+		}
+	}
+	for _, c := range []string{
+		"echo x > {d}/out/x", "tee {d}/out/x", "echo x > {d}/out/../x", "ln -s /usr {d}/l2; echo x > {d}/l2/x",
+	} {
+		for _, g := range []*guard{{}, newGuard("", false)} {
+			if g.personOnly(cmd(c)) == "" {
+				t.Errorf("%q should stay with a person", cmd(c))
+			}
+		}
+	}
+}
+
 func TestAllowDestructiveSetting(t *testing.T) {
 	b := newBox(t)
 	g := newGuard(b.home, true)

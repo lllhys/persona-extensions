@@ -207,6 +207,9 @@ func (g *guard) personOnlyDepth(cmd string, depth int) string {
 	g.sv = readVars(stripped, full, tail, g.cwd, depth == 0)
 	for _, r := range redirects {
 		g.seg = r.seg
+		if g.quickScratch(r.target) {
+			continue
+		}
 		if g.scratchTargets(nil, []string{r.target}) {
 			g.note("scratch: > " + r.target)
 			continue
@@ -573,8 +576,7 @@ func isMessageFlag(prog, flag string) bool {
 // scan splits cmd into the words of each simple command, as a shell would group them: quotes keep a word together
 // (and are removed; $'…' escapes are decoded), a backslash escapes the next character, an unquoted {a,b} or {a..c}
 // in a word makes several words, a comment is skipped, and lists, pipes, subshells, groups and command
-// substitutions separate. redirects are the files output is written to with >, >|, N> or &> (not >>, not >&N),
-// outside /dev/ and /tmp/.
+// substitutions separate. redirects are the files output is written to with >, >|, N> or &> (not >>, not >&N).
 func scan(cmd string) (segs [][]string, redirects []string) {
 	full, reds, _ := scanFull(cmd)
 	for _, s := range full {
@@ -711,7 +713,7 @@ func scanFull(cmd string) (segs []segment, redirects []redirect, tail string) {
 	return segs, redirects, sep.String()
 }
 
-// redirectTarget reads the redirect whose > is at rs[i]: the file it overwrites ("" for >>, >&N, /dev/ and /tmp/),
+// redirectTarget reads the redirect whose > is at rs[i]: the file it overwrites ("" for >> and >&N),
 // and the index of its last character.
 func redirectTarget(rs []rune, i int) (int, string) {
 	appendTo := false
@@ -746,16 +748,15 @@ func redirectTarget(rs []rune, i int) (int, string) {
 		}
 	}
 	target := t.String()
-	if appendTo || target == "" || scratch(target) {
+	if appendTo || target == "" {
 		return i, ""
 	}
 	return i, target
 }
 
-// scratch says whether a file is one nobody keeps: under /dev/ or /tmp/.
-// The path is cleaned first, so /tmp/../etc/hosts is not one. A .. after a symlink goes to the parent of where the
-// link leads, not where the cleaned path says (/tmp/link/../x), so such a path is left to the scratch check, which
-// reads it the way the kernel does.
+// scratch says whether a file is one nobody keeps: written as /dev/… or /tmp/…, and landing under /dev or a
+// temporary directory once its .. and symlinks are resolved the way the kernel does, so neither /tmp/../etc/hosts
+// nor /tmp/link/f with link leading to ~ is one, while /tmp/link/../x is one when link leads elsewhere in /tmp.
 func scratch(f string) bool {
 	if !strings.HasPrefix(f, "/") {
 		return false
@@ -765,7 +766,26 @@ func scratch(f string) bool {
 		return false
 	}
 	real, ok := physical(f)
-	return ok && real == clean
+	if !ok {
+		return false
+	}
+	real = resolve(real, false)
+	for _, d := range append([]string{"/dev"}, tmpRoots...) {
+		if d = resolve(d, true); real != d && within(real, d) {
+			return true
+		}
+	}
+	return false
+}
+
+// quickScratch is scratch for a file output is written to, read before the command runs: a command that makes links
+// or mounts may change where a /tmp/ path leads by then (ln -s ~ /tmp/h; echo x > /tmp/h/.bashrc), so only /dev/
+// counts in one.
+func (g *guard) quickScratch(f string) bool {
+	if !scratch(f) {
+		return false
+	}
+	return g.sv == nil || !g.sv.links || strings.HasPrefix(path.Clean(f), "/dev/")
 }
 
 func isDigits(s string) bool {
@@ -935,7 +955,7 @@ func (g *guard) segmentFrom(pre, words []string, depth int) string {
 		case "tee":
 			if !has(rest, "--append") && !hasShort(rest, 'a') {
 				for _, f := range rest {
-					if !strings.HasPrefix(f, "-") && !scratch(f) {
+					if !strings.HasPrefix(f, "-") && !g.quickScratch(f) {
 						why = "overwrite: tee " + f
 						break
 					}
