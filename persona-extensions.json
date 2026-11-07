@@ -291,7 +291,7 @@
         "manifest_version": 1,
         "id": "hackernews",
         "name": "Hacker News",
-        "version": "0.1.1",
+        "version": "0.1.2",
         "description": "Hacker News 的帖子：扩展里的一页看 Top、New、Best、Ask HN 和 Show HN，点开在 App 里读正文和顶层评论（hub 去读，手机不用代理），页面文字跟随 App 的语言；助手能用工具查列表、读帖子。只读公开内容，不用账号。",
         "publisher": "nwverse",
         "engines": {
@@ -397,9 +397,9 @@
       ],
       "packages": [
         {
-          "url": "release:hackernews-v0.1.1/hackernews-0.1.1.tar.gz",
-          "sha256": "baf882986d669ec70595c9c803660183a8ce519ad11681fca779db1d74fee90d",
-          "size": 12781008
+          "url": "release:hackernews-v0.1.2/hackernews-0.1.2.tar.gz",
+          "sha256": "6f0b698da02bcb2e584889efd526929d6b641faf16707d93d6b997467425061c",
+          "size": 12786318
         }
       ]
     },
