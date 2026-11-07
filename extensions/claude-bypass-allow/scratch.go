@@ -426,15 +426,18 @@ var cdPrefixes = map[string]bool{"builtin": true, "command": true, "time": true,
 	"nocorrect": true, "-": true}
 
 // cdWord is the index of the word that may be a segment's cd (cd, chdir, pushd, popd) or eval: its program after
-// cdPrefixes and their options (command -p, time -p, builtin --); -1 when none.
+// cdPrefixes, their options (command -p, time -p, builtin --) and the assignments and ! after them (time FOO=1 cd,
+// time ! cd, zsh's nocorrect FOO=1 cd); -1 when none.
 func cdWord(words []string) int {
 	i := firstProgram(words)
-	for i >= 0 && i < len(words) && cdPrefixes[words[i]] {
+	for i >= 0 && cdPrefixes[words[i]] {
 		for i++; i < len(words) && strings.HasPrefix(words[i], "-"); i++ {
 		}
-	}
-	if i >= len(words) {
-		return -1
+		if j := firstProgram(words[i:]); j >= 0 {
+			i += j
+		} else {
+			i = -1
+		}
 	}
 	return i
 }

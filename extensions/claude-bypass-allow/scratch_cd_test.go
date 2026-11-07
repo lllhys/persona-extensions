@@ -19,13 +19,17 @@ func TestScratchCdPrefixes(t *testing.T) {
 		{"bash", "command cd {home} && rm -rf Documents/*"}, // zsh's command runs /usr/bin/cd
 		{"bash", "command -p cd {home} && rm -rf Documents/*"},
 		{"bash", "time -p cd {home}; rm -rf Documents/*"},
+		{"bash", "time ! cd {home}; rm -rf Documents/*"},
+		{"bash", "time -p FOO=1 cd {home} && rm -rf Documents/*"},
 		{"bash", "builtin pushd {home} >/dev/null && rm -rf Documents/*"},
 		{"bash", "eval cd {home}; rm -rf Documents/*"},
 		{"bash", "eval 'cd {home}'; rm -rf Documents/*"},
+		{"bash", "time FOO=1 eval 'cd {home}'; rm -rf Documents/*"},
 		{"zsh", "chdir {home} && rm -rf Documents/*"},
 		{"zsh", "builtin chdir {home} && rm -rf Documents/*"},
 		{"zsh", "noglob cd {home} && rm -rf Documents/*"},
 		{"zsh", "nocorrect cd {home} && rm -rf Documents/*"},
+		{"zsh", "nocorrect FOO=1 cd {home} && rm -rf Documents/*"},
 		{"zsh", "true; - cd {home} && rm -rf Documents/*"}, // zsh -c reads a leading - as its own option
 	} {
 		command := b.cmd(tc.command)
