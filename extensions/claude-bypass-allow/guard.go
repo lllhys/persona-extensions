@@ -737,12 +737,14 @@ func isDigits(s string) bool {
 // possible program; shell keywords are here too. ssh runs its unquoted arguments ("ssh host rm -rf x") joined
 // with a space through the remote shell, the way it runs one quoted argument; autossh execs ssh; busybox runs its
 // applet as a program. caffeinate, arch, xcrun, pkexec, nsenter, systemd-run, chrt, numactl, fakeroot, valgrind,
-// ltrace and gdb --args exec the program after their options.
+// ltrace and gdb --args exec the program after their options. toybox runs its applet like busybox; torsocks,
+// proxychains, proxychains4, firejail and bwrap run the wrapped command after their options.
 var wrappers = map[string]bool{
 	"sudo": true, "doas": true, "xargs": true, "parallel": true, "env": true, "nice": true, "ionice": true, "nohup": true,
 	"time": true, "timeout": true, "exec": true, "command": true, "builtin": true, "stdbuf": true, "setsid": true,
 	"flock": true, "chroot": true, "runuser": true, "strace": true, "unbuffer": true, "watch": true, "ssh": true,
 	"autossh": true, "busybox": true, "eval": true,
+	"toybox": true, "torsocks": true, "proxychains": true, "proxychains4": true, "firejail": true, "bwrap": true,
 	"npx": true, "pnpx": true, "bunx": true, "dlx": true, "uvx": true, "pipx": true,
 	"unshare": true, "taskset": true, "coproc": true, "script": true, "sg": true, "trap": true,
 	"caffeinate": true, "arch": true, "xcrun": true, "pkexec": true, "nsenter": true, "systemd-run": true, "chrt": true,
