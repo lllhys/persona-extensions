@@ -450,10 +450,11 @@ func (sv *shellVars) cd(args []string, k int) {
 			}
 			continue
 		}
-		// Shells search CDPATH unless the first component is . or ... We do not resolve that search: a command
-		// may set CDPATH dynamically, so relative destructive targets must remain subject to confirmation.
+		// Shells search CDPATH (zsh: also its tied cdpath array) unless the first component is . or ... We do
+		// not resolve that search: a command may set CDPATH dynamically, so relative destructive targets must
+		// remain subject to confirmation.
 		first := strings.SplitN(d, string(filepath.Separator), 2)[0]
-		if first != "." && first != ".." && (os.Getenv("CDPATH") != "" || sv.sets("CDPATH")) {
+		if first != "." && first != ".." && (os.Getenv("CDPATH") != "" || sv.sets("CDPATH") || sv.sets("cdpath")) {
 			sv.cwds = nil
 			return
 		}

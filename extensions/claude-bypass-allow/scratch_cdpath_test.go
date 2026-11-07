@@ -21,6 +21,10 @@ func TestScratchCDPATHRequiresConfirmation(t *testing.T) {
 		{"command-local", "", "CDPATH={keep} cd sub && rm -f sentinel"},
 		{"inherited", b.keep, "cd sub && rm -f sentinel"},
 		{"dynamic", "", "read CDPATH; cd sub && rm -f sentinel"},
+		{"zsh array", "", "cdpath=({keep}); cd sub && rm -f sentinel"},
+		{"zsh scalar", "", "cdpath={keep}; cd sub && rm -f sentinel"},
+		{"zsh append", "", "cdpath+=({keep}); cd sub && rm -f sentinel"},
+		{"zsh glob", "", "cdpath=({keep}); cd sub && rm -rf *"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("CDPATH", tc.env)
@@ -78,5 +82,33 @@ func TestScratchCDPATHMatchesShellDestination(t *testing.T) {
 	}
 	if why := newGuard(b.project, false).personOnly("cd sub && rm -f sentinel"); why == "" {
 		t.Fatal("guard approved a path the shell resolves outside scratch")
+	}
+}
+
+// zsh ties the lower-case cdpath array to CDPATH: a cd target missing from the working directory is looked up there.
+func TestScratchZshCdpathMatchesShellDestination(t *testing.T) {
+	zsh, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("zsh unavailable")
+	}
+	b := newBox(t)
+	t.Setenv("CDPATH", "")
+	outside := filepath.Join(b.keep, "other")
+	if err := os.MkdirAll(outside, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, set := range []string{"cdpath=({keep})", "cdpath={keep}", "cdpath+=({keep})"} {
+		command := exec.Command(zsh, "-f", "-c", b.cmd(set+"; cd other >/dev/null && pwd -P"))
+		command.Dir = b.project
+		out, err := command.Output()
+		if err != nil {
+			t.Fatalf("%s: %v", set, err)
+		}
+		if got := strings.TrimSpace(string(out)); got != outside {
+			t.Fatalf("%s: shell destination = %q, want %q", set, got, outside)
+		}
+		if why := newGuard(b.project, false).personOnly(b.cmd(set + "; cd other && rm -f sentinel")); why == "" {
+			t.Errorf("%s: guard approved a path the shell resolves outside scratch", set)
+		}
 	}
 }
