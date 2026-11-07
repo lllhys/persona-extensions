@@ -753,13 +753,19 @@ func redirectTarget(rs []rune, i int) (int, string) {
 }
 
 // scratch says whether a file is one nobody keeps: under /dev/ or /tmp/.
-// The path is cleaned first, so /tmp/../etc/hosts is not one.
+// The path is cleaned first, so /tmp/../etc/hosts is not one. A .. after a symlink goes to the parent of where the
+// link leads, not where the cleaned path says (/tmp/link/../x), so such a path is left to the scratch check, which
+// reads it the way the kernel does.
 func scratch(f string) bool {
 	if !strings.HasPrefix(f, "/") {
 		return false
 	}
-	f = path.Clean(f)
-	return strings.HasPrefix(f, "/dev/") || strings.HasPrefix(f, "/tmp/")
+	clean := path.Clean(f)
+	if !strings.HasPrefix(clean, "/dev/") && !strings.HasPrefix(clean, "/tmp/") {
+		return false
+	}
+	real, ok := physical(f)
+	return ok && real == clean
 }
 
 func isDigits(s string) bool {

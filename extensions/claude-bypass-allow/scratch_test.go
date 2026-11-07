@@ -65,6 +65,10 @@ func TestScratchDeletions(t *testing.T) {
 	if err := os.Symlink(b.keep, filepath.Join(b.tmp, "link")); err != nil {
 		t.Fatal(err)
 	}
+	// a link to a directory that is not there yet
+	if err := os.Symlink(filepath.Join(b.keep, "sub"), filepath.Join(b.tmp, "dl")); err != nil {
+		t.Fatal(err)
+	}
 	goes := []string{
 		realCommand,
 		"rm -rf {tmp}/x", "rm -rf {tmp}/x/*", "rm -rf ~/wt/feat ~/ag-work/v1/e1", "rm -rf $HOME/ag-work/old", "rm -rf ${HOME}/wt/x",
@@ -77,6 +81,7 @@ func TestScratchDeletions(t *testing.T) {
 		"find . -name '*.go' -fprint {tmp}/list", "find {tmp}/x -delete -fls {tmp}/x.log",
 		"rsync -a --delete src/ {tmp}/dst/", "rm -rf {tmp}/link", "bash -c 'rm -rf {tmp}/x'",
 		"cd {tmp} && rm -rf x", "cd {tmp}/a; cd b; rm -rf c", "rm -rf ~/wt/x; echo $(date)", "sh -c 'S={tmp}/a; rm -rf $S'",
+		"rm -rf {tmp}/a/../b", "rm -rf {tmp}/dl",
 	}
 	g := newGuard(b.project, false)
 	for _, c := range goes {
@@ -97,6 +102,10 @@ func TestScratchDeletions(t *testing.T) {
 		"rm -rf {tmp}/*/", "rm -rf {tmp}/.*", "rm -rf {tmp}/*/x",
 		// through a symlink that leads out, or one the command may make
 		"rm -rf {tmp}/link/", "rm -rf {tmp}/link/f", "ln -s {keep} {tmp}/l2; rm -rf {tmp}/l2/f",
+		// .. after a symlink goes to the parent of where the link leads
+		"rm -rf {tmp}/link/../x", "echo x > {tmp}/link/../x", "cd {tmp}/link && rm -rf ../x", "cd {tmp}/link/.. && rm -rf x",
+		// a link that leads nowhere yet: the command may make where it leads first
+		"mkdir {keep}/sub; rm -rf {tmp}/dl/../x", "mkdir {keep}/sub; rm -rf {tmp}/dl/x", "cd {tmp}/dl/.. && rm -rf x",
 		// variables the check cannot read
 		"rm -rf $S/x", "rm -rf $S; S={tmp}/a", "S={tmp}/a; S=/etc; rm -rf $S/x", "if x; then S={tmp}/a; fi; rm -rf $S/x",
 		"x && S={tmp}/a; rm -rf $S", "S={tmp}/a; read S; rm -rf $S", "S={tmp}/a; export S; rm -rf $S",

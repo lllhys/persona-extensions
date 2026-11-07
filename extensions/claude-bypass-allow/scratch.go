@@ -158,6 +158,42 @@ func resolve(p string, follow bool) string {
 	}
 }
 
+// physical is the absolute path p cleaned the way the kernel reads it: a .. goes to the parent of what the path
+// before it leads to, symlinks resolved, where filepath.Clean would only drop the name before it. ok is false when a
+// .. comes after a link that leads nowhere yet: where it goes depends on what the command makes first.
+func physical(p string) (out string, ok bool) {
+	out = "/"
+	for _, part := range strings.Split(p, "/") {
+		switch part {
+		case "", ".":
+		case "..":
+			if real, err := filepath.EvalSymlinks(out); err == nil {
+				out = real
+			} else if dangles(out) {
+				return "", false
+			}
+			out = filepath.Dir(out)
+		default:
+			out = filepath.Join(out, part)
+		}
+	}
+	return out, true
+}
+
+// dangles says whether the deepest part of p that exists is a link that leads nowhere (or loops): what is behind it
+// depends on what is made there later, so it cannot be read.
+func dangles(p string) bool {
+	for d := p; ; d = filepath.Dir(d) {
+		if _, err := os.Lstat(d); err == nil {
+			_, err := filepath.EvalSymlinks(d)
+			return err != nil
+		}
+		if filepath.Dir(d) == d {
+			return false
+		}
+	}
+}
+
 // shellVars is what one command string sets that the scratch check can read.
 type shellVars struct {
 	vars    map[string][]string // the values each readable variable can have
@@ -397,9 +433,21 @@ func (sv *shellVars) cd(args []string, k int) {
 		return
 	}
 	var next []string
+	// cd reads a .. logically, cd -P (or zsh's chase_links) physically: both count
+	add := func(d string) bool {
+		next = append(next, filepath.Clean(d))
+		real, ok := physical(d)
+		if ok && real != filepath.Clean(d) {
+			next = append(next, real)
+		}
+		return ok
+	}
 	for _, d := range dirs {
 		if filepath.IsAbs(d) {
-			next = append(next, filepath.Clean(d))
+			if !add(d) {
+				sv.cwds = nil
+				return
+			}
 			continue
 		}
 		// Shells search CDPATH unless the first component is . or ... We do not resolve that search: a command
@@ -414,7 +462,10 @@ func (sv *shellVars) cd(args []string, k int) {
 			return
 		}
 		for _, c := range sv.cwds {
-			next = append(next, filepath.Join(c, d))
+			if !add(c + "/" + d) {
+				sv.cwds = nil
+				return
+			}
 		}
 	}
 	if len(sv.cwds) == 0 {
@@ -733,11 +784,23 @@ func (g *guard) scratchPath(p string) bool {
 			return false
 		}
 		for _, c := range g.sv.cwds {
-			abs = append(abs, filepath.Join(c, p))
+			abs = append(abs, c+"/"+p)
 		}
 	}
 	for _, a := range abs {
-		if !g.roots.holds(resolve(filepath.Clean(a), follow)) {
+		real, ok := physical(a)
+		if !ok {
+			return false
+		}
+		// a link on the way that leads nowhere yet: the command may make where it leads before the deletion runs
+		through := real
+		if !follow {
+			through = filepath.Dir(real)
+		}
+		if dangles(through) {
+			return false
+		}
+		if !g.roots.holds(resolve(real, follow)) {
 			return false
 		}
 	}
