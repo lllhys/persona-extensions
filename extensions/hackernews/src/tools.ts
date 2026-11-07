@@ -56,6 +56,7 @@ export async function callTool(service: HackerNews, name: string, raw: unknown =
     if (gone(story)) throw new Error(`item ${id} was deleted or hidden`);
     const title = oneLine(story.title) || `${story.type} by ${story.by}`;
     const lines = [`${JSON.stringify(clip(title, 300))} ${itemURL(id)}`, clip(meta(en, story, service.now()), 300)];
+    if (thread.stale) lines.push(`(This read failed: ${errorText(thread.stale, "en")}. This is what was read ${ago(en, service.now() - thread.at)}.)`);
     if (story.url) lines.push("Article: " + clip(oneLine(story.url), 2000));
     if (story.text) lines.push("\n" + clip(plain(story.text), 6000));
     if (thread.missed) lines.push(`\n(${thread.missed} comments could not be read.)`);

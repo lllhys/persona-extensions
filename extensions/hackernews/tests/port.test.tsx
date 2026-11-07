@@ -55,6 +55,20 @@ test("stale list, error/retry, status recovery and no account", async () => {
   await service.stories("top", 30, true); assert.equal(service.status("en").state, "ok"); assert.ok(service.status().last_sync);
   assert.equal(textsFor("en").account, service.status("en").account);
 });
+test("a stale story, comment or list item carries the note and its read time", async () => {
+  const { fixture, service } = setup(); await service.thread(1);
+  fixture.time += 3 * 3_600_000;
+  for (const id of [1, 11, 12, 13]) fixture.bodies.set(`/item/${id}.json`, new Response("down", { status: 500 }));
+  await service.stories("top");
+  const story = text(await draw(service, { s: 1 }));
+  assert.ok(story.includes("This read failed: Hacker News answered HTTP 500. Showing what was read 3h ago")); assert.ok(story.includes("Synthetic comment"));
+  const tool = await callTool(service, "hn_item", { item: 1 });
+  assert.ok(tool.includes("(This read failed: Hacker News answered HTTP 500. This is what was read 3h ago.)")); assert.ok(tool.includes("- fixture-b ("));
+  // The ids were read just now, story 1 is the older copy: the list is as old as its oldest story.
+  const list = text(await draw(service));
+  assert.ok(list.includes("Showing what was read 3h ago")); assert.ok(list.includes("Read 3h ago")); assert.ok(list.includes("Synthetic Rust article"));
+  assert.equal(service.status("en").state, "error");
+});
 test("filter matches title/domain, exclusions and score; show-all", async () => {
   const { service } = setup({ keywords: ["RUST", " EXAMPLE.NET "], exclude_keywords: ["ask hn"], min_score: 10 });
   const listing = await service.stories("top"); assert.deepEqual(filter(listing.stories, service.config).map(it => it.id), [1]);
@@ -341,6 +355,6 @@ test("service replacement publishes loading rather than the previous service's d
 });
 test("manifest stays transitional, unchanged version and read-only egress", async () => {
   const manifest = JSON.parse(await readFile("persona-extension.json", "utf8"));
-  assert.equal(manifest.version, "0.1.1"); assert.deepEqual(manifest.permissions.network, ["hacker-news.firebaseio.com"]);
+  assert.equal(manifest.version, "0.1.2"); assert.deepEqual(manifest.permissions.network, ["hacker-news.firebaseio.com"]);
   assert.ok(manifest.runtime.command); assert.equal(manifest.runtime.source, undefined);
 });

@@ -33,7 +33,7 @@ inject an adapter without changing the network grants.
 `build:source` emits a bounded, import-free bundle, its SHA-256 descriptor,
 `build/package/` and `build/hackernews-source.tar.gz`. The explicit local package
 profile uses `runtime.mode: deno` and `runtime.source: {entry, bundle, sha256}`,
-a main-navigation page and system snapshot, retaining version 0.1.1 and the
+a main-navigation page and system snapshot, retaining version 0.1.2 and the
 released read-only permissions. It includes TypeScript authoring files and the
 extension-owned lockfile. Installing the archive needs no npm dependency
 resolution. Rebuilding from source uses the repository's officially synced SDK.

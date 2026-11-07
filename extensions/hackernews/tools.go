@@ -176,6 +176,9 @@ func (a *app) toolItem(ctx context.Context, id int64, comments int) (string, err
 		title = s.Type + " by " + s.By
 	}
 	fmt.Fprintf(&b, "%q %s\n%s\n", title, itemURL(s.ID), en.meta(s, now))
+	if th.stale != nil {
+		fmt.Fprintf(&b, "(This read failed: %s. This is what was read %s.)\n", oneLine(th.stale.Error()), en.ago(now.Sub(th.at)))
+	}
 	if s.URL != "" {
 		b.WriteString("Article: " + s.URL + "\n")
 	}

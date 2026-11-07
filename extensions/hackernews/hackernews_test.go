@@ -369,6 +369,42 @@ func TestStaleCopy(t *testing.T) {
 	}
 }
 
+func TestStaleItemCopy(t *testing.T) {
+	ctx := context.Background()
+	f := newFakeSite(t)
+	sample(f)
+	a := testApp(t, f, Config{})
+	if _, err := a.thread(ctx, 1, commentsShow, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.stories(ctx, "top", listMost, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int64{1, 11, 12, 13} { // read 3 hours ago, and the site fails for them from here on
+		old := a.site.cache[itemPath(id)]
+		old.at = old.at.Add(-3 * time.Hour)
+		a.site.cache[itemPath(id)] = old
+		f.set(itemPath(id), "")
+	}
+	res, _ := a.action(ctx, req("en", 3, pageState{List: "top", Story: 1}, "refresh", nil))
+	checkView(t, res.View)
+	if all := joined(res.View); !strings.Contains(all, "This read failed: Hacker News answered HTTP 500. Showing what was read 3h ago") || !strings.Contains(all, "Great news.") {
+		t.Errorf("story page:\n%s", all)
+	}
+	out, err := a.toolItem(ctx, 1, 10)
+	if err != nil || !strings.Contains(out, "(This read failed: Hacker News answered HTTP 500. This is what was read 3h ago.)") || !strings.Contains(out, "- bob (") {
+		t.Errorf("hn_item: %v\n%s", err, out)
+	}
+	// the ids were read just now, story 1 is the older copy: the list is as old as its oldest story
+	v, _ := a.render(ctx, req("en", 3, nil, "", nil))
+	if all := joined(v); !strings.Contains(all, "Showing what was read 3h ago") || !strings.Contains(all, "Read 3h ago") || !strings.Contains(all, "Rust in the kernel") {
+		t.Errorf("list page:\n%s", all)
+	}
+	if st := a.status(); st.State != "error" || !strings.Contains(st.Error, "HTTP 500") {
+		t.Fatalf("status %+v", st)
+	}
+}
+
 func TestStoryPage(t *testing.T) {
 	f := newFakeSite(t)
 	sample(f)

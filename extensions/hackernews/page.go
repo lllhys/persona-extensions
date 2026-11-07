@@ -190,6 +190,9 @@ func (a *app) storyPage(ctx context.Context, r *ext.UIRequest, st pageState, ref
 	}
 	v.Title = clip(s.Title, 200)
 	head := []wire.Component{text(t.meta(s, now), wire.TextStyleCaption)}
+	if th.stale != nil {
+		head = append(head, text(fmt.Sprintf(t.stale, oneLine(th.stale.Error()), t.ago(now.Sub(th.at))), wire.TextStyleSecondary))
+	}
 	body := plain(s.Text)
 	for _, c := range chunks(clip(body, textMost), chunkMost) {
 		head = append(head, text(c, wire.TextStyleBody))

@@ -48,9 +48,10 @@ export function page(props: PageProps): Node {
     if (loaded.kind === "error") return <View key="page" title="Hacker News" state={JSON.stringify(state)}><Section key="error-section">{bodyText("error", fmt(t.failed, errorText(loaded.error, locale)))}</Section>{tail}</View>;
     if (loaded.kind !== "story" || !story) throw new Error("story page needs a thread");
     if (gone(story)) return <View key="page" title="Hacker News" state={JSON.stringify(state)}><Section key="gone-section">{bodyText("gone", t.gone)}</Section>{tail}</View>;
-    const { comments, missed } = loaded.thread;
+    const { comments, missed, at, stale } = loaded.thread;
     return <View key="page" title={clip(story.title, 200)} state={JSON.stringify(state)}>
       <Section key="story-head">{bodyText("story-meta", meta(t, story, now), "caption")}
+        {stale ? bodyText("stale", fmt(t.stale, errorText(stale, locale), ago(t, now - at))) : null}
         {chunks(clip(plain(story.text), 12000)).map((part, i) => bodyText(`body-${i}`, part, "body"))}
       </Section>
       <Section key="comments" title={t.comments} footer={comments.length ? fmt(t.commentsFoot, comments.length, story.descendants) : undefined}>

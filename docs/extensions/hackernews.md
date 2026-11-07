@@ -22,7 +22,7 @@ Because each item is its own request, a list is its ids and then up to 30 items,
 
 Each request has a 15-second timeout and a 2 MiB answer limit; an answer that is not JSON never replaces a good copy. Lists and items are cached for five minutes, up to 2,000 answers, oldest first out. **Refresh** reads again anything older than 30 seconds.
 
-When a read fails, the older copy stays on the page or in the tool's answer, with a note saying why and how long ago it was read. The connector's status is `error`, with the reason, when the last read failed and none has succeeded since. A missing or deleted item does not change it.
+When a read fails, whether of a list or of one story or comment, the older copy stays on the page or in the tool's answer, with a note saying why and how long ago it was read. A list or a story counts as read when its oldest part was. The connector's status is `error`, with the reason, when the last read failed and none has succeeded since. A missing or deleted item does not change it.
 
 A page reads for at most 15 seconds and a tool call for at most 25. Stories that could not be read in time are counted on the page and in the answer.
 

@@ -6,7 +6,8 @@ const sameFailure = (a: unknown, b: unknown) => a === b || (a instanceof ReadErr
 function sameLoaded(a: Loaded, b: Loaded): boolean {
   if (a.kind === "list" && b.kind === "list") return a.listing.at === b.listing.at && a.listing.missed === b.listing.missed
     && sameFailure(a.listing.stale, b.listing.stale) && sameItems(a.listing.stories, b.listing.stories);
-  if (a.kind === "story" && b.kind === "story") return a.thread.story === b.thread.story && a.thread.missed === b.thread.missed && sameItems(a.thread.comments, b.thread.comments);
+  if (a.kind === "story" && b.kind === "story") return a.thread.story === b.thread.story && a.thread.at === b.thread.at && a.thread.missed === b.thread.missed
+    && sameFailure(a.thread.stale, b.thread.stale) && sameItems(a.thread.comments, b.thread.comments);
   if (a.kind === "error" && b.kind === "error") return sameFailure(a.error, b.error);
   return a.kind === "loading" && b.kind === "loading";
 }

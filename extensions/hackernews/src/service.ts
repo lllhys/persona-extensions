@@ -11,8 +11,11 @@ export function errorText(error: unknown, locale: string): string {
   return error instanceof ReadError ? fmt(textsFor(locale)[error.code], error.status) : textsFor(locale).unreachable;
 }
 interface Reading { value: unknown; at: number; stale?: ReadError }
+type ItemReading = Reading & { value: Item };
 export interface Listing { stories: Item[]; missed: number; at: number; stale?: ReadError }
-export interface Thread { story: Item; comments: Item[]; missed: number }
+export interface Thread { story: Item; comments: Item[]; missed: number; at: number; stale?: ReadError }
+/** The earlier of two reads, with the first reason an older copy stands in. */
+const older = (a: Omit<Reading, "value">, b: Omit<Reading, "value">) => ({ at: Math.min(a.at, b.at), stale: a.stale ?? b.stale });
 const aborted = (signal?: AbortSignal) => signal?.throwIfAborted();
 const cancelled = (error: unknown) => error instanceof Error && error.name === "AbortError";
 function ids(value: unknown): number[] {
@@ -123,18 +126,20 @@ export class HackerNews {
       throw failure;
     }
   }
-  async item(id: number, refresh = false, signal?: AbortSignal): Promise<Item> {
+  private async readItem(id: number, refresh: boolean, signal?: AbortSignal): Promise<ItemReading> {
     if (!Number.isSafeInteger(id) || id <= 0) throw new ReadError("not_found");
-    const result = await this.read(`/item/${id}.json`, refresh, value => item(value, id), signal);
-    return result.value as Item;
+    return await this.read(`/item/${id}.json`, refresh, value => item(value, id), signal) as ItemReading;
   }
-  private async items(ids: number[], refresh: boolean, signal?: AbortSignal): Promise<{ items: Item[]; missed: number }> {
+  async item(id: number, refresh = false, signal?: AbortSignal): Promise<Item> {
+    return (await this.readItem(id, refresh, signal)).value;
+  }
+  private async items(ids: number[], refresh: boolean, signal?: AbortSignal): Promise<{ items: ItemReading[]; missed: number }> {
     const result = await Promise.all(ids.map(async id => {
-      try { return await this.item(id, refresh, signal); }
+      try { return await this.readItem(id, refresh, signal); }
       catch (error) { aborted(signal); return error instanceof ReadError && error.code === "not_found" ? null : undefined; }
     }));
     aborted(signal);
-    return { items: result.filter((it): it is Item => !!it), missed: result.filter(it => it === undefined).length };
+    return { items: result.filter((it): it is ItemReading => !!it), missed: result.filter(it => it === undefined).length };
   }
   async stories(feed: Feed, count = 30, refresh = false, signal?: AbortSignal): Promise<Listing> {
     if (!isFeed(feed)) throw new Error("unknown list");
@@ -142,13 +147,15 @@ export class HackerNews {
     const wanted = (rd.value as number[]).slice(0, Math.min(30, Math.max(0, Math.trunc(count))));
     const result = await this.items(wanted, refresh, signal);
     if (wanted.length && result.missed === wanted.length) throw new ReadError("all_missed");
-    return { stories: result.items.filter(it => !gone(it)), missed: result.missed, at: rd.at, stale: rd.stale };
+    const shown = result.items.filter(it => !gone(it.value));
+    return { stories: shown.map(it => it.value), missed: result.missed, ...shown.reduce(older, { at: rd.at, stale: rd.stale }) };
   }
   async thread(id: number, count = 15, refresh = false, signal?: AbortSignal): Promise<Thread> {
-    const story = await this.item(id, refresh, signal);
-    if (gone(story)) return { story, comments: [], missed: 0 };
+    const story = await this.readItem(id, refresh, signal);
+    if (gone(story.value)) return { story: story.value, comments: [], missed: 0, at: story.at, stale: story.stale };
     count = Math.max(0, Math.min(30, Math.trunc(count)));
-    const result = await this.items(story.kids.slice(0, count + Math.floor(count / 2)), refresh, signal);
-    return { story, comments: result.items.filter(it => !gone(it)).slice(0, count), missed: result.missed };
+    const result = await this.items(story.value.kids.slice(0, count + Math.floor(count / 2)), refresh, signal);
+    const comments = result.items.filter(it => !gone(it.value)).slice(0, count);
+    return { story: story.value, comments: comments.map(it => it.value), missed: result.missed, ...comments.reduce(older, { at: story.at, stale: story.stale }) };
   }
 }

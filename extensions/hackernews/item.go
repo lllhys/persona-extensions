@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -29,6 +30,9 @@ type item struct {
 	Kids        []int64 `json:"kids"`
 	Dead        bool    `json:"dead"`
 	Deleted     bool    `json:"deleted"`
+
+	at    time.Time // when this copy was read
+	stale error     // why an older copy stands in for a failed read
 }
 
 // gone says the item is not there to show: deleted, flagged dead, or empty.
@@ -69,7 +73,8 @@ func listEndpoint(id string) (string, bool) {
 // listMost is how many of a list's stories are read: the site's front page is 30.
 const listMost = 30
 
-// listing is a list as read: its stories in order, how many could not be read, and an older copy's reason.
+// listing is a list as read: its stories in order, how many could not be read, when its oldest part was read, and an
+// older copy's reason.
 type listing struct {
 	stories []item
 	missed  int
@@ -99,6 +104,7 @@ func (a *app) stories(ctx context.Context, list string, n int, refresh bool) (li
 	for _, it := range items {
 		if !it.gone() {
 			l.stories = append(l.stories, it)
+			l.at, l.stale = older(l.at, l.stale, it)
 		}
 	}
 	if len(ids) > 0 && missed == len(ids) && ctx.Err() == nil {
@@ -145,7 +151,16 @@ func (a *app) item(ctx context.Context, id int64, refresh bool) (item, error) {
 	if err := json.Unmarshal(rd.body, &it); err != nil || it.ID != id {
 		return item{}, errBadAnswer
 	}
+	it.at, it.stale = rd.at, rd.stale
 	return it, nil
+}
+
+// older is the earlier of at and it.at, and the first of stale and it.stale.
+func older(at time.Time, stale error, it item) (time.Time, error) {
+	if it.at.Before(at) {
+		at = it.at
+	}
+	return at, cmp.Or(stale, it.stale)
 }
 
 // thread is a story with its first top-level comments (in the site's order, which is its ranking).
@@ -153,6 +168,8 @@ type thread struct {
 	story    item
 	comments []item
 	missed   int
+	at       time.Time // when its oldest part was read
+	stale    error     // why an older copy stands in for a failed read
 }
 
 func (a *app) thread(ctx context.Context, id int64, comments int, refresh bool) (thread, error) {
@@ -160,7 +177,7 @@ func (a *app) thread(ctx context.Context, id int64, comments int, refresh bool) 
 	if err != nil {
 		return thread{}, err
 	}
-	th := thread{story: st}
+	th := thread{story: st, at: st.at, stale: st.stale}
 	if st.gone() {
 		return th, nil
 	}
@@ -174,6 +191,7 @@ func (a *app) thread(ctx context.Context, id int64, comments int, refresh bool) 
 	for _, c := range all {
 		if !c.gone() && len(th.comments) < comments {
 			th.comments = append(th.comments, c)
+			th.at, th.stale = older(th.at, th.stale, c)
 		}
 	}
 	return th, nil
