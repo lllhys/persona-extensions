@@ -186,11 +186,13 @@ func (g *guard) personOnlyDepth(cmd string, depth int) string {
 		if depth >= 3 {
 			continue
 		}
-		shell := false
+		shell, ssh := false, false
 		for i, w := range kept {
 			b := progName(w)
+			ssh = ssh || sshClients[b]
 			shell = shell || shells[b] || ((b == "sudo" || b == "doas") && sudoShell(kept[i+1:]))
 			for _, n := range globMatches(b) {
+				ssh = ssh || sshClients[n]
 				shell = shell || shells[n]
 			}
 			if b == "env" {
@@ -203,6 +205,14 @@ func (g *guard) personOnlyDepth(cmd string, depth int) string {
 			}
 		}
 		for _, w := range kept {
+			if ssh {
+				if command, ok := sshOptionCommand(w); ok {
+					if why := g.nested(kept, command, depth+1); why != "" {
+						return why
+					}
+					continue
+				}
+			}
 			sub := strings.Contains(w, "$(") || strings.Contains(w, "`")
 			if sub || (shell && strings.ContainsAny(w, " \t\n;&|()<>")) {
 				target := w
@@ -227,6 +237,28 @@ func (g *guard) personOnlyDepth(cmd string, depth int) string {
 		}
 	}
 	return ""
+}
+
+// sshClients pass -o options to ssh's config parser.
+var sshClients = map[string]bool{"ssh": true, "autossh": true, "scp": true, "sftp": true}
+
+// sshOptionCommands are the ssh_config keywords whose value ssh runs as a command.
+var sshOptionCommands = map[string]bool{"remotecommand": true, "proxycommand": true, "localcommand": true, "knownhostscommand": true}
+
+// sshOptionCommand returns the command of an -o value that runs one: -o Key=command, -oKey=command, and the
+// "Key command" and "Key = command" spellings ssh_config accepts too. ssh skips an = before the key, so
+// -o=Key=command and -o '=Key=command' run it as well.
+func sshOptionCommand(w string) (string, bool) {
+	w = strings.TrimLeft(strings.TrimPrefix(w, "-o"), "= \t")
+	i := strings.IndexAny(w, "= \t")
+	if i < 0 || !sshOptionCommands[strings.ToLower(w[:i])] {
+		return "", false
+	}
+	command := strings.TrimLeft(w[i:], " \t")
+	if strings.HasPrefix(command, "=") {
+		command = strings.TrimLeft(command[1:], " \t")
+	}
+	return command, true
 }
 
 // nested reads a command string that the words run: with no scratch targets when it runs elsewhere (ssh host '…',
