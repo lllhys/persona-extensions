@@ -1,0 +1,288 @@
+{
+  "manifest_version": 1,
+  "id": "enkeep-memory",
+  "name": "enkeep 记忆",
+  "version": "0.1.0",
+  "description": "每天、每周整理知识库：所有来源统一分拣，带原文出处地提取事实、做事方式和知识，建实体关系图谱；改知识库的地方都是提议，确认后合入，能撤销。前两周只提议不改。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/enkeep-memory",
+  "tags": [
+    "knowledge base",
+    "assistant",
+    "memory"
+  ],
+  "engines": {
+    "persona": ">=202611062050",
+    "extension_protocol": 1
+  },
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/enkeep-memory-linux-amd64",
+      "linux-arm64": "bin/enkeep-memory-linux-arm64",
+      "darwin-amd64": "bin/enkeep-memory-darwin-amd64",
+      "darwin-arm64": "bin/enkeep-memory-darwin-arm64"
+    },
+    "args": [
+      "serve"
+    ]
+  },
+  "activation_events": [
+    "on_startup"
+  ],
+  "contributes": {
+    "ui": [
+      {
+        "id": "enkeep-memory",
+        "title": "enkeep 记忆",
+        "placement": "nav_page",
+        "icon": "list"
+      },
+      {
+        "id": "enkeep-memory-today",
+        "title": "enkeep 记忆",
+        "placement": "overview_card",
+        "opens": "enkeep-memory"
+      },
+      {
+        "id": "enkeep-memory-health",
+        "title": "记忆体检",
+        "placement": "extension_page"
+      }
+    ],
+    "skills": [
+      {
+        "id": "enkeep-memory",
+        "dir": "skills/enkeep-memory"
+      }
+    ],
+    "events": [
+      {
+        "id": "enkeep-memory-kb",
+        "subscribe": [
+          "kb.changed",
+          "kb.forgotten"
+        ]
+      }
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "mode": {
+        "type": "string",
+        "title": "合入方式",
+        "description": "auto：前 shadow_days 天只提议（影子期），之后进待确认；shadow：一直只提议；review：从第一天起就进待确认",
+        "default": "auto",
+        "enum": [
+          "auto",
+          "shadow",
+          "review"
+        ]
+      },
+      "shadow_days": {
+        "type": "integer",
+        "title": "影子期天数",
+        "default": 14,
+        "minimum": 0,
+        "maximum": 90
+      },
+      "timezone": {
+        "type": "string",
+        "title": "时区",
+        "description": "空着就用 hub 的时区",
+        "default": ""
+      },
+      "language": {
+        "type": "string",
+        "title": "摘要语言",
+        "description": "空着就用 hub 的语言",
+        "default": ""
+      },
+      "daily_at": {
+        "type": "string",
+        "title": "日级时间",
+        "description": "每天这个时间整理前一天",
+        "default": "03:30",
+        "pattern": "^[0-2][0-9]:[0-5][0-9]$"
+      },
+      "weekly_at": {
+        "type": "string",
+        "title": "周级时间（周一）",
+        "description": "每周一这个时间整理上一周",
+        "default": "05:30",
+        "pattern": "^[0-2][0-9]:[0-5][0-9]$"
+      },
+      "daily_tier": {
+        "type": "string",
+        "title": "日级模型档",
+        "default": "small",
+        "enum": [
+          "small",
+          "medium"
+        ]
+      },
+      "weekly_tier": {
+        "type": "string",
+        "title": "周级模型档",
+        "default": "medium",
+        "enum": [
+          "small",
+          "medium"
+        ]
+      },
+      "activity_days": {
+        "type": "integer",
+        "title": "群活跃天数",
+        "description": "群里这么多天内你没发言、也没人提到你，就不读",
+        "default": 3,
+        "minimum": 1,
+        "maximum": 30
+      },
+      "mention_window": {
+        "type": "integer",
+        "title": "提到你时读前后几条",
+        "default": 15,
+        "minimum": 3,
+        "maximum": 100
+      },
+      "admit_all_below_tokens": {
+        "type": "integer",
+        "title": "小数据量全读",
+        "description": "一天可读的内容低于这么多 token 时全部读（屏蔽的、群发邮件除外）",
+        "default": 20000,
+        "minimum": 0,
+        "maximum": 1000000
+      },
+      "ai_min_relevance": {
+        "type": "integer",
+        "title": "沉默群交给模型判断的相关性下限",
+        "default": 60,
+        "minimum": 0,
+        "maximum": 100
+      },
+      "pin_chats": {
+        "type": "array",
+        "title": "总是读的会话",
+        "description": "会话 id 或名字",
+        "items": {
+          "type": "string"
+        }
+      },
+      "block_chats": {
+        "type": "array",
+        "title": "从不读的会话",
+        "description": "会话 id 或名字",
+        "items": {
+          "type": "string"
+        }
+      },
+      "block_senders": {
+        "type": "array",
+        "title": "从不读的发送者",
+        "description": "名字或地址",
+        "items": {
+          "type": "string"
+        }
+      },
+      "bulk_domains": {
+        "type": "array",
+        "title": "群发邮件域名",
+        "description": "这些域名发来的邮件直接丢掉（内置了常见的）",
+        "items": {
+          "type": "string"
+        }
+      },
+      "private_keywords": {
+        "type": "array",
+        "title": "隐私词",
+        "description": "含这些词的消息不读、不发给模型",
+        "items": {
+          "type": "string"
+        }
+      },
+      "owner_aliases": {
+        "type": "array",
+        "title": "我的其他写法",
+        "description": "英文名、拼音、常用昵称；补充助手设置里的别名",
+        "items": {
+          "type": "string"
+        }
+      },
+      "graph": {
+        "type": "boolean",
+        "title": "实体关系图谱",
+        "default": true
+      },
+      "custom_types": {
+        "type": "array",
+        "title": "自定义实体类型",
+        "description": "写法：名字: 说明",
+        "items": {
+          "type": "string"
+        }
+      },
+      "custom_predicates": {
+        "type": "array",
+        "title": "自定义关系",
+        "description": "写法：名字: 主语类型|… -> 宾语类型|…: 说明",
+        "items": {
+          "type": "string"
+        }
+      },
+      "auto_apply_kinds": {
+        "type": "array",
+        "title": "可以自动合入的提议类型",
+        "description": "影子期之后，这些类型判过 10 条以上、准确率达到下限才自动合入；高风险的从不自动合入",
+        "items": {
+          "type": "string",
+          "enum": [
+            "pin_fact",
+            "pin_practice",
+            "pin_knowledge",
+            "mail_downgrade",
+            "remove_alias",
+            "remove_members"
+          ]
+        },
+        "default": []
+      },
+      "auto_apply_min_precision": {
+        "type": "number",
+        "title": "自动合入的准确率下限",
+        "default": 0.95,
+        "minimum": 0.5,
+        "maximum": 1
+      },
+      "proposal_expiry_days": {
+        "type": "integer",
+        "title": "提议过期天数",
+        "description": "展示以后这么多天没处理就过期，什么都不改",
+        "default": 14,
+        "minimum": 1,
+        "maximum": 90
+      },
+      "backfill_days": {
+        "type": "integer",
+        "title": "一次性回读历史天数",
+        "description": "0 表示不回读",
+        "default": 0,
+        "minimum": 0,
+        "maximum": 365
+      },
+      "stale_days": {
+        "type": "integer",
+        "title": "多少天没人提就算过时",
+        "default": 30,
+        "minimum": 7,
+        "maximum": 365
+      }
+    }
+  },
+  "permissions": {
+    "hub": [
+      "kb.read",
+      "kb.write",
+      "models"
+    ]
+  }
+}
