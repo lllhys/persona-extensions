@@ -82,6 +82,7 @@ func Check(t testing.TB, manifest []byte, run Run, config ...json.RawMessage) wi
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	h := newHub(run)
+	h.manifest = &m // what it declares is granted here
 	go h.serve(ctx)
 
 	if err := h.call(ctx, wire.MethodPing, struct{}{}, nil); code(err) != wire.ErrorCodeNotInitialized {
@@ -95,6 +96,9 @@ func Check(t testing.TB, manifest []byte, run Run, config ...json.RawMessage) wi
 		Hub: wire.HubInfo{Build: 0, Role: wire.HubRoleCenter, Timezone: "Asia/Shanghai", ExtensionPoints: map[string]int{}}}
 	if len(config) > 0 {
 		init.Config = config[0]
+	}
+	if m.Permissions != nil {
+		init.Granted = *m.Permissions // what it declares is granted here, as the host refuses by it
 	}
 	var raw json.RawMessage
 	if err := h.call(ctx, wire.MethodInitialize, init, &raw); err != nil {

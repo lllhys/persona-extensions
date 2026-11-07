@@ -79,7 +79,7 @@ func TestAssistantComponentShorthand(t *testing.T) {
 }
 
 func TestAssistantOpen(t *testing.T) {
-	for _, target := range []string{"https://example.com/page", "persona://session/example-machine/abc", "jarvis://session/example-machine/abc", "persona://task/task_1", "persona://kb/notes/example.md", "persona://file/example-machine/%2Ftmp%2Fexample.txt"} {
+	for _, target := range []string{"https://example.com/page", "persona://session/example-machine/abc", "persona://session/example-machine/abc", "persona://task/task_1", "persona://kb/notes/example.md", "persona://file/example-machine/%2Ftmp%2Fexample.txt"} {
 		if err := CheckAssistantOpen(target); err != nil {
 			t.Errorf("%s: %v", target, err)
 		}

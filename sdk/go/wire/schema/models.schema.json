@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "models.schema.json",
+  "title": "Model calls",
+  "description": "Calling a model through the hub (docs/extensions.md \"Model calls\", #6102): model.complete, with the permission models in the manifest's permissions.hub, granted by the user. The call runs on the extension's own purpose extension.<id> in Settings › Model configuration, which follows \"Knowledge base\" until the user picks another model for it; the extension never sees a key or chooses the connection. There is no budget and no cap: each call's usage comes back in its result, and the hub logs it. A connection held for quota or load (model_paused) sends nothing until it lets go. Params are strict: an unknown field is invalid_params. Plugin-side: only the hub and the program speak it.",
+  "x-side": "plugin",
+  "x-methods": {
+    "model.complete": {"from": "program", "params": "ModelCompleteParams", "result": "ModelCompleteResult"}
+  },
+  "$defs": {
+    "ModelErrorCode": {
+      "description": "error.code of model.complete besides permission_denied (data {scope: \"models\"}): invalid_params; assistant_offline (the manager is away: try again); model_unavailable (nothing to call for this extension: the user picks a model for it in Settings › Model configuration); model_paused (the connection is held for quota or load, nothing was sent; data ModelPause: try again after until); model_failed (the upstream refused or failed the request); timeout (past timeout_seconds); invalid_output (with json_schema, the reply was still not JSON matching it after one more try; data ModelInvalidOutput).",
+      "type": "string",
+      "enum": ["invalid_params", "assistant_offline", "model_unavailable", "model_paused", "model_failed", "timeout", "invalid_output"]
+    },
+    "ModelMessage": {
+      "description": "One turn of the conversation: the user's, or the model's earlier answer.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role": {"$ref": "#/$defs/ModelRole"},
+        "content": {"type": "string", "minLength": 1}
+      },
+      "required": ["role", "content"]
+    },
+    "ModelRole": {
+      "type": "string",
+      "enum": ["user", "assistant"]
+    },
+    "ModelCompleteParams": {
+      "description": "model.complete (models): one answer to a conversation that starts and ends with the user's turn, the turns alternating.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "system": {"type": "string", "description": "The system prompt."},
+        "messages": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/ModelMessage"}},
+        "max_tokens": {"type": "integer", "minimum": 0, "maximum": 64000, "description": "Room for the answer; 0 is 4096. Connections speaking the Responses API are sent none."},
+        "json_schema": {"description": "A JSON Schema the answer must match: the hub asks for JSON matching it, checks the reply (type, enum, const, properties, required, additionalProperties, items, prefixItems, lengths, bounds, allOf / anyOf / oneOf, local $ref) and asks once more when it does not match; the result's json has the decoded value. At most 64 KiB."},
+        "timeout_seconds": {"type": "integer", "minimum": 0, "maximum": 600, "description": "Bounds the whole call, a second try included; 0 is 120."},
+        "label": {"type": "string", "maxLength": 64, "description": "What the call is for (daily, weekly…): it goes in the hub's log line with the usage."}
+      },
+      "required": ["messages"]
+    },
+    "ModelUsage": {
+      "description": "What the call spent, every request of it together (a second try for json_schema included), as the upstream counted it.",
+      "type": "object",
+      "properties": {
+        "input_tokens": {"type": "integer"},
+        "output_tokens": {"type": "integer"},
+        "cache_read_input_tokens": {"type": "integer"},
+        "cache_creation_input_tokens": {"type": "integer"},
+        "requests": {"type": "integer"}
+      },
+      "required": ["input_tokens", "output_tokens", "requests"]
+    },
+    "ModelCompleteResult": {
+      "type": "object",
+      "properties": {
+        "text": {"type": "string", "description": "The answer as the model wrote it."},
+        "json": {"description": "With json_schema: the answer decoded, matching it."},
+        "model": {"type": "string", "description": "The model that answered."},
+        "stop_reason": {"type": "string", "description": "end_turn, or max_tokens when the answer was cut off."},
+        "usage": {"$ref": "#/$defs/ModelUsage"}
+      },
+      "required": ["text", "model", "stop_reason", "usage"]
+    },
+    "ModelPause": {
+      "description": "The data of model_paused.",
+      "type": "object",
+      "properties": {
+        "reason": {"type": "string", "description": "quota or busy."},
+        "until": {"type": "string", "description": "An RFC 3339 time."}
+      },
+      "required": ["reason", "until"]
+    },
+    "ModelInvalidOutput": {
+      "description": "The data of invalid_output: why the last reply did not match, the reply, and what the call spent.",
+      "type": "object",
+      "properties": {
+        "problem": {"type": "string"},
+        "text": {"type": "string"},
+        "usage": {"$ref": "#/$defs/ModelUsage"}
+      },
+      "required": ["problem", "text", "usage"]
+    }
+  }
+}

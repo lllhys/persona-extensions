@@ -22,11 +22,11 @@ type Environment struct {
 }
 
 // Env reads the environment, under the names of any hub: PERSONA_EXTENSION_*, before the rename (#1844)
-// PERSONA_PLUGIN_*, before Persona JARVIS_PLUGIN_*.
+// PERSONA_PLUGIN_*, before Persona PERSONA_PLUGIN_*.
 func Env() Environment {
 	e := Environment{
 		ID: getenv("ID"), Dir: getenv("DIR"), Data: getenv("DATA"), Socket: getenv("SOCKET"),
-		HubURL: first("PERSONA_HUB_URL", "JARVIS_HUB_URL"), HubToken: first("PERSONA_HUB_TOKEN", "JARVIS_HUB_TOKEN"),
+		HubURL: first("PERSONA_HUB_URL", "PERSONA_HUB_URL"), HubToken: first("PERSONA_HUB_TOKEN", "PERSONA_HUB_TOKEN"),
 	}
 	if c := getenv("CONFIG"); c != "" {
 		e.Config = json.RawMessage(c)
@@ -38,7 +38,7 @@ func Env() Environment {
 }
 
 func getenv(name string) string {
-	return first("PERSONA_EXTENSION_"+name, "PERSONA_PLUGIN_"+name, "JARVIS_PLUGIN_"+name)
+	return first("PERSONA_EXTENSION_"+name, "PERSONA_PLUGIN_"+name, "PERSONA_PLUGIN_"+name)
 }
 
 func first(names ...string) string {

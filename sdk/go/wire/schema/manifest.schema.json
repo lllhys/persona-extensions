@@ -11,6 +11,12 @@
       "type": "string", "maxLength": 253,
       "pattern": "^(\\*\\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
     },
+    "ExactHost": {"description": "A host name, lowercase, no scheme, port, path or wildcard.", "type": "string", "maxLength": 253, "pattern": "^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"},
+    "NetworkEntry": {
+      "description": "A host name as Host, or config:<field> (config:<field>:http) for the address the user writes in configuration field <field> (format uri): https only unless :http.",
+      "type": "string", "maxLength": 253,
+      "pattern": "^((\\*\\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?|config:[a-z_][a-z0-9_]{0,63}(:http)?)$"
+    },
     "ActivationEvent": {"type": "string", "enum": ["on_startup", "on_call", "on_http"]},
     "Manifest": {
       "type": "object",
@@ -44,6 +50,7 @@
         },
         "configuration": {"description": "The configuration's JSON Schema, in the subset every app draws as a form (docs \"Configuration: the form subset\")."},
         "secrets": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/SecretSpec"}},
+        "settings_check": {"type": "boolean", "description": "The program checks a change of its settings or secrets before the hub saves it (settings.check)."},
         "permissions": {"$ref": "#/$defs/Permissions"},
         "tools": {
           "description": "Command-line programs the hub installs into the extension's own directory and puts first on its PATH (docs \"Command-line programs (tools)\", #4507). Installing them is a permission. Hubs before them refuse the manifest.",
@@ -166,6 +173,8 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "mode": {"type": "string", "enum": ["process", "deno"], "description": "Default process preserves executable packages. deno requires a self-contained source bundle and verified independent Linux isolation."},
+        "source": {"$ref": "#/$defs/SourceRuntime"},
         "command": {"$ref": "#/$defs/Command"},
         "args": {"type": "array", "items": {"type": "string"}},
         "env": {"type": "object", "additionalProperties": {"type": "string"}},
@@ -173,7 +182,20 @@
         "http": {"type": "boolean"},
         "resources": {"$ref": "#/$defs/Resources"}
       },
-      "required": ["command"]
+      "allOf": [{"oneOf": [
+        {"required": ["command"], "not": {"required": ["source"]}, "properties": {"mode": {"enum": ["process"]}}},
+        {"required": ["mode", "source"], "properties": {"mode": {"const": "deno"}, "rpc": {"const": "stdio"}, "http": {"const": false}}, "not": {"anyOf": [{"required": ["command"]}, {"required": ["args"]}, {"required": ["env"]}]}}
+      ]}]
+    },
+    "SourceRuntime": {
+      "type": "object", "additionalProperties": false,
+      "description": "entry is offline build input only; bundle is the signed self-contained artifact, verified again on each start. No runtime dependency resolution.",
+      "properties": {
+        "entry": {"type": "string", "pattern": "^[a-zA-Z0-9_/-]+\\.tsx?$"},
+        "bundle": {"type": "string", "pattern": "^[a-zA-Z0-9_/-]+\\.mjs$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "required": ["entry", "bundle", "sha256"]
     },
     "Resources": {
       "description": "The most a program may use when the hub runs it in a sandbox (docs/extensions.md \"Sandbox\"): memory in MB, CPU in percent of one core. Unset: 1024 MB, 100%.",
@@ -226,7 +248,8 @@
         "name": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"},
         "title": {"type": "string", "minLength": 1},
         "description": {"type": "string"},
-        "required": {"type": "boolean"}
+        "required": {"type": "boolean"},
+        "hint": {"description": "last4: once set, the settings show its last four characters.", "enum": ["last4"]}
       },
       "required": ["name", "title"]
     },
@@ -235,15 +258,16 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "network": {"type": "array", "items": {"$ref": "#/$defs/Host"}},
+        "network": {"type": "array", "items": {"$ref": "#/$defs/NetworkEntry"}},
         "hub_api": {"type": "boolean", "description": "The old way: the hub's full token. With hub scopes, the scopes win."},
         "hub": {"type": "array", "description": "The scopes of the hub's API it calls: its token opens their routes only.",
-          "items": {"type": "string", "pattern": "^(kb\\.read|kb\\.write|inbox\\.read|inbox\\.write|agents\\.read|agents\\.control|machines\\.read|notify|assistant\\.ask|extensions\\.call:[a-z0-9][a-z0-9_-]{0,31})$"}},
+          "items": {"type": "string", "pattern": "^(kb\\.read|kb\\.write|inbox\\.read|inbox\\.write|agents\\.read|agents\\.control|machines\\.read|notify|assistant\\.ask|todos\\.read|todos\\.write|models|extensions\\.call:[a-z0-9][a-z0-9_-]{0,31})$"}},
         "launcher_keys": {"type": "boolean"},
         "gh_login": {"type": "boolean", "description": "It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector), held in its memory only."},
         "usage_gateways": {"type": "boolean", "description": "It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts): accounts, status and quota windows, never a key."},
         "agent_runtimes": {"type": "boolean", "description": "Its program is an agent runtime that connects to this machine's node; in a sandbox it gets a socket in its run directory (PERSONA_RUNTIME_SOCKET) that leads to the node's runtime.sock only. Needs runtime."},
-        "error_reports": {"type": "boolean", "description": "It receives the error and crash reports of the hub and the user's devices, scrubbed (no message text, tokens, user names, machine names or IP addresses). Needed by contributes.error_reports."}
+        "error_reports": {"type": "boolean", "description": "It receives the error and crash reports of the hub and the user's devices, scrubbed (no message text, tokens, user names, machine names or IP addresses). Needed by contributes.error_reports."},
+        "auth_relay": {"type": "boolean", "description": "It is handed the authorization links the user's Agents stop at (only links its contributes.auth_relay names, printed by the Agent's own command) to complete them with the account it is signed in with. Needed by contributes.auth_relay."}
       }
     },
     "Contributes": {
@@ -274,6 +298,7 @@
         "agent_filters": {"type": "array", "items": {"$ref": "#/$defs/AgentFilterItem"}},
         "tunnels": {"type": "array", "items": {"$ref": "#/$defs/TunnelItem"}},
         "error_reports": {"type": "array", "items": {"$ref": "#/$defs/ErrorReportsItem"}},
+        "auth_relay": {"type": "array", "items": {"$ref": "#/$defs/AuthRelayItem"}},
         "messaging": {"type": "array", "items": {"$ref": "messaging.schema.json#/$defs/MessagingItem"}}
       }
     },
@@ -328,7 +353,7 @@
       "required": ["id", "name", "light", "dark"]
     },
     "LookID": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$", "description": "A look's id: also a persona package's (the apps cache by it)."},
-    "BuiltinLook": {"type": "string", "enum": ["persona", "jarvis", "jarvis-circuit"], "description": "A look every app draws itself: Mochi (the default), Visor, Circuit."},
+    "BuiltinLook": {"type": "string", "enum": ["persona"], "description": "The look every app draws itself: Mochi (the default)."},
     "LookTexts": {
       "description": "A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub checks).",
       "type": "object",
@@ -435,6 +460,19 @@
       },
       "required": ["id", "title", "text"]
     },
+    "AuthRelayItem": {
+      "description": "Authorization links it completes for the user's Agents (auth_relay.complete): links on these hosts and paths, https only. Needs the program to speak the protocol and permissions.auth_relay.",
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 80, "description": "What it completes, in a few words (shown in the extension's details)."},
+        "hosts": {"type": "array", "description": "The pages' exact host names.", "minItems": 1, "maxItems": 16, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/ExactHost"}},
+        "paths": {"type": "array", "description": "The pages' exact paths (a trailing / is ignored).", "minItems": 1, "maxItems": 16, "uniqueItems": true,
+          "items": {"type": "string", "maxLength": 256, "pattern": "^/[^?#\\s]*$"}}
+      },
+      "required": ["id", "hosts", "paths"]
+    },
     "ErrorReportsItem": {
       "description": "It is given the error and crash reports of the hub and the user's devices (error_reports.deliver): needs the program to speak the protocol, on_startup and permissions.error_reports.",
       "type": "object",
@@ -486,7 +524,8 @@
         "kind_descriptions": {"type": "object", "additionalProperties": {"type": "string"}},
         "archive_sources": {"type": "array", "maxItems": 4, "items": {"type": "string", "pattern": "^[a-z][a-z0-9]*$"}},
         "meta_description": {"type": "string", "maxLength": 4000},
-        "cli": {"type": "string"}
+        "cli": {"type": "string"},
+        "sends_as_user": {"type": "boolean", "description": "The connector sends messages in the user's name by itself, not through the hub's write gate (a read tool that also replies, say). Its program may then record each one in the sent-as-user ledger with sent.record, and the install preview says so."}
       },
       "required": ["id", "name", "capabilities"]
     },
@@ -565,9 +604,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "id": {"$ref": "#/$defs/ID", "description": "The server's name for the assistant; not jarvis or persona."},
+        "id": {"$ref": "#/$defs/ID", "description": "The server's name for the assistant; not persona or persona."},
         "command": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$", "description": "Looked up on PATH, then in ~/bin."},
-        "env": {"type": "string", "pattern": "^PERSONA_[A-Z0-9_]{1,56}$", "description": "A PERSONA_ variable (JARVIS_ read too) that, when set, replaces the lookup: a path, or \"\" / 0 / off / false to leave the server out."},
+        "env": {"type": "string", "pattern": "^PERSONA_[A-Z0-9_]{1,56}$", "description": "A PERSONA_ variable (PERSONA_ read too) that, when set, replaces the lookup: a path, or \"\" / 0 / off / false to leave the server out."},
         "args": {"type": "array", "items": {"type": "string"}},
         "requires": {"type": "array", "items": {"type": "string", "minLength": 1}, "description": "Words `<command> --help` must print; otherwise the server is left out."},
         "allow": {"type": "array", "items": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"}, "description": "Tools that run without asking."},
@@ -632,7 +671,7 @@
       "type": "object",
       "properties": {
         "id": {"$ref": "#/$defs/ID"},
-        "subscribe": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["inbox.changed", "agent.needs_you", "agent.finished"]}}
+        "subscribe": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["kb.changed", "kb.forgotten", "inbox.changed", "agent.needs_you", "agent.finished", "todo.changed", "todo.decision"]}}
       },
       "required": ["id", "subscribe"]
     },

@@ -95,3 +95,48 @@ func TestValidateCalls(t *testing.T) {
 		t.Error("an unknown call")
 	}
 }
+
+// What the hub sends and reads holds, nulls included: Go writes a nil list, map or pointer as null, and the hub
+// reads null as empty (a list, an object) or absent; a null answer is {}.
+func TestValidateReadsNullsAsTheHub(t *testing.T) {
+	holds := []struct{ name, raw string }{
+		// a new event: meta null, the hub's own call
+		{"connector.group.append", `{"contribution":"x","thread":"t","event":"","meta":null,"messages":["m"]}`},
+		{"connector.group.fallback", `{"contribution":"x","thread":"t","batch":"b","events":[{"id":"e","meta":null,"done":false}]}`},
+	}
+	for _, c := range holds[:2] {
+		if err := ValidateParams(c.name, json.RawMessage(c.raw)); err != nil {
+			t.Errorf("%s %s: %v", c.name, c.raw, err)
+		}
+	}
+	answers := []struct{ name, raw string }{
+		{"connector.thread.page", `{"chat":{"id":"c","name":"C","kind":"dm"},"messages":null}`},
+		{"connector.manifest", `{"protocol":2,"id":"x","name":"X","capabilities":null}`},
+		{"kb.list", `{"items":null,"tags":null,"total":0}`},
+		{"connector.group.fallback", `{"assign":null,"new":null}`},
+		{"channel.typing", `null`},
+		{"kb.owner", `{"name":"","aliases":null,"handles":null}`},
+		{"connector.secrets.delete", `null`},
+		// a nil pointer to an optional object: absent, even when the object has required fields
+		{"connector.thread.page", `{"chat":{"id":"c","name":"C","kind":"pr","author":null,"branch":null},"messages":[{"id":"1","at":"2026-11-04T08:00:00Z","sender":{"name":"A"},"reply_to":null,"code":null}],"before":null}`},
+		{"connector.login.step", `{"step":"scan","kind":"qr","qr":null}`},
+		{"connector.snapshot.get", `{"chats":null,"meetings":null}`},
+		// a nil map is an empty one
+		{"connector.inbox.settle", `{"settled":null}`},
+	}
+	for _, c := range answers {
+		if err := ValidateResult(c.name, json.RawMessage(c.raw)); err != nil {
+			t.Errorf("%s %s: %v", c.name, c.raw, err)
+		}
+	}
+	// A null where a string or a struct with required fields is wanted is still wrong.
+	for _, c := range []struct{ name, raw string }{
+		{"connector.status", `{"state":null}`},
+		{"connector.status", `null`},
+		{"connector.thread.page", `{"chat":null,"messages":[]}`},
+	} {
+		if err := ValidateResult(c.name, json.RawMessage(c.raw)); err == nil {
+			t.Errorf("%s %s holds", c.name, c.raw)
+		}
+	}
+}

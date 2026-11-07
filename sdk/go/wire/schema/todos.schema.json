@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "todos.schema.json",
+  "title": "To-do events",
+  "description": "What the hub tells an extension's program of the to-dos (docs/extensions.md \"Events\"): event.todo.changed and event.todo.decision. Only an extension that subscribes to the topic (contributes.events) and was granted todos.read at install is told; to read a to-do or its decisions it calls the to-do API (GET /api/v1/todos, GET /api/v1/todos/{id}/decisions) with the same scope. Plugin-side: only the hub and the program speak it.",
+  "x-side": "plugin",
+  "x-events": {
+    "event.todo.changed": {"from": "hub", "params": "TodoChangedEvent"},
+    "event.todo.decision": {"from": "hub", "params": "TodoDecisionEvent"}
+  },
+  "$defs": {
+    "TodoEventThread": {
+      "description": "The chat thread a to-do is bound to: the channel it lives on (feishu…), the chat and the thread in it, and the title shown for it.",
+      "type": "object",
+      "properties": {
+        "channel": {"type": "string"},
+        "chat_id": {"type": "string"},
+        "thread_id": {"type": "string"},
+        "title": {"type": "string"}
+      },
+      "required": ["channel", "chat_id", "thread_id", "title"]
+    },
+    "TodoChangedEvent": {
+      "description": "event.todo.changed: a to-do was created or deleted, or its title, whether it is done (or failed to start), or the thread it is bound to changed. Changes within about a second of each other are told once, as the to-do is at the end of them. title, thread and done are as after the change (the last ones for a deleted to-do); thread is left out when the to-do has none, done unless the to-do is done (closed, or its task failed to start). Notes, agents and decisions changing do not send it (decisions have event.todo.decision). Read the to-do again if it matters.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "thread": {"$ref": "#/$defs/TodoEventThread"},
+        "done": {"type": "boolean"},
+        "what": {"type": "string", "enum": ["created", "updated", "deleted"]}
+      },
+      "required": ["id", "title", "what"]
+    },
+    "TodoEventDecision": {
+      "description": "A decision on a to-do: what was asked and chosen (reason and supersedes_id left out when empty), and where it came from: manual (written in the to-do), card (the user answered an Agent's question card), outcome (pulled out of an Agent's finished work, not made by the user), agent (an Agent noted it), thread (the user's reply in the to-do's chat thread).",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "question": {"type": "string"},
+        "choice": {"type": "string"},
+        "reason": {"type": "string"},
+        "source": {"type": "string", "enum": ["manual", "card", "outcome", "agent", "thread"]},
+        "supersedes_id": {"type": "string"}
+      },
+      "required": ["id", "question", "choice", "source"]
+    },
+    "TodoDecisionEvent": {
+      "description": "event.todo.decision: a decision was written on a to-do, whatever its source (a decision from the to-do's own thread has source thread: an extension that posts decisions into that thread should skip it). Sent once for each decision written, not for one marked superseded later. title and thread are the to-do's now; thread is left out when it has none.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "thread": {"$ref": "#/$defs/TodoEventThread"},
+        "decision": {"$ref": "#/$defs/TodoEventDecision"}
+      },
+      "required": ["id", "title", "decision"]
+    }
+  }
+}

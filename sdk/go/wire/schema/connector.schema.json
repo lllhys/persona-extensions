@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "connector.schema.json",
   "title": "Connector protocol",
-  "description": "The connectors extension point's calls (docs/connector-protocol.md, protocol 2): what the hub asks a connector program (connector.<method>) and what the program asks back (connector.secrets.*, connector.posts.*, connector.archive.chats, connector.credentials.gh_token, the connector.changed event). Every params object carries contribution, the connector's id; results do not. Plugin-side: only the hub and the program speak it.",
+  "description": "The connectors extension point's calls (docs/connector-protocol.md, protocol 2): what the hub asks a connector program (connector.<method>) and what the program asks back (connector.secrets.*, connector.posts.*, connector.archive.chats, connector.credentials.gh_token, sent.record, the connector.changed event). Every params object carries contribution, the connector's id; results do not. Plugin-side: only the hub and the program speak it.",
   "x-side": "plugin",
   "x-methods": {
     "connector.status": {"from": "hub", "params": "ConnectorParams", "result": "ConnectorStatus"},
@@ -39,14 +39,15 @@
     "connector.posts.comments": {"from": "program", "params": "ConnectorPostsCommentsParams", "result": "Empty"},
     "connector.posts.pending": {"from": "program", "params": "ConnectorPostsPendingParams", "result": "ConnectorPostsPending"},
     "connector.archive.chats": {"from": "program", "params": "ConnectorArchiveChatsParams", "result": "ConnectorArchivedChats"},
-    "connector.credentials.gh_token": {"from": "program", "params": "ConnectorGhTokenParams", "result": "ConnectorGhToken"}
+    "connector.credentials.gh_token": {"from": "program", "params": "ConnectorGhTokenParams", "result": "ConnectorGhToken"},
+    "sent.record": {"from": "program", "params": "ConnectorSentRecordParams", "result": "Empty"}
   },
   "x-events": {
     "connector.changed": {"from": "program", "params": "ConnectorChangedEvent"}
   },
   "$defs": {
     "ConnectorErrorCode": {
-      "description": "error.code a program answers or gets besides the base ErrorCode: rate_limited (tools.call / actions.do; data {retry_after} in seconds, fractional allowed), and why credentials.gh_token has no token.",
+      "description": "error.code a program answers or gets besides the base ErrorCode: rate_limited (tools.call / actions.do, and the hub's answer to too many sent.record; data {retry_after} in seconds, fractional allowed), and why credentials.gh_token has no token.",
       "type": "string",
       "enum": ["rate_limited", "no_machine", "offline", "node_too_old", "no_gh", "not_signed_in"]
     },
@@ -186,7 +187,8 @@
       "description": "tools.call and actions.do.",
       "type": "object",
       "properties": {
-        "text": {"type": "string"}
+        "text": {"type": "string"},
+        "message_ref": {"type": "string", "description": "actions.do only (tools.call ignores it): the id, on the other side, of the message the write made, when the service gave one (a comment's id, a mail's Message-ID, a chat message's id). The hub trims it and keeps it as the sent-as-user ledger row's message_ref; one longer than 200 characters is dropped (the row has none), not cut. Leave it out when there is none."}
       }
     },
     "ConnectorAction": {
@@ -506,7 +508,7 @@
       "required": ["contribution", "thread", "name"]
     },
     "ConnectorGroupAppendParams": {
-      "description": "group.append (meta): add messages to one event, an existing one (event and its meta) or a new one (event empty, meta null) that may continue a done one. Answered with the event as a ConnectorInboxThing with id and meta.",
+      "description": "group.append (meta): add messages to one event, an existing one (event and its meta) or a new one (event empty, meta null: meta is always there) that may continue a done one. Answered with the event as a ConnectorInboxThing with id and meta.",
       "type": "object",
       "properties": {
         "contribution": {"type": "string"},
@@ -649,9 +651,30 @@
         "locked": {"type": "boolean"},
         "tagged_at": {"type": "string", "format": "date-time"},
         "pinned": {"type": "string"},
-        "locked_fields": {"type": "array", "items": {"type": "string"}}
+        "locked_fields": {"type": "array", "items": {"type": "string"}},
+        "provenance": {"type": "object", "additionalProperties": {"$ref": "#/$defs/ConnectorKBProvenance"}, "description": "The store's: which extension holds a locked field. A connector's is ignored."}
       },
       "required": ["kind", "id", "title"]
+    },
+    "ConnectorKBProvenance": {
+      "description": "Who holds a locked field of a knowledge-base entity, and from what (kb.schema.json KBProvenance).",
+      "type": "object",
+      "properties": {
+        "by": {"type": "string"},
+        "at": {"type": "string", "format": "date-time"},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/ConnectorKBEvidence"}}
+      },
+      "required": ["by", "at"]
+    },
+    "ConnectorKBEvidence": {
+      "type": "object",
+      "properties": {
+        "chat": {"type": "string"},
+        "day": {"type": "string"},
+        "n": {"type": "integer"},
+        "note": {"type": "string"}
+      },
+      "required": ["chat", "day"]
     },
     "ConnectorDocTitleParams": {
       "description": "items.doc_title: the title of a document link in a chat.",
@@ -834,6 +857,21 @@
       },
       "required": ["contribution", "machine"]
     },
+    "ConnectorSentRecordParams": {
+      "description": "sent.record: the program of a connector that declares sends_as_user (manifest connectors[].sends_as_user) tells the hub about a message it sent in the user's name outside the hub's write gate, for the sent-as-user ledger (docs/connectors.md \"Sent as the user\"). Only a connector of the caller's own that declares it may: else permission_denied. The hub sets the row's origin (the extension; session_id and machine_id are kept beside it) and how it was let through (kind auto, with setting) itself. Errors: permission_denied, invalid_params, rate_limited (data {retry_after} in seconds: 60 calls at once per extension, then one a second, whether or not they were allowed), and no_database on a hub without a database; a ledger that cannot be written is an error with a message and no code. Recording is best effort: it never undoes the send.",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "target": {"type": "object", "description": "Where it went: an object of short values (a chat, a thread, recipients…). Strings are cut to 200 characters; a value that is not a string, a number, a boolean or a list of up to 10 strings is dropped, and so is an empty string. The hub keeps 20 keys at most, in key order, each name cut to 64 characters. Anything but an object is invalid_params."},
+        "text": {"type": "string", "description": "What it said; may be empty, but it must be there (else invalid_params). The hub keeps the first 4000 characters."},
+        "summary": {"type": "string", "description": "One line saying what it was: the first line is kept, cut to 300 characters. Without it the hub makes one from the connector and the target."},
+        "session_id": {"type": "string", "description": "The Persona conversation that asked for the send, when one did. The extension's own word, which the hub cannot check; cut to 200 characters."},
+        "machine_id": {"type": "string", "description": "The computer that conversation ran on, when it names one. The extension's own word, which the hub cannot check; cut to 200 characters."},
+        "message_ref": {"type": "string", "description": "The sent message's id on the other side, when the service gave one. The hub trims it; one longer than 200 characters is dropped (the row has none), not cut."},
+        "setting": {"type": "string", "description": "The extension's setting (config key) that let it send without asking, when there is one; cut to 200 characters."}
+      },
+      "required": ["contribution", "target", "text"]
+    },
     "ConnectorGhToken": {
       "type": "object",
       "properties": {
@@ -855,7 +893,7 @@
       "type": "object",
       "properties": {
         "post": {"$ref": "#/$defs/ConnectorPost"},
-        "comments": {"type": "array", "maxItems": 5000, "items": {"$ref": "#/$defs/ConnectorPostComment"}}
+        "comments": {"type": "array", "maxItems": 5000, "items": {"$ref": "#/$defs/ConnectorPostComment"}, "x-go-pointer": true}
       },
       "required": ["post"]
     },

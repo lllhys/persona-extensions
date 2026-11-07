@@ -336,7 +336,10 @@
         "kind": {"const": "mention"},
         "text": {"type": "string", "maxLength": 200},
         "user_id": {"type": "string", "maxLength": 200},
-        "all": {"type": "boolean"}
+        "all": {"type": "boolean"},
+        "block": {"$ref": "#/$defs/MessagingBlock"},
+        "list": {"$ref": "#/$defs/MessagingList"},
+        "block_id": {"type": "string", "maxLength": 200, "description": "The block it is in, as a text part's block_id."}
       },
       "required": ["kind", "text"]
     },
@@ -345,7 +348,10 @@
       "properties": {
         "kind": {"const": "link"},
         "text": {"type": "string", "maxLength": 2000},
-        "url": {"type": "string", "minLength": 1, "maxLength": 2000}
+        "url": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "block": {"$ref": "#/$defs/MessagingBlock"},
+        "list": {"$ref": "#/$defs/MessagingList"},
+        "block_id": {"type": "string", "maxLength": 200, "description": "The block it is in, as a text part's block_id."}
       },
       "required": ["kind", "text", "url"]
     },
@@ -354,7 +360,10 @@
       "properties": {
         "kind": {"const": "emoji"},
         "key": {"type": "string", "minLength": 1, "maxLength": 100},
-        "text": {"type": "string", "maxLength": 100}
+        "text": {"type": "string", "maxLength": 100},
+        "block": {"$ref": "#/$defs/MessagingBlock"},
+        "list": {"$ref": "#/$defs/MessagingList"},
+        "block_id": {"type": "string", "maxLength": 200, "description": "The block it is in, as a text part's block_id."}
       },
       "required": ["kind", "key", "text"]
     },

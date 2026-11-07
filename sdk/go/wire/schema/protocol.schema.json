@@ -226,7 +226,9 @@
         "tz": {"type": "string"},
         "locale": {"type": "string"},
         "platform": {"$ref": "view.schema.json#/$defs/Platform"},
-        "ui_version": {"type": "integer"}
+        "ui_version": {"type": "integer"},
+        "stream": {"$ref": "stream.schema.json#/$defs/UIStreamCapability",
+          "description": "Explicit stream opt-in, independent of ui_version. Absent means snapshot-only. Contract only: no current client or hub advertises it."}
       }
     },
     "UIRequest": {
@@ -457,6 +459,29 @@
         "reports": {"type": "array", "items": {"$ref": "#/$defs/ErrorReport"}}
       },
       "required": ["contribution", "reports"]
+    },
+    "AuthRelayCompleteParams": {
+      "description": "auth_relay.complete's parameters: an authorization link one of the user's Agents stopped at, on a host and path the contribution names. The manager has checked that the Agent's own command printed it on one of the user's computers. The link is a secret while it lives: never log it.",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "url": {"type": "string", "maxLength": 4096}
+      },
+      "required": ["contribution", "url"]
+    },
+    "AuthRelayStatus": {"description": "How auth_relay.complete ended: done (authorized, the Agent can go on), manual (not one it completes: the user's), failed (one it completes, but it did not go through).", "type": "string",
+      "enum": ["done", "manual", "failed"]},
+    "AuthRelayReason": {"description": "Why it was not done: not_handled (not a link it completes), not_signed_in (its account is not signed in for the page), new_permissions (the page asks for more than was granted before), app_not_allowed (the extension's own settings leave this app to the user), unknown_page (not the page it knows), unavailable (what it completes them with can't be reached), not_confirmed (it clicked, the page never said it was done), expired (the link is no longer valid).", "type": "string",
+      "enum": ["not_handled", "not_signed_in", "new_permissions", "app_not_allowed", "unknown_page", "unavailable", "not_confirmed", "expired"]},
+    "AuthRelayResult": {
+      "description": "What auth_relay.complete answers. Never the link, a token or a page's text.",
+      "type": "object",
+      "properties": {
+        "status": {"$ref": "#/$defs/AuthRelayStatus"},
+        "app": {"type": "string", "maxLength": 80, "description": "The app the page authorized (or asked to), as the page names it."},
+        "reason": {"$ref": "#/$defs/AuthRelayReason"}
+      },
+      "required": ["status"]
     },
     "ExtensionNotification": {
       "description": "extension_notification in an extension's alert push: whose it is, the page a tap opens (ui with state) and its buttons (category ext.<extension>.<hash of the action ids>, registered by the app as it meets it).",

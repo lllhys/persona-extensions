@@ -9,9 +9,21 @@
       "type": "string",
       "enum": ["neutral", "positive", "caution", "danger"]
     },
-    "TextStyle": {"type": "string", "enum": ["body", "secondary", "caption", "code"]},
-    "FieldKind": {"type": "string", "enum": ["text", "secret", "number", "toggle", "choice"]},
-    "ChartKind": {"type": "string", "enum": ["bar", "line"]},
+    "TextStyle": {
+      "description": "title and headline (UI version 6) are a section's big title and a small heading; an older app draws them as body.",
+      "type": "string", "enum": ["body", "secondary", "caption", "code", "title", "headline"]},
+    "FieldKind": {
+      "description": "date, time, datetime, multichoice and multiline are UI version 6. Values stay strings: date YYYY-MM-DD, time HH:MM (24 hours), datetime YYYY-MM-DDTHH:MM local to context.tz, multichoice a JSON array of the chosen values, multiline the text with \\n.",
+      "type": "string", "enum": ["text", "secret", "number", "toggle", "choice", "date", "time", "datetime", "multichoice", "multiline"]},
+    "ChartKind": {
+      "description": "area, candlestick, donut and pie are UI version 6: an older app gets a line (an area, a candlestick's closes) or bars (a donut, a pie).",
+      "type": "string", "enum": ["bar", "line", "area", "candlestick", "donut", "pie"]},
+    "CandleRising": {"description": "A candlestick's rising candle: green (the default) or red, as the market writes it; the falling one is the other.", "type": "string", "enum": ["green", "red"]},
+    "Color": {
+      "description": "A named color (UI version 6): each app has its own of each, right in light and dark and in every style. Not a hex; an unknown one draws as the app's quiet ink. Only on badges, icons, tiles, chart series and sparks, never on text; never with a tone on the same object.",
+      "type": "string",
+      "enum": ["red", "orange", "amber", "yellow", "green", "teal", "blue", "indigo", "purple", "pink", "gray"]
+    },
     "ButtonRole": {"type": "string", "enum": ["normal", "destructive"]},
     "Placement": {
       "description": "A slot in the apps an extension draws at (docs \"UI slots\"). extension_page is plugin_page's new name (UI version 3): the hub takes both and answers the new API with extension_page, the old one with plugin_page.",
@@ -30,9 +42,10 @@
     },
     "Platform": {"type": "string", "enum": ["ios", "mac", "android", "web"]},
     "NavIcon": {
-      "description": "The fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the icons after money; 4 for those after settings). Each app draws its own icon for the meaning; an unknown one draws as the default (extension; plugin is its old name).",
+      "description": "The fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the icons after money; 4 for those after settings; 6 for those after file, and a metric's, a tile's, a row action's). Each app draws its own icon for the meaning; an unknown one draws as the default (extension; plugin is its old name).",
       "type": "string",
-      "enum": ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file"]
+      "enum": ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file",
+        "home", "sofa", "light", "power", "fan", "thermometer", "droplet", "lock", "unlock", "door", "window", "camera", "video", "play", "pause", "stop", "speaker", "tv", "plug", "battery", "bolt", "sun", "moon", "cloud", "rain", "snow", "wind", "leaf", "car", "location", "robot", "wifi", "shield", "trend_up", "trend_down", "wallet", "bank", "heart", "plus", "minus", "trash", "edit", "refresh", "share", "info"]
     },
     "View": {
       "type": "object",
@@ -55,6 +68,8 @@
     "Section": {
       "type": "object",
       "properties": {
+        "key": {"type": "string", "minLength": 1, "maxLength": 128, "x-since": 7,
+          "description": "Stable section identity in stream protocol 1 (UI version 7); optional for legacy snapshots."},
         "title": {"type": "string", "maxLength": 2000},
         "footer": {"type": "string", "maxLength": 2000},
         "items": {"type": "array", "items": {"$ref": "#/$defs/Component"}},
@@ -89,7 +104,10 @@
         {"$ref": "#/$defs/CodeComponent"},
         {"$ref": "#/$defs/DiffComponent"},
         {"$ref": "#/$defs/CommentThreadComponent"},
-        {"$ref": "#/$defs/ComposerComponent"}
+        {"$ref": "#/$defs/ComposerComponent"},
+        {"$ref": "#/$defs/ImageComponent"},
+        {"$ref": "#/$defs/GridComponent"},
+        {"$ref": "#/$defs/CarouselComponent"}
       ]
     },
     "TextComponent": {
@@ -112,7 +130,10 @@
         "label": {"type": "string", "minLength": 1, "maxLength": 2000},
         "value": {"type": "string", "minLength": 1, "maxLength": 2000},
         "detail": {"type": "string", "maxLength": 2000},
-        "tone": {"$ref": "#/$defs/Tone"}
+        "tone": {"$ref": "#/$defs/Tone"},
+        "icon": {"$ref": "#/$defs/NavIcon", "x-since": 6},
+        "icon_color": {"$ref": "#/$defs/Color", "x-since": 6},
+        "spark": {"$ref": "#/$defs/Spark", "x-since": 6}
       },
       "required": ["type", "label", "value"]
     },
@@ -142,7 +163,12 @@
         "action": {"$ref": "#/$defs/Action"},
         "icon": {"$ref": "#/$defs/NavIcon", "x-since": 3, "description": "At most one of icon, avatar and thumbnail."},
         "avatar": {"$ref": "#/$defs/Avatar", "x-since": 3},
-        "thumbnail": {"$ref": "#/$defs/Thumbnail", "x-since": 3}
+        "thumbnail": {"$ref": "#/$defs/Thumbnail", "x-since": 3},
+        "icon_color": {"$ref": "#/$defs/Color", "x-since": 6},
+        "control": {"$ref": "#/$defs/RowControl", "x-since": 6, "description": "A switch, a slider or a stepper; the row then has a key."},
+        "actions": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"$ref": "#/$defs/RowAction"}, "x-since": 6,
+          "description": "Extra actions in the row's menu and under a swipe: shortcuts only, the same must be possible on the page the row opens."},
+        "spark": {"$ref": "#/$defs/Spark", "x-since": 6}
       },
       "required": ["type", "title"]
     },
@@ -180,7 +206,10 @@
         "kind": {"$ref": "#/$defs/FieldKind"},
         "value": {"type": "string", "maxLength": 2000},
         "choices": {"type": "array", "items": {"$ref": "#/$defs/Choice"}},
-        "placeholder": {"type": "string", "maxLength": 2000}
+        "placeholder": {"type": "string", "maxLength": 2000},
+        "earliest": {"type": "string", "maxLength": 40, "x-since": 6, "description": "date, time, datetime: the first one allowed, written like value."},
+        "latest": {"type": "string", "maxLength": 40, "x-since": 6, "description": "date, time, datetime: the last one allowed."},
+        "detail": {"type": "string", "maxLength": 2000, "x-since": 6, "description": "A line of help under the field."}
       },
       "required": ["type", "name", "label", "kind"]
     },
@@ -192,7 +221,7 @@
       "required": ["type"]
     },
     "ChartComponent": {
-      "description": "A bar or line chart. Every series has the same labels in the same order; with more than one series each is named.",
+      "description": "A chart: bar, line, and in UI version 6 area, candlestick, donut, pie. Every series has the same labels in the same order; with more than one series each is named. A candlestick has one series whose points all have open, high, low and close (value is the close), at most 240 of them; a donut or a pie one series of 2 to 8 points.",
       "type": "object", "x-since": 2,
       "properties": {
         "type": {"const": "chart"},
@@ -202,7 +231,9 @@
         "title": {"type": "string", "maxLength": 2000},
         "unit": {"type": "string", "maxLength": 2000},
         "stacked": {"type": "boolean"},
-        "detail": {"type": "string", "maxLength": 2000}
+        "detail": {"type": "string", "maxLength": 2000},
+        "center": {"type": "string", "maxLength": 20, "x-since": 6, "description": "donut: the words in the hole (a total)."},
+        "rising": {"$ref": "#/$defs/CandleRising", "x-since": 6, "description": "candlestick: the color of a rising candle."}
       },
       "required": ["type", "kind", "series"]
     },
@@ -260,7 +291,8 @@
         "title": {"type": "string", "minLength": 1, "maxLength": 2000},
         "detail": {"type": "string", "maxLength": 2000},
         "icon": {"$ref": "#/$defs/NavIcon"},
-        "button": {"$ref": "#/$defs/EmptyButton"}
+        "button": {"$ref": "#/$defs/EmptyButton"},
+        "icon_color": {"$ref": "#/$defs/Color", "x-since": 6}
       },
       "required": ["type", "title"]
     },
@@ -420,6 +452,120 @@
         "buttons": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"$ref": "#/$defs/ComposerButton"}}
       },
       "required": ["type", "name", "buttons"]
+    },
+    "ImageComponent": {
+      "description": "A picture with an optional caption; tapping it shows it full screen unless no_zoom. A ref is the extension's own picture (a camera, a map) fetched through the hub. An older app gets a row with a thumbnail (url) or a line of text (ref).",
+      "type": "object", "x-since": 6,
+      "properties": {
+        "type": {"const": "image"},
+        "key": {"type": "string", "maxLength": 128},
+        "src": {"$ref": "#/$defs/ImageSource"},
+        "alt": {"type": "string", "minLength": 1, "maxLength": 200, "description": "Read out, and shown when the picture does not load."},
+        "caption": {"type": "string", "maxLength": 2000},
+        "aspect": {"$ref": "#/$defs/ImageAspect"},
+        "fit": {"$ref": "#/$defs/ImageFit"},
+        "no_zoom": {"type": "boolean", "description": "Tapping does nothing (else it shows the picture full screen)."}
+      },
+      "required": ["type", "src", "alt"]
+    },
+    "GridComponent": {
+      "description": "Tiles in columns that fit the width: two on a phone, more on wider screens, at most max_columns (4 when absent). Each tile counts as a component of the page. An older app gets a row per tile.",
+      "type": "object", "x-since": 6,
+      "properties": {
+        "type": {"const": "grid"},
+        "key": {"type": "string", "maxLength": 128},
+        "tiles": {"type": "array", "minItems": 1, "maxItems": 60, "items": {"$ref": "#/$defs/Tile"}},
+        "max_columns": {"type": "integer", "minimum": 1, "maximum": 6}
+      },
+      "required": ["type", "tiles"]
+    },
+    "CarouselComponent": {
+      "description": "Tiles in one line that scrolls sideways: cameras, rooms, a watchlist. Each tile counts as a component of the page. An older app gets a text (the title) and a row per tile.",
+      "type": "object", "x-since": 6,
+      "properties": {
+        "type": {"const": "carousel"},
+        "key": {"type": "string", "maxLength": 128},
+        "title": {"type": "string", "maxLength": 2000},
+        "tiles": {"type": "array", "minItems": 1, "maxItems": 20, "items": {"$ref": "#/$defs/Tile"}},
+        "width": {"$ref": "#/$defs/TileWidth"}
+      },
+      "required": ["type", "tiles"]
+    },
+    "ImageSource": {
+      "description": "Where a picture comes from (UI version 6): an https url the app loads without credentials, or a ref the extension serves itself (ui.image) through the hub; exactly one. path is written by the hub only, for a ref: its own address, which the app loads with its device credentials. An extension that writes path is refused.",
+      "type": "object",
+      "properties": {
+        "url": {"type": "string", "pattern": "^https://[^/?#]+", "maxLength": 4096},
+        "ref": {"type": "string", "minLength": 1, "maxLength": 256},
+        "path": {"type": "string", "pattern": "^/api/v1/extensions/[^/]+/-/image/[A-Za-z0-9_.-]+$", "maxLength": 2048},
+        "width": {"type": "integer", "minimum": 1, "maximum": 8192},
+        "height": {"type": "integer", "minimum": 1, "maximum": 8192}
+      }
+    },
+    "ImageAspect": {"description": "square 1:1, landscape 4:3 (the default), wide 16:9, portrait 3:4, auto from src's width and height (4:3 until the picture comes).", "type": "string", "enum": ["square", "landscape", "wide", "portrait", "auto"]},
+    "ImageFit": {"description": "fill crops to fill the frame (the default); fit shows all of it.", "type": "string", "enum": ["fill", "fit"]},
+    "RowControlKind": {"type": "string", "enum": ["switch", "slider", "stepper"]},
+    "RowControl": {
+      "description": "A control in a row or a tile (UI version 6). Changing it calls ui.action with action and values {name: the new value} (a switch \"true\" or \"false\", a slider and a stepper the number). The app shows the new value at once and puts back the old one if the action fails. A slider sends when the finger lifts, a stepper 0.6 s after the last tap.",
+      "type": "object",
+      "properties": {
+        "kind": {"$ref": "#/$defs/RowControlKind"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "on": {"type": "boolean", "description": "switch: on or off."},
+        "value": {"type": "number", "x-go-pointer": true, "description": "slider, stepper: the value now."},
+        "min": {"type": "number", "x-go-pointer": true},
+        "max": {"type": "number", "x-go-pointer": true},
+        "step": {"type": "number", "x-go-pointer": true, "description": "More than 0 (checked by the hub); a slider's is (max - min) / 100 when absent."},
+        "unit": {"type": "string", "maxLength": 8},
+        "display": {"type": "string", "maxLength": 20, "description": "How to write the value (\"22.5 °C\"); else the number and unit."},
+        "disabled": {"type": "boolean"},
+        "action": {"$ref": "#/$defs/Action"}
+      },
+      "required": ["kind", "name", "action"]
+    },
+    "RowAction": {
+      "description": "One of a row's or a tile's extra actions (UI version 6): in its menu (long press, right click, the … button) and, with swipe, under a swipe from the trailing edge. confirm and push work as on any action; a destructive one has confirm.",
+      "type": "object",
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 20},
+        "icon": {"$ref": "#/$defs/NavIcon"},
+        "role": {"$ref": "#/$defs/ButtonRole"},
+        "swipe": {"type": "boolean", "description": "Also under a swipe. At most two of a row's actions."},
+        "action": {"$ref": "#/$defs/Action"}
+      },
+      "required": ["title", "action"]
+    },
+    "Spark": {
+      "description": "A small trend line inside a row, a metric, a stat or a tile (UI version 6): values only, no axes. Without color or tone, the app's quiet ink.",
+      "type": "object",
+      "properties": {
+        "values": {"type": "array", "minItems": 2, "maxItems": 60, "items": {"type": "number"}},
+        "color": {"$ref": "#/$defs/Color"},
+        "tone": {"$ref": "#/$defs/Tone"},
+        "fill": {"type": "boolean", "description": "Shade under the line."}
+      },
+      "required": ["values"]
+    },
+    "TileWidth": {"description": "A carousel's tiles: narrow about 140pt (scenes), regular about 200pt (the default; rooms), wide about 80% of the screen (camera pictures).", "type": "string", "enum": ["narrow", "regular", "wide"]},
+    "Tile": {
+      "description": "A tile of a grid or a carousel (UI version 6): an icon or a picture, a title, a state line, a value; tapping does its action. active marks a tile that is on (a scene running, a light on) in its color.",
+      "type": "object",
+      "properties": {
+        "key": {"type": "string", "maxLength": 128},
+        "title": {"type": "string", "minLength": 1, "maxLength": 40},
+        "subtitle": {"type": "string", "maxLength": 80},
+        "value": {"type": "string", "maxLength": 40},
+        "icon": {"$ref": "#/$defs/NavIcon", "description": "At most one of icon and image."},
+        "image": {"$ref": "#/$defs/ImageSource"},
+        "color": {"$ref": "#/$defs/Color"},
+        "badge": {"$ref": "#/$defs/Badge"},
+        "active": {"type": "boolean"},
+        "spark": {"$ref": "#/$defs/Spark"},
+        "control": {"$ref": "#/$defs/RowControl", "description": "A switch only; the tile then has a key."},
+        "actions": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"$ref": "#/$defs/RowAction"}},
+        "action": {"$ref": "#/$defs/Action"}
+      },
+      "required": ["title"]
     },
     "Layout": {
       "description": "stack: sections one under another. split: on a wide screen the side pane's sections in a column at the start, the rest beside it, each scrolling on its own; on a narrow one the side pane folds into a bar on top that opens as a sheet.",
@@ -707,7 +853,7 @@
         "confirm": {"type": "string", "description": "Ask the user first, in these words."},
         "submit": {"type": "boolean", "description": "Send the page's fields as values."},
         "reply": {"type": "string", "minLength": 1, "maxLength": 2000, "description": "Assistant only: send this text back to the same conversation. The hub reads it from the saved view, not from the client."},
-        "open": {"type": "string", "minLength": 1, "maxLength": 4096, "description": "Assistant only: an https URL or a validated persona/jarvis session, task, kb or file target, opened inside the app."},
+        "open": {"type": "string", "minLength": 1, "maxLength": 4096, "description": "Assistant only: an https URL or a validated persona/persona session, task, kb or file target, opened inside the app."},
         "pop": {"type": "boolean", "description": "Assistant only: return one page within the card."},
         "push": {"$ref": "#/$defs/Push", "x-since": 3,
           "description": "Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls ui.action with id)."},
@@ -762,17 +908,20 @@
       "type": "object",
       "properties": {
         "url": {"type": "string", "pattern": "^https://[^/?#]+"},
-        "text": {"type": "string", "maxLength": 2}
+        "text": {"type": "string", "maxLength": 2},
+        "ref": {"type": "string", "minLength": 1, "maxLength": 256, "x-since": 6, "description": "The extension's own picture (ui.image) through the hub, in place of url."},
+        "path": {"type": "string", "pattern": "^/api/v1/extensions/[^/]+/-/image/[A-Za-z0-9_.-]+$", "maxLength": 2048, "x-since": 6, "description": "Written by the hub only, for a ref."}
       }
     },
     "Thumbnail": {
-      "description": "A small picture at the row's start: an https image the app loads without any credentials.",
+      "description": "A small picture at the row's start: an https image the app loads without any credentials, or (UI version 6) a ref the extension serves (ui.image) through the hub; exactly one of url and ref.",
       "type": "object",
       "properties": {
         "url": {"type": "string", "pattern": "^https://[^/?#]+"},
-        "aspect": {"$ref": "#/$defs/ThumbnailAspect"}
-      },
-      "required": ["url"]
+        "aspect": {"$ref": "#/$defs/ThumbnailAspect"},
+        "ref": {"type": "string", "minLength": 1, "maxLength": 256, "x-since": 6},
+        "path": {"type": "string", "pattern": "^/api/v1/extensions/[^/]+/-/image/[A-Za-z0-9_.-]+$", "maxLength": 2048, "x-since": 6, "description": "Written by the hub only, for a ref."}
+      }
     },
     "ThumbnailAspect": {"type": "string", "enum": ["square", "wide"]},
     "TableAlign": {"type": "string", "enum": ["start", "end"]},
@@ -797,7 +946,8 @@
       "type": "object",
       "properties": {
         "text": {"type": "string", "maxLength": 2000},
-        "tone": {"$ref": "#/$defs/Tone"}
+        "tone": {"$ref": "#/$defs/Tone"},
+        "color": {"$ref": "#/$defs/Color", "x-since": 6}
       },
       "required": ["text"]
     },
@@ -810,12 +960,13 @@
       "required": ["value"]
     },
     "ChartSeries": {
-      "description": "One line, or one color of bars. No tone: the app's own colors, in order.",
+      "description": "One line, or one color of bars. No tone and no color: the app's own colors, in order. At most 120 points (240 for a candlestick, checked by the hub).",
       "type": "object",
       "properties": {
         "name": {"type": "string", "maxLength": 40},
         "tone": {"$ref": "#/$defs/Tone"},
-        "points": {"type": "array", "minItems": 1, "maxItems": 120, "items": {"$ref": "#/$defs/ChartPoint"}}
+        "points": {"type": "array", "minItems": 1, "maxItems": 240, "items": {"$ref": "#/$defs/ChartPoint"}},
+        "color": {"$ref": "#/$defs/Color", "x-since": 6}
       },
       "required": ["points"]
     },
@@ -825,7 +976,12 @@
       "properties": {
         "label": {"type": "string", "maxLength": 40},
         "value": {"type": "number"},
-        "display": {"type": "string", "maxLength": 40}
+        "display": {"type": "string", "maxLength": 40},
+        "open": {"type": "number", "x-go-pointer": true, "x-since": 6},
+        "high": {"type": "number", "x-go-pointer": true, "x-since": 6},
+        "low": {"type": "number", "x-go-pointer": true, "x-since": 6},
+        "close": {"type": "number", "x-go-pointer": true, "x-since": 6},
+        "volume": {"type": "number", "minimum": 0, "x-go-pointer": true, "x-since": 6}
       },
       "required": ["label", "value"]
     },
@@ -835,7 +991,8 @@
         "label": {"type": "string", "minLength": 1},
         "value": {"type": "string", "minLength": 1},
         "detail": {"type": "string"},
-        "tone": {"$ref": "#/$defs/Tone"}
+        "tone": {"$ref": "#/$defs/Tone"},
+        "spark": {"$ref": "#/$defs/Spark", "x-since": 6}
       },
       "required": ["label", "value"]
     },

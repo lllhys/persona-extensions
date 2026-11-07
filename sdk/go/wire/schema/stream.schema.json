@@ -1,0 +1,1352 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stream.schema.json",
+  "title": "Extension native UI stream protocol",
+  "description": "Native UI stream protocol 1 (#5956). Server-only JSX execution, manager-owned sessions and native snapshots/deltas over the existing authenticated app WebSocket. Engine activation remains subject to independent sandbox gates. Empty deltas may retain a version for unchanged non-event work or advance exactly one to consume every accepted/ambiguous callback, including no-UI-change writes.",
+  "$defs": {
+    "UIStreamItem": {
+      "$ref": "view.schema.json#/$defs/Component",
+      "oneOf": [
+        {
+          "$ref": "view.schema.json#/$defs/TextComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "text": {},
+            "style": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/MetricComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "label": {},
+            "value": {},
+            "detail": {},
+            "tone": {},
+            "icon": {},
+            "icon_color": {},
+            "spark": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/ProgressComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "label": {},
+            "ratio": {},
+            "detail": {},
+            "tone": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/RowComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "title": {},
+            "subtitle": {},
+            "value": {},
+            "badge": {},
+            "action": {},
+            "icon": {},
+            "avatar": {},
+            "thumbnail": {},
+            "icon_color": {},
+            "control": {},
+            "actions": {},
+            "spark": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/ButtonComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "title": {},
+            "action": {},
+            "role": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/LinkComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "title": {},
+            "url": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/FieldComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "name": {},
+            "label": {},
+            "kind": {},
+            "value": {},
+            "choices": {},
+            "placeholder": {},
+            "earliest": {},
+            "latest": {},
+            "detail": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/DividerComponent",
+          "properties": {
+            "type": {},
+            "key": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/ChartComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "kind": {},
+            "series": {},
+            "title": {},
+            "unit": {},
+            "stacked": {},
+            "detail": {},
+            "center": {},
+            "rising": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/StatGridComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "stats": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/SegmentedComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "name": {},
+            "choices": {},
+            "value": {},
+            "action": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/MarkdownComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "text": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/TableComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "columns": {},
+            "rows": {},
+            "caption": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/EmptyComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "title": {},
+            "detail": {},
+            "icon": {},
+            "button": {},
+            "icon_color": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/LoadingComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "title": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/HeaderComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "title": {},
+            "subtitle": {},
+            "badges": {},
+            "facts": {},
+            "avatar": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/BreadcrumbComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "crumbs": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/FileTreeComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "entries": {},
+            "selected": {},
+            "action": {},
+            "expand": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/CodeComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "path": {},
+            "language": {},
+            "text": {},
+            "start_line": {},
+            "highlight": {},
+            "truncated": {},
+            "load": {},
+            "line_url": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/DiffComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "path": {},
+            "old_path": {},
+            "status": {},
+            "language": {},
+            "additions": {},
+            "deletions": {},
+            "binary": {},
+            "collapsed": {},
+            "hunks": {},
+            "threads": {},
+            "load": {},
+            "expand": {},
+            "comment": {},
+            "context": {},
+            "viewed": {},
+            "mark_viewed": {},
+            "revision": {},
+            "generated": {},
+            "similarity": {},
+            "draft": {},
+            "suggestions": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/CommentThreadComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "title": {},
+            "comments": {},
+            "resolved": {},
+            "reply": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/ComposerComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "name": {},
+            "placeholder": {},
+            "value": {},
+            "buttons": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/ImageComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "src": {},
+            "alt": {},
+            "caption": {},
+            "aspect": {},
+            "fit": {},
+            "no_zoom": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/GridComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "tiles": {},
+            "max_columns": {}
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "view.schema.json#/$defs/CarouselComponent",
+          "properties": {
+            "type": {},
+            "key": {},
+            "title": {},
+            "tiles": {},
+            "width": {}
+          },
+          "additionalProperties": false
+        }
+      ],
+      "x-discriminator": "type",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/UIStreamKey"
+        }
+      },
+      "required": [
+        "key"
+      ]
+    },
+    "UIStreamSection": {
+      "$ref": "view.schema.json#/$defs/Section",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/UIStreamKey"
+        },
+        "title": {},
+        "footer": {},
+        "items": {
+          "type": "array",
+          "maxItems": 300,
+          "items": {
+            "$ref": "#/$defs/UIStreamItem"
+          }
+        },
+        "more": {},
+        "pane": {}
+      },
+      "required": [
+        "key"
+      ],
+      "additionalProperties": false
+    },
+    "UIStreamView": {
+      "$ref": "view.schema.json#/$defs/View",
+      "properties": {
+        "title": {},
+        "sections": {
+          "type": "array",
+          "maxItems": 300,
+          "items": {
+            "$ref": "#/$defs/UIStreamSection"
+          }
+        },
+        "state": {
+          "type": "string",
+          "maxLength": 16384
+        },
+        "refresh_after": {},
+        "search": {},
+        "filter": {},
+        "tabs": {},
+        "layout": {},
+        "review": {},
+        "fallback": {},
+        "pages": {
+          "type": "object",
+          "maxProperties": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "UIStreamKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Opaque stable node key; one namespace for root, sections, components and tiles. Uniqueness and topology are reducer checks."
+    },
+    "UIStreamID": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Opaque session, generation, request or event identifier. Never an authority claim or a credential."
+    },
+    "UIStreamVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-go-type": "int64",
+      "description": "Positive JSON-safe integer. Monotonic within an epoch; rotate the epoch before exhaustion. Ordering is a reducer check."
+    },
+    "UIStreamScalar": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "string",
+          "maxLength": 4096
+        }
+      ],
+      "x-untagged": true,
+      "x-json-value": true,
+      "description": "Bounded JSON scalar, not executable content. Strings at most 4096 code points; finite numbers in the JSON-safe range."
+    },
+    "UIStreamValue": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/UIStreamScalar"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UIStreamScalar"
+          },
+          "maxItems": 64
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/UIStreamScalar"
+          },
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "maxProperties": 64
+        }
+      ],
+      "x-untagged": true,
+      "x-json-value": true,
+      "description": "Interaction value: scalar, scalar array or scalar map only (one container level). No functions, callbacks, binary data or nested containers. Never send credentials or secret field contents."
+    },
+    "UIStreamCapability": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "type": "integer",
+          "const": 1
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "maxItems": 64,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "protocol",
+        "components"
+      ],
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "description": "Client opt-in for protocol 1 plus supported native component tags. ui_version alone does not opt in. Declaration is not runtime support."
+    },
+    "UIStreamSnapshot": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "type": "integer",
+          "const": 1
+        },
+        "session": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "epoch": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "version": {
+          "$ref": "#/$defs/UIStreamVersion"
+        },
+        "root_key": {
+          "$ref": "#/$defs/UIStreamKey"
+        },
+        "view": {
+          "$ref": "#/$defs/UIStreamView"
+        }
+      },
+      "required": [
+        "protocol",
+        "session",
+        "epoch",
+        "version",
+        "root_key",
+        "view"
+      ],
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "description": "Full authoritative tree before deltas, including after resume or recovery. Keys required on sections/items; tiles and global uniqueness need semantic validation."
+    },
+    "UIStreamDelta": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "type": "integer",
+          "const": 1
+        },
+        "session": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "epoch": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "base_version": {
+          "$ref": "#/$defs/UIStreamVersion"
+        },
+        "version": {
+          "$ref": "#/$defs/UIStreamVersion"
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UIStreamOperation"
+          },
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "protocol",
+        "session",
+        "epoch",
+        "base_version",
+        "version",
+        "operations"
+      ],
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "description": "Atomic batch, at most 256 operations. An explicit empty batch keeps the version for a non-event no-op or advances exactly one revision as an accepted or ambiguous callback fence. Validate against a staged whole tree before committing. Ordering/equality are reducer checks."
+    },
+    "UIStreamEvent": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "type": "integer",
+          "const": 1
+        },
+        "session": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "epoch": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "version": {
+          "$ref": "#/$defs/UIStreamVersion"
+        },
+        "event_id": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "key": {
+          "$ref": "#/$defs/UIStreamKey"
+        },
+        "action": {
+          "$ref": "#/$defs/UIStreamID",
+          "description": "Opaque registered callback Action.id for this node and event slot; never callback code or an authority claim."
+        },
+        "event": {
+          "type": "string",
+          "enum": [
+            "press",
+            "change",
+            "submit"
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/UIStreamValue"
+        }
+      },
+      "required": [
+        "protocol",
+        "session",
+        "epoch",
+        "version",
+        "event_id",
+        "key",
+        "action",
+        "event",
+        "value"
+      ],
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "description": "Authenticated owner interaction for the displayed generation/version. Deduplicate event_id before writes. Validate action against the saved node/event slot, then resolve its callback server-side; no callback code or secrets in this payload."
+    },
+    "UIStreamOperation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/UIStreamReplace"
+        },
+        {
+          "$ref": "#/$defs/UIStreamInsert"
+        },
+        {
+          "$ref": "#/$defs/UIStreamRemove"
+        },
+        {
+          "$ref": "#/$defs/UIStreamMove"
+        }
+      ],
+      "x-discriminator": "op",
+      "x-preserve-required": true,
+      "x-unknown-policy": "recover",
+      "description": "Atomic native tree operation. Unknown operations invalidate the entire batch and require a snapshot, never skipping. Tiles update by replacing their containing grid/carousel."
+    },
+    "UIStreamReplace": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "const": "replace"
+        },
+        "key": {
+          "$ref": "#/$defs/UIStreamKey"
+        },
+        "view": {
+          "$ref": "#/$defs/UIStreamView"
+        },
+        "section": {
+          "$ref": "#/$defs/UIStreamSection"
+        },
+        "item": {
+          "$ref": "#/$defs/UIStreamItem"
+        }
+      },
+      "required": [
+        "op",
+        "key"
+      ],
+      "additionalProperties": false,
+      "description": "Replace a complete node/subtree; omitted properties are cleared. Exactly one payload, matching the target kind and key.",
+      "oneOf": [
+        {
+          "required": [
+            "view"
+          ]
+        },
+        {
+          "required": [
+            "section"
+          ]
+        },
+        {
+          "required": [
+            "item"
+          ]
+        }
+      ]
+    },
+    "UIStreamInsert": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "const": "insert"
+        },
+        "parent": {
+          "$ref": "#/$defs/UIStreamKey"
+        },
+        "before": {
+          "$ref": "#/$defs/UIStreamKey"
+        },
+        "section": {
+          "$ref": "#/$defs/UIStreamSection"
+        },
+        "item": {
+          "$ref": "#/$defs/UIStreamItem"
+        }
+      },
+      "required": [
+        "op",
+        "parent"
+      ],
+      "additionalProperties": false,
+      "description": "Insert a section under root or item under section. before names a destination sibling; omitted means append.",
+      "oneOf": [
+        {
+          "required": [
+            "section"
+          ]
+        },
+        {
+          "required": [
+            "item"
+          ]
+        }
+      ]
+    },
+    "UIStreamRemove": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "const": "remove"
+        },
+        "key": {
+          "$ref": "#/$defs/UIStreamKey"
+        }
+      },
+      "required": [
+        "op",
+        "key"
+      ],
+      "additionalProperties": false,
+      "description": "Remove a node and its subtree, never the root. Existence/root checks are semantic."
+    },
+    "UIStreamMove": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "const": "move"
+        },
+        "key": {
+          "$ref": "#/$defs/UIStreamKey"
+        },
+        "parent": {
+          "$ref": "#/$defs/UIStreamKey"
+        },
+        "before": {
+          "$ref": "#/$defs/UIStreamKey"
+        }
+      },
+      "required": [
+        "op",
+        "key",
+        "parent"
+      ],
+      "additionalProperties": false,
+      "description": "Move a section/item subtree. No cycles, tile moves or wrong parent kinds. Omitted before appends."
+    },
+    "UIStreamRequest": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/UIStreamOpenRequest"
+        },
+        {
+          "$ref": "#/$defs/UIStreamCloseRequest"
+        },
+        {
+          "$ref": "#/$defs/UIStreamSuspendRequest"
+        },
+        {
+          "$ref": "#/$defs/UIStreamResumeRequest"
+        },
+        {
+          "$ref": "#/$defs/UIStreamEventRequest"
+        },
+        {
+          "$ref": "#/$defs/UIStreamSnapshotRequest"
+        }
+      ],
+      "x-discriminator": "request",
+      "x-preserve-required": true,
+      "x-unknown-policy": "reject",
+      "description": "Owner-bound lifecycle request over the authenticated WebSocket. The transport supplies principal/hub identity; never trust an owner field from JSON. No endpoint or runtime is enabled by these contracts."
+    },
+    "UIStreamOpenRequest": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "const": "open"
+        },
+        "protocol": {
+          "type": "integer",
+          "const": 1
+        },
+        "request_id": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "extension": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "contribution": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "context": {
+          "$ref": "protocol.schema.json#/$defs/UIContext"
+        },
+        "state": {
+          "type": "string",
+          "maxLength": 16384
+        }
+      },
+      "required": [
+        "request",
+        "protocol",
+        "request_id",
+        "extension",
+        "contribution",
+        "context",
+        "state"
+      ],
+      "additionalProperties": false,
+      "description": "Reauthorize the extension/contribution and explicit context.stream capability; allocate an owner-bound session and send a snapshot before deltas."
+    },
+    "UIStreamCloseRequest": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "const": "close"
+        },
+        "protocol": {
+          "type": "integer",
+          "const": 1
+        },
+        "request_id": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "session": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "epoch": {
+          "$ref": "#/$defs/UIStreamID"
+        }
+      },
+      "required": [
+        "request",
+        "protocol",
+        "request_id",
+        "session",
+        "epoch"
+      ],
+      "additionalProperties": false,
+      "description": "Idempotent for unknown/already closed owned sessions; unmount and release state, callbacks and effects."
+    },
+    "UIStreamSuspendRequest": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "const": "suspend"
+        },
+        "protocol": {
+          "type": "integer",
+          "const": 1
+        },
+        "request_id": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "session": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "epoch": {
+          "$ref": "#/$defs/UIStreamID"
+        }
+      },
+      "required": [
+        "request",
+        "protocol",
+        "request_id",
+        "session",
+        "epoch"
+      ],
+      "additionalProperties": false,
+      "description": "Stop UI intervals/polling and bound pending work. Service work is independent of visibility."
+    },
+    "UIStreamResumeRequest": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "const": "resume"
+        },
+        "protocol": {
+          "type": "integer",
+          "const": 1
+        },
+        "request_id": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "session": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "epoch": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "version": {
+          "$ref": "#/$defs/UIStreamVersion"
+        }
+      },
+      "required": [
+        "request",
+        "protocol",
+        "request_id",
+        "session",
+        "epoch",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "Reauthorize the owned session, discard stale delta chains and send a fresh snapshot before further deltas."
+    },
+    "UIStreamEventRequest": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "const": "event"
+        },
+        "protocol": {
+          "type": "integer",
+          "const": 1
+        },
+        "request_id": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "interaction": {
+          "$ref": "#/$defs/UIStreamEvent"
+        }
+      },
+      "required": [
+        "request",
+        "protocol",
+        "request_id",
+        "interaction"
+      ],
+      "additionalProperties": false,
+      "description": "Authorize and deduplicate the interaction before invoking its registered server-side callback. request_id is correlation, not write deduplication."
+    },
+    "UIStreamSnapshotRequest": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "const": "snapshot"
+        },
+        "protocol": {
+          "type": "integer",
+          "const": 1
+        },
+        "request_id": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "session": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "epoch": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "version": {
+          "$ref": "#/$defs/UIStreamVersion"
+        }
+      },
+      "required": [
+        "request",
+        "protocol",
+        "request_id",
+        "session",
+        "epoch",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "Read-only recovery request: reauthorize and send a complete snapshot, never replay an interaction or write."
+    },
+    "UIStreamClientEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "type": {
+          "const": "extension_ui_stream"
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "request": {
+          "$ref": "#/$defs/UIStreamRequest"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "request"
+          ]
+        }
+      ]
+    },
+    "UIStreamActionResult": {
+      "x-preserve-required": true,
+      "allOf": [{"$ref": "view.schema.json#/$defs/ActionResult"}],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "toast": {"type": "string", "maxLength": 2000},
+        "open_url": {"type": "string", "maxLength": 4096},
+        "push": {"$ref": "#/$defs/UIStreamPush"},
+        "pop": {"type": "boolean"},
+        "lines": {"$ref": "#/$defs/UIStreamFileLines"}
+      },
+      "description": "Bounded presentation-only subset of native ActionResult, at most 64 KiB UTF-8 JSON. Carried in the correlated event receipt and cached on replay. Clients apply it once per session/epoch/event_id, only after reaching receipt.version; never execute HTML, JavaScript or infer authorization from a result. JSX state owns view/items updates through snapshots/deltas. Manager validates push ownership and credential-free HTTPS (or its own permitted native URL)."
+    },
+    "UIStreamPush": {
+      "x-preserve-required": true,
+      "allOf": [{"$ref": "view.schema.json#/$defs/Push"}],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ui": {"type": "string", "maxLength": 64},
+        "state": {"type": "string", "maxLength": 16384},
+        "title": {"type": "string", "maxLength": 2000}
+      },
+      "description": "Extension-owned native Push only: no assistant page or arbitrary target. State is additionally bounded to 16 KiB UTF-8. Not authority to invoke an action."
+    },
+    "UIStreamFileLines": {
+      "allOf": [{"$ref": "view.schema.json#/$defs/FileLines"}],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "side": {"$ref": "view.schema.json#/$defs/DiffSide"},
+        "start": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "lines": {"type": "array", "maxItems": 20000, "items": {"type": "string", "maxLength": 20000}},
+        "total": {"type": "integer", "minimum": 0, "maximum": 9007199254740991}
+      },
+      "required": ["path", "start", "lines"],
+      "x-preserve-required": true,
+      "description": "Native FileLines presentation response correlated to the saved event, not filesystem access or code execution. The complete result remains limited to 64 KiB UTF-8 JSON."
+    },
+    "UIStreamReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "epoch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "x-go-type": "int64"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "accepted",
+            "ambiguous",
+            "rejected"
+          ]
+        },
+        "result": {"$ref": "#/$defs/UIStreamActionResult"}
+      },
+      "required": [
+        "session",
+        "epoch",
+        "event_id",
+        "version",
+        "status"
+      ]
+    },
+    "UIStreamFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "UIStreamSnapshotEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "type": {
+          "const": "extension_ui_stream"
+        },
+        "kind": {
+          "const": "snapshot"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "snapshot": {
+          "$ref": "#/$defs/UIStreamSnapshot"
+        }
+      },
+      "required": [
+        "type",
+        "kind",
+        "snapshot"
+      ]
+    },
+    "UIStreamDeltaEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "type": {
+          "const": "extension_ui_stream"
+        },
+        "kind": {
+          "const": "delta"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "delta": {
+          "$ref": "#/$defs/UIStreamDelta"
+        }
+      },
+      "required": [
+        "type",
+        "kind",
+        "delta"
+      ]
+    },
+    "UIStreamReceiptEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "type": {
+          "const": "extension_ui_stream"
+        },
+        "kind": {
+          "const": "receipt"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "receipt": {
+          "$ref": "#/$defs/UIStreamReceipt"
+        }
+      },
+      "required": [
+        "type",
+        "kind",
+        "receipt"
+      ]
+    },
+    "UIStreamErrorEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "type": {
+          "const": "extension_ui_stream"
+        },
+        "kind": {
+          "const": "error"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "error": {
+          "$ref": "#/$defs/UIStreamFailure"
+        }
+      },
+      "required": [
+        "type",
+        "kind",
+        "error"
+      ]
+    },
+    "UIStreamClosedEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "type": {
+          "const": "extension_ui_stream"
+        },
+        "kind": {
+          "const": "closed"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "session": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "type",
+        "kind",
+        "session"
+      ]
+    },
+    "UIStreamServerEnvelope": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/UIStreamSnapshotEnvelope"
+        },
+        {
+          "$ref": "#/$defs/UIStreamDeltaEnvelope"
+        },
+        {
+          "$ref": "#/$defs/UIStreamReceiptEnvelope"
+        },
+        {
+          "$ref": "#/$defs/UIStreamErrorEnvelope"
+        },
+        {
+          "$ref": "#/$defs/UIStreamClosedEnvelope"
+        },
+        {
+          "$ref": "#/$defs/UIStreamSuspendedEnvelope"
+        }
+      ],
+      "x-discriminator": "kind",
+      "x-preserve-required": true,
+      "x-unknown-policy": "reject"
+    },
+    "UIStreamSuspendedEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "type": {
+          "const": "extension_ui_stream"
+        },
+        "kind": {
+          "const": "suspended"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "session": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "type",
+        "kind",
+        "session"
+      ]
+    },
+    "UIPageSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "generation": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "version": {
+          "$ref": "#/$defs/UIStreamVersion"
+        },
+        "rootKey": {
+          "$ref": "#/$defs/UIStreamKey"
+        },
+        "view": {
+          "$ref": "#/$defs/UIStreamView"
+        }
+      },
+      "required": [
+        "generation",
+        "version",
+        "rootKey",
+        "view"
+      ],
+      "description": "Source-process native render revision, independent of manager-owned wire revisions. Validate original JSON before fitting; never trust source recipients or owners."
+    }
+  }
+}

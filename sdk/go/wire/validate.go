@@ -1,10 +1,13 @@
 package wire
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
+	"math/big"
 	"path"
 	"regexp"
 	"sort"
@@ -111,7 +114,7 @@ const errorsMost = 20
 // first. It returns a *ValidationError, or nil when v holds.
 func Validate(def string, v any) error {
 	switch v.(type) {
-	case map[string]any, []any, string, float64, bool, nil:
+	case map[string]any, []any, string, float64, json.Number, bool, nil:
 	default:
 		raw, err := json.Marshal(v)
 		if err != nil {
@@ -139,7 +142,18 @@ func Validate(def string, v any) error {
 // ValidateJSON is Validate for raw JSON.
 func ValidateJSON(def string, raw []byte) error {
 	var v any
-	if err := json.Unmarshal(raw, &v); err != nil {
+	if strings.HasPrefix(def, "UIStream") {
+		// Stream bounds and versions must be checked before float64 rounding. Keep legacy decoding unchanged.
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.UseNumber()
+		if err := decoder.Decode(&v); err != nil {
+			return &ValidationError{Def: def, Errors: []string{"$: " + err.Error()}}
+		}
+		var trailing any
+		if err := decoder.Decode(&trailing); err != io.EOF {
+			return &ValidationError{Def: def, Errors: []string{"$: trailing JSON data"}}
+		}
+	} else if err := json.Unmarshal(raw, &v); err != nil {
 		return &ValidationError{Def: def, Errors: []string{"$: " + err.Error()}}
 	}
 	return Validate(def, v)
@@ -207,35 +221,68 @@ func (c *checker) check(s map[string]any, v any, here, at string) {
 		}
 		return
 	}
+	if all, ok := s["allOf"].([]any); ok {
+		for _, option := range all {
+			c.check(option.(map[string]any), v, here, at)
+		}
+	}
+	if anyOf, ok := s["anyOf"].([]any); ok {
+		passing := false
+		for _, option := range anyOf {
+			sub := checker{}
+			sub.check(option.(map[string]any), v, here, at)
+			if len(sub.errs) == 0 {
+				passing = true
+				break
+			}
+		}
+		if !passing {
+			c.add("%s: no matching anyOf branch", at)
+		}
+	}
+	if forbidden, ok := s["not"].(map[string]any); ok {
+		sub := checker{}
+		sub.check(forbidden, v, here, at)
+		if len(sub.errs) == 0 {
+			c.add("%s: matches forbidden schema", at)
+		}
+	}
 	if one, ok := s["oneOf"].([]any); ok {
 		if disc, ok := s["x-discriminator"].(string); ok {
 			obj, _ := v.(map[string]any)
 			tag := obj[disc]
+			matched := false
 			for _, o := range one {
-				ref, _ := o.(map[string]any)["$ref"].(string)
-				target, f := resolve(ref, here)
+				option := o.(map[string]any)
+				ref, _ := option["$ref"].(string)
+				target, _ := resolve(ref, here)
 				props, _ := target["properties"].(map[string]any)
 				d, _ := props[disc].(map[string]any)
 				if tag != nil && d["const"] == tag {
-					c.check(target, v, f, at)
-					return
+					// Check the complete branch, including overlays next to its $ref.
+					c.check(option, v, here, at)
+					matched = true
+					break
 				}
 			}
-			c.add("%s: no variant with %s %s", at, disc, show(tag))
-			return
-		}
-		passing := 0
-		for _, o := range one {
-			sub := checker{}
-			sub.check(o.(map[string]any), v, here, at)
-			if len(sub.errs) == 0 {
-				passing++
+			if !matched {
+				c.add("%s: no variant with %s %s", at, disc, show(tag))
+				return
+			}
+		} else {
+			passing := 0
+			for _, o := range one {
+				sub := checker{}
+				sub.check(o.(map[string]any), v, here, at)
+				if len(sub.errs) == 0 {
+					passing++
+				}
+			}
+			if passing != 1 {
+				c.add("%s: matches %d of oneOf, not one", at, passing)
 			}
 		}
-		if passing != 1 {
-			c.add("%s: matches %d of oneOf, not one", at, passing)
-		}
-		return
+		// All oneOf forms also retain their sibling type/properties constraints.
 	}
 	if t, ok := s["type"].(string); ok && !isType(t, v) {
 		c.add("%s: not of type %s", at, t)
@@ -276,6 +323,15 @@ func (c *checker) check(s map[string]any, v any, here, at string) {
 		if m, ok := num(s["maximum"]); ok && x > m {
 			c.add("%s: above %v", at, m)
 		}
+	case json.Number:
+		if n, ok := preciseNumber(x); ok {
+			if m, ok := preciseNumber(s["minimum"]); ok && n.Cmp(m) < 0 {
+				c.add("%s: below %s", at, show(s["minimum"]))
+			}
+			if m, ok := preciseNumber(s["maximum"]); ok && n.Cmp(m) > 0 {
+				c.add("%s: above %s", at, show(s["maximum"]))
+			}
+		}
 	case []any:
 		if m, ok := num(s["minItems"]); ok && float64(len(x)) < m {
 			c.add("%s: fewer than %v items", at, m)
@@ -314,6 +370,9 @@ func (c *checker) check(s map[string]any, v any, here, at string) {
 		}
 		extra := s["additionalProperties"]
 		for _, k := range sortedKeys(x) {
+			if names, ok := s["propertyNames"].(map[string]any); ok {
+				c.check(names, k, here, at+".<key>")
+			}
 			if p, ok := props[k].(map[string]any); ok {
 				c.check(p, x[k], here, at+"."+k)
 			} else if extra == false {
@@ -327,6 +386,8 @@ func (c *checker) check(s map[string]any, v any, here, at string) {
 
 func isType(t string, v any) bool {
 	switch t {
+	case "null":
+		return v == nil
 	case "string":
 		_, ok := v.(string)
 		return ok
@@ -339,12 +400,13 @@ func isType(t string, v any) bool {
 	case "array":
 		_, ok := v.([]any)
 		return ok
-	case "number":
-		_, ok := v.(float64)
-		return ok
-	case "integer":
+	case "number", "integer":
+		if n, ok := v.(json.Number); ok {
+			f, valid := preciseNumber(n)
+			return valid && (t == "number" || f.IsInt())
+		}
 		f, ok := v.(float64)
-		return ok && f == math.Trunc(f) && !math.IsInf(f, 0)
+		return ok && !math.IsNaN(f) && !math.IsInf(f, 0) && (t == "number" || f == math.Trunc(f))
 	}
 	return true
 }
@@ -354,7 +416,31 @@ func num(v any) (float64, bool) {
 	return f, ok
 }
 
+// preciseNumber retains enough mantissa bits to distinguish the input's decimal digits from integer bounds.
+// big.Float stores an exponent separately: hostile exponents never allocate an enormous integer/denominator.
+func preciseNumber(v any) (*big.Float, bool) {
+	switch n := v.(type) {
+	case json.Number:
+		f, _, err := big.ParseFloat(string(n), 10, uint(len(n))*4+64, big.ToNearestEven)
+		return f, err == nil && !f.IsInf()
+	case float64:
+		if !math.IsNaN(n) && !math.IsInf(n, 0) {
+			return big.NewFloat(n), true
+		}
+	}
+	return nil, false
+}
+
 func equal(a, b any) bool {
+	_, aNumber := a.(json.Number)
+	_, bNumber := b.(json.Number)
+	if aNumber || bNumber {
+		if left, ok := preciseNumber(a); ok {
+			if right, ok := preciseNumber(b); ok {
+				return left.Cmp(right) == 0
+			}
+		}
+	}
 	ja, _ := json.Marshal(a)
 	jb, _ := json.Marshal(b)
 	return string(ja) == string(jb)

@@ -2,6 +2,7 @@ package wire
 
 import (
 	"cmp"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -30,7 +31,13 @@ var tones = append([]string{""}, Tones...)
 // CheckView holds a View to what the apps draw: first to the schema (known component types with what they need, short
 // strings, https links, tones and styles from the fixed lists), then to what the schema cannot say (a page's size, a
 // field's name once, a chart's series alike). A View that does not fit is refused, not half drawn.
-func CheckView(v *View) error {
+func CheckView(v *View) error { return checkView(v, false) }
+
+// CheckFitted is CheckView for a view the hub fitted for an older app (extension.Fit): the same, but the names the hub
+// gives what it draws such an app (ReservedName) are let through.
+func CheckFitted(v *View) error { return checkView(v, true) }
+
+func checkView(v *View, hubNames bool) error {
 	if v == nil {
 		return errors.New("no view")
 	}
@@ -41,6 +48,30 @@ func CheckView(v *View) error {
 		}
 		return err
 	}
+	return checkViewSemantics(v, hubNames)
+}
+
+// CheckViewJSON validates the original native JSON before decoding it for semantic checks.
+// Unlike CheckView, it does not re-encode Component: optional zero values and required
+// empty fields must not disappear at a stream's validation boundary. Legacy encoding
+// and CheckView behavior are unchanged. Stream callers also apply UIStreamView's overlay.
+func CheckViewJSON(raw []byte) error { return checkViewJSON(raw, false) }
+
+// CheckFittedJSON retains native source presence while allowing only fitter-owned names.
+func CheckFittedJSON(raw []byte) error { return checkViewJSON(raw, true) }
+
+func checkViewJSON(raw []byte, hubNames bool) error {
+	if err := ValidateJSON("View", raw); err != nil {
+		return err
+	}
+	var v View
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return err
+	}
+	return checkViewSemantics(&v, hubNames)
+}
+
+func checkViewSemantics(v *View, hubNames bool) error {
 	if len(v.State) > StateMost {
 		return fmt.Errorf("state: more than %d bytes", StateMost)
 	}
@@ -50,8 +81,8 @@ func CheckView(v *View) error {
 		}
 	}
 	n := 0
-	names := map[string]bool{}
-	keys := map[string]bool{}
+	pc := &pageCheck{names: map[string]bool{}, keys: map[string]bool{}, hubNames: hubNames}
+	names, keys := pc.names, pc.keys
 	if v.Search != nil {
 		names["q"] = true
 	}
@@ -82,7 +113,8 @@ func CheckView(v *View) error {
 	}
 	for i, s := range v.Sections {
 		for j, e := range s.Items {
-			if n++; n > ItemsMost {
+			// a grid's or a carousel's tiles are components of the page each
+			if n += max(1, len(e.Tiles)); n > ItemsMost {
 				return fmt.Errorf("more than %d items", ItemsMost)
 			}
 			var err error
@@ -99,24 +131,22 @@ func CheckView(v *View) error {
 				}
 			case "field":
 				switch {
-				case names[e.Name]:
-					err = fmt.Errorf("field %q twice", e.Name)
 				case e.Kind == "choice" && len(e.Choices) == 0:
 					err = errors.New("a choice field needs choices")
 				case e.Kind == "secret" && e.Value != "":
 					err = errors.New("a secret field is never filled in")
+				default:
+					err = pc.name(e.Name)
 				}
-				names[e.Name] = true
 			case "segmented":
 				switch {
-				case names[e.Name]:
-					err = fmt.Errorf("field %q twice", e.Name)
+				case pc.name(e.Name) != nil:
+					err = fmt.Errorf("field %q twice, or a reserved name", e.Name)
 				case !slices.ContainsFunc(e.Choices, func(c Choice) bool { return c.Value == e.Value }):
 					err = errors.New("segmented: value is one of its choices")
 				case slices.ContainsFunc(e.Choices, func(c Choice) bool { return utf8.RuneCountInString(cmp.Or(c.Title, c.Value)) > 12 }):
 					err = errors.New("segmented: a choice has at most 12 characters")
 				}
-				names[e.Name] = true
 			case "chart":
 				err = checkChart(e)
 			case "stat_grid":
@@ -124,8 +154,6 @@ func CheckView(v *View) error {
 			case "row":
 				if (e.Icon != "") && (e.Avatar != nil || e.Thumbnail != nil) || e.Avatar != nil && e.Thumbnail != nil {
 					err = errors.New("a row has at most one of icon, avatar and thumbnail")
-				} else if a := e.Avatar; a != nil && a.URL == "" && a.Text == "" {
-					err = errors.New("an avatar has a url or a text")
 				}
 			case "table":
 				for k, r := range e.Rows {
@@ -137,10 +165,7 @@ func CheckView(v *View) error {
 			case "markdown":
 				err = checkMarkdown(e.Text)
 			case "composer":
-				if names[e.Name] {
-					err = fmt.Errorf("field %q twice", e.Name)
-				}
-				names[e.Name] = true
+				err = pc.name(e.Name)
 			case "code":
 				code += len(e.Text)
 				if h := e.Highlight; h != nil && h.End < h.Start {
@@ -154,6 +179,9 @@ func CheckView(v *View) error {
 				code += lines
 			case "comment_thread":
 				err = checkComments(e.Comments)
+			}
+			if err == nil {
+				err = pc.checkV6(&e)
 			}
 			if err == nil && code > CodeMost {
 				err = fmt.Errorf("a view carries at most %d bytes of code: page the rest (load)", CodeMost)
@@ -247,14 +275,18 @@ func where(v *View, msg string) string {
 
 func checkChart(e Component) error {
 	if !slices.Contains(ChartKinds, e.Kind) {
-		return errors.New("chart kind is bar or line")
+		return errors.New("chart kind is bar, line, area, candlestick, donut or pie")
+	}
+	most := PointsMost
+	if e.Kind == ChartKindCandlestick {
+		most = CandlesMost
 	}
 	if len(e.Series) == 0 || len(e.Series) > SeriesMost {
 		return fmt.Errorf("a chart has 1 to %d series", SeriesMost)
 	}
 	first := e.Series[0].Points
-	if len(first) == 0 || len(first) > PointsMost {
-		return fmt.Errorf("a series has 1 to %d points", PointsMost)
+	if len(first) == 0 || len(first) > most {
+		return fmt.Errorf("a series has 1 to %d points", most)
 	}
 	for k, s := range e.Series {
 		if utf8.RuneCountInString(s.Name) > 40 || !slices.Contains(tones, s.Tone) {
@@ -278,7 +310,7 @@ func checkChart(e Component) error {
 			}
 		}
 	}
-	return nil
+	return checkChartV6(e)
 }
 
 func checkStats(stats []Stat) error {
@@ -294,6 +326,9 @@ func checkStats(stats []Stat) error {
 		}
 		if !slices.Contains(tones, st.Tone) {
 			return fmt.Errorf("stat %d: tone is neutral, positive, caution or danger", k)
+		}
+		if err := checkSpark(st.Spark); err != nil {
+			return fmt.Errorf("stat %d: %v", k, err)
 		}
 	}
 	return nil
@@ -378,6 +413,24 @@ func Actions(v *View) []*Action {
 			}
 			for k := range e.Buttons {
 				out = append(out, &e.Buttons[k].Action)
+			}
+			if c := e.Control; c != nil {
+				out = append(out, &c.Action)
+			}
+			for k := range e.Actions {
+				out = append(out, &e.Actions[k].Action)
+			}
+			for k := range e.Tiles {
+				t := &e.Tiles[k]
+				if t.Action != nil {
+					out = append(out, t.Action)
+				}
+				if t.Control != nil {
+					out = append(out, &t.Control.Action)
+				}
+				for l := range t.Actions {
+					out = append(out, &t.Actions[l].Action)
+				}
 			}
 			for k := range e.Threads {
 				if e.Threads[k].Reply != nil {

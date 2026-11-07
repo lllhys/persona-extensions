@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -136,6 +137,14 @@ func CheckAssistantView(v *View) error {
 				if e.Type == "field" && e.Kind == "secret" {
 					return fmt.Errorf("%s.sections[%d].items[%d]: assistant cards must not collect secrets", where, i, j)
 				}
+				// UI version 6: no extension serves an assistant card's pictures, and a control acts at once, which a
+				// card's actions (a reply the user confirms) do not.
+				if HasImageRef(&e) {
+					return fmt.Errorf("%s.sections[%d].items[%d]: assistant cards show pictures by https url, not ref", where, i, j)
+				}
+				if e.Control != nil || slices.ContainsFunc(e.Tiles, func(t Tile) bool { return t.Control != nil }) {
+					return fmt.Errorf("%s.sections[%d].items[%d]: assistant cards have no controls; use a button", where, i, j)
+				}
 			}
 		}
 		for _, a := range Actions(page) {
@@ -211,7 +220,7 @@ func CheckAssistantOpen(target string) error {
 	if u.Scheme == "https" {
 		return nil
 	}
-	if (u.Scheme != "persona" && u.Scheme != "jarvis") || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+	if u.Scheme != "persona" || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
 		return errors.New("open: use https or a persona session, task, kb or file link")
 	}
 	parts := strings.Split(strings.TrimPrefix(u.EscapedPath(), "/"), "/")

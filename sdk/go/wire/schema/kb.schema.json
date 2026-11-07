@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "kb.schema.json",
   "title": "Knowledge base",
-  "description": "What an extension's program may ask of the knowledge base directly (docs/extensions.md \"Knowledge base RPC\"): kb.list, kb.get, kb.day, kb.search, kb.owner (permission kb.read) and kb.update (kb.write), and the events event.kb.changed / event.kb.forgotten. Params are strict: no contribution, and an unknown field is invalid_params. A connector hands the knowledge base its conversations, items and posts through the connector calls instead (connector.schema.json). Plugin-side: only the hub and the program speak it.",
+  "description": "What an extension's program may ask of the knowledge base directly (docs/extensions.md \"Knowledge base RPC\"): kb.list, kb.recent, kb.get, kb.day, kb.search, kb.owner (permission kb.read) and kb.update (kb.write), and the events event.kb.changed / event.kb.forgotten. An extension's kb.update is attributed to it: it may not touch what the user or another extension holds (conflict), and it holds the locked fields it writes (docs/knowledge.md \"Who holds a field\"). Params are strict: no contribution, and an unknown field is invalid_params. A connector hands the knowledge base its conversations, items and posts through the connector calls instead (connector.schema.json). Plugin-side: only the hub and the program speak it.",
   "x-side": "plugin",
   "x-methods": {
     "kb.list": {"from": "program", "params": "KBListParams", "result": "KBListResult"},
@@ -10,7 +10,8 @@
     "kb.day": {"from": "program", "params": "KBDayParams", "result": "KBDayResult"},
     "kb.search": {"from": "program", "params": "KBSearchParams", "result": "KBSearchResult"},
     "kb.update": {"from": "program", "params": "KBUpdateParams", "result": "KBUpdateResult"},
-    "kb.owner": {"from": "program", "params": "KBOwnerParams", "result": "KBOwner"}
+    "kb.owner": {"from": "program", "params": "KBOwnerParams", "result": "KBOwner"},
+    "kb.recent": {"from": "program", "params": "KBRecentParams", "result": "KBRecentResult"}
   },
   "x-events": {
     "event.kb.changed": {"from": "hub", "params": "KBChangedEvent"},
@@ -22,9 +23,39 @@
       "enum": ["projects", "chats", "people", "docs", "meetings", "events", "recordings"]
     },
     "KBErrorCode": {
-      "description": "error.code of a knowledge-base call besides permission_denied (data {scope}, the one missing): invalid_params, not_found, assistant_offline (the manager is away), kb_unavailable (not open yet). Both of the last are worth trying again.",
+      "description": "error.code of a knowledge-base call besides permission_denied (data {scope}, the one missing): invalid_params, not_found, assistant_offline (the manager is away), kb_unavailable (not open yet), conflict (kb.update touches fields the user or another extension holds; data KBConflict, nothing was written). assistant_offline and kb_unavailable are worth trying again; conflict is for the user to decide.",
       "type": "string",
-      "enum": ["invalid_params", "not_found", "assistant_offline", "kb_unavailable"]
+      "enum": ["invalid_params", "not_found", "assistant_offline", "kb_unavailable", "conflict"]
+    },
+    "KBConflict": {
+      "description": "The data of a conflict error: field → who holds it (user, or ext:<extension id>); a linked entity's field is <kind>/<id>.<field>.",
+      "type": "object",
+      "properties": {
+        "owners": {"type": "object", "additionalProperties": {"type": "string"}}
+      },
+      "required": ["owners"]
+    },
+    "KBEvidence": {
+      "description": "What a written value rests on: a chat's day (kb.day) and optionally the line n there.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "chat": {"type": "string", "minLength": 1},
+        "day": {"type": "string", "description": "YYYY-MM-DD in the knowledge base's time zone."},
+        "n": {"type": "integer", "minimum": 0, "description": "1-based line in that day's file (kb.day's n)."},
+        "note": {"type": "string", "maxLength": 200}
+      },
+      "required": ["chat", "day"]
+    },
+    "KBProvenance": {
+      "description": "An entry of an entity's meta.provenance (kb.get): which extension holds that locked field, since when, from what. A locked field without one is the user's.",
+      "type": "object",
+      "properties": {
+        "by": {"type": "string", "description": "ext:<extension id>"},
+        "at": {"type": "string", "format": "date-time"},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/KBEvidence"}}
+      },
+      "required": ["by", "at"]
     },
     "KBHandle": {
       "description": "An identity clue: kind (phone, email, a source's user id kind…) and the raw value.",
@@ -43,7 +74,8 @@
         "kind": {"$ref": "#/$defs/KBKind"},
         "tag": {"type": "string"},
         "limit": {"type": "integer", "minimum": 0, "maximum": 200, "description": "0 is 30."},
-        "offset": {"type": "integer", "minimum": 0}
+        "offset": {"type": "integer", "minimum": 0},
+        "since": {"type": "string", "description": "An RFC 3339 time: only entities updated at or after it (a chat: its last message)."}
       },
       "required": ["kind"]
     },
@@ -68,9 +100,32 @@
         "relevance": {"type": "integer", "description": "0–100: how much it concerns the owner."},
         "tags": {"type": "array", "items": {"type": "string"}},
         "updated": {"type": "string", "format": "date-time"},
-        "extra": {"type": "string", "description": "A project's short / long · status, a chat's dm / group…"}
+        "extra": {"type": "string", "description": "A project's short / long · status, a chat's dm / group…"},
+        "source": {"type": "string", "description": "A chat's source (lark, mail, wechat, github…)."}
       },
       "required": ["kind", "id", "name", "relevance", "updated"]
+    },
+    "KBRecentParams": {
+      "description": "kb.recent (kb.read): what came in from every source in [since, until), newest first, across kinds: one feed for a curation pass. Read a chat's text with kb.day, anything else with kb.get.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "since": {"type": "string", "description": "An RFC 3339 time."},
+        "until": {"type": "string", "description": "An RFC 3339 time; none is now."},
+        "kinds": {"type": "array", "items": {"$ref": "#/$defs/KBKind"}, "description": "None is chats, docs, meetings, events and recordings."},
+        "limit": {"type": "integer", "minimum": 0, "maximum": 200, "description": "0 is 50."},
+        "offset": {"type": "integer", "minimum": 0}
+      },
+      "required": ["since"]
+    },
+    "KBRecentResult": {
+      "type": "object",
+      "properties": {
+        "items": {"type": "array", "items": {"$ref": "#/$defs/KBEntry"}},
+        "total": {"type": "integer"},
+        "next_offset": {"type": "integer", "x-go-pointer": true}
+      },
+      "required": ["items", "total"]
     },
     "KBGetParams": {
       "description": "kb.get: one entity, with its most recent messages (recent_chars, none is 12000; 0 leaves them out). Live agents are not in it.",
@@ -135,7 +190,7 @@
       "additionalProperties": false,
       "properties": {
         "id": {"type": "string", "minLength": 1},
-        "day": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+        "day": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", "description": "YYYY-MM-DD, a real date (the hub refuses 2026-13-45)."}
       },
       "required": ["id", "day"]
     },
@@ -163,7 +218,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "query": {"type": "string", "minLength": 1},
+        "query": {"type": "string", "minLength": 1, "description": "Not only spaces (the hub refuses that)."},
         "messages": {"type": "boolean", "x-go-pointer": true},
         "limit": {"type": "integer", "minimum": 0, "maximum": 200, "description": "0 is 40."}
       },
@@ -185,7 +240,7 @@
       "required": ["path", "line"]
     },
     "KBUpdateParams": {
-      "description": "kb.update: kind and id, and the fields to change (the knowledge base's update API, plus pinned, lock and the remove_* lists). tags replaces (an empty list clears); a field left out is kept. Protected fields and history limits: docs/knowledge.md.",
+      "description": "kb.update: kind and id, and the fields to change (the knowledge base's update API, plus pinned, lock and the remove_* lists). A field left out is kept; the other lists add to what is there. Protected fields and history limits: docs/knowledge.md.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -205,7 +260,7 @@
         "note": {"type": "string"},
         "importance": {"type": "string"},
         "relevance": {"type": "integer", "minimum": 0, "maximum": 100, "x-go-pointer": true},
-        "tags": {"type": "array", "items": {"type": "string"}},
+        "tags": {"type": "array", "items": {"type": "string"}, "x-go-pointer": true, "description": "Replaces the tags; an empty list clears them, none keeps them."},
         "summary": {"type": "string"},
         "log": {"type": "string", "description": "A project's: a line appended to its timeline."},
         "source": {"type": "string", "description": "Who writes the log line."},
@@ -214,14 +269,17 @@
         "people": {"type": "array", "items": {"type": "string"}},
         "dirs": {"type": "array", "items": {"type": "string"}, "description": "A project's code directories, <machine>:<path>."},
         "projects": {"type": "array", "items": {"type": "string"}},
-        "merge_into": {"type": "string"}
+        "merge_into": {"type": "string", "description": "Refused (conflict) when the user or another extension holds anything on the project folded away; no before."},
+        "evidence": {"type": "array", "maxItems": 20, "items": {"$ref": "#/$defs/KBEvidence"}, "description": "Kept as the provenance of the fields this write holds."},
+        "unlock": {"type": "array", "items": {"type": "string"}, "description": "Fields this extension holds, handed back to the built-in pipeline; unlocking pinned clears it."}
       },
       "required": ["kind", "id"]
     },
     "KBUpdateResult": {
       "type": "object",
       "properties": {
-        "id": {"type": "string"}
+        "id": {"type": "string"},
+        "before": {"type": "object", "additionalProperties": {}, "description": "The previous value of each field written (null when unset; summary is the old text), for the extension's own undo."}
       },
       "required": ["id"]
     },
