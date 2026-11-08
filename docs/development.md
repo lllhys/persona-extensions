@@ -10,6 +10,8 @@ Use the Go version the modules declare (for example [pluginkit/go.mod](../plugin
 
 Every program extension is its own Go module: a `main` package in `extensions/<id>/` with its own `go.mod` and `go.sum`, module path `github.com/nwverse/persona-extensions/extensions/<id>`. It builds, tests and packages on its own. Shared code is a module of its own that an extension pulls in with a `replace` directive: `pluginkit/` (`../../pluginkit`) and the copied SDK (`../../sdk/go`). The repository root holds no package-manager file (`go.mod`, `go.sum`, `go.work`, `package.json`, lockfiles, `node_modules`, `Cargo.toml`, `pyproject.toml`, `requirements.txt` and the like); [scripts/check-layout.py](../scripts/check-layout.py) fails when one appears.
 
+The official TypeScript SDK also owns one standalone authoring oracle, `sdk/ts/scripts/int64-oracle.go`, which its portable checks invoke explicitly with `go run <file>`. It is not an extension runtime or a discovered Go module. The layout guard recognizes only that exact SDK-owned file; other Go files outside modules, including other SDK scripts, still fail. Synchronize the oracle unchanged with the SDK rather than adding an invented module or editing the copied SDK.
+
 ```text
 extensions/<id>/           Manifest, source, tests and dependencies for one extension
   persona-extension.json   The only manifest, including the market tags

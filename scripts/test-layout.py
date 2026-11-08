@@ -77,6 +77,21 @@ class LayoutTests(unittest.TestCase):
         files = {**GOOD, 'extensions/alpha/go.mod': 'module example.com/repo\n'}
         self.assertEqual(len(self.problems(files)), 1)
 
+    def test_official_sdk_standalone_oracle(self):
+        files = {**GOOD, 'sdk/ts/scripts/int64-oracle.go': 'package main\nfunc main() {}\n'}
+        self.assertEqual(self.problems(files), [])
+        tmp, root = tree(files)
+        with tmp:
+            self.assertEqual(layout.modules(root), ['pluginkit', 'tools', 'extensions/alpha'])
+
+    def test_sdk_standalone_rule_does_not_allow_other_go(self):
+        for name in ['sdk/ts/scripts/other.go', 'sdk/ts/scripts/nested/main.go',
+                     'sdk/ts/src/int64-oracle.go', 'scripts/int64-oracle.go']:
+            with self.subTest(name=name):
+                files = {**GOOD, 'sdk/ts/scripts/int64-oracle.go': 'package main\n', name: 'package main\n'}
+                self.assertEqual(self.problems(files), [
+                    str(pathlib.PurePosixPath(name).parent) + ': Go code that belongs to no module'])
+
     def test_go_outside_every_module(self):
         files = {**GOOD, 'scripts/gen/main.go': 'package main\n'}
         self.assertEqual(self.problems(files), ['scripts/gen: Go code that belongs to no module'])
