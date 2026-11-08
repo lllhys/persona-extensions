@@ -1,0 +1,305 @@
+{
+  "dependency_branch": "fix/158-sdk-source-authoring-delivery",
+  "dependency_commit": "fe6e9d5eb4bffe40d50f604e93990615f3043e0f",
+  "canonical_manifest_sha256": "3c2149353d4103dfac007b1a814f7a7ae9f925ee316686820ef673720ea8fb03",
+  "upstream_source_commit": "54a1c467807800cef4aba7536e62ba3f5b27c634",
+  "release": false,
+  "files": [
+    {
+      "path": "sdk/VERSION",
+      "sha256": "f7199ec6d295659f1ec1cf9446ea583ad2eb5c4175742cd6157d6ae02b45938a"
+    },
+    {
+      "path": "sdk/ts/README.md",
+      "sha256": "091a818ea0938061099e5b79b59b8a29518248460f3e9ac23cf685cce7c85e6c"
+    },
+    {
+      "path": "sdk/ts/fixtures/Manifest.custom-contributions.json",
+      "sha256": "61ed686e7665b1c2c5708e56925efde8d03ecfff646f8c24bd5964e74979af9c"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamClientEnvelope.open.json",
+      "sha256": "23f2848828b00256833e9d9cf815326e676de7012ac74607d046fcc7ce0c1007"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamDelta.empty.json",
+      "sha256": "9859f3640d8fb54c6a398ba21a35b0375645b48935db2d763054d775f0ca0275"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamDelta.max-version.json",
+      "sha256": "530291f7afd03ea3d24d334daef330ceae0f34a27eaf229c2480b4804a51c451"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamDelta.operations.json",
+      "sha256": "665ec8cd682536879b74fa1ab22d5e37c0aa83b2d19979adac307253894ca596"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamEvent.array.json",
+      "sha256": "c97f01ecffa95831f7623a5be900f5cb9c9fa971def789165d9cea4abae1072e"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamEvent.empty-array.json",
+      "sha256": "1fb5a09b36462abe229e6672bedb7d678e9fa20ecb15e28ba19b06a1e29ff566"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamEvent.empty-object.json",
+      "sha256": "a16ef7539d0587b73b9064f63e84693e3f2b48d65011d39ba456159ae4dc9836"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamEvent.empty-string.json",
+      "sha256": "65f37f1da2f0769074194cbd2b18ab2c4d9f09ca3815eb0dfc2d1b16c2ce36b9"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamEvent.false.json",
+      "sha256": "fc77e8b23c5f702d31400ca611619d491ec03a41a980d996be2a714ef571b7fa"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamEvent.map.json",
+      "sha256": "a144cc77833d76e9d549da109de3d1dbd3ee610dbcee30fc2679b19445dfc667"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamEvent.null.json",
+      "sha256": "25730be51c49636b5c92239446ea9239647949af88a79c2a7de7e55ff91dc707"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamEvent.zero.json",
+      "sha256": "4fdb498d6e2a1816b8b28f37c182e3d0cd7cd3539bcf3b667eb0a2f1cf5928e8"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamRequest.close.json",
+      "sha256": "ad6cf8fbe0adcb54fb87e107d2f62798324bdff6fcf15fb2bb2f32ae5f200af7"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamRequest.event.json",
+      "sha256": "48412d6aaf4e4a2d4f4948474c347965bf9abbe322c30e206c7399e03416455f"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamRequest.open.json",
+      "sha256": "2b73bedb32d324024d2a7e61f221c1efaa46fa175463b2d68d84a4e8c010ab1c"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamRequest.resume.json",
+      "sha256": "ba92821ba842406ed77f31f0a00b09dfa26291edb33f170ebe7fb068c69d68be"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamRequest.snapshot.json",
+      "sha256": "64c3f19c73f4805e427501bead3d4bbaf51a2a96b236213e21f39e7c838d014f"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamRequest.suspend.json",
+      "sha256": "13ef8f682d5bb4eedfed8aebbfbe986df5038b64e3933637cf863e0605034d12"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamServerEnvelope.event-fence.json",
+      "sha256": "4f93aa87488c3e587fb8a2d0a1a6bf22fb9fcc64ee5d35a6ee403f2d37fe8f91"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamServerEnvelope.receipt.json",
+      "sha256": "b33ef45b6827370fc1e052fc3845b01187ee9a3226a4cd7540726a268c9e3b3d"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamServerEnvelope.snapshot.json",
+      "sha256": "6496e0a32251dcd1d55dce7ecc0d5261ba7327e9c80bb50d555149d9fcdcfe04"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamServerEnvelope.suspended.json",
+      "sha256": "24c77a238bdbe75c4a2fd20fb57d66acafbfd13301e9898969c6393718468fa3"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamSnapshot.after-operations.json",
+      "sha256": "d6ea67fedfc088882c72eb4bae235dc8b168a04a63f7a7081bb81a12eed141ab"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamSnapshot.empty.json",
+      "sha256": "d33b270662d859c9b581a39c166d25ccee355490bb0c2e74a8b2b1f22b321b0a"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamSnapshot.keyed.json",
+      "sha256": "baa30ffc8506f1b17fa48ce873720c855aeb100973a65c56ddce4ce5de7fabfd"
+    },
+    {
+      "path": "sdk/ts/fixtures/UIStreamSnapshot.required-empty.json",
+      "sha256": "40fb18bf99f1e6d0f7a9b08588bcb157c5efcf37d4a4d97271abc71679e917f1"
+    },
+    {
+      "path": "sdk/ts/package-lock.json",
+      "sha256": "90c128ee8d55752c5b0d604cad93f5412931c8664dd42a06bd2cced453e768ea"
+    },
+    {
+      "path": "sdk/ts/package.json",
+      "sha256": "749086dfa354600980a4ade077114dd737b67f9f1ac0a140987813f8587e495c"
+    },
+    {
+      "path": "sdk/ts/scripts/check-negative-types.ts",
+      "sha256": "9c45342d3ace697418b8caf9f9a1aefc8131f2d0d4313ef84dd8a97b18f728ca"
+    },
+    {
+      "path": "sdk/ts/scripts/check-portable.ts",
+      "sha256": "fcbdc41ff1d40af224968302b98fb9608d99f1ff9bd1205a1b068784aa1c5de4"
+    },
+    {
+      "path": "sdk/ts/scripts/check-source-bundle.mjs",
+      "sha256": "9cb694c252abe493efcfaf15820234ac2496a8c2c6424ef9af9f4c3425f8a804"
+    },
+    {
+      "path": "sdk/ts/scripts/int64-oracle.go",
+      "sha256": "0bd71f01dd08393c11b9ff782e4bd2d54a5e512585308db181c153e87b90b271"
+    },
+    {
+      "path": "sdk/ts/scripts/portable-exact.mjs",
+      "sha256": "e76cd8c21100a70325dc448eec4a255301749973869660a007dc7eaf739164a4"
+    },
+    {
+      "path": "sdk/ts/scripts/portable-transport.mjs",
+      "sha256": "247bf653602cd962e8c015f5ac3bf8077f2828052872337250951bee895ec2f3"
+    },
+    {
+      "path": "sdk/ts/scripts/portable-ui.mjs",
+      "sha256": "fbd8cc848c08b79532aacfd67d20752b4401dd7daf7b88864a004cc1f9907314"
+    },
+    {
+      "path": "sdk/ts/scripts/source-authoring-tests.mjs",
+      "sha256": "e777fbde21e893be3f35eed82fcccc5dbc50eb63d5bc77cf1a260be7de30f349"
+    },
+    {
+      "path": "sdk/ts/scripts/source-authoring-worker.mjs",
+      "sha256": "a87eb6499dd2f266bacbd28966a1472782d48e2f4de6837c1bba031a1414dba4"
+    },
+    {
+      "path": "sdk/ts/src/compat.test.ts",
+      "sha256": "cd6dae66ea2bb9d8d439621bed38106dde8204d613b3d59093631f80437daa56"
+    },
+    {
+      "path": "sdk/ts/src/compat.ts",
+      "sha256": "d307309e9cfc39736115288f8bf52a3cab8cde50bf0b68cb334769652afbc189"
+    },
+    {
+      "path": "sdk/ts/src/components.ts",
+      "sha256": "4a53cfdc7ae903ff24028be480dc83f082a878b94730de4974b458d81f8d6de0"
+    },
+    {
+      "path": "sdk/ts/src/exact-json.test.ts",
+      "sha256": "6fbb8135219b5aad2637c3dc68da28faabe20a2c51c54b2cc55765126e6a870f"
+    },
+    {
+      "path": "sdk/ts/src/exact-json.ts",
+      "sha256": "43a6295dd03a206f60e329b31627f9e4115b3d8e0f11c9c66ba628c6b3d7a716"
+    },
+    {
+      "path": "sdk/ts/src/hooks.ts",
+      "sha256": "417405606371d539a770ebfa6c0b178b631e7dac00d62429f12748ae28c23a86"
+    },
+    {
+      "path": "sdk/ts/src/index.test.ts",
+      "sha256": "30d2a9f3346ce14746a98691d198df4623112447f4628f72f65d67e25634e8e9"
+    },
+    {
+      "path": "sdk/ts/src/index.ts",
+      "sha256": "bbce48bbf67e4fdaeb94389ca826bd4b4cba377049fc423ad084569b2aad8009"
+    },
+    {
+      "path": "sdk/ts/src/jsx-dev-runtime.ts",
+      "sha256": "f904e7e2f82cf06568f792912e606b39abb590388e213d9104c7d8eb43c43ef4"
+    },
+    {
+      "path": "sdk/ts/src/jsx-runtime.ts",
+      "sha256": "b5677f594f8cc703fc337a475cc0afd2d70567c8b7278cbc632c671666e6d394"
+    },
+    {
+      "path": "sdk/ts/src/main.test.ts",
+      "sha256": "4248e897c299c17faced2859963a8bb4eb67fb76553a736a63f45733e7c68232"
+    },
+    {
+      "path": "sdk/ts/src/page-bridge.test.ts",
+      "sha256": "8ba52b012176ecf389ae2024954290fa47c1d6a89a2c01e052bfadf85a1e3481"
+    },
+    {
+      "path": "sdk/ts/src/page-bridge.ts",
+      "sha256": "378e94f822aebbd418d995a6f2cdc76217b8d577091aeb3d583ee67f022877d9"
+    },
+    {
+      "path": "sdk/ts/src/readiness-exact.test.ts",
+      "sha256": "8cd39c61248152aa88518aacb683df313809e40ba9936b7b6dde79bfdaf525ac"
+    },
+    {
+      "path": "sdk/ts/src/readiness-fences.test.ts",
+      "sha256": "37848587d5834956a6a7cc84deb2c9df5dd9bb5288f4763c4eabb2faed31fe15"
+    },
+    {
+      "path": "sdk/ts/src/renderer.ts",
+      "sha256": "c57d25d4dae653e489a8265b8d767b6fd65be7945ffb81d27d82682a1505f702"
+    },
+    {
+      "path": "sdk/ts/src/runtime-boundaries.test.tsx",
+      "sha256": "e9292635ef083d082b99df024e1b80cf9cb025bdaead08a8de2c292a8c6b6ad7"
+    },
+    {
+      "path": "sdk/ts/src/snapshot-readiness.test.ts",
+      "sha256": "ac8206ce4342c193bd62fe51245662ccd1f74a245470e215e88893f1e2c9104e"
+    },
+    {
+      "path": "sdk/ts/src/stream.test.ts",
+      "sha256": "ddc6c712b803b4ad491835fb52dd2b70e514630b58604c398885a870f54c2e19"
+    },
+    {
+      "path": "sdk/ts/src/test-fixtures.ts",
+      "sha256": "6c04d310478d50745f8b053a4dafa36fb3240607a20bcd3d064fd6c4175186d8"
+    },
+    {
+      "path": "sdk/ts/src/testdata/exact-program.ts",
+      "sha256": "951df79f2df4cee122b8f4a85d4922bd0e74bbde71e9134603826b3c60d8b902"
+    },
+    {
+      "path": "sdk/ts/src/testdata/int64-cases.json",
+      "sha256": "14bdc2cf3b33e48b4c6c5ff3a226c568755a1624868314a4502e45f8dc818b06"
+    },
+    {
+      "path": "sdk/ts/src/testdata/separate-page.ts",
+      "sha256": "246cadc1c756fc3319dffad4fad9ad68d7fa8fb1eb0ef4f46e7af03956fc72a2"
+    },
+    {
+      "path": "sdk/ts/src/transport.test.ts",
+      "sha256": "63663680aa2f768e07374e22b82b1c02968ae6569984532f8a43ce6206074618"
+    },
+    {
+      "path": "sdk/ts/src/ui-lifecycle.test.tsx",
+      "sha256": "badd9867def87e63947870f8a3fd07cbf4f20871be2b218182a23ee13f661150"
+    },
+    {
+      "path": "sdk/ts/src/ui.test.tsx",
+      "sha256": "360c713fc95caca7de9731bd89a96a8ea4fffd4d899f841ae5a8a14542dbe7bc"
+    },
+    {
+      "path": "sdk/ts/src/ui.ts",
+      "sha256": "ce2b69b7429396e430482ac638384da534d467ef3e9134578d83fceb343b90b1"
+    },
+    {
+      "path": "sdk/ts/src/wire.test.ts",
+      "sha256": "87ee8caf778186b8e22d4aab216f5c3e39f3684d74bbeacb7b82542eb2e80230"
+    },
+    {
+      "path": "sdk/ts/src/wire.ts",
+      "sha256": "2aa364d090ca30db9d8fc40403cdead335339849cbeb324e39c47781086c456f"
+    },
+    {
+      "path": "sdk/ts/tsconfig.json",
+      "sha256": "35e05c03cdc0c405d4107b934d374385c1609ea6ba15a18e9ccc17c00024e4f5"
+    },
+    {
+      "path": "sdk/ts/tsconfig.negative.json",
+      "sha256": "7c95b51b3321defab84af687fa9993472b31a006d3cb4eab736741d82e9d46da"
+    },
+    {
+      "path": "sdk/ts/tsconfig.ui.json",
+      "sha256": "424aba1b44acada110c25b4750530b6061f5c4cbcdc8aaf9d94c348de6bd2cb7"
+    },
+    {
+      "path": "sdk/ts/typechecks/native.tsx",
+      "sha256": "a74c56cf9b44ca08d8dee838eccd40c4df0858179211b7654b81f24948337672"
+    },
+    {
+      "path": "sdk/ts/typechecks/negative.tsx",
+      "sha256": "0b3badb790ad1421f2d69fa9d565df0b08ef9844bbcc88130c14479f0f6bd1a3"
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+package main
+
+import (
+    "encoding/json"
+    "net/http"
+    "testing"
+    "time"
+
+    "github.com/nwverse/persona/sdk/go/wire"
+)
+
+// This file is copied as a _test.go into a disposable copy of the original Go
+// extension. It does not alter or replace the protected implementation.
+func TestRound2OriginalGoCalendar(t *testing.T) {
+    valid := map[string]float64{
+        "2024-02-29T09:00:00Z": 1709197200,
+        "2000-02-29T00:00:00Z": 951782400,
+        "0000-01-01T00:00:00Z": -62167219200,
+        "9999-12-31T23:59:59.999999999Z": 253402300799.999,
+        "1969-12-31T23:59:59.999999999Z": -0.001,
+        "2026-01-01T1:00:00Z": 1767229200,
+        "2026-01-01T00:00:00,1234Z": 1767225600.123,
+        "2026-01-01T00:00:00+24:00": 1767139200,
+        "2026-01-01T00:00:00+00:60": 1767222000,
+    }
+    invalid := []string{"2026-02-30T09:00:00Z", "1900-02-29T00:00:00Z", "2026-04-31T00:00:00Z", "2026-00-01T00:00:00Z", "2026-01-00T00:00:00Z", "2026-01-01T24:00:00Z", "2026-01-01T00:60:00Z", "2026-01-01T00:00:60Z", "2026-01-01T00:00:00+25:00", "2026-01-01T00:00:00+00:61", "2026-01-01 00:00:00Z", "2026-01-01T00:00:00", "10000-01-01T00:00:00Z", "999999999999999999-01-01T00:00:00Z"}
+    timestamp := func(time string) any {
+        r := wire.ErrorReport{Breadcrumbs: []wire.ErrorBreadcrumb{{Category: "synthetic", Time: time}}}
+        ev := Event(r, Options{})
+        return ev["breadcrumbs"].(map[string]any)["values"].([]any)[0].(map[string]any)["timestamp"]
+    }
+    for time, want := range valid {
+        if got := timestamp(time); got != want { t.Errorf("%s: got %v, want %v", time, got, want) }
+    }
+    for _, time := range invalid {
+        if got := timestamp(time); got != nil { t.Errorf("invalid calendar timestamp was not omitted: %s", time) }
+    }
+    huge := "999999999999999999-01-01T00:00:00Z"
+    if Event(wire.ErrorReport{Time: huge}, Options{})["timestamp"] != huge { t.Fatal("opaque report time changed") }
+    t.Log("Go calendar oracle: 9 valid, 14 invalid, huge opaque report time unchanged")
+}
+
+func TestRound2OriginalGoIntegerTokens(t *testing.T) {
+    // Go's generated fields are int (64-bit on this runner), not float64.
+    for _, token := range []string{"1.5", "1e100", "1.0", "1e0", "9223372036854775808", "-9223372036854775809", "01"} {
+        var r wire.ErrorReport
+        if json.Unmarshal([]byte(`{"count":` + token + `}`), &r) == nil { t.Errorf("count token unexpectedly accepted: %s", token) }
+    }
+    for _, token := range []string{"9007199254740993", "9223372036854775807", "-9223372036854775808"} {
+        var r wire.ErrorReport
+        if err := json.Unmarshal([]byte(`{"count":` + token + `}`), &r); err != nil { t.Fatal(err) }
+        ev := Event(r, Options{})
+        raw, err := json.Marshal(ev["extra"].(map[string]any)["count"])
+        if err != nil || string(raw) != token { t.Errorf("valid count lost precision: %s", token) }
+    }
+    for _, token := range []string{"1.0", "1e0"} {
+        var r wire.ErrorReport
+        if json.Unmarshal([]byte(`{"exceptions":[{"frames":[{"line":` + token + `}]}]}`), &r) == nil { t.Errorf("frame token unexpectedly accepted: %s", token) }
+    }
+    t.Log("Go integer oracle: lexical float forms rejected, full int64 boundary preserved")
+}
+
+func TestRound2OriginalGoUnknownPlatforms(t *testing.T) {
+    for _, source := range []string{"__proto__", "constructor", "toString", "hasOwnProperty", "unknown"} {
+        if Event(wire.ErrorReport{Source: source}, Options{})["platform"] != "" { t.Fatal("unknown platform was not empty") }
+    }
+    t.Log("Go source oracle: 5 unknown names return empty platform")
+}
+
+func TestOriginalGoDurationAndDSNPaths(t *testing.T) {
+    now := time.Date(2026, 11, 6, 9, 0, 0, 0, time.UTC)
+    for _, header := range []string{"X-Sentry-Rate-Limits", "Retry-After"} {
+        value := "10000000000"
+        status := 429
+        if header == "X-Sentry-Rate-Limits" { value += ":error"; status = 200 }
+        until, ok := limitedUntil(&http.Response{StatusCode:status, Header:http.Header{header:[]string{value}}}, now)
+        if !ok || until.UnixMilli() != now.UnixMilli()-8446744073710 { t.Fatal("Go signed duration overflow changed") }
+    }
+    dsn, err := ParseDSN("https://key@errors.example.com/prefix/../42", false)
+    if err != nil || dsn.EnvelopeURL() != "https://errors.example.com/prefix/../api/42/envelope/" { t.Fatal("Go preserves noncanonical DSN path") }
+    t.Log("Go original duration/path oracle: int64 duration wraps; DSN dot segments are preserved")
+}

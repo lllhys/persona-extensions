@@ -1,0 +1,382 @@
+[
+  {
+    "kind": "delivery",
+    "raw": "null"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "[]"
+  },
+  {
+    "kind": "delivery",
+    "raw": "true"
+  },
+  {
+    "kind": "delivery",
+    "raw": "1"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":null}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[null,{}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"contribution\":null,\"reports\":[]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":2,\"COUNT\":null}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"REPORTS\":[{\"Source\":\"hub\",\"\u212aind\":\"log\",\"\u017fource\":\"web\",\"id\":\"synthetic\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"id\":\"first\",\"count\":3},{\"id\":\"second\",\"count\":7}],\"reports\":[{}],\"reports\":[{},{}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"id\":\"old\"}],\"reports\":[],\"reports\":[{}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"id\":\"old\"}],\"reports\":null,\"reports\":[{}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"tags\":{\"x\":\"first\"},\"tags\":{\"x\":null,\"X\":\"upper\",\"__proto__\":\"fixture\"}}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"tags\":{\"x\":1,\"x\":\"later\"}}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"type\":\"Outer\",\"frames\":[{\"function\":\"f\",\"line\":2}]}],\"exceptions\":[{\"frames\":[{\"column\":3}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"unknown\":1e999,\"user\":{\"email\":\"me@example.com\"}}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":0}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":0}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":0}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":-0}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":-0}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":-0}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":-1}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":-1}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":-1}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":1.0}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":1.0}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":1.0}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":1e0}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":1e0}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":1e0}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":-1.0}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":-1.0}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":-1.0}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":-1e0}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":-1e0}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":-1e0}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":1.5}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":1.5}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":1.5}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":1e999}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":1e999}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":1e999}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":9007199254740993}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":9007199254740993}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":9007199254740993}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":9223372036854775807}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":9223372036854775807}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":9223372036854775807}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":-9223372036854775808}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":-9223372036854775808}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":-9223372036854775808}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":9223372036854775808}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":9223372036854775808}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":9223372036854775808}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":-9223372036854775809}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":-9223372036854775809}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":-9223372036854775809}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":null}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":null}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":null}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":true}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":true}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":true}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"count\":\"1\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"line\":\"1\"}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"exceptions\":[{\"frames\":[{\"column\":\"1\"}]}]}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"id\":1,\"id\":\"later\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"source\":1,\"source\":\"later\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"kind\":1,\"kind\":\"later\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"level\":1,\"level\":\"later\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"time\":1,\"time\":\"later\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"release\":1,\"release\":\"later\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"build\":1,\"build\":\"later\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"commit\":1,\"commit\":\"later\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"os\":1,\"os\":\"later\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"os_version\":1,\"os_version\":\"later\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"device_model\":1,\"device_model\":\"later\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"message\":1,\"message\":\"later\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"fingerprint\":1,\"fingerprint\":\"later\"}]}"
+  },
+  {
+    "kind": "delivery",
+    "raw": "{\"reports\":[{\"received_at\":1,\"received_at\":\"later\"}]}"
+  },
+  {
+    "kind": "config",
+    "raw": "null"
+  },
+  {
+    "kind": "config",
+    "raw": "{}"
+  },
+  {
+    "kind": "config",
+    "raw": "[]"
+  },
+  {
+    "kind": "config",
+    "raw": "true"
+  },
+  {
+    "kind": "config",
+    "raw": "{\"environment\":null,\"sample_rate\":null,\"include_log_lines\":null,\"allow_http\":null}"
+  },
+  {
+    "kind": "config",
+    "raw": "{\"environment\":\"staging\",\"ENVIRONMENT\":null}"
+  },
+  {
+    "kind": "config",
+    "raw": "{\"sample_rate\":-1}"
+  },
+  {
+    "kind": "config",
+    "raw": "{\"sample_rate\":2}"
+  },
+  {
+    "kind": "config",
+    "raw": "{\"sample_rate\":0.5,\"sample_rate\":null}"
+  },
+  {
+    "kind": "config",
+    "raw": "{\"include_log_lines\":false,\"include_log_lines\":null}"
+  },
+  {
+    "kind": "config",
+    "raw": "{\"sample_rate\":1e999}"
+  },
+  {
+    "kind": "config",
+    "raw": "{\"include_log_lines\":\"bad\",\"include_log_lines\":true}"
+  },
+  {
+    "kind": "config",
+    "raw": "{\"ALLOW_HTTP\":true,\"Environment\":\"fixture\"}"
+  }
+]

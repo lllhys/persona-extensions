@@ -1,0 +1,52 @@
+package main
+
+import (
+    "encoding/json"
+    "os"
+    "testing"
+
+    "github.com/nwverse/persona/sdk/go/wire"
+)
+
+// Test-only oracle: calls the unchanged Go decoder, Event and configuration clamps.
+func TestTypedSourceOracle(t *testing.T) {
+    var cases []struct { Kind, Raw string }
+    raw, err := os.ReadFile("typed-cases.json")
+    if err != nil { t.Fatal(err) }
+    if err := json.Unmarshal(raw, &cases); err != nil { t.Fatal(err) }
+    type result struct {
+        Kind string `json:"kind"`
+        Raw string `json:"raw"`
+        OK bool `json:"ok"`
+        Events []string `json:"events"`
+        Config map[string]any `json:"config,omitempty"`
+    }
+    results := make([]result, 0, len(cases))
+    for _, c := range cases {
+        out := result{Kind:c.Kind, Raw:c.Raw, Events:[]string{}}
+        if c.Kind == "config" {
+            var cfg Config
+            out.OK = json.Unmarshal([]byte(c.Raw), &cfg) == nil
+            if out.OK {
+                app := newApp(func(string, ...any) {})
+                app.configure(DSN{Host:"errors.example.com"}, cfg)
+                out.Config = map[string]any{"environment":app.opts.Environment, "sample":app.sample, "logs":app.logs, "allow_http":cfg.AllowHTTP}
+            }
+        } else {
+            var d wire.ErrorReportsDeliver
+            out.OK = json.Unmarshal([]byte(c.Raw), &d) == nil
+            if out.OK {
+                for _, r := range d.Reports {
+                    bytes, err := json.Marshal(Event(r, Options{Environment:"production", Client:"persona-sentry/0.1.2"}))
+                    if err != nil { t.Fatal(err) }
+                    out.Events = append(out.Events, string(bytes))
+                }
+            }
+        }
+        results = append(results, out)
+    }
+    bytes, err := json.Marshal(results)
+    if err != nil { t.Fatal(err) }
+    if err := os.WriteFile("typed-oracle.json", bytes, 0600); err != nil { t.Fatal(err) }
+    t.Logf("unchanged Go typed oracle: %d cases", len(results))
+}
