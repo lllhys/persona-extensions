@@ -139,5 +139,8 @@
   "legacyNotice": "旧的单条 CI 通知已改为按分支合并",
   "ignoredCI": "此分支的 CI 已排除",
   "ciDisabled": "CI 提醒已关闭",
-  "repoMuted": "仓库已静音"
+  "repoMuted": "仓库已静音",
+  "truncated": "正在显示文件的一部分",
+  "logErrors": "日志中的错误",
+  "logLocation": "出错位置"
 }

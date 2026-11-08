@@ -14,7 +14,7 @@ export interface Check { id: Integer; name: string; status: string; conclusion?:
 export interface Repository { full_name: string; name: string; html_url: string; description?: string; default_branch: string; owner: User; private?: boolean }
 export interface Notification { id: string; reason: string; updated_at: string; subject: { title: string; url: string; type: string }; repository: { full_name: string; html_url: string } }
 export interface Search<T> { total_count: number; items: T[]; incomplete_results?: boolean }
-export interface PageState { authEpoch?: number; dp?: number; fp?: number; v?: string; t?: string; q?: string; f?: string; r?: string; n?: Integer; ref?: string; p?: string; pg?: number; o?: string; pr?: boolean; id?: Integer; src?: boolean; w?: string; b?: string; e?: string; l?: number; s?: string; pv?: boolean; head?: string; start?: number }
+export interface PageState { cp?: number; lp?: number; authEpoch?: number; dp?: number; fp?: number; v?: string; t?: string; q?: string; f?: string; r?: string; n?: Integer; ref?: string; p?: string; pg?: number; o?: string; pr?: boolean; id?: Integer; src?: boolean; w?: string; b?: string; e?: string; l?: number; s?: string; pv?: boolean; head?: string; start?: number }
 export type Thing = wire.ConnectorInboxThing;
 export type Batch = wire.ConnectorChatBatch;
 export function validRepo(repo: string): boolean { return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) && repo.split("/").every(p => p !== "." && p !== ".."); }

@@ -139,5 +139,8 @@
   "legacyNotice": "古い個別 CI 通知はブランチ通知に統合済み",
   "ignoredCI": "このブランチの CI は除外済み",
   "ciDisabled": "CI 通知は無効です",
-  "repoMuted": "リポジトリはミュート済み"
+  "repoMuted": "リポジトリはミュート済み",
+  "truncated": "ファイルの一部を表示中",
+  "logErrors": "ログのエラー",
+  "logLocation": "エラーの位置"
 }

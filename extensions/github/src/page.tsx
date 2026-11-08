@@ -5,6 +5,7 @@ import { translations, errorText } from "./localization.ts";
 import { clipBytes, repoOf, type Comment, type Issue, type PageState, type Pull, type Repository } from "./model.ts";
 import { patchPages, keyFor, type Loaded } from "./page-model.ts";
 import { checkState } from "./thread.ts";
+import { contentPages, errorLines, logPages, pageIndex } from "./content-pages.ts";
 export type ActionFactory = (id: string, options?: ActionOptions) => NativeAction | CallbackAction;
 export interface PageProps { state: PageState; loaded: Loaded; locale?: string; uiVersion?: number; action: ActionFactory }
 export function mergeLabel(p: Pull, locale?: string): string {
@@ -36,9 +37,14 @@ export function page(props: PageProps): Node {
   </>;
   else if (data.kind === "file") {
     const markdown = /\.(?:md|markdown)$/i.test(s.p ?? "") && !s.src;
+    const pages = contentPages(data.text, version >= 4 ? 2000 : 400), part = pageIndex(s.cp, pages.length), shown = pages[part]!;
+    const truncated = pages.length > 1, next = part + 1 < pages.length ? a("source_page:" + (part + 1)) : undefined;
     body = <>
       {version >= 4 ? <Breadcrumb key="file-path" crumbs={(s.p ?? "").split("/").map((name, i, parts) => ({ title: name, action: i < parts.length - 1 ? a("directory:" + parts.slice(0, i + 1).join("/")) : undefined }))} /> : null}
-      {markdown && version >= 3 ? <Markdown key="file-markdown" text={text(data.text, 100000)} /> : version >= 4 ? <Code key={keyFor("code", s.r + ":" + s.p)} path={s.p} text={text(data.text, 100000)} line_url={`https://github.com/${data.repo ?? s.r}/blob/${data.ref || s.ref || "HEAD"}/${s.p}#L{start}-L{end}`} /> : <Text key="file" text={text(data.text, 100000)} style="code" />}
+      {markdown && version >= 3 ? <Markdown key="file-markdown" text={shown.text} /> : version >= 4 ? <Code key={keyFor("code", s.r + ":" + s.p)} path={s.p} text={shown.text} start_line={shown.startLine} truncated={truncated} load={next} line_url={`https://github.com/${data.repo ?? s.r}/blob/${data.ref || s.ref || "HEAD"}/${s.p}#L{start}-L{end}`} /> : <Text key="file" text={shown.text} style="code" />}
+      {truncated ? <Text key="source-page" text={`${t.truncated} · ${part + 1} / ${pages.length}`} style="secondary" /> : null}
+      {part > 0 ? <Button key="source-previous" title={t.previous} action={a("source_page:" + (part - 1))} /> : null}
+      {next ? <Button key="source-next" title={t.more} action={next} /> : null}
       {/\.(?:md|markdown)$/i.test(s.p ?? "") ? <Button key="raw" title={s.src ? t.preview : t.raw} action={a("src")} /> : null}
       <Link key="file-web" title={t.openWeb} url={`https://github.com/${data.repo ?? s.r}/blob/${data.ref || s.ref || "HEAD"}/${s.p}`} />
     </>;
@@ -107,17 +113,26 @@ export function page(props: PageProps): Node {
       </> : null}
       <Link key="thread-web" title={t.openWeb} url={issue.html_url} />
     </>;
-  } else if (data.kind === "check") body = <>
+  } else if (data.kind === "check") {
+    const { pages, focus } = logPages(data.log), part = pageIndex(s.lp, pages.length, focus), shown = pages[part], errors = errorLines(data.log);
+    body = <>
     <Text key="check-summary" text={`${data.check.name}: ${data.check.conclusion || data.check.status}\n${text(data.check.output?.title, 2000)}`} />
     {diagnostics(data.diagnostics)}
+    {errors ? <><Text key="log-errors-title" text={t.logErrors} /><Text key="log-errors" text={text(errors, 100000)} style="code" /></> : null}
     {(data.annotations ?? []).slice(0, 100).map((annotation, i) => <><Row key={`annotation-${i}`} title={text(annotation.title || annotation.message, 1000)} subtitle={`${annotation.path}:${annotation.start_line}`} badge={{ text: annotation.annotation_level }} /><Text key={`annotation-message-${i}`} text={text(annotation.message, 2000)} /></>)}
     {(data.steps ?? []).map(step => <Row key={`step-${step.number}`} title={`${step.number}. ${step.name}`} value={step.conclusion || step.status} />)}
-    {data.log ? <Text key="log" text={text(data.log.slice(-100000), 100000)} style="code" /> : null}
+    {data.log && shown ? <>
+      <Text key="log" text={shown.text} style="code" />
+      {pages.length > 1 ? <Text key="log-page" text={`${t.log} · ${part + 1} / ${pages.length}`} style="secondary" /> : null}
+      {part > 0 ? <Button key="log-previous" title={t.previous} action={a("log_page:" + (part - 1))} /> : null}
+      {part + 1 < pages.length ? <Button key="log-next" title={t.next} action={a("log_page:" + (part + 1))} /> : null}
+      {part !== focus ? <Button key="log-location" title={t.logLocation} action={a("log_page:" + focus)} /> : null}
+    </> : null}
     {data.check.output?.summary ? version >= 3 ? <Markdown key="summary" text={text(data.check.output.summary, 12000)} /> : <Text key="summary" text={text(data.check.output.summary, 12000)} /> : null}
     {data.check.app?.slug === "github-actions" && checkState(data.check) === "failure" ? <Button key="rerun" title={t.rerun} action={a("rerun", { confirm: t.rerunConfirm, values: { id: String(s.id) } })} /> : null}
     {data.check.html_url || data.check.details_url ? <Link key="check-web" title={t.openWeb} url={(data.check.html_url || data.check.details_url)!} /> : null}
   </>;
-  else body = <>
+  } else body = <>
     <Text key="write-target" text={`${s.w}: ${s.r}#${s.n}${s.p ? " " + s.p + ":" + s.l : ""}`} />
     {s.pv ? <>{version >= 3 ? <Markdown key="preview" text={s.b ?? ""} /> : <Text key="preview" text={s.b ?? ""} />}<Text key="write-choice" text={s.e ?? ""} /><Button key="send" title={t.send} action={a("send", { confirm: t.confirm })} /><Button key="edit" title={t.raw} action={a("edit_preview")} /></> : <><Field key="write-body" name="body" label={t.body} kind="multiline" value={s.b ?? ""} />{["review", "submit_review", "merge"].includes(s.w ?? "") ? <Field key="event" name="event" label={s.w === "merge" ? t.merge : t.reviewComment} kind="choice" value={s.e} choices={(s.w === "merge" ? ["merge", "squash", "rebase"] : ["COMMENT", "APPROVE", "REQUEST_CHANGES"]).map(value => ({ value, title: value }))} /> : null}<Button key="preview" title={t.preview} action={a("preview", { submit: true })} /></>}
     <Button key="cancel" title={t.cancel} action={a("cancel")} />

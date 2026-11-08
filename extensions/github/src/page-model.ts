@@ -13,7 +13,7 @@ export function readState(raw?: unknown): PageState {
   const state: PageState = {};
   for (const name of ["v", "t", "q", "f", "r", "ref", "p", "o", "w", "b", "e", "s", "head"] as const) if (typeof input[name] === "string") state[name] = input[name].slice(0, name === "b" ? 8000 : 2000);
   for (const name of ["n", "id"] as const) if (isInteger(input[name]) && input[name] >= 0) state[name] = input[name];
-  for (const name of ["pg", "l", "start", "dp", "fp", "authEpoch"] as const) if (typeof input[name] === "number" && Number.isSafeInteger(input[name]) && input[name] >= 0) state[name] = input[name];
+  for (const name of ["pg", "l", "start", "dp", "fp", "cp", "lp", "authEpoch"] as const) if (typeof input[name] === "number" && Number.isSafeInteger(input[name]) && input[name] >= 0) state[name] = input[name];
   for (const name of ["pr", "src", "pv"] as const) if (typeof input[name] === "boolean") state[name] = input[name];
   state.pg = Math.max(1, Math.min(state.pg ?? 1, 10)); return state;
 }
@@ -30,8 +30,9 @@ export function transition(state: PageState, action: string, values: Record<stri
     case "src": return { ...state, src: !state.src };
     case "edit_preview": return { ...state, pv: false, o: undefined };
     case "directory": return { ...state, v: "repo", n: undefined, p: values.path ?? arg, t: "code" };
-    case "source": return { ...state, v: "source", p: arg || values.path };
-    case "file": return { ...state, v: values.kind === "dir" ? "repo" : "file", p: values.path ?? arg };
+    case "source_page": case "log_page": { const page = Number(arg); return Number.isSafeInteger(page) && page >= 0 ? { ...state, [kind === "source_page" ? "cp" : "lp"]: page } : state; }
+    case "source": return { ...state, v: "source", p: arg || values.path, cp: 0 };
+    case "file": return { ...state, v: values.kind === "dir" ? "repo" : "file", p: values.path ?? arg, cp: 0 };
     case "branch": return { ...state, v: "repo", t: "code", ref: arg || values.ref, p: "" };
     case "load_diff": return { ...state, o: values.path ?? arg };
     case "diff": return { ...state, v: "diff", p: arg || values.path, dp: 0 };
@@ -39,7 +40,7 @@ export function transition(state: PageState, action: string, values: Record<stri
     case "diff_previous": return { ...state, dp: Math.max(0, (state.dp ?? 0) - 1) };
     case "files_next": return { ...state, fp: (state.fp ?? 0) + 1, o: undefined };
     case "files_previous": return { ...state, fp: Math.max(0, (state.fp ?? 0) - 1), o: undefined };
-    case "check": return { ...state, v: "check", id: decimal(arg) };
+    case "check": return { ...state, v: "check", id: decimal(arg), lp: undefined };
     case "edit": return { ...state, v: "write", w: arg, b: values.body ?? "", e: values.event ?? "COMMENT", p: values.path ?? state.p, l: Number(values.line ?? 0), start: Number(values.start_line ?? 0), s: values.side ?? "new", id: decimal(values.id ?? "0"), pv: false, head: ["line", "draft"].includes(arg) ? state.head : undefined };
     case "cancel": return { r: state.r, n: state.n, t: "discussion", pg: 1 };
     case "back": return {};
@@ -50,9 +51,9 @@ export async function loadPage(service: GitHubService, state: PageState, signal?
   try {
     if (state.v === "write") return { kind: "write" };
     if (state.v === "source") {
-      const pull = await service.pull(state.r!, state.n!, signal), content = await service.content(pull.head.repo?.full_name ?? state.r!, state.p!, pull.head.sha, signal);
+      const pull = await service.pull(state.r!, state.n!, signal), revision = state.ref || pull.head.sha, content = await service.content(pull.head.repo?.full_name ?? state.r!, state.p!, revision, signal);
       if (Array.isArray(content)) throw new GitHubError("Expected file source", "invalid_params");
-      return { kind: "file", text: service.decodeFile(content), sha: pull.head.sha, repo: pull.head.repo?.full_name ?? state.r, ref: pull.head.sha };
+      return { kind: "file", text: service.decodeFile(content), sha: revision, repo: pull.head.repo?.full_name ?? state.r, ref: revision };
     }
     if (state.v === "file") { const c = await service.content(state.r!, state.p!, state.ref, signal); if (Array.isArray(c)) throw new GitHubError("Expected file", "invalid_params"); return { kind: "file", text: service.decodeFile(c), sha: c.sha }; }
     if (state.v === "repo") {

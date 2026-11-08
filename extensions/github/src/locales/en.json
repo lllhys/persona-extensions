@@ -139,5 +139,8 @@
   "legacyNotice": "Legacy per-notification CI entries are superseded by branch entries",
   "ignoredCI": "CI for this branch is excluded",
   "ciDisabled": "CI notifications are disabled",
-  "repoMuted": "Repository is muted"
+  "repoMuted": "Repository is muted",
+  "truncated": "Showing part of this file",
+  "logErrors": "Errors from the log",
+  "logLocation": "Error location"
 }

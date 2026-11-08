@@ -51,7 +51,9 @@ export function Root(options: RootOptions): Node {
   const [result, setResult] = useState<{ identity: string; loaded: Loaded } | undefined>(undefined), [failure, setFailure] = useState<unknown>(undefined);
   const epoch = options.service.client.epoch;
   useEffect(() => options.service.client.onAuthenticationChange(() => { setResult(undefined); setFailure(undefined); setState({}); setRevision(r => r + 1); }), [options.service]);
-  const identity = stringify(state) + ":" + revision + ":" + epoch;
+  // Content-window navigation reuses the already loaded revision, without another request.
+  const { cp: _sourcePage, lp: _logPage, ...requestState } = state;
+  const identity = stringify(requestState) + ":" + revision + ":" + epoch;
   useLoadEffect(async signal => {
     const loaded = await loadPage(options.service, state, signal, options.locale);
     if (!signal.aborted) setResult(previous => previous?.identity === identity && stringify(previous.loaded) === stringify(loaded) ? previous : { identity, loaded });
@@ -69,7 +71,7 @@ export function Root(options: RootOptions): Node {
         const navigation = id === "file" && loaded.kind === "repo" ? { ...values, kind: String(loaded.items.find(i => i.path === values.path)?.type ?? "file") } : values;
         const editingDiff = ["edit:line", "edit:draft"].includes(id);
         if (editingDiff && (loaded.kind !== "detail" || !loaded.pull || !loaded.files.length)) throw new GitHubError("Open the diff before selecting comment lines", "invalid_params");
-        const drawnState = editingDiff && loaded.kind === "detail" ? { ...state, head: loaded.pull!.head.sha, authEpoch: epoch } : state;
+        const drawnState = editingDiff && loaded.kind === "detail" ? { ...state, head: loaded.pull!.head.sha, authEpoch: epoch } : id.startsWith("source:") && loaded.kind === "detail" && loaded.pull ? { ...state, ref: loaded.pull.head.sha } : state;
         setState(transition(drawnState, id, navigation));
       }
     } catch (error) { context.signal.throwIfAborted(); setFailure(error); }

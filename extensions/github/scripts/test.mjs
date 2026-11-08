@@ -10,7 +10,7 @@ try { for (const jsx of ["react-jsx", "react-jsxdev"]) { const invalid = run(pro
 console.log("PASS: valid JSX accepted and invalid JSX rejected in both production and development modes");
 const packageBuild = run(process.execPath, ["scripts/build-source.mjs"]); if (packageBuild.status !== 0) throw new Error(packageBuild.stdout + packageBuild.stderr); console.log(packageBuild.stdout.trim());
 await mkdir(new URL("../.test-dist/", import.meta.url), { recursive: true });
-const suites = ["parity", "program", "boundaries", "regressions", "round2", "round3", "exact"];
+const suites = ["parity", "program", "boundaries", "regressions", "round2", "round3", "exact", "ui-parity"];
 await build({ absWorkingDir: dir, entryPoints: suites.map(name => `tests/${name}.test.tsx`), bundle: true, platform: "node", format: "esm", target: "es2022", jsx: "automatic", jsxImportSource: "@persona/extension", outdir: ".test-dist", outExtension: { ".js": ".mjs" } });
 const bun = process.argv.includes("--bun"), result = run(bun ? "bun" : process.execPath, [bun ? "test" : "--test", ...suites.map(name => `./.test-dist/${name}.test.mjs`)], 90_000);
 console.log(result.stdout); if (result.stderr) console.error(result.stderr);
