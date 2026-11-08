@@ -1,4 +1,7 @@
-// Persona extension SDK for TypeScript (docs/extensions.md "Writing an extension: SDK, templates and CLI"): an extension program's side of
+import { extensionEnv, hubEnv } from './compat.js';
+import { ExactJSON } from './exact-json.ts';
+export { ExactJSON, JSONIntegerError } from './exact-json.ts';
+// Persona extension SDK for TypeScript (docs/extensions/extensions.md "Writing an extension: SDK, templates and CLI"): an extension program's side of
 // the process protocol, for Bun. Build the program with `bun build --compile` into one executable per platform:
 // the package holds only that, and the hub needs no runtime.
 //
@@ -38,6 +41,27 @@ export const unsupported = (why: string) => new ExtError(why, "unsupported");
 /** Answers the calls of one namespace: method is without the namespace ("status" for connector.status). */
 export type Handler = (method: string, params: any) => unknown | Promise<unknown>;
 
+/** Original request params, before Number rounding. Missing params and JSON null stay distinct.
+ * This view covers inbound namespace RPC requests only, not replies, events or serialization. */
+export interface ExactCall {
+  readonly rawParams: string | undefined;
+  readonly params: ExactJSON | undefined;
+}
+
+/** Events still use legacy params and have no call metadata. */
+export type ExactHandler = (method: string, params: any, call: ExactCall | undefined) => unknown | Promise<unknown>;
+const EXACT_PARAMS = Symbol.for("@persona/extension.exactParams");
+type OptInHandler = Handler & { [EXACT_PARAMS]?: true };
+
+/** Explicitly opt one namespace into original JSON request params. The second argument
+ * remains legacy JSON.parse data. Lexical int64 errors become public invalid_params errors. */
+export function withExactParams(handler: ExactHandler): Handler {
+  const wrapped = (method: string, params: any, call?: ExactCall) => handler(method, params, call);
+  Object.defineProperty(wrapped, EXACT_PARAMS, { value: true });
+  return wrapped;
+}
+
+
 /** One ui contribution: what it draws, and what its buttons do. */
 export interface Page {
   render(req: UIRequest): wire.View | Promise<wire.View>;
@@ -48,6 +72,10 @@ export interface Page {
 /** A ui.render or ui.action, and the hub to call while drawing. */
 export interface UIRequest extends wire.UIParams {
   hub: Hub;
+  /** Derived by the host page lifecycle, never inferred from ui_version. Absent on ordinary snapshots. */
+  transport?: "snapshot" | "stream";
+  /** Mounted root factory lifetime; disposal or suspension aborts pending preparation. */
+  signal?: AbortSignal;
 }
 
 /** A shortcut.run: its params' values (strings), for whom; and the hub to call while running. */
@@ -74,7 +102,7 @@ export interface Program {
   namespaces?: Record<string, Handler>;
   /** Pages by ui contribution id (widgets too: placement widget, drawn per family; see isWidget). */
   ui?: Record<string, Page | ComponentPage>;
-  /** Shortcuts by contribution id: shortcut.run goes to them (docs/extensions.md "System-level places"). */
+  /** Shortcuts by contribution id: shortcut.run goes to them (docs/extensions/extensions.md "System-level places"). */
   shortcuts?: Record<string, (req: ShortcutRequest) => wire.ShortcutResult | void | Promise<wire.ShortcutResult | void>>;
   /** If set, served on the hub's socket (runtime.http in the manifest) by main(). */
   fetch?(req: Request): Response | Promise<Response>;
@@ -218,11 +246,14 @@ export function connect(prog: Program, write: Write) {
   let initialized = false;
   let contributes: Record<string, unknown> | undefined;
   const inflight = new Set<Promise<unknown>>();
+  // Only negotiated page lifecycle calls are cancelable; services retain legacy semantics.
+  const pageCalls = new Map<string, AbortController>();
+  const cancelablePage = (method: string) => ["ui.page.mount", "ui.page.event", "ui.page.resume"].includes(method);
   let initializing: Promise<void> | undefined;
   let accepting = true;
   let shuttingDown: Promise<unknown[]> | undefined;
 
-  async function request(method: string, params: any): Promise<unknown> {
+  async function request(method: string, params: any, rawFrame: string, signal?: AbortSignal): Promise<unknown> {
     if (method === "initialize") {
       if (params?.protocol !== PROTOCOL) {
         throw new ExtError(`protocol ${params?.protocol}, not ${PROTOCOL}`, "wrong_protocol");
@@ -241,7 +272,9 @@ export function connect(prog: Program, write: Write) {
           throw e;
         }
       }
-      return { protocol: PROTOCOL, id: prog.id, version: prog.version, ...(contributes ? { contributes } : {}) };
+      return { protocol: PROTOCOL, id: prog.id, version: prog.version,
+        ...(Object.values(prog.ui ?? {}).some(isComponentPage) ? { ui_page_cancellation: 1 } : {}),
+        ...(contributes ? { contributes } : {}) };
     }
     if (method === "manifest") {
       if (prog.manifest === undefined) throw new ExtError("no manifest here: it is in the package", "unknown_method");
@@ -252,13 +285,19 @@ export function connect(prog: Program, write: Write) {
     if (!initialized) throw new ExtError("not initialized", "not_initialized");
     if (method === "ping") return {};
     if (method === "ui.page.supported") return { contributions: Object.entries(prog.ui ?? {}).filter(([, page]) => isComponentPage(page)).map(([id]) => id) };
-    if (method.startsWith("ui.page.")) return pageBridge.call(method.slice(8), params ?? {});
+    if (method.startsWith("ui.page.")) return pageBridge.call(method.slice(8), params ?? {}, signal);
     const dot = method.indexOf(".");
     if (dot < 0) throw unknownMethod(method);
     const ns = method.slice(0, dot);
     const rest = method.slice(dot + 1);
     const h = prog.namespaces?.[ns];
-    if (h) return h(rest, params ?? {});
+    if (h) {
+      if ((h as OptInHandler)[EXACT_PARAMS] === true) {
+        const exact = ExactJSON.parse(rawFrame).field("params");
+        return (h as ExactHandler)(rest, params ?? {}, Object.freeze({ rawParams: exact?.raw, params: exact }));
+      }
+      return h(rest, params ?? {});
+    }
     if (ns === "ui" && prog.ui) return ui(rest, params ?? {});
     if (ns === "shortcut" && prog.shortcuts) {
       if (rest !== "run") throw unknownMethod(method);
@@ -343,14 +382,21 @@ export function connect(prog: Program, write: Write) {
     }
     if (f.method) {
       const id = f.id;
+      if (id && pageCalls.has(id)) { write(answer(id, { error: { message: "duplicate active page request ID" } })); return; }
+      const controller = id && cancelablePage(f.method) ? new AbortController() : undefined;
+      if (controller && pageCalls.size >= 256) { write(answer(id, { error: { message: "page request quota" } })); return; }
+      if (id && controller) pageCalls.set(id, controller);
       const done = Promise.resolve()
-        .then(() => request(f.method!, f.params))
+        .then(() => request(f.method!, f.params, text, controller?.signal))
         .then(
           (result) => write(answer(id, { result: result ?? {} })),
           (err) => write(answer(id, { error: wireError(err) })),
         );
       inflight.add(done);
-      done.finally(() => inflight.delete(done));
+      done.finally(() => { inflight.delete(done); if (id && pageCalls.get(id) === controller) pageCalls.delete(id); });
+    } else if (f.event === "rpc.cancel") {
+      const id = (f.params as { id?: unknown } | undefined)?.id;
+      if (typeof id === "string") pageCalls.get(id)?.abort();
     } else if (f.event) {
       const dot = f.event.indexOf(".");
       const h = initialized && dot > 0 ? prog.namespaces?.[f.event.slice(0, dot)] : undefined;
@@ -385,7 +431,7 @@ export function connect(prog: Program, write: Write) {
 /** What the hub gives a program in its environment, under the names of any hub. */
 export function env() {
   const get = (name: string) =>
-    process.env[`PERSONA_EXTENSION_${name}`] || process.env[`PERSONA_PLUGIN_${name}`] || "";
+    extensionEnv(name);
   const json = (s: string) => {
     try {
       return s ? JSON.parse(s) : undefined;
@@ -401,8 +447,8 @@ export function env() {
     /** For a program that does not speak the protocol (rpc: none); otherwise initialize has it. */
     config: json(get("CONFIG")),
     secrets: json(get("SECRETS")) as Record<string, string> | undefined,
-    hubURL: process.env.PERSONA_HUB_URL || "",
-    hubToken: process.env.PERSONA_HUB_TOKEN || "",
+    hubURL: hubEnv("URL"),
+    hubToken: hubEnv("TOKEN"),
   };
 }
 
