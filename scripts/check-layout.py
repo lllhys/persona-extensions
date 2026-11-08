@@ -37,6 +37,10 @@ FORBIDDEN_PATTERNS = [re.compile(r"requirements.*\.txt"), re.compile(r".*\.cspro
 
 SKIP_DIRS = {".git", "dist", "node_modules", "testdata"}
 
+# The official SDK runs this standard-library oracle explicitly with `go run <file>`.
+# It is authoring tooling, not an extension package; no other orphan Go file is allowed.
+SDK_STANDALONE_GO = {"sdk/ts/scripts/int64-oracle.go"}
+
 # The first bytes of a compiled program: ELF (linux), Mach-O 64- and 32-bit, and Mach-O universal (darwin). A
 # `go build` inside an extension's directory leaves one there; the release builds every program from source
 # (scripts/package.sh), so one in the repository is only weight in every clone.
@@ -121,10 +125,12 @@ def problems(root):
         if compiled(os.path.join(root, name)):
             out.append(f"{name}: a compiled program; the release builds it from source, "
                        "so it does not go in the repository (go build -o elsewhere, or delete it)")
-    # Go code outside a module: nothing at the root resolves it any more.
+    # Go code outside a module: only the official standalone SDK oracle has an explicit file runner.
     for top, dirs, files in os.walk(root):
         dirs[:] = [x for x in dirs if x not in SKIP_DIRS]
-        if not any(f.endswith(".go") for f in files):
+        go_files = [f for f in files if f.endswith(".go")
+                    and os.path.relpath(os.path.join(top, f), root).replace(os.sep, "/") not in SDK_STANDALONE_GO]
+        if not go_files:
             continue
         d = top
         while d != root and not os.path.isfile(os.path.join(d, "go.mod")):
