@@ -161,6 +161,32 @@ class OCITests(unittest.TestCase):
         self.client.transport = mock.Mock(side_effect=[(404, {}, b""), (202, {"Location": "https://example.com/upload"}, b"")])
         with self.assertRaisesRegex(ValueError, "untrusted"):
             self.client.upload_blob(b"archive")
+        prefix = "/v2/" + self.client.path + "/blobs/"
+        for location in ("/v2/other/repository/blobs/upload/7.session", prefix + "upload/", prefix + "upload/a/../../x",
+                         prefix + "upload/session#fragment", "http://ghcr.io" + prefix + "upload/session",
+                         "https://ghcr.io.example.com" + prefix + "upload/session", prefix + "uploadsession"):
+            self.client.transport = mock.Mock(side_effect=[(404, {}, b""), (202, {"Location": location}, b"")])
+            with self.subTest(location=location), self.assertRaisesRegex(ValueError, "untrusted"):
+                self.client.upload_blob(b"archive")
+
+    def test_ghcr_singular_upload_session_location(self):
+        # GHCR answers POST /blobs/uploads/ with a relative /blobs/upload/<session> location (observed live).
+        calls = []
+        self.client.token = "synthetic"
+
+        def transport(method, url, headers, data=None, limit=None):
+            calls.append((method, url))
+            if method == "HEAD":
+                return 404, {}, b""
+            if method == "POST":
+                return 202, {"Location": "/v2/" + self.client.path + "/blobs/upload/7.0f1e2d3c-synthetic"}, b""
+            return 201, {"Docker-Content-Digest": oci.digest(b"archive")}, b""
+        self.client.transport = transport
+        self.client.upload_blob(b"archive")
+        put = [url for method, url in calls if method == "PUT"]
+        self.assertEqual(len(put), 1)
+        self.assertTrue(put[0].startswith("https://ghcr.io/v2/" + self.client.path + "/blobs/upload/7.0f1e2d3c-synthetic?"))
+        self.assertIn("digest=sha256%3A", put[0])
 
     def test_registry_path_filename_and_digest_safety(self):
         for value in ("../demo", "demo/other", "Demo", "demo?x", "demo@x"):

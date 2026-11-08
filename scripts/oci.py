@@ -185,8 +185,13 @@ class Registry:
         headers, _ = self.request("POST", "blobs/uploads/", b"", limit=1024 * 1024)
         location = urllib.parse.urljoin("https://ghcr.io/", header(headers, "Location") or "")
         parsed = urllib.parse.urlsplit(location)
-        upload_prefix = "/v2/" + self.path + "/blobs/uploads/"
-        if parsed.scheme != "https" or parsed.netloc != "ghcr.io" or not parsed.path.startswith(upload_prefix):
+        # The distribution spec leaves the session path to the registry: GHCR answers /blobs/upload/<session>
+        # (singular), others /blobs/uploads/<session>. Either way it must stay on GHCR and in this repository.
+        base = "/v2/" + self.path + "/blobs/"
+        session = next((parsed.path[len(base + kind):] for kind in ("uploads/", "upload/")
+                        if parsed.path.startswith(base + kind)), None)
+        if (parsed.scheme != "https" or parsed.netloc != "ghcr.io" or parsed.fragment or
+                not session or not re.fullmatch(r"[A-Za-z0-9._=-]+", session)):
             raise ValueError("untrusted OCI upload location")
         query = urllib.parse.parse_qsl(parsed.query)
         if any(k == "digest" for k, _ in query):
