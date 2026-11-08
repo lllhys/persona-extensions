@@ -1,0 +1,36 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+)
+
+// Overlay tests exercise the unchanged Go functions, not a rewritten modfile or implementation.
+func TestRound3OriginalControls(t *testing.T) {
+	raw := `{"id":1,"title":"Synthetic","created_at":"1970-01-01T00:00:00Z","post_stream":{"posts":[{"id":100,"post_number":1,"post_type":1,"cooked":"<p>Opening</p>"},{"id":101,"post_number":2,"post_type":1,"created_at":"1970-01-01T00:00:00Z","reaction_users_count":-1,"cooked":"<p>Reply</p>"}]}}`
+	var doc topicDoc
+	if err := json.Unmarshal([]byte(raw), &doc); err != nil { t.Fatal(err) }
+	if doc.CreatedAt.IsZero() || doc.CreatedAt.UnixMilli() != 0 { t.Fatal("epoch is not Go zero time") }
+	if got := topicMeta(doc, time.UTC); !strings.Contains(got, "01-01 00:00") { t.Fatal(got) }
+	f := newFakeSite(t); f.topics[1] = raw
+	p := testPlugin(t, f, nil); p.loc = time.UTC
+	v := p.topicPage(context.Background(), draw{loc: time.UTC}, pageState{Topic: 1, List: "hot"})
+	if got := texts(v); strings.Contains(got, "-1") || strings.Count(got, "01-01 00:00") != 2 { t.Fatal(got) }
+	tool, err := p.toolTopic(context.Background(), 1, 10)
+	if err != nil || !strings.Contains(tool, "-1") || strings.Count(tool, "01-01 00:00") != 2 { t.Fatal(tool, err) }
+	fmt.Println("original epoch/topic/post formatter and signed page/tool likes controls: PASS")
+	for _, count := range []int{8000, 16000, 32000} {
+		var ranked topicDoc
+		for i := 0; i < count; i++ {
+			ranked.PostStream.Posts = append(ranked.PostStream.Posts, postDoc{ID: int64(i+1), PostNumber: i+2, PostType: 1, Cooked: "x"})
+		}
+		start := time.Now(); replies := ranked.bestReplies(10)
+		if len(replies) != 10 { t.Fatal(len(replies)) }
+		for i, reply := range replies { if reply.PostNumber != i+2 { t.Fatal(reply) } }
+		fmt.Printf("original ranking: count=%d elapsed=%v returned=%d\n", count, time.Since(start), len(replies))
+	}
+}

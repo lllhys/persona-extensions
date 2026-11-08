@@ -1,0 +1,78 @@
+package main
+
+import (
+    "context"
+    "encoding/json"
+    "errors"
+    "fmt"
+    "io"
+    "net/http"
+    "strings"
+    "testing"
+    "time"
+)
+
+type round4Transport func(*http.Request) (*http.Response, error)
+func (f round4Transport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+type round4ErrorReader struct{}
+func (round4ErrorReader) Read([]byte) (int, error) { return 0, errors.New("synthetic error before body cap") }
+
+// These controls call the unchanged Go implementation with synthetic inputs.
+func TestRound4OriginalControls(t *testing.T) {
+    for _, tc := range []struct{ raw string; zero bool }{
+        {"0001-01-01T00:00:00Z", true}, {"0001-01-01T00:00:00.000000000Z", true},
+        {"0001-01-01T01:00:00+01:00", true}, {"0001-01-01T00:00:00.000000001Z", false},
+        {"0001-01-01T00:00:00.0000000001Z", true}, {"1970-01-01T00:00:00Z", false},
+    } {
+        var doc topicDoc
+        raw := fmt.Sprintf(`{"id":1,"created_at":%q}`, tc.raw)
+        if err := json.Unmarshal([]byte(raw), &doc); err != nil { t.Fatal(err) }
+        if doc.CreatedAt.IsZero() != tc.zero { t.Fatal(tc.raw, doc.CreatedAt) }
+        visible := strings.Contains(topicMeta(doc, time.UTC), "01-01 00:00")
+        if visible == tc.zero { t.Fatal(tc.raw, topicMeta(doc, time.UTC)) }
+        fmt.Printf("original zero-time: raw=%s zero=%v visible=%v unixMilli=%d\n", tc.raw, tc.zero, visible, doc.CreatedAt.UnixMilli())
+    }
+    for _, status := range []int{403, 404} {
+        f := newFakeSite(t); f.topics[1] = topicJSON(1, "Synthetic", "Opening")
+        p := testPlugin(t, f, nil)
+        path := "/t/topic/1.json"
+        good, err := p.read(context.Background(), path, 0); if err != nil { t.Fatal(err) }
+        lastOK, lastErr := p.lastOK, p.lastErr
+        f.status = status; f.body = "missing" + strings.Repeat("x", 8<<20)
+        body, err := p.read(context.Background(), path, 0)
+        if !errors.Is(err, errNoTopic) || body != nil { t.Fatal(status, err, len(body)) }
+        if !p.lastOK.Equal(lastOK) || p.lastErr != lastErr || len(p.site.cache) != 1 { t.Fatal("gone changed cache/health") }
+        if string(p.site.cache[path].body) != string(good) { t.Fatal("gone replaced cache") }
+        f.body = "Just a moment" + strings.Repeat("x", 8<<20)
+        body, err = p.read(context.Background(), path, 0)
+        if err != nil || !errors.Is(p.lastErr, errChallenged) || string(body) != string(good) { t.Fatal(status, err, p.lastErr) }
+        fmt.Printf("original oversized-topic: status=%d gone=true cachePreserved=true healthPreserved=true challengePriority=true\n", status)
+    }
+    errorSite := newFakeSite(t); errorSite.topics[1] = topicJSON(1, "Synthetic", "Opening")
+    errorPlugin := testPlugin(t, errorSite, nil)
+    good, err := errorPlugin.read(context.Background(), "/t/topic/1.json", 0)
+    if err != nil { t.Fatal(err) }
+    errorPlugin.site.http.Transport = round4Transport(func(*http.Request) (*http.Response, error) {
+        return &http.Response{StatusCode:403, Header:make(http.Header), Body:io.NopCloser(io.MultiReader(strings.NewReader(strings.Repeat("x",4096)),round4ErrorReader{}))}, nil
+    })
+    body, err := errorPlugin.read(context.Background(), "/t/topic/1.json", 0)
+    if err != nil || string(body) != string(good) || errorPlugin.lastErr == nil || errors.Is(errorPlugin.lastErr,errNoTopic) { t.Fatal("error after challenge prefix must retain stale network failure", err, errorPlugin.lastErr) }
+    fmt.Println("original topic body-read error after 4096 bytes: stale body retained, connector failure recorded; not gone")
+    f := newFakeSite(t)
+    var items []item
+    for i := 1; i <= 271; i++ { items = append(items, item{id:int64(i), title:"Synthetic"}) }
+    f.feeds["/hot.rss"] = rss(items...)
+    p := testPlugin(t, f, nil)
+    topics, err := p.hot(context.Background(), "hot", false)
+    if err != nil || len(topics) != 271 || topics[270].ID != 271 { t.Fatal("original 271st RSS row", len(topics), err) }
+    fmt.Println("original RSS: all 271 rows parsed, final ID=271; native migration pages keep every row reachable")
+    for _, token := range []string{"1.0", "1e0", "1.0000000000000001"} {
+        for _, field := range []string{"topic", "replies"} {
+            args := fmt.Sprintf(`{"topic":1,"%s":%s}`, field, token)
+            if field == "topic" { args = fmt.Sprintf(`{"topic":%s}`, token) }
+            _, err := p.cToolsCall(context.Background(), nil, json.RawMessage(`{"name":"linuxdo_topic","args":`+args+`}`))
+            if err == nil { t.Fatal("original accepted fractional/exponent integer", field, token) }
+            fmt.Printf("original RPC: field=%s token=%s rejected=true\n", field, token)
+        }
+    }
+}

@@ -79,20 +79,72 @@ jobs:
       - run: scripts/ci.sh
         env:
           CATALOG_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+  source-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      has_sources: ${{ steps.plan.outputs.has_sources }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python3 -I scripts/test-source-rebuild.py
+      - id: plan
+        run: python3 -I scripts/source-rebuild.py plan
+  source-rebuild:
+    name: Source standalone rebuild (${{ matrix.extension }})
+    needs: [source-plan]
+    if: needs.source-plan.outputs.has_sources == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.source-plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.11.1'
+      - name: Rebuild isolated source and its standalone authoring archive
+        env:
+          SOURCE_EXTENSION: ${{ matrix.extension }}
+        run: python3 -I scripts/source-rebuild.py rebuild --extension "$SOURCE_EXTENSION" --workspace "$RUNNER_TEMP/source-rebuild"
+      - uses: actions/upload-artifact@v4
+        with:
+          overwrite: true
+          name: source-rebuild-${{ matrix.extension }}
+          path: ${{ runner.temp }}/source-rebuild/*.json
+          if-no-files-found: error
   ci-required:
     name: CI required
     if: ${{ always() && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.phase == 'check')) }}
-    needs: [check]
+    needs: [check, source-plan, source-rebuild]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
     steps:
-      - name: Require successful checks
+      - name: Require successful checks and all registered source rebuilds
         env:
           CHECK_RESULT: ${{ needs.check.result }}
+          SOURCE_PLAN_RESULT: ${{ needs.source-plan.result }}
+          SOURCE_HAS_SOURCES: ${{ needs.source-plan.outputs.has_sources }}
+          SOURCE_REBUILD_RESULT: ${{ needs.source-rebuild.result }}
         run: |
-          if [ "$CHECK_RESULT" != success ]; then
-            printf 'Required check did not succeed: %s\n' "$CHECK_RESULT"
+          if [ "$CHECK_RESULT" != success ] || [ "$SOURCE_PLAN_RESULT" != success ]; then
+            printf 'Required checks did not succeed: check=%s source-plan=%s\n' "$CHECK_RESULT" "$SOURCE_PLAN_RESULT"
+            exit 1
+          fi
+          if [ "$SOURCE_HAS_SOURCES" = true ]; then
+            if [ "$SOURCE_REBUILD_RESULT" != success ]; then
+              printf 'Required standalone source rebuild did not succeed: %s\n' "$SOURCE_REBUILD_RESULT"
+              exit 1
+            fi
+          elif [ "$SOURCE_HAS_SOURCES" != false ] || [ "$SOURCE_REBUILD_RESULT" != skipped ]; then
+            printf '%s\n' 'Invalid source rebuild selection or result.'
             exit 1
           fi
   packages:

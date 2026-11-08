@@ -76,6 +76,18 @@ Packaging produces `dist/<id>-<version>.tar.gz` and a SHA-256 file. It includes 
 
 See [installation](installation.md#install-a-local-package) to install the package on a hub. Extension tests use fake services; running them does not require real account credentials.
 
+## Standalone source rebuilds on hosted CI
+
+Each new executable source migration registers `extensions/<id>/source-rebuild.json` and commits its expected import-free bundle under `source-reference/`. The reference is a byte-comparison fixture, not a released default package. The profile names its source build script, generated bundle/archive, and the extension/SDK paths inside the standalone authoring archive. See the [LinuxDo profile](../extensions/linuxdo/source-rebuild.json).
+
+[The source rebuild job](../.github/workflows/ci.yml) runs every registered profile on its own fresh GitHub-hosted runner, with pinned Node, no restored dependency cache and no HOME substitution. [The driver](../scripts/source-rebuild.py) copies only tracked extension and official SDK authoring inputs into a new tree, excluding the reference bundle; installs locked public dependencies; builds; and compares the result **byte-for-byte** with the committed reference. It then extracts the produced authoring archive into another new directory and independently installs and rebuilds it, repeating the same byte comparison. Archive traversal, links, special files, duplicate files and excessive size fail before extraction.
+
+`CI required` includes profile discovery and every source-rebuild matrix result. New source authoring cannot omit a rebuild profile. The pre-existing Hacker News and Showcase examples are not part of the new migration batch and supply no fresh-HOME proof unless they register a profile; their separate acceptance gates are not waived. [Pure guard regressions](../scripts/test-source-rebuild.py) run locally and in CI without executing a local standalone rebuild.
+
+The maintainer's merge policy accepts the successful hosted job as fresh-HOME proof. A local fresh-HOME rebuild is not required and local permission restrictions remain unchanged: do not substitute HOME, use a peer or wrapper, or relabel a weaker local check as that proof. Hosted rebuilding proves contained authoring and bundle reproducibility, not installed-hub behavior, production sandbox isolation, source default publication or catalog signing.
+
+Credential-negative lock fixtures use synthetic `URL.username` and `URL.password` values on the approved public registry origin. Assert that origin and retain the credential-rejection check, so an unrelated bad hostname cannot make the control pass. Do not add privacy exceptions, change the lock policy, or encode/split real private values to get them through a scan.
+
 ## Documentation checks
 
 ```sh

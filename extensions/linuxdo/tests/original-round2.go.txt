@@ -1,0 +1,48 @@
+package main
+
+import (
+ "encoding/json"
+ "fmt"
+ "strconv"
+ "strings"
+ "testing"
+ "time"
+)
+
+// Overlay-only controls exercise the original Go implementation without editing it.
+func TestRound2OriginalControls(t *testing.T) {
+ for _, token := range []string{"1", "1.0", "1e0", "1.0000000000000001", "9007199254740993", "9223372036854775807", "9223372036854775808"} {
+  var st pageState
+  err := json.Unmarshal([]byte(`{"t":`+token+`}`), &st)
+  fmt.Printf("original state: token=%s topic=%d rejected=%t\n", token, st.Topic, err != nil)
+  wantError := strings.ContainsAny(token, ".e") || token == "9223372036854775808"
+  if (err != nil) != wantError { t.Fatalf("state %s: %v", token, err) }
+ }
+ for _, raw := range []string{"0000-02-29T09:37:00Z", "0099-11-03T09:37:00Z", "9999-12-31T23:59:59.999999999Z", "2000-02-29T09:37:00.123456789Z", "not-a-date", "2026-02-30T09:37:00Z", "2026-11-03", "10000-01-01T00:00:00Z", "999999999999999999999-01-01T00:00:00Z"} {
+  var doc topicDoc
+  err := json.Unmarshal([]byte(`{"created_at":`+strconv.Quote(raw)+`}`), &doc)
+  formatted := "rejected"
+  if err == nil { formatted = doc.CreatedAt.UTC().Format("01-02 15:04") }
+  fmt.Printf("original calendar: %s -> %s\n", raw, formatted)
+  if raw == "0000-02-29T09:37:00Z" && formatted != "02-29 09:37" { t.Fatal(formatted) }
+  if raw == "10000-01-01T00:00:00Z" && err == nil { t.Fatal("unexpected huge-year support") }
+ }
+ for _, raw := range []string{"9007199254740993", "9223372036854775807", "9223372036854775808"} {
+  n, err := strconv.Atoi(raw)
+  fmt.Printf("original RSS Atoi: %s -> %d rangeError=%t\n", raw, n, err != nil)
+  if strconv.IntSize != 64 { t.Fatal("this comparison requires original 64-bit Go int") }
+  if raw == "9007199254740993" && n != 9007199254740993 { t.Fatal(n) }
+  if raw == "9223372036854775808" && (n != 9223372036854775807 || err == nil) { t.Fatal(n, err) }
+ }
+ for _, raw := range []string{"1"+strings.Repeat("0",308), "9223372036854775808", "9223372036854775807", "9223372036", "9223372037", "+123", "-1"} {
+  pause := pauseFor
+  if secs, err := strconv.Atoi(raw); err == nil && secs > 0 { pause = max(time.Duration(secs)*time.Second, time.Minute) }
+  label := raw; if len(label)>32 { label = "10^308" }
+  fmt.Printf("original Retry-After: %s -> %dms\n", label, pause.Milliseconds())
+ }
+ loc, err := time.LoadLocation("Local"); if err != nil || loc != time.Local { t.Fatal("Local", err) }
+ fmt.Printf("original Local formatter: %s\n", time.Date(2026,11,3,9,37,0,0,time.UTC).In(loc).Format("01-02 15:04"))
+ for _, pair := range [][2]string{{"<script>unclosed text", "unclosed text"}, {"<pre><pre>  code</pre>tail", "  code\ntail"}, {"<script>hidden</style><p>kept</p>", "kept"}} {
+  if got := plainText(pair[0]); got != pair[1] { t.Fatalf("original cooked control: %q != %q", got, pair[1]) }
+ }
+}

@@ -355,7 +355,8 @@ class FrozenArchiveRegressions(unittest.TestCase):
 class WorkflowRegressions(unittest.TestCase):
     def test_each_fixed_artifact_name_overwrites_on_rerun(self):
         text = (catalog.ROOT / ".github/workflows/ci.yml").read_text()
-        uploads = text.split("uses: actions/upload-artifact@v4")[1:]
+        publication = text.split("\n  packages:\n", 1)[1]
+        uploads = publication.split("uses: actions/upload-artifact@v4")[1:]
         self.assertEqual(len(uploads), 3)
         for block in uploads:
             self.assertIn("overwrite: true", block.split("\n  anonymous:")[0].split("\n  sign:")[0])

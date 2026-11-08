@@ -1,0 +1,16 @@
+[
+  {"args":"{\"topic\":1,\"limit\":9223372036854775807}","ok":true},
+  {"args":"{\"topic\":1,\"limit\":-9223372036854775808}","ok":true},
+  {"args":"{\"topic\":1,\"replies\":9223372036854775807}","ok":true},
+  {"args":"{\"topic\":1,\"replies\":-9223372036854775808}","ok":true},
+  {"args":"{\"topic\":1,\"replies\":9223372036854775808}","ok":false},
+  {"args":"{\"topic\":1,\"replies\":1.0,\"Replies\":1}","ok":false},
+  {"args":"{\"topic\":1,\"replies\":1,\"Replies\":null}","ok":true},
+  {"args":"{\"topic\":1,\"limit\":1.0,\"LIMIT\":1}","ok":false},
+  {"args":"{\"topic\":{\"invalid\":true},\"Topic\":1}","ok":true},
+  {"args":"{\"topic\":1,\"Topic\":null}","ok":false},
+  {"args":"{\"topic\":-0}","ok":false},
+  {"args":"{\"topic\":\"https://linux.do/t/topic/1\"}","ok":true},
+  {"args":"{\"topic\":1,\"replies\":null,\"Replieſ\":2}","ok":true},
+  {"args":"{\"topic\":1,\"limit\":9223372036854775808}","ok":false}
+]
