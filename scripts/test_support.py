@@ -7,6 +7,7 @@ import tempfile
 from unittest import mock
 
 import catalog
+import manifest as manifests
 
 
 class CatalogFixture:
@@ -14,6 +15,11 @@ class CatalogFixture:
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.directory = pathlib.Path(self.temp.name)
+        # Synthetic publisher fixtures mock the source ID/manifest/tags; they
+        # have no on-disk source manifest or predecessor unless a test sets one.
+        predecessor = mock.patch.object(manifests, "replaces", return_value="")
+        predecessor.start()
+        self.addCleanup(predecessor.stop)
         self.key = self.directory / "synthetic.pem"
         catalog.openssl("genpkey", "-algorithm", "ed25519", "-out", self.key)
         der = catalog.openssl("pkey", "-in", self.key, "-pubout", "-outform", "DER")

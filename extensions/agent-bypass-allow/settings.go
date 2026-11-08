@@ -16,8 +16,7 @@ import (
 // own indent), and our entry is told apart by the tag at the end of its command. A copy of the file is kept before
 // each change; a file that is not a JSON object is left alone.
 
-// tagFlag ends the entry's command; it is what marks an entry as this extension's.
-const tagFlag = "--persona-extension=claude-bypass-allow"
+// Hook ownership is stable across public extension ID changes (compat.go).
 
 // hookTimeout is how long Claude Code lets the hook run (seconds); it answers in milliseconds.
 const hookTimeout = 10
@@ -26,8 +25,6 @@ const hookTimeout = 10
 func hookCommand(bin, dir, data string) string {
 	return shellQuote(bin) + " hook --config-dir " + shellQuote(dir) + " --data " + shellQuote(data) + " " + tagFlag
 }
-
-func isOurCommand(cmd string) bool { return strings.HasSuffix(strings.TrimSpace(cmd), " "+tagFlag) }
 
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
@@ -226,11 +223,11 @@ func editSettings(path string, create bool, edit func(top *jsonObject) (bool, er
 		return false, err
 	}
 	if len(orig) > 0 {
-		if err := os.WriteFile(path+".claude-bypass-allow.bak", orig, mode); err != nil {
+		if err := os.WriteFile(path+settingsBackupSuffix, orig, mode); err != nil {
 			return false, fmt.Errorf("backup: %w", err)
 		}
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".settings-claude-bypass-allow-*")
+	tmp, err := os.CreateTemp(filepath.Dir(path), settingsTempPattern)
 	if err != nil {
 		return false, err
 	}

@@ -11,8 +11,9 @@ import (
 	"github.com/nwverse/persona/sdk/go/wire"
 )
 
-// TestManifests validates every manifest as committed (with its market tags) and as packages and indexes carry it
-// (without them, scripts/manifest.py packaged): the schema allows no field it does not know, at any depth.
+// TestManifests validates every source manifest after removing only author-owned
+// replaces, and its runtime projection after also removing tags. Unknown runtime
+// fields still fail the SDK schema at every depth; Python validates predecessors.
 func TestManifests(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join("..", "..", "extensions", "*", "persona-extension.json"))
 	if err != nil {
@@ -27,7 +28,7 @@ func TestManifests(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := wire.ValidateJSON("Manifest", raw); err != nil {
+			if err := wire.ValidateJSON("Manifest", withoutAuthorMetadata(t, raw)); err != nil {
 				t.Errorf("%s: %v", p, err)
 			}
 			if err := wire.ValidateJSON("Manifest", packaged(t, raw)); err != nil {
@@ -37,7 +38,22 @@ func TestManifests(t *testing.T) {
 	}
 }
 
-// packaged is the manifest without its tags, as scripts/manifest.py packaged writes it.
+// withoutAuthorMetadata keeps runtime fields strict without editing the copied SDK.
+func withoutAuthorMetadata(t *testing.T, raw []byte) []byte {
+	t.Helper()
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	delete(m, "replaces")
+	out, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// packaged matches the source-only field projection in scripts/manifest.py.
 func packaged(t *testing.T, raw []byte) []byte {
 	t.Helper()
 	var m map[string]json.RawMessage
@@ -45,6 +61,7 @@ func packaged(t *testing.T, raw []byte) []byte {
 		t.Fatal(err)
 	}
 	delete(m, "tags")
+	delete(m, "replaces")
 	out, err := json.Marshal(m)
 	if err != nil {
 		t.Fatal(err)

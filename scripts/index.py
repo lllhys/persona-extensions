@@ -59,8 +59,8 @@ def tree_inventory(ref):
         m = catalog.loads(git("show", ref + ":" + path))
         if m.get("id") != match[1]:
             raise ValueError("source inventory directory/id mismatch")
-        tags = m.pop("tags", [])
-        inventory.append({"manifest": m, "tags": tags})
+        inventory.append(catalog.source_entry(m))
+    catalog.validate_entry_identities(inventory)
     return sorted(inventory, key=lambda e: e["manifest"]["id"])
 
 
@@ -76,7 +76,7 @@ def check_source(generation, base_ref, body):
     if catalog.payload_hash(tree_catalog(source)[0]) != generation["base_catalog_hash"]:
         raise ValueError("signed source catalog does not match generation base")
     if generation["mode"] == "versions":
-        current = [{"manifest": e["manifest"], "tags": e["tags"]} for e in body["extensions"]]
+        current = [catalog.entry_inventory(e) for e in body["extensions"]]
         if current != base_inventory:
             raise ValueError("generated catalog does not match complete source inventory")
 

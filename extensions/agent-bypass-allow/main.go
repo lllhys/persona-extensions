@@ -1,13 +1,13 @@
-// Bypass auto-allow (docs/extensions/claude-bypass-allow.md): Claude Code in bypassPermissions mode still stops on some
+// Bypass auto-allow (docs/extensions/agent-bypass-allow.md): Claude Code in bypassPermissions mode still stops on some
 // Bash calls (its bypass-immune safety checks, mostly an rm whose target it cannot resolve), and an unattended agent
 // waits there for a person. On the computers you pick, this extension gives Claude Code a PermissionRequest hook that
 // allows those calls, and only those: Bash, in a bypassPermissions session, not about one of your own ask or deny rules.
 //
 // One program, three roles:
 //
-//	claude-bypass-allow hub     the hub's: the extension's page (hub.go)
-//	claude-bypass-allow node    each computer's: installs and removes the hook, keeps its heartbeat (node.go)
-//	claude-bypass-allow hook …  what Claude Code runs on PermissionRequest (hook.go)
+//	agent-bypass-allow hub     the hub's: the extension's page (hub.go)
+//	agent-bypass-allow node    each computer's: installs and removes the hook, keeps its heartbeat (node.go)
+//	agent-bypass-allow hook …  what Claude Code runs on PermissionRequest (hook.go)
 package main
 
 import (
@@ -21,7 +21,24 @@ import (
 )
 
 //go:embed persona-extension.json
-var manifest []byte
+var authorManifest []byte
+
+var manifest = packagedManifest(authorManifest)
+
+// Author metadata belongs in the signed market entry, not the runtime manifest.
+func packagedManifest(raw []byte) []byte {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		panic("invalid embedded extension manifest")
+	}
+	delete(fields, "tags")
+	delete(fields, "replaces")
+	out, err := json.Marshal(fields)
+	if err != nil {
+		panic("cannot encode embedded extension manifest")
+	}
+	return out
+}
 
 func main() {
 	var m struct{ ID, Version string }

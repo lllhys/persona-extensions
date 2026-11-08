@@ -1,4 +1,4 @@
-module github.com/nwverse/persona-extensions/extensions/claude-bypass-allow
+module github.com/nwverse/persona-extensions/extensions/agent-bypass-allow
 
 go 1.27.1
 

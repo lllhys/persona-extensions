@@ -63,6 +63,7 @@ step publisher
 python3 -I scripts/test-oci.py
 python3 -I scripts/test-publish-oci.py
 python3 -I scripts/test-publication-regressions.py
+python3 -I scripts/test-rename.py
 
 echo
 echo "ci: ok"

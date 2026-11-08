@@ -1,6 +1,6 @@
 # Bypass auto-allow (Claude Code)
 
-[Documentation](../README.md) · [Source](../../extensions/claude-bypass-allow/)
+[Documentation](../README.md) · [Source](../../extensions/agent-bypass-allow/)
 
 Claude Code in `bypassPermissions` mode (`--dangerously-skip-permissions`, "bypass permissions on") still stops on some calls and waits for someone to choose **Yes**. Persona then shows the agent as waiting for you, and an unattended run, often a subagent, stalls until someone answers or Claude Code denies the call after two minutes. On the computers you choose, this extension adds a Claude Code `PermissionRequest` hook. It allows those prompts only in `bypassPermissions` sessions, only for Bash, the read-only tools and subagents, and never for a Bash command that deletes or overwrites data, forces a push or changes permissions. A `Read` rule of yours covers `Glob`, `Grep`, `LS` and `NotebookRead` too. In every other case, it stays silent and Claude Code asks as usual.
 
@@ -71,14 +71,14 @@ The program adds one group to `hooks.PermissionRequest` in `<config dir>/setting
 
 ```json
 {"matcher": "Bash|Read|Glob|Grep|LS|NotebookRead|Agent|Task", "hooks": [{"type": "command", "timeout": 10,
-  "command": "'<package>/bin/claude-bypass-allow-<platform>' hook --config-dir '<config dir>' --data '<data dir>' --persona-extension=claude-bypass-allow"}]}
+  "command": "'<package>/bin/agent-bypass-allow-<platform>' hook --config-dir '<config dir>' --data '<data dir>' --persona-extension=claude-bypass-allow"}]}
 ```
 
-The trailing `--persona-extension=claude-bypass-allow` tag identifies the entry. The program changes only entries with that tag. Other keys and other tools' hooks keep their order and values, and the file keeps its indent. Before each change, it copies the previous file to `settings.json.claude-bypass-allow.bak`. A file that is not a JSON object is left alone and reported as an error. A session that was already running when you turned a computer on may not pick up the hook until it restarts.
+The trailing `--persona-extension=claude-bypass-allow` tag is a stable hook-ownership marker, not the extension's public identity. Version 0.2.24 keeps generating it so the old 0.2.23 binary can replace or remove the hook after rollback; both old and new marker suffixes are recognized. A mixed group is reduced to one owned hook without touching another tool's entries. Other keys and other tools' hooks keep their order and values, and the file keeps its indent. Before each change, it copies the previous file to `settings.json.claude-bypass-allow.bak`. A file that is not a JSON object is left alone and reported as an error. A session that was already running when you turned a computer on may not pick up the hook until it restarts.
 
 ## Audit log
 
-Each auto-allow appends one JSON line to `audit.jsonl` in the program's data directory on that computer (`~/.persona/node-plugins/claude-bypass-allow/data/`, mode 0600). The log keeps about the newest 1 MB across two files. Each entry records the time, session id, subagent id (when present), working directory, config directory, the tool, the call's full length, and the call itself: the command for Bash, otherwise the tool's name and what it is about (a path, a pattern, a subagent's type and description). Before the command is stored, it is put on one line, cut to 240 characters, and has likely secrets replaced with `***`: `NAME=value` where the name suggests a token, password or key; `Bearer`/`token` values; `--password`/`--token` flags; `-p` passwords for `mysql` and `sshpass`; the password in `curl -u user:password`; credentials in URLs; and opaque strings of 32 or more characters. This masking is a heuristic, so treat the log as sensitive.
+Each auto-allow appends one JSON line to `audit.jsonl` in the program's data directory on that computer (`~/.persona/node-plugins/<storage-id>/data/`, mode 0600; upgraded installations keep `claude-bypass-allow`, fresh installations use `agent-bypass-allow`). The log keeps about the newest 1 MB across two files. Each entry records the time, session id, subagent id (when present), working directory, config directory, the tool, the call's full length, and the call itself: the command for Bash, otherwise the tool's name and what it is about (a path, a pattern, a subagent's type and description). Before the command is stored, it is put on one line, cut to 240 characters, and has likely secrets replaced with `***`: `NAME=value` where the name suggests a token, password or key; `Bearer`/`token` values; `--password`/`--token` flags; `-p` passwords for `mysql` and `sshpass`; the password in `curl -u user:password`; credentials in URLs; and opaque strings of 32 or more characters. This masking is a heuristic, so treat the log as sensitive.
 
 The extension's page in **Settings → Extensions** lists, for each switched-on computer, whether the hook is installed in each config directory and the 30 newest auto-allows.
 
@@ -87,13 +87,21 @@ The extension's page in **Settings → Extensions** lists, for each switched-on 
 - **Runs a program on the hub**: only to draw the extension page. It reaches the computers through `nodes.call`, has no network access and holds no hub token.
 - **Runs a program on the computers you choose** (`node`), with `files` access. It edits Claude Code's `settings.json` outside its own data directory. It needs no network access and no secrets.
 
+## Upgrading from the former ID
+
+Version 0.2.24 changes the public ID from `claude-bypass-allow` to `agent-bypass-allow`. Its source declares the former ID as `replaces`; the signed market entry carries that declaration, not the runtime manifest. Once the new package and catalog are published, use the same registered market's normal preview and update flow on a hub and nodes that support identity transitions. The confirmation names both IDs. Do not uninstall the former extension or install a local new-ID archive to simulate this upgrade.
+
+The installed record keeps its storage slot, configuration, grants, enabled state, computer switches, contribution choices, auto-update choice and audit data. This extension declares no secrets: the secret list is empty before and after. Its allow rules do not change, and `allow_destructive` remains off by default. Old owner-facing IDs remain compatible with the committed installation, without granting old program tokens a new identity. Rollback restores 0.2.23 and its old ID in the same slot.
+
+The host stops and waits for the old node process, including hook cleanup and heartbeat shutdown, before starting the replacement. The persistent ownership tag and backup suffix above intentionally retain the old spelling; do not manually rewrite them. An incompatible node blocks the transition rather than treating the old ID's disappearance as an uninstall.
+
 ## Install
 
 Use the [public market](../installation.md), or package locally from the repository root:
 
 ```sh
-scripts/package.sh claude-bypass-allow
-go -C extensions/claude-bypass-allow test ./...
+scripts/package.sh agent-bypass-allow
+go -C extensions/agent-bypass-allow test ./...
 ```
 
 The tests cover the hook's decisions for each tool, the commands that stay with a person, deletions in scratch directories and the variables they use, the `allow_destructive` setting, rule matching, redaction, the audit log, editing settings.json without changing anything else, the program's install and cleanup, and the page in three languages.

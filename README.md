@@ -38,6 +38,8 @@ https://github.com/user-attachments/assets/0198ecd2-1e5f-4ca1-95f4-0473b0488670
 
 See the [`extensions/`](extensions/) directory for the available extensions. Each extension documents itself in its own directory, with longer guides under [`docs/extensions/`](docs/extensions/).
 
+The bypass extension's source is now `agent-bypass-allow` (formerly `claude-bypass-allow`). Its same-market update requires explicit identity confirmation and preserves installed settings, rules and data. Wait for its package/catalog publication and upgrade the hub and nodes first; do not uninstall/reinstall to migrate. See [its guide](docs/extensions/agent-bypass-allow.md#upgrading-from-the-former-id).
+
 ## Documentation and contributing
 
 - [Documentation index](docs/README.md)

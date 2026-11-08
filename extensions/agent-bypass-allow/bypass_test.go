@@ -26,7 +26,7 @@ func TestManifest(t *testing.T) {
 
 func TestConformance(t *testing.T) {
 	app := &hubApp{call: fakeNodes(nil)}
-	exttest.Check(t, manifest, exttest.Serve(t, app.program("claude-bypass-allow", version(t))), json.RawMessage(`{"machines":["m1"]}`))
+	exttest.Check(t, manifest, exttest.Serve(t, app.program(currentExtensionID, version(t))), json.RawMessage(`{"machines":["m1"]}`))
 }
 
 func version(t *testing.T) string {
@@ -295,7 +295,7 @@ func TestInstallKeepsEverythingElse(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "settings.json")
 	writeJSON(t, p, userSettings)
-	cmd := hookCommand("/opt/x/bin/claude-bypass-allow", dir, "/data/it's")
+	cmd := hookCommand("/opt/x/bin/"+currentExtensionID, dir, "/data/it's")
 	if changed, err := installHook(p, cmd); err != nil || !changed {
 		t.Fatalf("install: %v %v", changed, err)
 	}
@@ -314,14 +314,14 @@ func TestInstallKeepsEverythingElse(t *testing.T) {
 		t.Errorf("a second install should not write: %v %v", changed, err)
 	}
 	// An upgrade: the program moved, the entry follows.
-	if changed, _ := installHook(p, hookCommand("/opt/y/bin/claude-bypass-allow", dir, "/data")); !changed {
+	if changed, _ := installHook(p, hookCommand("/opt/y/bin/"+currentExtensionID, dir, "/data")); !changed {
 		t.Error("a new command should replace the old entry")
 	}
 	b, _ = os.ReadFile(p)
 	if strings.Count(string(b), tagFlag) != 1 || strings.Contains(string(b), "/opt/x/") {
 		t.Errorf("one entry, the new one:\n%s", b)
 	}
-	if _, err := os.Stat(p + ".claude-bypass-allow.bak"); err != nil {
+	if _, err := os.Stat(p + settingsBackupSuffix); err != nil {
 		t.Error("no backup")
 	}
 	if changed, err := uninstallHook(p); err != nil || !changed {

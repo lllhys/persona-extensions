@@ -53,7 +53,7 @@ def cutover_gate(args):
     if index.git("rev-parse", "HEAD").decode().strip() != index.full_sha(args.head_sha):
         raise ValueError("checkout differs from trusted Actions SHA")
     index.git("diff", "--exit-code", "HEAD", "--", "extensions", "persona-extensions.json")
-    inventory = [{"manifest": manifests.packaged(k), "tags": manifests.tags(k)} for k in manifests.ids()]
+    inventory = source_inventory()
     if inventory != index.tree_inventory(args.head_sha):
         raise ValueError("checkout inventory differs from trusted source commit")
 
@@ -266,6 +266,17 @@ def audit(args):
     print(f"audit: ok ({len(results)} verified packages; {result['releases']} Releases; {result['assets']} assets)")
 
 
+def source_inventory():
+    inventory = []
+    for extension_id in manifests.ids():
+        entry = {"manifest": manifests.packaged(extension_id), "tags": manifests.tags(extension_id)}
+        predecessor = manifests.replaces(extension_id)
+        if predecessor != "":
+            entry["replaces"] = predecessor
+        inventory.append(entry)
+    return catalog.validate_entry_identities(inventory)
+
+
 def desired_entries(body, mode):
     if mode == "bootstrap":
         # Do not derive already published versions from a new build or from the former repository.
@@ -275,17 +286,16 @@ def desired_entries(body, mode):
         return copy.deepcopy(body["extensions"])
     prior = {e["manifest"]["id"]: e for e in body["extensions"]}
     result = []
-    for extension_id in manifests.ids():
-        m = manifests.packaged(extension_id)
-        old = prior.get(extension_id)
+    for owned in source_inventory():
+        m = owned["manifest"]
+        old = prior.get(m["id"])
         if old and old["manifest"]["version"] == m["version"]:
             if old["manifest"] != m:
                 raise ValueError("same-version manifest changed; bump version before publishing")
-            tags = manifests.tags(extension_id)
-            if old["tags"] != tags:
-                result.append(dict(copy.deepcopy(old), tags=tags))
+            if catalog.entry_inventory(old) != owned:
+                result.append(dict(copy.deepcopy(owned), packages=copy.deepcopy(old["packages"])))
             continue
-        result.append({"manifest": m, "tags": manifests.tags(extension_id), "packages": []})
+        result.append(dict(owned, packages=[]))
     if result and any(not p["url"].startswith("oci:") for e in body["extensions"] for p in e["packages"]):
         raise ValueError("complete frozen Release bootstrap before publishing new versions")
     return result
@@ -375,8 +385,8 @@ def validate_plan(plan, original, body, head_sha):
     if len(entries) != len(expected):
         raise ValueError("plan is incomplete")
     for actual, wanted in zip(entries, expected):
-        if set(actual) != {"manifest", "tags", "packages"} or actual["manifest"] != wanted["manifest"] or actual["tags"] != wanted["tags"]:
-            raise ValueError("plan manifest or tags differ from trusted checkout")
+        if set(actual) != set(wanted) or catalog.entry_inventory(actual) != catalog.entry_inventory(wanted):
+            raise ValueError("plan manifest, tags or replaces differ from trusted checkout")
         if plan["mode"] == "bootstrap":
             if len(actual["packages"]) != len(wanted["packages"]):
                 raise ValueError("bootstrap package count changed")
@@ -405,7 +415,7 @@ def generate_payload(plan, catalog_path, head_sha, registry_factory=oci.Registry
             oci.verify_package(registry, m["id"], m["version"], package,
                                archive_validator=lambda data: check_archive(data, m, strict, catalog.package_platform(package)))
             print(m["id"] + ": anonymous manifest/config/archive verified")
-    inventory = [{"manifest": manifests.packaged(k), "tags": manifests.tags(k)} for k in manifests.ids()]
+    inventory = source_inventory()
     present = {e["manifest"]["id"] for e in inventory}
     merged = {e["manifest"]["id"]: e for e in body["extensions"]
               if plan["mode"] == "bootstrap" or e["manifest"]["id"] in present}

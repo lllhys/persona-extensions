@@ -17,7 +17,7 @@ The repository has one catalog, `persona-extensions.json`, with embedded signatu
 }
 ```
 
-The payload has `market_version: 1`, market metadata, `signing_key` and `extensions`. Newly generated payloads also have signed `generation` provenance (see below). Each entry contains its packaged `manifest` (without `tags`), entry `tags` and `packages`. There is no legacy catalog, detached signature or standalone public-key file. [scripts/catalog.py](../scripts/catalog.py) retains the approved **public** key as a code constant; no private key belongs in the repository.
+The payload has `market_version: 1`, market metadata, `signing_key` and `extensions`. Newly generated payloads also have signed `generation` provenance (see below). Each entry contains its packaged `manifest` (without source-only `tags` and `replaces`), entry `tags`, optional `replaces` and `packages`. There is no legacy catalog, detached signature or standalone public-key file. [scripts/catalog.py](../scripts/catalog.py) retains the approved **public** key as a code constant; no private key belongs in the repository.
 
 Signatures cover `payload.encode("utf-8")`, **not** the outer JSON, parsed objects or canonicalized JSON. Outer formatting can change; the signed string cannot. Duplicate keys, absent/empty signatures, the wrong key and malformed signatures fail closed.
 
@@ -40,7 +40,7 @@ Every new payload includes this object **inside the signed UTF-8 payload**, not 
 }
 ```
 
-`base_catalog_hash` hashes the predecessor's decoded **raw payload bytes**, not its outer envelope formatting. The inventory hash covers the full sorted inventory, including IDs, packaged manifests and tags; it uses the canonical encoding in `catalog.inventory_hash`, independently of signature encoding. Mode is `bootstrap` or `versions`.
+`base_catalog_hash` hashes the predecessor's decoded **raw payload bytes**, not its outer envelope formatting. The inventory hash covers the full sorted inventory, including IDs, packaged manifests, tags and each non-empty `replaces` declaration; sources without that field retain their original encoding (no empty default field is added). It uses the canonical encoding in `catalog.inventory_hash`, independently of signature encoding. Mode is `bootstrap` or `versions`.
 
 PR CI obtains the repository ID and actual PR base SHA from GitHub context, fetches full history, and reads the base catalog directly from that commit with `git show`. The signed predecessor hash must equal that base's verified payload hash. The signed source commit must be its ancestor, have the same source inventory as that base, and contain the predecessor catalog. Versions-mode output must match the complete inventory. Thus docs-only base advances remain valid, but a newer catalog merge or source deletion makes an older signed artifact fail. Regenerate from the new base rather than editing provenance.
 
@@ -68,7 +68,11 @@ Current packages are all `any`: each program archive includes its manifest's pla
 
 ## Automated releases
 
-[CI](../.github/workflows/ci.yml) runs [scripts/ci.sh](../scripts/ci.sh) on PRs, main pushes, the issue-146 branch and dispatches. `CI required` fails unless PR checks succeed. Local checks do not replace required hosted CI. `scripts/ci.sh` never publishes and rejects the former `release` arguments.
+[CI](../.github/workflows/ci.yml) runs [scripts/ci.sh](../scripts/ci.sh) on PRs, main pushes, the issue-146 branch and dispatches. A manual `phase=check` dispatch is the default and sets publication off: it needs no cutover confirmation, reads no publication credentials and performs no package writes or signing. `CI required` fails unless PR or checks-only dispatch checks succeed. Local checks do not replace required hosted CI. `scripts/ci.sh` never publishes and rejects the former `release` arguments.
+
+```sh
+gh workflow run ci.yml --repo nwverse/persona-extensions --ref <issue-branch> -f phase=check
+```
 
 Publication requires both the final name `nwverse/persona-extensions` and cleaned repository ID `1449704212`. The former repository cannot pass this gate. Only trusted `main` can publish; issue branches remain checks-only. Before cutover, pushes perform **checks only**; dispatch publication refuses even when a caller checks the confirmation input. The script rechecks the actual GitHub repository identity, checkout SHA and full source inventory before reading package credentials or doing any upload.
 
@@ -78,7 +82,7 @@ After cutover, trusted main pushes automatically enable publication based on tha
 
 The initial bootstrap downloads **all 14 current archives from the cleaned repository's Releases**, compares asset metadata and downloaded bytes to the frozen signed catalog, and uploads those exact bytes. It never recompiles/replaces a current version or uses the former repository's assets. Cleaned historical archives can differ from the catalog in scrubbed descriptive fields; the audit lists those differences while enforcing identical id/version/runtime mappings and exact frozen checksums. Do not rewrite them to make their descriptions match.
 
-Future main pushes compare the **full current source inventory** to the signed catalog, including work from a replaced waiting run. A same-version packaged-manifest change fails; tags-only changes retain the original package URL/SHA256/size and need neither a version bump nor a new upload. Removing `extensions/<id>` removes that ID from the next generated catalog without deleting any historic Release, tag or GHCR version. Selection is not just a version-bump diff. An existing registry version is verified and reused **before any build**, so interrupted runs do not rebuild or overwrite published bytes. New versions are locally packaged once if absent. There are no Release/tag creation/deletion calls. The current catalog must first complete bootstrap before new-version catalogs can be generated.
+Future main pushes compare the **full current source inventory** to the signed catalog, including work from a replaced waiting run. A same-version packaged-manifest change fails; tags-only or source-only `replaces` changes retain the original package URL/SHA256/size and need neither a version bump nor a new upload. Removing `extensions/<id>` removes that ID from the next generated catalog without deleting any historic Release, tag or GHCR version. Selection is not just a version-bump diff. An existing registry version is verified and reused **before any build**, so interrupted runs do not rebuild or overwrite published bytes. New versions are locally packaged once if absent. There are no Release/tag creation/deletion calls. The current catalog must first complete bootstrap before new-version catalogs can be generated.
 
 The successful job produces artifact **`oci-package-plan`**:
 
@@ -86,6 +90,14 @@ The successful job produces artifact **`oci-package-plan`**:
 - `package-settings.json`: all package names and GitHub package settings URLs for that run.
 
 A failed run may retain a partial plan for diagnosis. It cannot pass the successful-run provenance check or completeness validation. Rerun packages to resume from verified registry versions. All three fixed-name artifacts use overwrite on reruns (which share a run ID), and consumers keep those exact names. Each artifact download starts in a new empty directory; Python runs with `-I` from the reviewed checkout, never inside downloaded data. Do not sign a partial plan.
+
+### Renamed identities
+
+An ID change is a new immutable OCI package namespace, not a moved registry tag. First merge the hub/node compatibility support. Then review the moved source, new ID/version/binary names and single `replaces` declaration through a separate extension PR. Because merging a version change on trusted main publishes packages, obtain publication authorization before merging it. A checks-only dispatch cannot grant that authorization.
+
+The complete source inventory projects `replaces` into the entry and signed generation provenance, while both packaged and embedded runtime manifests omit it. Duplicate/self predecessors, cycles and predecessors still present as current IDs are refused. The generated catalog removes the old current entry and includes the successor declaration; old packages, GHCR versions and historical Releases/tags are never deleted. Even a valid new signature cannot substitute a different declaration for the reviewed source inventory.
+
+Make the new namespace public through the authorized visibility step, then use the same-SHA anonymous gate and isolated signing job to create the dedicated catalog PR. Require its own CI and continuity checks. Existing users confirm the same-market identity upgrade; do not instruct them to uninstall/reinstall, move secret rows or rewrite data. See [identity changes](reference.md#identity-changes).
 
 ### Human visibility step
 

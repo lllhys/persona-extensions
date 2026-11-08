@@ -3,7 +3,7 @@
 
   scripts/manifest.py path <id>       the manifest's path
   scripts/manifest.py version <id>    its version
-  scripts/manifest.py packaged <id>   the manifest as packages and indexes carry it: without "tags"
+  scripts/manifest.py packaged <id>   the runtime manifest: without source-only "tags" and "replaces"
   scripts/manifest.py ids             every extension in extensions/
   scripts/manifest.py check           every manifest is sound (what CI runs): id, version, tags, no retired files,
                                       the files it references are in its package, its pack members are here
@@ -63,13 +63,13 @@ def tags(id):
     return load(id).get("tags", [])
 
 
+def replaces(id):
+    return load(id).get("replaces", "")
+
+
 def packaged(id):
-    """The manifest without its tags, for packages (as both persona-extension.json and persona-plugin.json) and
-    indexes: hubs from before tags (nwverse/persona#2424) read manifests strictly and refuse a field they don't know.
-    The index entry carries the tags instead."""
-    m = load(id)
-    m.pop("tags", None)
-    return m
+    """The runtime manifest: source-only tags/replaces belong in the signed entry instead."""
+    return catalog.source_entry(load(id))["manifest"]
 
 
 def dumps(m):
@@ -261,7 +261,7 @@ def check_junk(id):
 
 
 def check():
-    bad = []
+    bad, inventory = [], []
     for id in ids():
         try:
             m = load(id)
@@ -272,6 +272,10 @@ def check():
             bad.append("extensions/%s: the manifest's id is %r, not the directory's name" % (id, m.get("id")))
         if not catalog.valid_version(m.get("version", "")):
             bad.append("extensions/%s: version %r is not MAJOR.MINOR.PATCH" % (id, m.get("version")))
+        try:
+            inventory.append(catalog.source_entry(m))
+        except ValueError as e:
+            bad.append("extensions/%s: %s" % (id, e))
         t = m.get("tags", [])
         if not isinstance(t, list) or len(t) > TAGS_MOST or any(not isinstance(x, str) or not 0 < len(x) <= TAG_LONGEST for x in t):
             bad.append("extensions/%s: tags must be at most %d strings of 1 to %d characters" % (id, TAGS_MOST, TAG_LONGEST))
@@ -280,6 +284,10 @@ def check():
             if os.path.exists(os.path.join(ROOT, "extensions", id, gone)):
                 bad.append("extensions/%s: no %s (one manifest: %s; see docs/reference.md)" % (id, gone, NEW))
         bad += check_files(id, m) + check_pack(id, m) + check_junk(id)
+    try:
+        catalog.validate_entry_identities(inventory)
+    except ValueError as e:
+        bad.append(str(e))
     for b in bad:
         print(b, file=sys.stderr)
     return not bad

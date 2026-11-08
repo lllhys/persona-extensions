@@ -290,6 +290,35 @@ class GitContinuityRegressions(CatalogFixture, unittest.TestCase):
         self.write_signed(self.body)
         self.assertFalse(self.check())
 
+    def test_rename_declaration_must_match_real_signed_source_inventory(self):
+        source = dict(self.entry['manifest'], id='renamed', version='2.0.0',
+                      tags=self.entry['tags'], replaces='demo')
+        target = self.repo / 'extensions/renamed/persona-extension.json'
+        target.parent.mkdir(parents=True)
+        target.write_bytes(catalog.encode(source))
+        self.source_path.unlink()
+        self.pr_base = self.commit('Declare a synthetic replacement')
+        self.body['extensions'] = [dict(self.entry, manifest={k: v for k, v in source.items()
+                                                            if k not in ('tags', 'replaces')},
+                                       replaces='demo')]
+        self.body['generation'] = {
+            'repository': catalog.FINAL_REPOSITORY, 'repository_id': catalog.CLEANED_REPOSITORY_ID,
+            'base_catalog_hash': catalog.payload_hash(index.tree_catalog(self.pr_base)[0]),
+            'source_commit': self.pr_base,
+            'source_inventory_hash': catalog.inventory_hash(index.tree_inventory(self.pr_base)),
+            'mode': 'versions'}
+        self.write_signed(self.body)
+        self.assertTrue(self.check())
+        for predecessor in ('unrelated', None):
+            with self.subTest(predecessor=predecessor):
+                if predecessor is None:
+                    self.body['extensions'][0].pop('replaces')
+                else:
+                    self.body['extensions'][0]['replaces'] = predecessor
+                # A valid fresh signature cannot override reviewed source ownership.
+                self.write_signed(self.body)
+                self.assertFalse(self.check())
+
     def test_initial_conversion_against_real_raw_base_tree(self):
         raw, _ = self.write_signed(self.body)
         signature = catalog.loads(self.catalog_path.read_bytes())["signatures"][0]

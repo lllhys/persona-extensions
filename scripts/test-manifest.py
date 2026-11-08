@@ -2,6 +2,7 @@
 """Tests for scripts/manifest.py: what scripts/ci.sh release picks and the check() invariants.
 Run: python3 -I scripts/test-manifest.py."""
 import importlib.util
+import json
 import io
 import os
 import pathlib
@@ -11,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location('manifest', pathlib.Path(__file__).with_name('manifest.py'))
 manifest = importlib.util.module_from_spec(spec)
@@ -200,8 +202,12 @@ class GitFailureTests(unittest.TestCase):
             manifest.selected(['HEAD'])
 
     def test_changed_legitimately_reports_nothing_without_failing(self):
-        # Working-tree versions equal what is at HEAD: an empty list is a normal answer, not a failure.
-        self.assertEqual(manifest.changed('HEAD'), [])
+        # A synthetic unchanged source is independent of uncommitted version edits.
+        self.stub({'rev-parse': self.cp(0),
+                   'show': self.cp(0, stdout=json.dumps({'version': '1.2.3'}))})
+        with mock.patch.object(manifest, 'ids', return_value=['synthetic']), \
+                mock.patch.object(manifest, 'load', return_value={'version': '1.2.3'}):
+            self.assertEqual(manifest.changed('HEAD'), [])
 
     def test_selected_takes_several_ids_and_keeps_order(self):
         ids = manifest.ids()[:2]

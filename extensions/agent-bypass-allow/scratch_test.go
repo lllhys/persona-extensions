@@ -293,7 +293,7 @@ func TestNodeWritesOptions(t *testing.T) {
 		e := newEnv(t)
 		t.Setenv("HOME", filepath.Dir(e.config))
 		writeJSON(t, filepath.Join(e.data, optionsFile), `{"allow_destructive":true}`) // an old one
-		n := &node{bin: "/opt/bin/claude-bypass-allow"}
+		n := &node{bin: "/opt/bin/" + currentExtensionID}
 		in := initWith(e, c.config)
 		ctx, cancel := context.WithCancel(context.Background())
 		if _, err := n.init(ctx, in, nil); err != nil {
@@ -314,7 +314,7 @@ func TestNodeWritesOptions(t *testing.T) {
 
 func initWith(e env, config string) *ext.Init {
 	in := &ext.Init{}
-	in.Extension = &wire.ExtensionInfo{ID: "claude-bypass-allow", DataDir: e.data}
+	in.Extension = &wire.ExtensionInfo{ID: currentExtensionID, DataDir: e.data}
 	in.InitializeParams.Config = json.RawMessage(config)
 	return in
 }

@@ -8,8 +8,9 @@ on:
     inputs:
       phase:
         type: choice
-        options: [packages, catalog]
-        description: Push packages, or anonymously verify and sign a prior package plan
+        options: [check, packages, catalog]
+        description: Run checks only, push packages, or anonymously verify and sign a prior package plan
+        default: check
         required: true
       mode:
         type: choice
@@ -44,8 +45,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CONFIRM: ${{ inputs.confirm_cutover }}
+          PHASE: ${{ inputs.phase }}
         run: |
-          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$PHASE" = check ]; then
+            printf '%s\n' 'Checks-only dispatch: no publication or signing.'
+            printf '%s\n' 'publish=false' >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             if [ "$CONFIRM" != true ]; then
               printf '%s\n' 'Publication requires explicit cutover confirmation.'
               exit 1
@@ -76,7 +81,7 @@ jobs:
           CATALOG_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
   ci-required:
     name: CI required
-    if: ${{ always() && github.event_name == 'pull_request' }}
+    if: ${{ always() && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.phase == 'check')) }}
     needs: [check]
     runs-on: ubuntu-latest
     timeout-minutes: 5

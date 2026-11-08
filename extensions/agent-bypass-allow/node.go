@@ -159,7 +159,7 @@ func (n *node) install(dirs []string) {
 			}
 		}
 		if s.Error != "" {
-			fmt.Fprintf(os.Stderr, "claude-bypass-allow: %s: %s\n", d, s.Error)
+			fmt.Fprintf(os.Stderr, "%s: %s: %s\n", currentExtensionID, d, s.Error)
 		}
 		n.dirs = append(n.dirs, s)
 	}
@@ -192,7 +192,7 @@ func (n *node) cleanup() {
 			continue
 		}
 		if _, err := uninstallHook(s.Settings); err != nil {
-			fmt.Fprintf(os.Stderr, "claude-bypass-allow: %s: %v\n", s.Dir, err)
+			fmt.Fprintf(os.Stderr, "%s: %s: %v\n", currentExtensionID, s.Dir, err)
 		}
 	}
 }

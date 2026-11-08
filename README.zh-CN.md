@@ -38,6 +38,8 @@ https://github.com/user-attachments/assets/172bb2bb-6c28-401e-aae2-695f67e8356d
 
 有哪些扩展请直接看 [`extensions/`](extensions/) 目录，每个扩展的说明在各自的目录里，较长的指南在 [`docs/extensions/`](docs/extensions/)（英文）。
 
+bypass 扩展的源码现已更名为 `agent-bypass-allow`（原 `claude-bypass-allow`）。同市场更新需要明确确认身份变更，并保留已安装的设置、规则和数据。请先等安装包和目录发布，并升级 hub 与节点；不要用卸载重装来迁移。见[扩展说明](docs/extensions/agent-bypass-allow.md#upgrading-from-the-former-id)（英文）。
+
 ## 文档与贡献
 
 以下详细文档默认使用英文：

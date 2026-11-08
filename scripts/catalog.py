@@ -32,6 +32,51 @@ def payload_hash(payload):
     return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
+def valid_extension_id(value):
+    return isinstance(value, str) and len(value) <= 32 and re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", value) is not None
+
+
+def source_entry(source):
+    """Project author metadata into an inventory entry without changing runtime manifests."""
+    manifest = dict(source)
+    tags = manifest.pop("tags", [])
+    has_predecessor = "replaces" in manifest
+    predecessor = manifest.pop("replaces", None)
+    entry = {"manifest": manifest, "tags": tags}
+    if has_predecessor:
+        if not valid_extension_id(predecessor) or predecessor == manifest.get("id"):
+            raise ValueError("invalid extension replaces declaration")
+        entry["replaces"] = predecessor
+    return entry
+
+
+def entry_inventory(entry):
+    """The exact source-owned fields covered by generation provenance."""
+    result = {"manifest": entry["manifest"], "tags": entry.get("tags", [])}
+    if "replaces" in entry:
+        result["replaces"] = entry["replaces"]
+    return result
+
+
+def validate_entry_identities(entries):
+    ids, predecessors = set(), set()
+    for entry in entries:
+        extension_id = entry["manifest"].get("id")
+        if not valid_extension_id(extension_id) or extension_id in ids:
+            raise ValueError("unsafe or duplicate extension id")
+        ids.add(extension_id)
+        if "replaces" in entry:
+            predecessor = entry["replaces"]
+            if not valid_extension_id(predecessor) or predecessor == extension_id:
+                raise ValueError("invalid extension replaces declaration")
+            if predecessor in predecessors:
+                raise ValueError("ambiguous extension replaces declaration")
+            predecessors.add(predecessor)
+    if predecessors & ids:
+        raise ValueError("replacement predecessor is still a current extension (cycle or duplicate identity)")
+    return entries
+
+
 def inventory_hash(inventory):
     # Explicit canonical encoding here is for inventory provenance, never for signature verification.
     raw = json.dumps(inventory, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
@@ -123,14 +168,13 @@ def validate_payload(payload):
         raise ValueError("extensions must be an array")
     if "generation" in payload:
         validate_generation(payload["generation"])
-    ids = set()
+    validate_entry_identities(entries)
     for entry in entries:
         m = entry["manifest"]
-        if not isinstance(m["id"], str) or len(m["id"]) > 32 or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", m["id"]) or m["id"] in ids:
-            raise ValueError("unsafe or duplicate extension id")
-        ids.add(m["id"])
         if "tags" in m:
             raise ValueError("packaged manifests must not contain tags")
+        if "replaces" in m:
+            raise ValueError("packaged manifests must not contain replaces")
         if not valid_version(m["version"]):
             raise ValueError("unsafe extension version")
         packages = entry["packages"]
