@@ -121,9 +121,11 @@ Self-hosted destinations outside the original grant remain denied, as before.
   complete DSN URL normalization/escaping parity until this delivery path is fixed.
   Canonical DSNs have local regressions. Signed Go rate-limit duration wrapping
   and integer-only Retry-After behavior are retained and checked at millisecond precision.
-- SDK dependency PR CI/layout currently fails on the official
-  `sdk/ts/scripts/int64-oracle.go` layout rule (tracked separately). The SDK and
-  repository guard are not edited or skipped here.
+- Local repository CI at the pinned SDK base fails on the official
+  `sdk/ts/scripts/int64-oracle.go` layout rule. The guard and copied SDK are not
+  edited or skipped here. The dependency branch subsequently adopted the normal
+  official layout fix in PR #166; its live merge head and required hosted CI must
+  be verified before this source profile can advance.
 - Required hosted CI, installed-hub delivery/scrubbing/isolation, management-page
   interactions and inspected screenshots remain coordinating-agent gates.
 
