@@ -8,7 +8,7 @@ Each extension is rooted at `extensions/<id>/` and has one manifest, `persona-ex
 
 | Field or file | Purpose |
 | --- | --- |
-| `manifest_version`, `id`, `name`, `version` | Manifest format and extension identity; version is `MAJOR.MINOR.PATCH`, optionally with a prerelease suffix. |
+| `manifest_version`, `id`, `name`, `version` | Manifest format and extension identity; SemVer `MAJOR.MINOR.PATCH`, optionally with prerelease identifiers, no numeric leading zeros or build metadata, at most 96 ASCII characters. See [OCI naming](releases.md#oci-contract). |
 | `engines` | Host/protocol compatibility requirements. `plugin_protocol` remains a compatibility identifier. |
 | `runtime.command` | Platform-to-binary map; package paths are `bin/<id>-<platform>`. |
 | `contributes` | Connectors, app views, assistant skills and other contributions supported by the host. |
@@ -37,16 +37,16 @@ Telegram's [serve adapter](../extensions/telegram/internal/serve/serve.go) dispa
 
 The repository was created during the Plugin → Extension migration's public-repository split. Historical implementation names are not prose to translate or blindly rename.
 
-- New hubs read `persona-extension.json` and `persona-extensions.json` (`extensions` entries).
-- Pre-rename hubs read `persona-plugin.json` and `persona-plugins.json` (`plugins` entries), and use `personad plugin …`.
+- Current hubs need embedded-signature catalog and OCI support to read `persona-extensions.json`; its raw UTF-8 `payload` contains `extensions` entries. Upgrade the hub before switching the catalog format.
+- Older hubs can still install local packages with the compatible `persona-plugin.json` manifest and `personad plugin …`; there is no legacy market catalog in this repository.
 - Packages include both manifest names. [scripts/package.sh](../scripts/package.sh) writes both from `persona-extension.json`; the legacy file is never committed.
 - Hubs from before `tags` read manifests strictly and refuse unknown fields. Packages and index entries therefore carry the manifest without `tags` (`scripts/manifest.py packaged`); the index entry carries the tags in its own `tags` field, and the SDK drops them when a program answers `manifest`. `scripts/index.py check` rejects an index manifest that still has them.
-- Both indexes list equivalent extension ids, versions and packages; their metadata also agrees. Each is signed separately over its exact bytes.
+- The catalog has one embedded Ed25519 signature over the raw UTF-8 payload string. Its public key remains the approved cleaned repository key; no detached signature or standalone key file is served.
 - Protocol names and placements such as `plugin_protocol` and LINUX DO's `plugin_page` remain intentional. The host may expose a newer UI name without making the older manifest identifier invalid.
 
-The legacy copies follow the compatibility period of nwverse/persona#1843: packaging keeps generating `persona-plugin.json`, and the index keeps `persona-plugins.json`, until at least 2027-05-05 and until the hub logs no calls to the old interfaces for 30 consecutive days. Stop generating them in a separate change after that. Stripping `tags` from packaged manifests lasts until the market no longer serves hubs from before `tags`.
+The package manifest copies still follow the compatibility period of nwverse/persona#1843: packaging keeps generating `persona-plugin.json` until at least 2027-05-05 and until the hub logs no calls to the old interfaces for 30 consecutive days. The approved catalog format migration is a separate decision: it removes the legacy catalog and detached files now. Stripping `tags` from packaged manifests lasts until the market no longer serves hubs from before `tags`.
 
-Do not remove old files or rename protocol identifiers as part of documentation cleanup. See [releases](releases.md) for index and signing details.
+Do not rename protocol identifiers or remove the compatible package manifest as part of the catalog migration. See [releases](releases.md) for catalog signing, OCI publication and the cutover gate.
 
 ## SDK ownership
 

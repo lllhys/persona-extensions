@@ -15,9 +15,11 @@
 """
 import json, os, posixpath, re, subprocess, sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import catalog
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NEW, OLD = "persona-extension.json", "persona-plugin.json"
-SEMVER = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$")
 # What a hub takes as a market entry's tags (nwverse/persona server/internal/extension/market.go).
 TAGS_MOST, TAG_LONGEST = 16, 24
 # The directories scripts/package.sh copies into a package besides the manifest and the program.
@@ -268,7 +270,7 @@ def check():
             continue
         if m.get("id") != id:
             bad.append("extensions/%s: the manifest's id is %r, not the directory's name" % (id, m.get("id")))
-        if not SEMVER.match(str(m.get("version", ""))):
+        if not catalog.valid_version(m.get("version", "")):
             bad.append("extensions/%s: version %r is not MAJOR.MINOR.PATCH" % (id, m.get("version")))
         t = m.get("tags", [])
         if not isinstance(t, list) or len(t) > TAGS_MOST or any(not isinstance(x, str) or not 0 < len(x) <= TAG_LONGEST for x in t):

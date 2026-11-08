@@ -1,10 +1,4 @@
-# Pull requests: scripts/ci.sh (manifests, gofmt, the copied SDK's vet and tests, vet, tests, every platform builds,
-# both indexes agree).
-# main: the same, then release the extensions whose version changed since the last commit a release run finished for
-# (else since the push's "before"), update both indexes and commit them.
-# A manual run releases the extensions named (a version merged earlier and held back until now).
-# Both jobs run on GitHub-hosted ubuntu-latest (a public repository: no self-hosted runner, no runner variable).
-# Pull requests must pass the required aggregate check before merging.
+# Checks always run; publication stays disabled until the cleaned repository completes cutover.
 name: ci
 on:
   pull_request:
@@ -12,32 +6,80 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      extensions:
-        description: Extension ids to release, separated by spaces
+      phase:
+        type: choice
+        options: [packages, catalog]
+        description: Push packages, or anonymously verify and sign a prior package plan
         required: true
+      mode:
+        type: choice
+        options: [bootstrap, versions]
+        description: Bootstrap reuses the frozen cleaned Release archives; versions never creates Releases
+        default: bootstrap
+      package_run_id:
+        description: Successful same-checkout-SHA package run (required for catalog phase)
+        required: false
+      confirm_cutover:
+        type: boolean
+        description: The cutover owner has confirmed completion (final repository name and id are also checked)
+        default: false
 permissions:
   contents: read
-# A pull request's new push cancels its older run. A push to main is never cancelled here: its run gets a group of
-# its own, and its release job waits in the release group below.
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('ci-{0}', github.ref) || format('ci-{0}-{1}', github.ref, github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  check:
-    if: github.event_name == 'pull_request'
+  identity:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      publish: ${{ steps.gate.outputs.publish }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: gate
+        name: Require completed cutover before any publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONFIRM: ${{ inputs.confirm_cutover }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            if [ "$CONFIRM" != true ]; then
+              printf '%s\n' 'Publication requires explicit cutover confirmation.'
+              exit 1
+            fi
+            python3 -I scripts/publish-oci.py gate --confirm-cutover
+            printf '%s\n' 'publish=true' >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_REPOSITORY" = nwverse/persona-extensions ] && [ "$GITHUB_REPOSITORY_ID" = 1449704212 ]; then
+            python3 -I scripts/publish-oci.py gate --confirm-cutover
+            printf '%s\n' 'publish=true' >> "$GITHUB_OUTPUT"
+          else
+            printf '%s\n' 'Cutover not enabled: checks only, no package publication.'
+            printf '%s\n' 'publish=false' >> "$GITHUB_OUTPUT"
+          fi
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # PR continuity reads the actual base and signed source ancestry.
       - uses: actions/setup-go@v5
         with:
           go-version-file: pluginkit/go.mod
-          cache-dependency-path: "**/go.sum"
+          cache-dependency-path: '**/go.sum'
       - run: scripts/ci.sh
+        env:
+          CATALOG_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
   ci-required:
     name: CI required
     if: ${{ always() && github.event_name == 'pull_request' }}
     needs: [check]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions: {}
     steps:
       - name: Require successful checks
@@ -48,130 +90,106 @@ jobs:
             printf 'Required check did not succeed: %s\n' "$CHECK_RESULT"
             exit 1
           fi
-  release:
-    permissions:
-      contents: write
-    if: github.event_name != 'pull_request'
-    # One release at a time per branch, and a running one is never cancelled. GitHub still keeps only one waiting
-    # run per group (a newer one replaces it), so a release diffs from the last commit CI released for, not only from
-    # its own push's "before": the versions of a replaced run go out with the next one.
-    concurrency:
-      group: release-${{ github.ref }}
-      cancel-in-progress: false
+  packages:
+    needs: [identity, check]
+    if: needs.identity.outputs.publish == 'true' && (github.event_name == 'push' || inputs.phase == 'packages')
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    # Global across trusted refs; no concurrent tag writers and no cancellation mid-upload.
+    concurrency:
+      group: persona-extension-oci-publication
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: pluginkit/go.mod
-          cache-dependency-path: "**/go.sum"
-      # scripts/release.sh uses gh; ubuntu-latest has it. Should a runner not: a fixed release of GitHub's own,
-      # checked against the sha256 written here, unpacked in the job's temporary directory (no sudo, nothing kept).
-      - name: gh
-        run: |
-          if command -v gh >/dev/null; then gh --version | head -1; exit 0; fi
-          v=2.103.3
-          case "$(uname -m)" in
-            x86_64) arch=amd64 sum=4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d ;;
-            aarch64 | arm64) arch=arm64 sum=ee32df2323c8847f5fac6cb6b4b69ca75828e9329a8f22f677021f7b3306ce63 ;;
-            *) echo "::error::no gh for $(uname -m)"; exit 1 ;;
-          esac
-          f="gh_${v}_linux_${arch}.tar.gz"
-          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$f" "https://github.com/cli/cli/releases/download/v${v}/$f"
-          echo "$sum  $RUNNER_TEMP/$f" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/gh_${v}_linux_${arch}/bin" >> "$GITHUB_PATH"
-          "$RUNNER_TEMP/gh_${v}_linux_${arch}/bin/gh" --version | head -1
-      - name: Check and release
+          cache-dependency-path: '**/go.sum'
+      - name: Push once or verify and reuse existing versions
         env:
-          BEFORE: ${{ github.event.before }}
-          NAMED: ${{ inputs.extensions }}
-        run: |
-          if [ -n "$NAMED" ]; then
-            read -ra named <<< "$NAMED"  # split on spaces, no glob expansion
-            scripts/ci.sh release "${named[@]}"
-          elif [ -z "$BEFORE" ] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ]; then
-            scripts/ci.sh
-          else
-            # From the last commit CI released for, else this push's "before": a run dropped while it waited (GitHub
-            # keeps one waiting run per group) released nothing, and its versions go out with this one.
-            base=$(scripts/manifest.py base "$(scripts/manifest.py last-released)" "$BEFORE")
-            echo "diffing from ${base:-$BEFORE}"
-            scripts/ci.sh release "${base:-$BEFORE}"
-          fi
-      # The index's signature (nwverse/persona#1848): only with the market's key in the repository's secrets.
-      # The key is given to this step only, not to the steps that run the extensions' code and tests.
-      - name: Sign the index
+          GH_TOKEN: ${{ github.token }}
+          GHCR_TOKEN: ${{ github.token }}
+          MODE: ${{ github.event_name == 'push' && 'versions' || inputs.mode }}
+        run: python3 -I scripts/publish-oci.py push --confirm-cutover --mode "$MODE" --output "$RUNNER_TEMP/packages"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          overwrite: true # Reruns share the run id; replace the partial plan.
+          name: oci-package-plan
+          path: |
+            ${{ runner.temp }}/packages/plan.json
+            ${{ runner.temp }}/packages/package-settings.json
+          if-no-files-found: error
+          retention-days: 30
+  anonymous:
+    needs: [identity, check]
+    if: needs.identity.outputs.publish == 'true' && github.event_name == 'workflow_dispatch' && inputs.phase == 'catalog'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate artifact provenance before download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_RUN_ID: ${{ inputs.package_run_id }}
+        run: python3 -I scripts/publish-oci.py validate-run --confirm-cutover --run-id "$PACKAGE_RUN_ID"
+      - name: Require a new empty artifact directory
+        run: mkdir "$RUNNER_TEMP/package-plan"
+      - uses: actions/download-artifact@v4
+        with:
+          name: oci-package-plan
+          path: ${{ runner.temp }}/package-plan
+          run-id: ${{ inputs.package_run_id }}
+          github-token: ${{ github.token }}
+      - name: Anonymous public gate and payload generation
+        env:
+          GH_TOKEN: ${{ github.token }} # GitHub identity check only; registry clients are explicitly anonymous.
+        run: python3 -I scripts/publish-oci.py catalog --confirm-cutover --plan "$RUNNER_TEMP/package-plan/plan.json" --output "$RUNNER_TEMP/unsigned"
+      - uses: actions/upload-artifact@v4
+        with:
+          overwrite: true
+          name: verified-unsigned-payload
+          path: ${{ runner.temp }}/unsigned/payload.json
+          if-no-files-found: error
+  sign:
+    needs: [anonymous]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require a new empty artifact directory
+        run: mkdir "$RUNNER_TEMP/unsigned"
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-unsigned-payload
+          path: ${{ runner.temp }}/unsigned
+      # No build/test/untrusted extension code in this job. The secret belongs only to this step.
+      - name: Sign raw payload with the approved existing key
         env:
           EXTENSION_MARKET_SIGNING_KEY: ${{ secrets.EXTENSION_MARKET_SIGNING_KEY }}
         run: |
-          if [ -z "$EXTENSION_MARKET_SIGNING_KEY" ]; then echo "::warning::no EXTENSION_MARKET_SIGNING_KEY; index not signed"; exit 0; fi
-          scripts/sign-index.py && scripts/sign-index.py verify
-      # Staged first, so signatures that were not there before (an index whose entries were removed by hand, and its
-      # stale .sig with them) are committed too.
-      # Packaging takes long enough that another merge often lands on main meanwhile (runs 42076093722, 42078092272:
-      # "fetch first"), so the commit is rebased onto the branch as it is now, a few times if it keeps moving. The index
-      # files must come out of the rebase byte for byte as signed; a conflict (an index changed on main meanwhile) fails
-      # the job, and a manual run for that id (scripts/ci.sh release <id>) then puts the released version in.
-      - name: Commit the index
-        env:
-          BRANCH: ${{ github.ref_name }}
-          NAMED: ${{ inputs.extensions }}
-          INDEX_DEPLOY_KEY: ${{ secrets.EXTENSION_INDEX_DEPLOY_KEY }}
-        run: |
-          files="persona-extensions.json persona-plugins.json persona-extensions.json.sig persona-plugins.json.sig"
-          for f in $files; do
-            if [ -e "$f" ]; then git add "$f"; fi
-          done
-          if git diff --cached --quiet; then exit 0; fi
-          # Only this step receives the deploy key. Keep it in ssh-agent memory, never in a key file.
-          if [ -z "$INDEX_DEPLOY_KEY" ]; then
-            printf '%s\n' '::error::EXTENSION_INDEX_DEPLOY_KEY is required to push the signed index'
-            exit 1
-          fi
-          key="$INDEX_DEPLOY_KEY"
-          unset INDEX_DEPLOY_KEY
-          eval "$(ssh-agent -s)" >/dev/null
-          trap 'ssh-agent -k >/dev/null 2>&1 || true' EXIT
-          printf '%s\n' "$key" | ssh-add - >/dev/null 2>&1
-          unset key
-          # GitHub's host keys come from its authenticated HTTPS API, not an unauthenticated key scan.
-          gh api meta --jq '.ssh_keys[] | "github.com " + .' > "$RUNNER_TEMP/index-known-hosts"
-          git config core.sshCommand "ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/index-known-hosts"
-          git remote set-url --push origin "git@github.com:${GITHUB_REPOSITORY}.git"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # "market: index after <sha>" marks what a push's release covered (scripts/manifest.py last-released); a
-          # manual run released only the ids named, so its commit must not look like one.
-          if [ -n "$NAMED" ]; then
-            msg="market: index for $NAMED"  # a variable, so the input is not expanded again
-            git commit -m "$msg"
-          else
-            git commit -m "market: index after ${GITHUB_SHA::7}"
-          fi
-          signed() { for f in $files; do echo "$f $(git rev-parse -q --verify "HEAD:$f" || echo none)"; done; }
-          want=$(signed)
-          for try in 1 2 3 4 5; do
-            git fetch origin "$BRANCH"
-            if ! git rebase FETCH_HEAD; then
-              git rebase --abort || true
-              echo "::error::the index commit does not rebase onto origin/$BRANCH (the index changed there meanwhile)"
-              exit 1
-            fi
-            if [ "$(signed)" != "$want" ]; then
-              echo "::error::after the rebase the index files are not the ones signed"
-              exit 1
-            fi
-            scripts/index.py check
-            scripts/sign-index.py verify
-            if git push origin "HEAD:$BRANCH"; then exit 0; fi
-            echo "push $try rejected; main moved, rebasing again"
-            sleep $((try * 5))
-          done
-          echo "::error::the index commit was not pushed after 5 tries"
-          exit 1
+          mkdir "$RUNNER_TEMP/signed"
+          python3 -I scripts/sign-index.py sign --payload "$RUNNER_TEMP/unsigned/payload.json" --output "$RUNNER_TEMP/signed/persona-extensions.json" --source-commit "$GITHUB_SHA"
+          python3 -I scripts/sign-index.py verify --catalog "$RUNNER_TEMP/signed/persona-extensions.json"
+          printf '%s\n' 'Catalog artifact only: create or reuse a dedicated catalog-update issue before opening its PR. Put Refs #<catalog-issue-number> in that PR body; #146 is code tracking only. Require the PR own CI; never push the catalog directly to main.' > "$RUNNER_TEMP/signed/PR-body.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          overwrite: true
+          name: signed-oci-catalog
+          path: ${{ runner.temp }}/signed/
+          if-no-files-found: error
+          retention-days: 30

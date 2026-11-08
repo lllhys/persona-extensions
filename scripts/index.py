@@ -1,116 +1,117 @@
 #!/usr/bin/env python3
-"""The market's index (docs/releases.md, "Market and indexes"), in two files with the same entries:
+"""Verify signatures and, on PRs, signed continuity against GitHub's actual base commit."""
+import argparse
+import os
+import pathlib
+import re
+import subprocess
+import sys
 
-  persona-extensions.json   key "extensions", read by hubs that know extensions (nwverse/persona#1844)
-  persona-plugins.json      key "plugins" with the old manifest, read by hubs from before the rename
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import catalog
 
-  scripts/index.py add <id> <tag>   put dist/<id>-<version>.tar.gz in as the release asset of <tag>
-  scripts/index.py has <id> <tag>   exit 0 when both files list <id> with a package of release <tag>
-                                    (release:<tag>/<file>, pinned by its sha256); its entry is replaced, the others stay
-  scripts/index.py check            both files list the same full entries (manifest, tags and packages), no id
-                                    twice in one index, and no entry's manifest has tags (what CI runs)
-
-An entry's manifest is scripts/manifest.py packaged (the manifest without tags, as the package carries it); its tags
-are the manifest's.
-
-The signature of both files is scripts/sign-index.py (nwverse/persona#1848).
-"""
-import hashlib, json, os, sys
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import manifest  # noqa: E402
-
-ROOT = manifest.ROOT
-NEW = os.path.join(ROOT, "persona-extensions.json")
-OLD = os.path.join(ROOT, "persona-plugins.json")
+ROOT = str(catalog.ROOT)
+NEW = str(catalog.CATALOG)
 
 
-def read(p, key):
-    if not os.path.exists(p):
-        return None
-    with open(p) as f:
-        d = json.load(f)
-    d.setdefault(key, [])
-    return d
+def git(*args):
+    result = subprocess.run(["git", "-C", ROOT, *args], capture_output=True, timeout=30)
+    if result.returncode:
+        raise ValueError("cannot read trusted git provenance")
+    return result.stdout
 
 
-def write(p, d):
-    with open(p, "w") as f:
-        json.dump(d, f, ensure_ascii=False, indent=2)
-        f.write("\n")
+def full_sha(value):
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{40}", value):
+        raise ValueError("trusted base must be a full commit SHA")
+    return value
 
 
-def meta(d):
-    return {k: d[k] for k in ("market_version", "name", "description", "homepage", "signing_key") if k in d}
+def base_payload(data, signature=None):
+    body = catalog.loads(data)
+    if "payload" in body:
+        return catalog.verified_data(data)[0], body["signatures"]
+    # Only the initial raw-to-envelope conversion may use a detached signature from the real base tree.
+    if signature is None:
+        raise ValueError("raw base catalog requires its original detached signature")
+    catalog.verify_signature(data, signature)
+    catalog.validate_payload(body)
+    if body.get("signing_key") != catalog.APPROVED_PUBLIC_KEY:
+        raise ValueError("base signing key differs from approved key")
+    return data, [signature]
 
 
-def add(id, tag):
-    m = manifest.load(id)
-    pkg = "%s-%s.tar.gz" % (id, m["version"])
-    data = open(os.path.join(ROOT, "dist", pkg), "rb").read()
-    new, old = read(NEW, "extensions"), read(OLD, "plugins")
-    if new is None and old is None:
-        sys.exit("no index yet: write persona-extensions.json with market_version, name, description first")
-    head = meta(new or old)
-    new = new or dict(head, extensions=[])
-    old = old or dict(head, plugins=[])
-    # The tags come out of the manifest into the entry: hubs from before tags refuse a manifest with them.
-    man, tags = manifest.packaged(id), manifest.tags(id)
-    packages = [{"url": "release:%s/%s" % (tag, pkg), "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}]
-    for d, key in ((new, "extensions"), (old, "plugins")):
-        d[key] = [e for e in d[key] if e["manifest"]["id"] != id] + [{"manifest": man, "tags": tags, "packages": packages}]
-        d[key].sort(key=lambda e: e["manifest"]["id"])
-    write(NEW, new)
-    write(OLD, old)
-    print("index: %s %s → release:%s/%s" % (id, m["version"], tag, pkg))
+def tree_catalog(ref):
+    data = git("show", full_sha(ref) + ":persona-extensions.json")
+    signature = None
+    if "payload" not in catalog.loads(data):
+        signature = catalog.loads(git("show", ref + ":persona-extensions.json.sig"))
+    return base_payload(data, signature)
 
 
-def has(id, tag):
-    """Whether both indexes list id with a package of release tag."""
-    for path, key in ((NEW, "extensions"), (OLD, "plugins")):
-        d = read(path, key)
-        if d is None or not any(e["manifest"]["id"] == id and any(p["url"].startswith("release:%s/" % tag) for p in e["packages"]) for e in d[key]):
-            return False
-    return True
+def tree_inventory(ref):
+    paths = git("ls-tree", "-r", "--name-only", full_sha(ref), "--", "extensions").decode().splitlines()
+    inventory = []
+    for path in sorted(paths):
+        match = re.fullmatch(r"extensions/([a-z0-9]+(?:-[a-z0-9]+)*)/persona-extension.json", path)
+        if not match:
+            continue
+        m = catalog.loads(git("show", ref + ":" + path))
+        if m.get("id") != match[1]:
+            raise ValueError("source inventory directory/id mismatch")
+        tags = m.pop("tags", [])
+        inventory.append({"manifest": m, "tags": tags})
+    return sorted(inventory, key=lambda e: e["manifest"]["id"])
 
 
-def check():
-    new, old = read(NEW, "extensions"), read(OLD, "plugins")
-    if new is None or old is None:
-        print("persona-extensions.json and persona-plugins.json must both be there", file=sys.stderr)
+def check_source(generation, base_ref, body):
+    full_sha(base_ref)
+    source = generation["source_commit"]
+    # Commit and repository identity are not taken from a PR/artifact sidecar. The signed source must
+    # be in the real base history and carry exactly its current inventory and predecessor catalog.
+    git("merge-base", "--is-ancestor", source, base_ref)
+    source_inventory, base_inventory = tree_inventory(source), tree_inventory(base_ref)
+    if catalog.inventory_hash(source_inventory) != generation["source_inventory_hash"] or source_inventory != base_inventory:
+        raise ValueError("signed source inventory is stale or does not match trusted PR base")
+    if catalog.payload_hash(tree_catalog(source)[0]) != generation["base_catalog_hash"]:
+        raise ValueError("signed source catalog does not match generation base")
+    if generation["mode"] == "versions":
+        current = [{"manifest": e["manifest"], "tags": e["tags"]} for e in body["extensions"]]
+        if current != base_inventory:
+            raise ValueError("generated catalog does not match complete source inventory")
+
+
+def check(path=None, *, base_catalog=None, base_signature=None, repository_id=None, base_ref=None):
+    try:
+        payload, body = catalog.verified(path or NEW)
+        if base_catalog is None and base_ref is None:
+            return True  # Offline signature check is not a PR continuity verdict.
+        if str(repository_id) != str(catalog.CLEANED_REPOSITORY_ID):
+            raise ValueError("PR repository is not the cleaned repository")
+        if base_catalog is not None:
+            prior, signatures = base_payload(pathlib.Path(base_catalog).read_bytes(), base_signature)
+        else:
+            prior, signatures = tree_catalog(base_ref)
+        wrapper = catalog.loads(pathlib.Path(path or NEW).read_bytes())
+        if payload == prior and wrapper["signatures"] == signatures:
+            return True  # Unchanged catalog or byte-identical format conversion, never an older payload.
+        generation = catalog.validate_generation(body.get("generation"))
+        if generation["base_catalog_hash"] != catalog.payload_hash(prior):
+            raise ValueError("signed catalog is stale: predecessor differs from actual PR base catalog")
+        check_source(generation, base_ref, body)
+        return True
+    except (ValueError, OSError, TypeError, KeyError, subprocess.SubprocessError) as error:
+        print("catalog: " + str(error), file=sys.stderr)
         return False
-
-    def canon(entries):
-        # Whole entries, not just id/version/packages: a drift in the manifest body or the entry tags is a bad
-        # hand-edit too. sort_keys keeps key order irrelevant; the entries themselves stay ordered by id.
-        return json.dumps(entries, sort_keys=True, ensure_ascii=False)
-
-    if canon(new["extensions"]) != canon(old["plugins"]):
-        print("persona-extensions.json and persona-plugins.json list different entries (manifest, tags or packages)", file=sys.stderr)
-        return False
-    for path, d, key in ((NEW, new, "extensions"), (OLD, old, "plugins")):
-        ids = [e["manifest"]["id"] for e in d[key]]
-        dup = sorted({i for i in ids if ids.count(i) > 1})
-        if dup:
-            print("%s lists an id more than once: %s" % (os.path.basename(path), ", ".join(dup)), file=sys.stderr)
-            return False
-    tagged = [e["manifest"]["id"] for d, k in ((new, "extensions"), (old, "plugins")) for e in d[k] if "tags" in e["manifest"]]
-    if tagged:
-        print("index entries whose manifest has tags (hubs from before tags refuse it): %s" % ", ".join(tagged), file=sys.stderr)
-        return False
-    if meta(new) != meta(old):
-        print("persona-extensions.json and persona-plugins.json have a different name or description", file=sys.stderr)
-        return False
-    return True
 
 
 if __name__ == "__main__":
-    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
-    if cmd == "has" and len(sys.argv) == 4:
-        sys.exit(0 if has(sys.argv[2].rstrip("/").removeprefix("extensions/"), sys.argv[3]) else 1)
-    if cmd == "add" and len(sys.argv) == 4:
-        add(sys.argv[2].rstrip("/").removeprefix("extensions/"), sys.argv[3])
-    elif cmd == "check":
-        sys.exit(0 if check() else 1)
-    else:
-        sys.exit(__doc__)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command", choices=["check"])
+    parser.add_argument("--catalog", default=NEW)
+    parser.add_argument("--base-ref", default=os.environ.get("CATALOG_PR_BASE_SHA") or None)
+    parser.add_argument("--repository-id", default=os.environ.get("GITHUB_REPOSITORY_ID"))
+    args = parser.parse_args()
+    if os.environ.get("GITHUB_EVENT_NAME") == "pull_request" and not args.base_ref:
+        parser.error("PR validation requires the GitHub base SHA")
+    sys.exit(0 if check(args.catalog, base_ref=args.base_ref, repository_id=args.repository_id) else 1)

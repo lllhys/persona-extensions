@@ -1,16 +1,7 @@
 #!/bin/bash
-# What CI runs, runnable on any machine with Go, a C compiler (the race detector), Python 3 and (for release) gh:
-#   scripts/ci.sh            the checks a pull request needs: documentation links, the repository layout (no
-#                            package-manager file at the root), manifests, gofmt, the copied SDK's vet and tests,
-#                            every Go module's tidiness, vet and tests with the race detector, every platform builds,
-#                            indexes, and the indexes' signatures against market.pub (nwverse/persona#1848)
-#   scripts/ci.sh release <base>    then release the extensions whose version changed since the git ref <base>
-#                                   (a push to main: the last commit a release run finished for, else its "before");
-#                                   a version merged but meant to wait is not released
-#   scripts/ci.sh release <id>…     then release these (CI's manual run; extensions/<id> too). An argument that is
-#                                   neither an extension nor a git commit fails the release, not selects them all
-# A version is released once: one that has its release already is skipped, unless the index does not have it yet.
+# Portable checks only. Publication is a separate gated workflow (docs/releases.md).
 set -euo pipefail
+[ "$#" -eq 0 ] || { printf '%s\n' 'ci: failed; publication arguments are not supported' >&2; exit 1; }
 cd "$(dirname "$0")/.."
 step() { printf '\n== %s\n' "$*"; }
 
@@ -68,30 +59,10 @@ step signature
 scripts/sign-index.py verify
 python3 -I scripts/test-sign-index.py
 
-if [ "${1:-}" = release ]; then
-  shift
-  step release
-  # Captured, not read from a process substitution: under set -e an argument that is neither an id nor a git
-  # commit, or manifest.py's own git failing, stops the release here instead of an empty "nothing to release".
-  ids=$(scripts/manifest.py selected "$@")
-  [ -n "$ids" ] || echo "nothing to release"
-  for id in $ids; do
-    tag="$id-v$(scripts/manifest.py version "$id")"
-    if gh release view "$tag" >/dev/null 2>&1; then
-      if scripts/index.py has "$id" "$tag"; then
-        echo "$tag: released already"
-      else
-        # Released, but the index commit after it was lost (a push racing another merge to main): put the package
-        # that was uploaded into the index, not a new build of it (its bytes, so its sha256, may differ).
-        echo "$tag: released, not in the index: adding it"
-        gh release download "$tag" -p "$id-$(scripts/manifest.py version "$id").tar.gz" -D dist --clobber
-        scripts/index.py add "$id" "$tag"
-      fi
-    else
-      scripts/release.sh "$id"
-    fi
-  done
-  scripts/index.py check
-fi
+step publisher
+python3 -I scripts/test-oci.py
+python3 -I scripts/test-publish-oci.py
+python3 -I scripts/test-publication-regressions.py
+
 echo
 echo "ci: ok"

@@ -54,8 +54,8 @@ class PackageJunkTests(unittest.TestCase):
         self.tmp = pathlib.Path(tempfile.mkdtemp())
         (self.tmp / 'scripts').mkdir()
         (self.tmp / 'extensions').mkdir()
-        # package.sh invokes scripts/manifest.py relative to its own location, so stage both.
-        for name in ('package.sh', 'manifest.py'):
+        # package.sh invokes manifest.py, which shares version validation with catalog.py.
+        for name in ('package.sh', 'manifest.py', 'catalog.py'):
             shutil.copy2(REPO / 'scripts' / name, self.tmp / 'scripts' / name)
         shutil.copytree(REPO / 'extensions' / EXT_ID, self.tmp / 'extensions' / EXT_ID)
         ext = self.tmp / 'extensions' / EXT_ID

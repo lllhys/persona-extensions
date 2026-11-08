@@ -14,7 +14,7 @@ personad extension market add github:nwverse/persona-extensions
 
 This repository is public: no GitHub token is required. Tokens mentioned by the generic market CLI are for private markets, not this one.
 
-The market indexes released extensions; it is not a directory listing of every example or open PR. Packages are GitHub Release assets with pinned SHA-256 hashes. The hub records the market's public signing key and verifies subsequent indexes. A missing or invalid signature, or a changed key, prevents installation and upgrades. See [market signing](releases.md#market-signing).
+The market lists published extensions; it is not a directory listing of every example or open PR. The single catalog embeds an Ed25519 signature over its raw UTF-8 payload. The official hub verifies the fixed approved public key; a missing or invalid signature prevents installation and upgrades. OCI packages on GHCR are pinned by manifest digest, while catalog SHA-256 and size refer to the archive blob. The initial converted catalog retains frozen cleaned Release references until authorized bootstrap publication finishes. Upgrade the hub for embedded catalog/OCI support and the matching official pin before switching. See [market signing](releases.md#market-signing).
 
 If a lookup fails, first check that the extension has a release in this market and that the hub meets its manifest's `engines` requirements. If verification fails, do not bypass it or silently trust a replacement key; ask the market maintainer to resolve the index/signature problem.
 

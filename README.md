@@ -2,7 +2,9 @@
 
 [简体中文](README.zh-CN.md)
 
-Public extensions for Persona: connect data sources, add assistant tools and skills, and contribute views rendered by the apps. This repository is also an extension market, with versioned packages published in GitHub Releases.
+Public extensions for Persona: connect data sources, add assistant tools and skills, and contribute views rendered by the apps. This repository is also an extension market, using one embedded-signature catalog and digest-pinned OCI packages on GHCR. The initial catalog conversion retains frozen cleaned Release references until the authorized cutover bootstrap and anonymous public gate complete; it does not publish packages by itself.
+
+New catalog signatures also cover their predecessor and source inventory, which PR CI checks against the real base commit. Publication stays checks-only in next; after cutover, the final repository identity enables trusted main publication without an extra repository setting. Package visibility is the only manual package setting. See [releases](docs/releases.md) for continuity, immutable versions and dedicated catalog-update issues.
 
 [![Persona Extensions promo: add the market with one line, then pick the extensions you need](docs/assets/promo-preview.webp)](#video-tour)
 
@@ -16,7 +18,7 @@ In the Persona app, open **Settings → Extensions → Extension markets → Add
 github:nwverse/persona-extensions
 ```
 
-Then choose an extension to install. This public market does not require a GitHub token.
+Then choose an extension to install. This public market does not require a GitHub token. Use a hub with embedded catalog/OCI support and the current official key pin; older hubs can still install local packages.
 
 On the hub's machine, you can register the same market with:
 
