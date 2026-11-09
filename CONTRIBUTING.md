@@ -15,7 +15,8 @@ This is a public repository: contributions use public services and protocols onl
 
 1. Check [open issues](https://github.com/nwverse/persona-extensions/issues) and [pull requests](https://github.com/nwverse/persona-extensions/pulls) for related work; coordinate overlapping changes before editing.
 2. Work on a non-default branch. Follow the [development guide](docs/development.md), and keep behavioral changes separate from documentation-only cleanup.
-3. Run `scripts/ci.sh` and the [documentation checks](docs/development.md#documentation-checks). Report commands, results and any checks you could not run.
-4. Submit a focused pull request when you are authorized to publish the changes. A version bump on `main` can trigger a release; see [release behavior](docs/releases.md#automated-releases) before changing manifests.
+3. Run affected local tests, lint and builds, including `scripts/ci.sh` and the [documentation checks](docs/development.md#documentation-checks). Report commands, results and any checks you could not run.
+4. Submit a focused pull request when you are authorized to publish the changes. A version bump selects a version for a separately authorized manual publication; see [release behavior](docs/releases.md#automated-releases) before changing manifests.
+5. Merge after local verification passes. Hosted CI is explicit-dispatch only, not a PR merge gate. Do not use admin merge, change rulesets or force-push. Source/default/catalog/publication and privacy gates remain separate.
 
 Review translated documentation against the original: preserve setup requirements, safety boundaries, compatibility notes and troubleshooting details, not just headings.

@@ -25,8 +25,8 @@ The repository root holds no package-manager or lockfile of any language: no `go
 ## Other rules
 
 - Never sign or edit the market catalog (`persona-extensions.json`) by hand: the publication tools generate its payload and embedded signatures. Format conversion may reuse a verified existing signature over the unchanged payload bytes; new signatures are made only in Actions with the signing-key secret.
-- A version bump merged to `main` publishes that extension to GHCR after the separately approved repository cutover (docs/releases.md). Existing versions are immutable; all existing GitHub Releases and tags remain untouched, and new versions create neither. Bump `version` in `persona-extension.json` when the package changes; a change that leaves packages as they are (tests, docs, repository tooling) bumps nothing.
-- Check open issues and pull requests for related work first, and run `scripts/ci.sh` before opening a pull request ([CONTRIBUTING.md](CONTRIBUTING.md)).
+- A version bump merged to `main` selects that extension for a separately authorized manual GHCR publication after repository cutover (docs/releases.md); a push does not publish by itself. Existing versions are immutable; all existing GitHub Releases and tags remain untouched, and new versions create neither. Bump `version` in `persona-extension.json` when the package changes; a change that leaves packages as they are (tests, docs, repository tooling) bumps nothing.
+- Check open issues and pull requests for related work first, and run affected local tests, lint and builds, including `scripts/ci.sh`, before opening a pull request ([CONTRIBUTING.md](CONTRIBUTING.md)). Merge after local verification passes; hosted CI is explicit-dispatch only, not a PR gate. Do not use admin merge or change rulesets.
 
 ## Language
 

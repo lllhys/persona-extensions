@@ -1,9 +1,6 @@
-# Checks always run; publication stays disabled until the cleaned repository completes cutover.
+# Explicit dispatch only; checks are the default and publication remains separately gated.
 name: ci
 on:
-  pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       phase:
@@ -121,7 +118,7 @@ jobs:
           if-no-files-found: error
   ci-required:
     name: CI required
-    if: ${{ always() && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.phase == 'check')) }}
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.phase == 'check' }}
     needs: [check, source-plan, source-rebuild]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -242,7 +239,7 @@ jobs:
           mkdir "$RUNNER_TEMP/signed"
           python3 -I scripts/sign-index.py sign --payload "$RUNNER_TEMP/unsigned/payload.json" --output "$RUNNER_TEMP/signed/persona-extensions.json" --source-commit "$GITHUB_SHA"
           python3 -I scripts/sign-index.py verify --catalog "$RUNNER_TEMP/signed/persona-extensions.json"
-          printf '%s\n' 'Catalog artifact only: create or reuse a dedicated catalog-update issue before opening its PR. Put Refs #<catalog-issue-number> in that PR body; #146 is code tracking only. Require the PR own CI; never push the catalog directly to main.' > "$RUNNER_TEMP/signed/PR-body.txt"
+          printf '%s\n' 'Catalog artifact only: create or reuse a dedicated catalog-update issue before opening its PR. Put Refs #<catalog-issue-number> in that PR body; #146 is code tracking only. Require local verification and signed base continuity; never push the catalog directly to main.' > "$RUNNER_TEMP/signed/PR-body.txt"
       - uses: actions/upload-artifact@v4
         with:
           overwrite: true

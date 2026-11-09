@@ -10,7 +10,7 @@ src="extensions/$id"
 manifest=$(scripts/manifest.py path "$id")
 version=$(scripts/manifest.py version "$id")
 out="dist/$id"
-rm -rf "$out" && mkdir -p "$out/bin"
+rm -rf "${out:?}" && mkdir -p "$out/bin"
 # The manifest goes in under both names, without its tags (scripts/manifest.py packaged): hubs from before the rename
 # to extensions (nwverse/persona#1844) read only persona-plugin.json, newer ones prefer persona-extension.json, and
 # hubs from before tags (nwverse/persona#2424) refuse a manifest with them. Only persona-extension.json is committed;

@@ -43,11 +43,18 @@ The SDK implements the process protocol; `pluginkit` preserves the helpers used 
    ```
 3. In `runtime.command`, list the program path for each supported platform: `linux-amd64`, `linux-arm64`, `darwin-arm64` and `darwin-amd64`. Use `bin/<id>-<platform>` paths. The package ships compiled programs; the hub installs no runtime.
 4. Test the manifest against the program's advertised contributions and exercise the process protocol with the official SDK's `exttest` helpers. Follow the existing [LINUX DO tests](../extensions/linuxdo/plugin_test.go) or [Telegram tests](../extensions/telegram/plugin_test.go).
-5. Run the checks below before preparing a pull request. A version bump merged to `main` triggers [release automation](releases.md#automated-releases).
+5. Run the affected local tests, lint and builds before preparing a pull request, then merge after that verification passes. Hosted CI runs only on explicit dispatch, not as a PR gate. A version bump selects work for a separately authorized [manual release](releases.md#automated-releases); it does not publish by itself.
 
 See the [local reference](reference.md) and published SDK schemas for the process contract. For runtime-free extensions and packs, start with [starter-kit and starter-pack](extensions/starter-kit.md): omit `runtime`, provide the manifest and contribution files, and use the same packaging script. It skips compilation when there is no runtime and omits an empty `bin/` directory.
 
 ## Tests and packaging
+
+From 2026-11-09, [CI](../.github/workflows/ci.yml) runs only through `workflow_dispatch`. PRs merge after affected local tests, lint and builds pass; do not wait for hosted CI, use admin merge or change rulesets. Manual checks retain every source-rebuild job and its budgets; disabling automatic triggers must not remove those checks or enable publication. For workflow changes, run [policy regressions](../scripts/test-ci-policy.py) and workflow lint locally as well as the checks below.
+
+```sh
+python3 -I scripts/test-ci-policy.py
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/ci.yml
+```
 
 ```sh
 scripts/ci.sh
@@ -82,9 +89,9 @@ Each new executable source migration registers `extensions/<id>/source-rebuild.j
 
 [The source rebuild job](../.github/workflows/ci.yml) runs every registered profile on its own fresh GitHub-hosted runner, with pinned Node, no restored dependency cache and no HOME substitution. [The driver](../scripts/source-rebuild.py) copies only tracked extension and official SDK authoring inputs into a new tree, excluding the reference bundle; installs locked public dependencies; builds; and compares the result **byte-for-byte** with the committed reference. It then extracts the produced authoring archive into another new directory and independently installs and rebuilds it, repeating the same byte comparison. Archive traversal, links, special files, duplicate files and excessive size fail before extraction.
 
-`CI required` includes profile discovery and every source-rebuild matrix result. New source authoring cannot omit a rebuild profile. The pre-existing Hacker News and Showcase examples are not part of the new migration batch and supply no fresh-HOME proof unless they register a profile; their separate acceptance gates are not waived. [Pure guard regressions](../scripts/test-source-rebuild.py) run locally and in CI without executing a local standalone rebuild.
+For explicit checks-only dispatches, `CI required` includes profile discovery and every source-rebuild matrix result. It is not a PR merge gate. New source authoring still cannot omit a rebuild profile. The pre-existing Hacker News and Showcase examples are not part of the new migration batch and supply no fresh-HOME proof unless they register a profile; their separate acceptance gates are not waived. [Pure guard regressions](../scripts/test-source-rebuild.py) run locally and in CI without executing a local standalone rebuild.
 
-The maintainer's merge policy accepts the successful hosted job as fresh-HOME proof. A local fresh-HOME rebuild is not required and local permission restrictions remain unchanged: do not substitute HOME, use a peer or wrapper, or relabel a weaker local check as that proof. Hosted rebuilding proves contained authoring and bundle reproducibility, not installed-hub behavior, production sandbox isolation, source default publication or catalog signing.
+A successful manually dispatched hosted job supplies fresh-HOME proof; do not claim that proof before its actual result. A local fresh-HOME rebuild is not required and local permission restrictions remain unchanged: do not substitute HOME, use a peer or wrapper, or relabel a weaker local check as that proof. Hosted rebuilding proves contained authoring and bundle reproducibility, not installed-hub behavior, production sandbox isolation, source default publication or catalog signing.
 
 Credential-negative lock fixtures use synthetic `URL.username` and `URL.password` values on the approved public registry origin. Assert that origin and retain the credential-rejection check, so an unrelated bad hostname cannot make the control pass. Do not add privacy exceptions, change the lock policy, or encode/split real private values to get them through a scan.
 
