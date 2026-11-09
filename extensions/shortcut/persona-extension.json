@@ -1,0 +1,34 @@
+{
+  "manifest_version": 1,
+  "id": "shortcut",
+  "name": "Shortcut 故事",
+  "version": "0.1.0",
+  "description": "在 Persona 里处理 Shortcut 个人故事：查看自己负责的未完成故事、描述、评论和工作流；创建故事或更新工作流状态前在手机上确认。API token 加密存在 hub，不删除故事，不管理工作区。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/shortcut/README.md",
+  "tags": ["Shortcut", "故事", "研发协作", "工作流"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/shortcut-linux-amd64",
+      "linux-arm64": "bin/shortcut-linux-arm64",
+      "darwin-arm64": "bin/shortcut-darwin-arm64",
+      "darwin-amd64": "bin/shortcut-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "shortcut", "name": "Shortcut", "capabilities": ["status", "tools", "actions"],
+      "hosts": ["api.app.shortcut.com"], "agent_tools": ["shortcut_*"],
+      "confirm_always": ["shortcut_create_story", "shortcut_update_story_state"]
+    }],
+    "ui": [{"id": "stories", "title": "Shortcut 故事", "placement": "nav_page", "icon": "check"}]
+  },
+  "configuration": {"type": "object", "properties": {}},
+  "secrets": [{
+    "name": "api_token", "title": "Shortcut API token",
+    "description": "在 Shortcut 的 API token 设置中创建；只通过 Shortcut-Token 发往 api.app.shortcut.com",
+    "required": true
+  }],
+  "permissions": {"network": ["api.app.shortcut.com"]}
+}
