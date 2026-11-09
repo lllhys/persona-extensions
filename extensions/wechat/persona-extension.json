@@ -1,0 +1,27 @@
+{
+  "manifest_version": 1,
+  "id": "wechat",
+  "name": "微信",
+  "version": "0.1.0",
+  "description": "微信机器人：通过公开 iLink 接口扫码绑定，在个人微信里和 Persona 对话；只转发绑定人的消息，支持图片、语音转写和正在输入。登录信息加密保存在 hub，升级无需重新扫码。",
+  "publisher": "nwverse",
+  "tags": ["聊天", "微信"],
+  "engines": {"persona": ">=202611041602", "plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/wechat-linux-amd64",
+      "linux-arm64": "bin/wechat-linux-arm64",
+      "darwin-arm64": "bin/wechat-darwin-arm64",
+      "darwin-amd64": "bin/wechat-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{"id": "wechat", "name": "微信", "capabilities": ["status", "login"]}],
+    "channel": [{
+      "id": "wechat", "name": "微信", "kind": "im", "connector": "wechat", "bind": "qr",
+      "description": "在个人微信里私聊机器人：扫码绑定，消息进主对话，回答以纯文字发回",
+      "capabilities": {"images_in": true, "voice_in": true, "format": "plain", "max_text": 3500, "asks": "text", "push": true, "typing": true}
+    }]
+  },
+  "permissions": {"network": ["*.weixin.qq.com"]}
+}
