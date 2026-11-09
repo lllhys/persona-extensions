@@ -1,0 +1,66 @@
+// Appended through a Go overlay; never modifies the frozen Go implementation.
+func TestRound2OriginalOracle(t *testing.T) {
+  f := newFakeOKX(t)
+  p, _ := newTestPlugin(t, f, `{"tz":"UTC"}`)
+  for _, token := range []string{`"1"`, `true`, `1.5`, `-1.5`, `1.0`, `-1.0`, `1e0`, `-1e0`, `0.0`, `0e0`, `9223372036854775808`, `-9223372036854775809`} {
+    _, err := p.cToolsCall(context.Background(), nil, json.RawMessage(`{"name":"markets_search","args":{"query":"BTC","limit":`+token+`}}`))
+    if err == nil { t.Fatalf("original Go accepted invalid limit %s", token) }
+    t.Logf("ORACLE limit %s rejected", token)
+  }
+  for _, token := range []string{`null`, `0`, `-0`, `-1`, `31`, `9007199254740992`, `9007199254740993`, `-9007199254740993`, `9223372036854775807`, `-9223372036854775808`} {
+    got, err := p.cToolsCall(context.Background(), nil, json.RawMessage(`{"name":"markets_search","args":{"query":"BTC","limit":`+token+`}}`))
+    if err != nil { t.Fatalf("original Go rejected legal int64 %s", token) }
+    fallback, err := p.cToolsCall(context.Background(), nil, json.RawMessage(`{"name":"markets_search","args":{"query":"BTC","limit":10}}`))
+    if err != nil || got.(map[string]any)["text"] != fallback.(map[string]any)["text"] { t.Fatalf("original Go clamp changed for %s", token) }
+    t.Logf("ORACLE limit %s accepted with default", token)
+  }
+  for _, raw := range []string{
+    `{"NAME":"markets_search","name":null,"ARGS":{"QUERY":"BTC","LIMIT":1,"limit":null}}`,
+    `{"name":"markets_search","args":false,"ARGS":{"query":"BTC","limit":1}}`,
+    `{"name":"markets_search","args":{"query":"ETH","QUERY":"BTC","Query":null,"limit":1}}`,
+    `{"name":"markets_quote","args":{"ſymbols":["BTC-USDT",null],"SYMBOL":null,"LIMIT":null}}`,
+    `{"name":"markets_quote","args":{"symbols":["ETH-USDT"],"SYMBOLS":null}}`,
+  } {
+    if _, err := p.cToolsCall(context.Background(), nil, json.RawMessage(raw)); err != nil { t.Fatalf("original Go rejected ordered fields %s: %v", raw, err) }
+  }
+  for _, raw := range []string{
+    `{"name":123,"NAME":"markets_quote","args":{}}`,
+    `{"name":"markets_quote","args":{"symbols":[12],"SYMBOLS":["BTC-USDT"]}}`,
+    `{"name":"markets_quote","args":{"ſymbols":false,"symbols":[]}}`,
+    `{"name":"markets_quote","args":{"symbol":false,"SYMBOL":"BTC"}}`,
+    `{"name":"markets_quote","args":{"query":123,"QUERY":null}}`,
+    `{"name":"markets_quote","args":{"bar":{},"BAR":"1H"}}`,
+    `{"name":"markets_quote","args":{"limit":1.0,"LIMIT":1}}`,
+    `{"name":"markets_quote","args":{"limit":1,"LIMIT":-1e0}}`,
+    `{"name":"markets_quote","args":[]}`,
+    `{"name":"markets_quote","args":{},"ARGS":false}`,
+  } {
+    if _, err := p.cToolsCall(context.Background(), nil, json.RawMessage(raw)); err == nil { t.Fatalf("original Go accepted earlier typed-field error %s", raw) }
+  }
+  if _, err := p.cToolsCall(context.Background(), nil, json.RawMessage(`{"name":"markets_quote","args":{"query":123}}`)); err == nil { t.Fatal("original Go accepted wrong-type unrelated query") }
+  for _, token := range []string{"9223372036854775807", "-9223372036854775808", "9007199254740993"} {
+    q := (okxTicker{InstID:"BTC-USDT", Last:"100", TS:token}).quote()
+    for _, name := range []string{"UTC", "America/New_York", "Asia/Hong_Kong", "Asia/Shanghai"} {
+      loc, err := time.LoadLocation(name); if err != nil { t.Fatal(err) }
+      t.Logf("ORACLE timestamp %s %s %s", token, name, q.At.In(loc).Format("2006-01-02 15:04"))
+    }
+  }
+  var body string
+  server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, body) }))
+  defer server.Close()
+  source := newOKX(server.URL)
+  for _, row := range []string{`{"instId":"BTC-USDT","last":100}`, `{"instId":"BTC-USDT","ts":true}`} {
+    body = `{"code":"0","data":[`+row+`]}`
+    if _, err := source.Quote(context.Background(), "BTC-USDT", 0); err == nil { t.Fatal("original Go accepted wrong ticker type") }
+  }
+  body = `{"code":"0","data":[[1,"2","3","4","5","6"]]}`
+  if _, err := source.Candles(context.Background(), "BTC-USDT", "1H", 60, 0); err == nil { t.Fatal("original Go accepted wrong candle cell type") }
+  body = `{"code":"0","data":[["1e3","2","3","4","5","6"],["9223372036854775807","2","3","4","5","6"]]}`
+  cs, err := source.Candles(context.Background(), "BTC-USDT", "1H", 60, 0)
+  if err != nil || len(cs) != 1 { t.Fatalf("original candle lexical/full-range boundary: %d %v", len(cs), err) }
+  stock := &txMarket{newTencent(tencentHosts{kline:server.URL, mkline:server.URL}), mCN}
+  for _, data := range []string{`1`, `[]`, `{"qfqday":"broken"}`, `{"qfqday":[1]}`} {
+    body = `{"code":0,"data":{"sh600000":`+data+`}}`
+    if _, err := stock.Candles(context.Background(), "600000.SH", "1D", 60, 0); err == nil { t.Fatal("original Go accepted wrong stock nesting") }
+  }
+}

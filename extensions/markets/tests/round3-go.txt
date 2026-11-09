@@ -1,0 +1,75 @@
+// Overlay-only oracle: the frozen Go implementation and declared toolchain remain unchanged.
+func TestRound3TypedOracle(t *testing.T) {
+ var alerts []Alert
+ for _, raw := range []string{
+  `[{"decimals":2.0,"decimals":2}]`, `[{"decimals":2e0,"DECIMALS":2}]`,
+  `[{"name":123,"NAME":"ok"}]`, `[{"price":"100","PRICE":100}]`,
+  `[{"created":"2026-02-30T00:00:00Z","CREATED":"2026-02-01T00:00:00Z"}]`,
+ } {
+  if err := json.Unmarshal([]byte(raw), &alerts); err == nil { t.Fatalf("Go accepted earlier type error: %s", raw) }
+ }
+ for _, date := range []string{"2026-02-30T00:00:00Z", "2026-04-31T00:00:00Z", "2026-02-01", "2026-02-01 00:00:00Z", "2026-02-01T24:00:00Z", "2026-02-01T00:00:60Z"} {
+  if err := json.Unmarshal([]byte(`[{"created":`+fmt.Sprintf("%q", date)+`}]`), &alerts); err == nil { t.Fatalf("Go accepted invalid date: %s", date) }
+ }
+ for _, date := range []string{"0000-02-29T00:00:00Z", "2000-02-29T23:59:59.123456789Z", "1970-01-01T00:00:00Z", "2026-02-01T00:00:00+08:00"} {
+  if err := json.Unmarshal([]byte(`[{"created":`+fmt.Sprintf("%q", date)+`}]`), &alerts); err != nil { t.Fatal(err) }
+ }
+ var body string
+ server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, body) })); defer server.Close()
+ stock := &txMarket{newTencent(tencentHosts{kline:server.URL, mkline:server.URL}), mCN}
+ for _, raw := range []string{
+  `{"code":0.0,"code":0,"data":{"sh600000":{"qfqday":[]}}}`,
+  `{"code":0e0,"CODE":0,"data":{"sh600000":{"qfqday":[]}}}`,
+  `{"code":0,"msg":123,"MSG":"ok","data":{"sh600000":{"qfqday":[]}}}`,
+  `{"code":0,"data":{"sh600000":1,"sh600000":{"qfqday":[]}}}`,
+ } {
+  body = raw
+  if _, err := stock.Candles(context.Background(), "600000.SH", "1D", 60, 0); err == nil { t.Fatalf("Go accepted invalid Tencent: %s", raw) }
+ }
+ source := newOKX(server.URL)
+ for _, field := range []string{"instId", "instType", "last", "open24h", "high24h", "low24h", "vol24h", "volCcy24h", "ts"} {
+  for _, bad := range []string{"123", "false", "[]", "{}"} {
+   body = `{"code":"0","data":[{"`+field+`":`+bad+`,"`+strings.ToUpper(field)+`":"100"}]}`
+   if _, err := source.Quote(context.Background(), "BTC-USDT", 0); err == nil { t.Fatalf("Go accepted invalid ticker field %s", field) }
+  }
+ }
+ for _, raw := range []string{
+  `{"code":"0","msg":123,"data":[{}]}`, `{"code":"0","msg":123,"MSG":"ok","data":[{}]}`,
+  `{"code":0,"CODE":"0","data":[{}]}`,
+ } {
+  body = raw
+  if _, err := source.Quote(context.Background(), "BTC-USDT", 0); err == nil { t.Fatalf("Go accepted invalid envelope: %s", raw) }
+ }
+ body = `{"CODE":"0","MSG":null,"data":123,"DATA":[{"INSTID":"BTC-USDT","LAST":"101","last":null,"TS":"0"}]}`
+ q, err := source.Quote(context.Background(), "BTC-USDT", 0)
+ if err != nil || q.Last != 101 || q.At.IsZero() || q.At.UnixMilli() != 0 { t.Fatalf("valid raw-message overwrite/case/null/epoch: %+v %v", q, err) }
+ body = `{"code":0,"data":{"sh600000":{"data":{"date":"20261106"},"DATA":{"data":["0930 100 10"]}}}}`
+ if cs, err := stock.Candles(context.Background(), "600000.SH", "T", 60, 0); err != nil || len(cs) != 1 { t.Fatalf("Go minute struct merge: %d %v", len(cs), err) }
+ t.Log("ORACLE original typed provider/state boundaries and valid struct-merge/case/null/epoch controls PASS")
+}
+func TestRound3FloatOracle(t *testing.T) {
+ cases := []struct{ raw string; value float64; valid bool }{
+  {"0x80",0,false}, {"0b10000000",0,false}, {"0o200",0,false}, {"0x1p7",128,true}, {"1_28",128,true},
+  {"+0X_1.8p+7",192,true}, {".5",.5,true}, {"1.",1,true}, {"1e+0_2",100,true}, {"128 ",0,false}, {"1__28",0,false},
+  {"0x1p-1074",math.SmallestNonzeroFloat64,true}, {"0x1p-1075",0,true}, {"0x1.0000000000001p-1075",math.SmallestNonzeroFloat64,true},
+  {"0x1.fffffffffffffp1023",math.MaxFloat64,true}, {"0x1.fffffffffffff8p1023",0,false},
+  {"0x1.00000000000008p0",1,true}, {"0x1.0000000000000801p0",1+math.Ldexp(1,-52),true},
+  {"0x0p999999999999999999999",0,true}, {"0x1p-9999999999999999999",0,true}, {"1e999999",0,false},
+ }
+ for _, c := range cases {
+  value, err := strconv.ParseFloat(c.raw, 64)
+  if (err == nil) != c.valid || c.valid && value != c.value { t.Fatalf("ParseFloat(%q) = %v %v", c.raw, value, err) }
+  t.Logf("ORACLE float %q valid=%v value=%v bits=%016x", c.raw, err==nil, value, math.Float64bits(value))
+ }
+ var body string
+ server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request) { fmt.Fprint(w, body) })); defer server.Close()
+ p := newPlugin(t.Logf); p.srcs = sources{newOKX(server.URL)}
+ for _, c := range cases[:5] {
+  body = `{"code":"0","data":[{"instId":"BTC-USDT","last":"100","open24h":"90"}]}`
+  alert, err := p.newAlert(context.Background(), Ref{"okx","BTC-USDT"}, "above", c.raw)
+  if (err==nil) != c.valid || c.valid && alert.Value != 128 { t.Fatalf("original alert grammar %s: %+v %v", c.raw, alert, err) }
+  body = `{"code":"0","data":[["1000",`+fmt.Sprintf("%q",c.raw)+`,"150","90","120","3"]]}`
+  cs, err := p.srcs[0].Candles(context.Background(),"BTC-USDT","1H",60,0)
+  if err != nil || (len(cs)==1) != c.valid || c.valid && cs[0].Open != 128 { t.Fatalf("original candle grammar %s: %v %v", c.raw, cs, err) }
+ }
+}
