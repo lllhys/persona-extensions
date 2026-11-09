@@ -23,7 +23,16 @@ description: 用户的 Persona 空间（经本机 spaces MCP 服务器）：每�
 
 ## 帮用户搭一个空间
 
-用户想开始管理一件新的事情时，不要直接套一个现成的结构。先问清楚他想记什么、关心哪些属性、需要怎样看（清单、进度、看板……），提出一个精简的方案（每种类型三到六个字段就够），用户同意后再写：
+用户想开始管理一件新的事情时，先看 `space_list` 返回的 `templates`（常见模板）有没有贴合的：
+
+- `project` 项目与目标：点子（看板）、目标（进度）、资料库（列表）、动态（动态流）。
+- `reading` 阅读与知识：书单（进度）、笔记（列表）、摘录与链接（表格）。
+- `inventory` 清单与物品：物品（表格）、心愿单（看板）。
+- `blank` 空白空间：不预置类型。
+
+贴合时把模板的类型简单说给用户听，同意后 `space_upsert {template, name?, examples?}` 一步建好（名称、图标、说明不填就用模板的；`examples: true` 才会写入几条示例记录，默认不写），之后照用户的说法用 `space_schema_upsert` 增删字段。
+
+没有贴合的模板时，不要硬套。先问清楚用户想记什么、关心哪些属性、需要怎样看（清单、进度、看板……），提出一个精简的方案（每种类型三到六个字段就够），用户同意后再写：
 
 1. `space_upsert {name, icon?, description?}` 建空间（可以给一个小写的 `id`）。
 2. `space_schema_upsert {space_id, key, label, view, statuses?, fields}` 定义每种类型。这是整体替换：`fields` 要列全，没列出的字段连同它的值会被删掉；已有记录不符合新定义时整个修改会被拒绝，错误里会说明是哪一条。
@@ -32,6 +41,7 @@ description: 用户的 Persona 空间（经本机 spaces MCP 服务器）：每�
 ## 写记录
 
 - `space_entity_upsert`：不给 `id` 是新建（要 `type` 和 `title`），给 `id` 是修改（`values` 合并进去，值为 `null` 删掉一个）。`relations: [{type, to}]` 是它指向的全部关系，给了就整体替换，不给保持不变。
+- `space_entity_derive {id, type, title?, relation?}`：从一条记录衍生出同一空间里另一种类型的新记录（例如把点子孵化成目标、把书衍生成一条笔记），带上两种类型共有的字段值，并以「源自」（或给定的 relation）指回原记录。
 - `space_entity_delete {id}`：删除记录和它所有的关系。删除前先和用户确认是哪一条。
 
 ## 注意

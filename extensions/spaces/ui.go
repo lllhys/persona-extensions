@@ -114,6 +114,32 @@ func (d draw) view(p page) *wire.View {
 	return d.home(p)
 }
 
+// starters offers the templates a new space starts from, each made in one tap (the blank one opens the form).
+func starters() wire.Section {
+	sec := wire.Section{Title: "从常见模板开始", Footer: "模板只是起点：建好后类型和字段都能随时改。"}
+	for _, t := range templates {
+		c := wire.Component{Type: wire.ComponentRow, Key: "tpl-" + t.Key, Icon: t.Icon, Title: t.Name, Subtitle: templateSummary(&t),
+			Action: &wire.Action{ID: "from-template", Values: map[string]string{"template": t.Key}}}
+		if len(t.Types) == 0 {
+			c.Action = &wire.Action{ID: "new-space"}
+		}
+		sec.Items = append(sec.Items, c)
+	}
+	return sec
+}
+
+// templateSummary is what a template brings: its types and their views, or that it brings none.
+func templateSummary(t *Template) string {
+	if len(t.Types) == 0 {
+		return "不预置类型，完全由你定义"
+	}
+	parts := make([]string, len(t.Types))
+	for i, d := range t.Types {
+		parts[i] = d.Label + "（" + viewTitles[d.View] + "）"
+	}
+	return strings.Join(parts, " · ")
+}
+
 func gone() *wire.View {
 	return &wire.View{Sections: []wire.Section{{Items: []wire.Component{{Type: wire.ComponentEmpty, Title: "它已经不在了", Detail: "可能刚被删除，返回上一页看看。"}}}}}
 }
@@ -127,7 +153,7 @@ func (d draw) home(p page) *wire.View {
 			Detail: "空间是一块按你的想法组织的数据：有哪些类型、每种类型记哪些字段、怎样呈现，都由你来定。" +
 				"在对话里告诉助手你想管理什么，它会把结构搭好；也可以直接新建。",
 			Button: &wire.EmptyButton{Title: "新建空间", Action: wire.Action{ID: "new-space"}},
-		}}}}}
+		}}}, starters()}}
 	}
 	sp, err := d.st.space(p.Space)
 	if err != nil {
@@ -368,6 +394,20 @@ func (d draw) entityView(p page, sp *Space, t *TypeDef, e *Entity) *wire.View {
 		Action: push(page{Entity: e.ID, Mode: modeLinks}, "关系")})
 	secs = append(secs, rel)
 
+	// Derive: the entity grows into another type of the space (an idea into a goal), pointing back at it.
+	var others []wire.Choice
+	for _, o := range sp.Types {
+		if o.Key != t.Key {
+			others = append(others, wire.Choice{Value: o.Key, Title: o.Label})
+		}
+	}
+	if len(others) > 0 {
+		secs = append(secs, wire.Section{Title: "衍生", Footer: "新记录带上两种类型共有的字段，并以「源自」关系指回这一条。", Items: []wire.Component{
+			{Type: wire.ComponentField, Name: "derive_to", Label: "衍生为", Kind: wire.FieldKindChoice, Choices: others, Value: others[0].Value},
+			{Type: wire.ComponentButton, Title: "衍生新记录", Action: &wire.Action{ID: "derive", Submit: true}},
+		}})
+	}
+
 	acts := wire.Section{}
 	if i := slices.Index(t.Statuses, e.Status); i >= 0 && i+1 < len(t.Statuses) {
 		acts.Items = append(acts.Items, wire.Component{Type: wire.ComponentButton, Title: "移到「" + t.Statuses[i+1] + "」",
@@ -514,24 +554,40 @@ func (d draw) spaceForm(p page, sp *Space) *wire.View {
 	for i, ic := range wire.NavIcons {
 		icons[i] = wire.Choice{Value: ic}
 	}
-	cur := Space{Icon: "folder"}
 	if sp != nil {
-		cur = *sp
+		return &wire.View{Title: sp.Name, State: ext.EncodeState(p), Sections: []wire.Section{{Items: []wire.Component{
+			{Type: wire.ComponentField, Name: "name", Label: "名称", Kind: wire.FieldKindText, Value: sp.Name},
+			{Type: wire.ComponentField, Name: "icon", Label: "图标", Kind: wire.FieldKindChoice, Choices: icons, Value: sp.Icon},
+			{Type: wire.ComponentField, Name: "description", Label: "说明", Kind: wire.FieldKindText, Value: sp.Description},
+			{Type: wire.ComponentButton, Title: "保存", Action: &wire.Action{ID: "save-space", Submit: true}},
+		}}}}
 	}
-	items := []wire.Component{
-		{Type: wire.ComponentField, Name: "name", Label: "名称", Kind: wire.FieldKindText, Value: cur.Name, Placeholder: "例如 读书、装修、旅行"},
-		{Type: wire.ComponentField, Name: "icon", Label: "图标", Kind: wire.FieldKindChoice, Choices: icons, Value: cur.Icon},
-		{Type: wire.ComponentField, Name: "description", Label: "说明", Kind: wire.FieldKindText, Value: cur.Description},
-		{Type: wire.ComponentButton, Title: "保存", Action: &wire.Action{ID: "save-space", Submit: true}},
-	}
-	title := cur.Name
-	if sp == nil {
-		title, items[3].Title = "新建空间", "创建"
-		if len(d.st.Spaces) > 0 {
-			items = append(items, wire.Component{Type: wire.ComponentButton, Title: "取消", Action: &wire.Action{ID: "cancel"}})
+	// A new space: a template, and the name, icon and description, which the template's fill when left empty.
+	tpls := make([]wire.Choice, len(templates))
+	brings := wire.Section{Title: "模板里有什么", Footer: "模板只是起点：它先建好常用的类型、字段和状态，之后都能在空间设置里改。"}
+	for i, t := range templates {
+		// The choice keeps to the short name so the picker is not cut off; what a template brings is read below.
+		tpls[i] = wire.Choice{Value: t.Key, Title: t.Name}
+		if len(t.Types) == 0 {
+			continue
 		}
+		brings.Items = append(brings.Items,
+			wire.Component{Type: wire.ComponentRow, Icon: t.Icon, Title: t.Name, Subtitle: t.Description},
+			wire.Component{Type: wire.ComponentText, Style: wire.TextStyleCaption, Text: "包含：" + templateSummary(&t)})
 	}
-	return &wire.View{Title: title, State: ext.EncodeState(p), Sections: []wire.Section{{Items: items}}}
+	icons = append([]wire.Choice{{Value: "", Title: "跟随模板"}}, icons...)
+	items := []wire.Component{
+		{Type: wire.ComponentField, Name: "template", Label: "模板", Kind: wire.FieldKindChoice, Choices: tpls, Value: "blank"},
+		{Type: wire.ComponentField, Name: "examples", Label: "附带几条示例记录", Kind: wire.FieldKindToggle, Value: "false"},
+		{Type: wire.ComponentField, Name: "name", Label: "名称", Kind: wire.FieldKindText, Placeholder: "不填就用模板名，例如 读书、装修、旅行"},
+		{Type: wire.ComponentField, Name: "icon", Label: "图标", Kind: wire.FieldKindChoice, Choices: icons, Value: ""},
+		{Type: wire.ComponentField, Name: "description", Label: "说明", Kind: wire.FieldKindText, Placeholder: "不填就用模板的说明"},
+		{Type: wire.ComponentButton, Title: "创建", Action: &wire.Action{ID: "save-space", Submit: true}},
+	}
+	if len(d.st.Spaces) > 0 {
+		items = append(items, wire.Component{Type: wire.ComponentButton, Title: "取消", Action: &wire.Action{ID: "cancel"}})
+	}
+	return &wire.View{Title: "新建空间", State: ext.EncodeState(p), Sections: []wire.Section{{Items: items}, brings}}
 }
 
 // typeForm edits the page's type, or defines a new one. Fields are written one a line (or split by ;) as
@@ -625,8 +681,10 @@ func change(st *State, now time.Time, r *ext.UIRequest, p *page, res *wire.Actio
 		in := SpaceInput{Name: val("name"), Icon: val("icon"), Description: val("description")}
 		if p.Mode != modeNewSpace {
 			in.ID = p.Space
+		} else {
+			in.Template, in.Examples = cmp.Or(r.Values["template"], "blank"), r.Values["examples"] == "true"
 		}
-		sp, err := st.upsertSpace(in)
+		sp, err := st.upsertSpace(in, now)
 		if err != nil {
 			return err
 		}
@@ -634,6 +692,20 @@ func change(st *State, now time.Time, r *ext.UIRequest, p *page, res *wire.Actio
 			saved()
 		}
 		*p = page{Space: sp.ID}
+	case "from-template":
+		sp, err := st.upsertSpace(SpaceInput{Template: r.Values["template"]}, now)
+		if err != nil {
+			return err
+		}
+		*p, res.Toast = page{Space: sp.ID}, "已从模板建好「"+sp.Name+"」"
+	case "derive":
+		e, err := st.deriveEntity(p.Entity, r.Values["derive_to"], "", "", now)
+		if err != nil {
+			return err
+		}
+		sp, _ := st.space(e.Space)
+		res.Toast = "已衍生为" + sp.typeDef(e.Type).Label
+		res.Push = &wire.Push{State: ext.EncodeState(page{Entity: e.ID, Mode: modeEntity}), Title: clip(e.Title, 60)}
 	case "delete-space":
 		res.Pop, res.Toast = true, "已删除"
 		return st.deleteSpace(p.Space)

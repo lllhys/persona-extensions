@@ -71,7 +71,7 @@ func ptr(s string) *string { return &s }
 func library(t *testing.T) *State {
 	t.Helper()
 	st := &State{}
-	if _, err := st.upsertSpace(SpaceInput{ID: "reading", Name: ptr("读书"), Icon: ptr("doc")}); err != nil {
+	if _, err := st.upsertSpace(SpaceInput{ID: "reading", Name: ptr("读书"), Icon: ptr("doc")}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	_, err := st.upsertType("reading", TypeDef{Key: "book", Label: "书", View: "progress", Statuses: []string{"想读", "在读", "读完"},
@@ -154,7 +154,7 @@ func TestRelationsAndDeletion(t *testing.T) {
 	if _, err := st.upsertEntity(EntityInput{ID: note.ID, Links: []Link{{Type: "自指", To: note.ID}}}, t0); err == nil {
 		t.Fatal("an edge to itself")
 	}
-	if _, err := st.upsertSpace(SpaceInput{ID: "other", Name: ptr("别处")}); err != nil {
+	if _, err := st.upsertSpace(SpaceInput{ID: "other", Name: ptr("别处")}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.upsertType("other", TypeDef{Key: "book", Label: "另一种书"}); err != nil {
@@ -245,7 +245,7 @@ func TestStoreIsSharedBetweenProcesses(t *testing.T) {
 		t.Fatal("nothing changed yet")
 	}
 	err := assistant.update(func(st *State, _ time.Time) error {
-		_, err := st.upsertSpace(SpaceInput{ID: "a", Name: ptr("甲")})
+		_, err := st.upsertSpace(SpaceInput{ID: "a", Name: ptr("甲")}, time.Now())
 		return err
 	})
 	if err != nil {
@@ -263,7 +263,7 @@ func TestStoreIsSharedBetweenProcesses(t *testing.T) {
 	before, _ := os.ReadFile(filepath.Join(dir, stateFile))
 	hub.update(func(st *State, _ time.Time) error {
 		st.Spaces = nil
-		_, err := st.upsertSpace(SpaceInput{})
+		_, err := st.upsertSpace(SpaceInput{}, time.Now())
 		return err
 	})
 	if after, _ := os.ReadFile(filepath.Join(dir, stateFile)); string(after) != string(before) {
@@ -521,7 +521,7 @@ func TestMCPToolsShareTheStoreWithThePages(t *testing.T) {
 		t.Fatal(r)
 	}
 	list := rpc("tools/list", nil)["result"].(map[string]any)["tools"].([]any)
-	if len(list) != 7 {
+	if len(list) != 8 {
 		t.Fatalf("%d tools", len(list))
 	}
 
@@ -591,7 +591,141 @@ func TestMCPToolsShareTheStoreWithThePages(t *testing.T) {
 	if r := rpc("tools/call", map[string]any{"name": "nope"}); r["error"] == nil {
 		t.Fatal("an unknown tool is a protocol error")
 	}
+	if tl := l["templates"].([]any); len(tl) != len(templates) || tl[0].(map[string]any)["key"] != "project" {
+		t.Fatalf("space_list names the templates: %v", tl)
+	}
+	tp, ok := call("space_upsert", map[string]any{"template": "inventory", "examples": true})
+	if !ok || tp["space"].(map[string]any)["name"] != "清单与物品" {
+		t.Fatal(tp)
+	}
+	invID := tp["space"].(map[string]any)["id"].(string)
+	if r, ok := call("space_upsert", map[string]any{"id": "trips", "template": "reading"}); ok {
+		t.Fatalf("a template does not change a space: %v", r)
+	}
+	wish, _ := call("space_query", map[string]any{"space_id": invID, "type": "wishes"})
+	wishID := wish["entities"].([]any)[0].(map[string]any)["id"]
+	d, ok := call("space_entity_derive", map[string]any{"id": wishID, "type": "items", "title": "台灯"})
+	if !ok || d["entity"].(map[string]any)["out"].([]any)[0].(map[string]any)["type"] != "源自" {
+		t.Fatal(d)
+	}
 	if r, ok := call("space_list", map[string]any{"surprise": true}); ok {
 		t.Fatalf("unknown arguments: %v", r)
+	}
+}
+
+func TestTemplatesAreValidSpaces(t *testing.T) {
+	seen := map[string]bool{}
+	for _, tpl := range templates {
+		if seen[tpl.Key] || !slices.Contains(wire.NavIcons, tpl.Icon) || tpl.Name == "" {
+			t.Fatalf("template %s: unique key, a nav icon and a name", tpl.Key)
+		}
+		seen[tpl.Key] = true
+		st := &State{}
+		sp, err := st.upsertSpace(SpaceInput{Template: tpl.Key, Examples: true}, t0)
+		if err != nil {
+			t.Fatalf("%s: %v", tpl.Key, err)
+		}
+		if sp.Name != tpl.Name || sp.Icon != tpl.Icon || len(sp.Types) != len(tpl.Types) || len(st.Entities) != len(tpl.examples) {
+			t.Fatalf("%s: %+v, %d entities", tpl.Key, sp, len(st.Entities))
+		}
+		// the space's types are its own: changing them leaves the template as it is
+		if len(sp.Types) > 0 {
+			sp.Types[0].Fields[0].Label = "改过"
+			if tpl.Types[0].Fields[0].Label == "改过" {
+				t.Fatal("a space shares its template's fields")
+			}
+		}
+	}
+	if !slices.Equal(templateKeys(), []string{"project", "reading", "inventory", "blank"}) {
+		t.Fatal(templateKeys())
+	}
+	st := &State{}
+	if _, err := st.upsertSpace(SpaceInput{Template: "nope"}, t0); err == nil || !strings.Contains(err.Error(), "project") {
+		t.Fatalf("an unknown template names the ones there are: %v", err)
+	}
+	sp, err := st.upsertSpace(SpaceInput{Template: "project", Name: ptr("副业"), Icon: ptr(""), Description: ptr("")}, t0)
+	if err != nil || sp.Name != "副业" || sp.Icon != "star" || sp.Description == "" || len(st.Entities) != 0 {
+		t.Fatalf("a name given wins, empty ones are the template's, no examples unless asked: %+v %v", sp, err)
+	}
+	if _, err := st.upsertSpace(SpaceInput{ID: sp.ID, Template: "reading"}, t0); err == nil {
+		t.Fatal("a template only makes a new space")
+	}
+}
+
+func TestDeriveCarriesSharedFieldsAndPointsBack(t *testing.T) {
+	st := &State{}
+	sp, _ := st.upsertSpace(SpaceInput{Template: "project", Examples: true}, t0)
+	idea, _, _ := st.query(Query{Space: sp.ID, Type: "ideas"})
+	goal, err := st.deriveEntity(idea[0].ID, "goals", "", "", t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if goal.Type != "goals" || goal.Title != idea[0].Title || goal.Status != "规划中" {
+		t.Fatalf("%+v", goal)
+	}
+	if out := st.outgoing(goal.ID); len(out) != 1 || out[0] != (Relation{From: goal.ID, Type: "源自", To: idea[0].ID}) {
+		t.Fatalf("points back: %v", out)
+	}
+	// a field both types have goes along (log and ideas both have summary)
+	entry, err := st.deriveEntity(idea[0].ID, "log", "孵化了一个点子", "记录", t0)
+	if err != nil || entry.Values["summary"] != idea[0].Values["summary"] || st.outgoing(entry.ID)[0].Type != "记录" {
+		t.Fatalf("%+v %v", entry, err)
+	}
+	if _, err := st.deriveEntity(idea[0].ID, "nope", "", "", t0); err == nil {
+		t.Fatal("an unknown type is refused")
+	}
+}
+
+func TestTemplatesOnThePage(t *testing.T) {
+	a := newApp(t.TempDir())
+	a.now = func() time.Time { return t0.Add(time.Hour) }
+	a.db().now = func() time.Time { return t0 }
+
+	v := ui(t, a, page{})
+	rows := v.Sections[1].Items
+	if len(rows) != len(templates) || rows[0].Title != "项目与目标" || rows[3].Action.ID != "new-space" {
+		t.Fatalf("the empty home offers the templates: %+v", v.Sections)
+	}
+	v = act(t, a, v.State, rows[0].Action.ID, rows[0].Action.Values).View
+	if v.Title != "项目与目标" || len(v.Tabs.Items) != 5 || v.Tabs.Items[1].Title != "目标" {
+		t.Fatalf("one tap makes the space with its types: %+v", v)
+	}
+
+	v = act(t, a, v.State, "space", map[string]string{"space": "+"}).View
+	if f := items(v, wire.ComponentField); f[0].Name != "template" || len(f[0].Choices) != len(templates) || f[3].Choices[0].Value != "" {
+		t.Fatalf("the form picks a template: %+v", f)
+	}
+	v = act(t, a, v.State, "save-space", map[string]string{"template": "reading", "examples": "true", "name": "", "icon": "", "description": ""}).View
+	if v.Title != "阅读与知识" || v.Tabs.Value != "books" || len(items(v, wire.ComponentProgress)) != 1 {
+		t.Fatalf("from the form, with its examples: %+v", v)
+	}
+
+	// An entity derives into another type of its space.
+	var p page
+	json.Unmarshal([]byte(v.State), &p)
+	var bookID string
+	a.db().read(func(st *State) {
+		ents, _, _ := st.query(Query{Space: p.Space, Type: "books"})
+		bookID = ents[0].ID
+	})
+	ev := ui(t, a, page{Entity: bookID, Mode: modeEntity})
+	var derive *wire.Section
+	for i := range ev.Sections {
+		if ev.Sections[i].Title == "衍生" {
+			derive = &ev.Sections[i]
+		}
+	}
+	if derive == nil || derive.Items[0].Value != "notes" || len(derive.Items[0].Choices) != 2 {
+		t.Fatalf("the entity page derives: %+v", ev.Sections)
+	}
+	res := act(t, a, ev.State, "derive", map[string]string{"derive_to": "clips"})
+	if res.Push == nil || !strings.Contains(res.Toast, "摘录与链接") {
+		t.Fatalf("a derived entity opens: %+v", res)
+	}
+	var np page
+	json.Unmarshal([]byte(res.Push.State), &np)
+	nv := ui(t, a, np)
+	if rel := items(nv, wire.ComponentRow); len(rel) == 0 || !strings.Contains(rel[0].Subtitle, "源自") {
+		t.Fatalf("the new entity points back: %+v", nv.Sections)
 	}
 }

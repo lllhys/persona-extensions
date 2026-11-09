@@ -177,22 +177,34 @@ func (st *State) links(id string) (out, in []Relation) {
 
 // ---- Spaces ----
 
-// SpaceInput creates a space (an unknown or empty id) or changes one; a nil field stays as it is.
+// SpaceInput creates a space (an unknown or empty id) or changes one; a nil field stays as it is. A new space can
+// start from a template: its types, and with Examples its example entities; a name, icon or description left out
+// or empty is the template's.
 type SpaceInput struct {
 	ID          string  `json:"id"`
 	Name        *string `json:"name"`
 	Icon        *string `json:"icon"`
 	Description *string `json:"description"`
+	Template    string  `json:"template"`
+	Examples    bool    `json:"examples"`
 }
 
-func (st *State) upsertSpace(in SpaceInput) (_ *Space, err error) {
+func (st *State) upsertSpace(in SpaceInput, now time.Time) (*Space, error) {
 	sp, _ := st.space(in.ID)
-	if in.ID == "" || sp == nil {
+	isNew := in.ID == "" || sp == nil
+	var tpl *Template
+	if in.Template != "" || in.Examples {
+		if !isNew {
+			return nil, fmt.Errorf("模板只在新建空间时可用")
+		}
+		var err error
+		if tpl, err = findTemplate(cmp.Or(in.Template, "blank")); err != nil {
+			return nil, err
+		}
+	}
+	if isNew {
 		if len(st.Spaces) >= maxSpaces {
 			return nil, fmt.Errorf("最多 %d 个空间", maxSpaces)
-		}
-		if in.Name == nil {
-			return nil, fmt.Errorf("新空间需要名字")
 		}
 		id := in.ID
 		if id == "" {
@@ -201,34 +213,46 @@ func (st *State) upsertSpace(in SpaceInput) (_ *Space, err error) {
 			return nil, fmt.Errorf("空间 id %q 只能用小写字母、数字、- 和 _", id)
 		}
 		sp = &Space{ID: id, Icon: "folder", Types: []TypeDef{}}
-		defer func() {
-			if err == nil {
-				st.Spaces = append(st.Spaces, sp)
+		if tpl != nil {
+			types, err := tpl.types()
+			if err != nil {
+				return nil, err
 			}
-		}()
+			sp.Name, sp.Icon, sp.Description, sp.Types = tpl.Name, tpl.Icon, tpl.Description, types
+		} else if in.Name == nil {
+			return nil, fmt.Errorf("新空间需要名字")
+		}
 	}
+	given := func(s *string) bool { return s != nil && (tpl == nil || strings.TrimSpace(*s) != "") }
 	next := *sp
-	if in.Name != nil {
+	if given(in.Name) {
 		next.Name = strings.TrimSpace(*in.Name)
 	}
-	if in.Icon != nil {
+	if given(in.Icon) {
 		next.Icon = cmp.Or(strings.TrimSpace(*in.Icon), "folder")
 	}
-	if in.Description != nil {
+	if given(in.Description) {
 		next.Description = strings.TrimSpace(*in.Description)
 	}
 	switch {
 	case next.Name == "" || utf8.RuneCountInString(next.Name) > maxLabel:
-		err = fmt.Errorf("空间名要有 1 到 %d 个字", maxLabel)
+		return nil, fmt.Errorf("空间名要有 1 到 %d 个字", maxLabel)
 	case !slices.Contains(wire.NavIcons, next.Icon):
-		err = fmt.Errorf("图标 %q 不在可选范围内：%s", next.Icon, strings.Join(wire.NavIcons, "、"))
+		return nil, fmt.Errorf("图标 %q 不在可选范围内：%s", next.Icon, strings.Join(wire.NavIcons, "、"))
 	case utf8.RuneCountInString(next.Description) > 500:
-		err = fmt.Errorf("空间说明最多 500 字")
-	}
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("空间说明最多 500 字")
 	}
 	*sp = next
+	if !isNew {
+		return sp, nil
+	}
+	st.Spaces = append(st.Spaces, sp)
+	if tpl != nil && in.Examples {
+		// a failed change is not saved, so the space goes with its examples
+		if err := tpl.seed(st, sp.ID, now); err != nil {
+			return nil, err
+		}
+	}
 	return sp, nil
 }
 

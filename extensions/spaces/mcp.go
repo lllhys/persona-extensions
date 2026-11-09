@@ -13,7 +13,7 @@ import (
 )
 
 // `spaces mcp` serves the ontology to the assistant: the Model Context Protocol on stdio (JSON-RPC 2.0, a message a
-// line). Three tools read and the manifest allows them; four write and go by the conversation's permission policy.
+// line). Three tools read and the manifest allows them; five write and go by the conversation's permission policy.
 // It shares spaces_state.json with the extension the hub runs, whose pages draw again when the file changes.
 
 const mcpProtocol = "2025-06-18"
@@ -60,8 +60,11 @@ var tools = []tool{
 			"id": str("要修改的空间；新建时可以指定一个小写 id，不填自动生成"), "name": str("名称"),
 			"icon":        str("图标：folder、star、money、doc、calendar、chart、list、check、tag、link、person、clock、code 等"),
 			"description": str("一句话说明这个空间管什么"),
+			"template": map[string]any{"type": "string", "enum": templateKeys(),
+				"description": "新建时从模板开始（见 space_list 的 templates）：project 项目与目标、reading 阅读与知识、inventory 清单与物品、blank 空白；名称、图标、说明不填就用模板的"},
+			"examples": map[string]any{"type": "boolean", "description": "和 template 一起：顺带写入模板的几条示例记录，默认不写"},
 		},
-		description: "新建或修改一个空间（名称、图标、说明）。空间建好后用 space_schema_upsert 定义它的类型。"},
+		description: "新建或修改一个空间（名称、图标、说明）。新建时可以给 template，一步建好模板的全部类型；否则空间建好后用 space_schema_upsert 定义它的类型。"},
 	{name: "space_schema_upsert", required: []string{"key"},
 		props: map[string]any{
 			"space_id": spaceArg, "key": str("类型 key，snake_case"), "label": str("显示名"),
@@ -79,6 +82,12 @@ var tools = []tool{
 			"relations": map[string]any{"type": "array", "items": link, "description": "它指向的全部关系；给了就整体替换，不给保持不变"},
 		},
 		description: "新建或修改一条记录。值按字段的 kind 严格校验：number 要数字，date 是 YYYY-MM-DD，enum 必须是选项之一，url 是 http(s) 链接；不认识的字段会被拒绝并列出可用字段。"},
+	{name: "space_entity_derive", required: []string{"id", "type"},
+		props: map[string]any{
+			"id": str("从哪条记录衍生"), "type": str("新记录的类型 key（同一空间里的另一种类型）"),
+			"title": str("新记录的标题，不填沿用原记录的"), "relation": str("新记录指向原记录的关系名，默认「源自」"),
+		},
+		description: "从一条记录衍生出另一种类型的新记录（例如把点子孵化成目标）：带上两种类型都有且符合的字段值，并建立一条从新记录指向原记录的关系。"},
 	{name: "space_entity_delete", required: []string{"id"}, props: map[string]any{"id": str("记录 id")},
 		description: "删除一条记录和它所有的关系。删除前先和用户确认是哪一条。"},
 }
@@ -147,7 +156,8 @@ func (m *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "spaces", "version": about.Version},
 			"instructions": "用户的空间：每个空间由类型（字段、状态、视图）和记录、关系组成，页面按这些结构呈现。" +
-				"先 space_list，再 space_schema_get 看字段，再读写；用户想管理一件新的事情时，先和用户商量好类型和字段，再用 space_upsert 和 space_schema_upsert 搭好。",
+				"先 space_list，再 space_schema_get 看字段，再读写；用户想管理一件新的事情时，先看 space_list 的 templates 里有没有合适的常见模板（space_upsert 带 template 一步建好），" +
+				"没有就和用户商量好类型和字段，再用 space_upsert 和 space_schema_upsert 搭好。",
 		}, nil
 	case "ping":
 		return map[string]any{}, nil
@@ -224,7 +234,7 @@ func (m *mcpServer) call(name string, raw json.RawMessage) (out any, err error) 
 				list = append(list, map[string]any{"id": sp.ID, "name": sp.Name, "icon": sp.Icon,
 					"description": sp.Description, "types": types, "relations": rels})
 			}
-			return map[string]any{"spaces": list}, nil
+			return map[string]any{"spaces": list, "templates": templateList()}, nil
 		})
 	case "space_schema_get":
 		var in struct {
@@ -238,7 +248,7 @@ func (m *mcpServer) call(name string, raw json.RawMessage) (out any, err error) 
 			if err != nil {
 				return nil, err
 			}
-			return map[string]any{"space": sp, "field_kinds": fieldKinds, "views": viewKinds}, nil
+			return map[string]any{"space": sp, "field_kinds": fieldKinds, "views": viewKinds, "templates": templateList()}, nil
 		})
 	case "space_query":
 		var q Query
@@ -261,8 +271,8 @@ func (m *mcpServer) call(name string, raw json.RawMessage) (out any, err error) 
 		if err := args(&in); err != nil {
 			return nil, err
 		}
-		return write(func(st *State, _ time.Time) (any, error) {
-			sp, err := st.upsertSpace(in)
+		return write(func(st *State, now time.Time) (any, error) {
+			sp, err := st.upsertSpace(in, now)
 			return map[string]any{"space": sp}, err
 		})
 	case "space_schema_upsert":
@@ -289,6 +299,23 @@ func (m *mcpServer) call(name string, raw json.RawMessage) (out any, err error) 
 			}
 			return map[string]any{"entity": outOf(st, e)}, nil
 		})
+	case "space_entity_derive":
+		var in struct {
+			ID       string `json:"id"`
+			Type     string `json:"type"`
+			Title    string `json:"title"`
+			Relation string `json:"relation"`
+		}
+		if err := args(&in); err != nil {
+			return nil, err
+		}
+		return write(func(st *State, now time.Time) (any, error) {
+			e, err := st.deriveEntity(in.ID, in.Type, in.Title, in.Relation, now)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"entity": outOf(st, e)}, nil
+		})
 	case "space_entity_delete":
 		var in struct {
 			ID string `json:"id"`
@@ -302,6 +329,19 @@ func (m *mcpServer) call(name string, raw json.RawMessage) (out any, err error) 
 		})
 	}
 	return nil, fmt.Errorf("%w %q", errNoTool, name)
+}
+
+// templateList names the templates a new space can start from and the types each brings.
+func templateList() []map[string]any {
+	out := make([]map[string]any, len(templates))
+	for i, t := range templates {
+		types := make([]map[string]any, len(t.Types))
+		for j, d := range t.Types {
+			types[j] = map[string]any{"key": d.Key, "label": d.Label, "view": d.View}
+		}
+		out[i] = map[string]any{"key": t.Key, "name": t.Name, "icon": t.Icon, "description": t.Description, "types": types}
+	}
+	return out
 }
 
 // entityOut is an entity with its edges, each naming the other end.

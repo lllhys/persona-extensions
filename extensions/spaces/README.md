@@ -12,4 +12,4 @@ go -C extensions/spaces test ./...
 go -C extensions/spaces run . mcp --data /tmp/spaces-data   # the MCP server on stdio
 ```
 
-All data is local, in the extension's data directory (`spaces_state.json`). It starts empty: no network, no secrets, no presets.
+All data is local, in the extension's data directory (`spaces_state.json`). It starts empty: no network, no secrets. A new space can start blank or from a starter template (项目与目标, 阅读与知识, 清单与物品) that only fills in its types.
