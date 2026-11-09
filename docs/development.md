@@ -56,6 +56,8 @@ python3 -I scripts/test-ci-policy.py
 go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/ci.yml
 ```
 
+A resident Persona node probes test listeners with an unauthenticated `GET /`. Counting it as a connector request can falsely fail a logout assertion. Synthetic fixtures must recognize only the complete known probe shape (method, raw target, public compatibility User-Agent, headers and empty body), never all root or unauthenticated traffic. Preserve the original no-request assertion and add credential/query/body negative controls; do not stop the node or raise waits/count budgets to hide the interference.
+
 ```sh
 scripts/ci.sh
 ```
