@@ -55,6 +55,13 @@ func fakeGrok(mode string) {
 	case "secret":
 		os.Stderr.WriteString("failed reading " + os.Getenv("HOME") + "/.grok/auth.json with token abcdefghijklmnopqrstuvwxyz0123456789\n")
 		os.Exit(2)
+	case "cwd":
+		for i, a := range os.Args {
+			if a == "--cwd" && i+1 < len(os.Args) {
+				os.Stderr.WriteString("Error: cannot write " + os.Args[i+1] + "/session.json\n")
+			}
+		}
+		os.Exit(1)
 	case "big":
 		chunk := strings.Repeat("x", 64<<10)
 		for range 40 {
@@ -175,6 +182,50 @@ func TestExecGrokErrors(t *testing.T) {
 	if !errors.As(err, &ge) || ge.Kind != GrokFailed {
 		t.Fatalf("missing program: %#v", err)
 	}
+}
+
+// classifyGrok's words in this run's own paths (a user called login, a temporary directory ending in 401) are not
+// grok's: a grok that cannot start, or whose error names its directory or the home directory, failed; it was not
+// signed out or rate limited.
+func TestExecGrokPathsDoNotDecideTheKind(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix only")
+	}
+	odd := filepath.Join(t.TempDir(), "login-401-429")
+	if err := os.Mkdir(odd, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	plain := filepath.Join(odd, "grok")
+	if err := os.WriteFile(plain, []byte("#!/bin/sh\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	failed := func(t *testing.T, err error, has string) {
+		t.Helper()
+		var ge *GrokError
+		if !errors.As(err, &ge) || ge.Kind != GrokFailed || !strings.Contains(ge.Msg, has) {
+			t.Fatalf("%#v", err)
+		}
+	}
+	t.Run("missing", func(t *testing.T) {
+		_, err := ExecGrok{}.Run(context.Background(), filepath.Join(odd, "no-grok"), "p")
+		failed(t, err, "cannot run grok: no such file or directory")
+	})
+	t.Run("not executable", func(t *testing.T) {
+		_, err := ExecGrok{}.Run(context.Background(), plain, "p")
+		failed(t, err, "cannot run grok: permission denied")
+	})
+	t.Run("its directory", func(t *testing.T) {
+		g, exe := fake(t, "cwd")
+		t.Setenv("TMPDIR", odd)
+		_, err := g.Run(context.Background(), exe, "p")
+		failed(t, err, "cannot write")
+	})
+	t.Run("the home directory", func(t *testing.T) {
+		g, exe := fake(t, "secret")
+		t.Setenv("HOME", odd)
+		_, err := g.Run(context.Background(), exe, "p")
+		failed(t, err, "~/.grok/auth.json")
+	})
 }
 
 func TestExecGrokStdoutCap(t *testing.T) {
