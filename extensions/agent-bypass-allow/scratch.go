@@ -297,10 +297,12 @@ func readVars(raw string, segs []segment, tail, cwd string, relative bool) *shel
 		case "if", "while", "until", "for", "case", "select":
 			depth++
 		}
-		if prog := firstProgram(words); prog >= 0 {
+		if prog := cdWord(words); prog >= 0 {
 			switch path.Base(words[prog]) {
-			case "cd", "pushd", "popd":
+			case "cd", "chdir", "pushd", "popd":
 				sv.cd(words[prog+1:], k)
+			case "eval":
+				sv.cwds = nil // its command string may cd anywhere
 			}
 		}
 	}
@@ -416,6 +418,28 @@ func firstProgram(words []string) int {
 		return i
 	}
 	return -1
+}
+
+// cdPrefixes run a cd after them in this shell: builtin, command, time, exec, and zsh's noglob, nocorrect and -.
+// zsh's command runs /usr/bin/cd instead, and exec replaces the shell; reading a cd there only asks more.
+var cdPrefixes = map[string]bool{"builtin": true, "command": true, "time": true, "exec": true, "noglob": true,
+	"nocorrect": true, "-": true}
+
+// cdWord is the index of the word that may be a segment's cd (cd, chdir, pushd, popd) or eval: its program after
+// cdPrefixes, their options (command -p, time -p, builtin --) and the assignments and ! after them (time FOO=1 cd,
+// time ! cd, zsh's nocorrect FOO=1 cd); -1 when none.
+func cdWord(words []string) int {
+	i := firstProgram(words)
+	for i >= 0 && cdPrefixes[words[i]] {
+		for i++; i < len(words) && strings.HasPrefix(words[i], "-"); i++ {
+		}
+		if j := firstProgram(words[i:]); j >= 0 {
+			i += j
+		} else {
+			i = -1
+		}
+	}
+	return i
 }
 
 // cd adds the directories a cd to args may go to; one it cannot read leaves relative targets unread.

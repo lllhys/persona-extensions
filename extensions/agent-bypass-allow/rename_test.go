@@ -119,11 +119,15 @@ func TestEmbeddedManifestStripsAuthorMetadata(t *testing.T) {
 			t.Fatalf("runtime field %s changed", key)
 		}
 	}
-	var identity struct{ ID, Version string }
+	var identity, sourceIdentity struct{ ID, Version string }
 	if err := json.Unmarshal(manifest, &identity); err != nil {
 		t.Fatal(err)
 	}
-	if identity.ID != currentExtensionID || identity.Version != "0.2.24" {
-		t.Fatalf("runtime identity: %+v", identity)
+	if err := json.Unmarshal(authorManifest, &sourceIdentity); err != nil {
+		t.Fatal(err)
+	}
+	// the version follows the source manifest's, so a later bump needs no change here
+	if identity.ID != currentExtensionID || identity.Version == "" || identity != sourceIdentity {
+		t.Fatalf("runtime identity: %+v, source %+v", identity, sourceIdentity)
 	}
 }
