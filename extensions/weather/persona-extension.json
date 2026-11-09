@@ -1,0 +1,132 @@
+{
+  "manifest_version": 1,
+  "id": "weather",
+  "name": "天气",
+  "version": "0.1.0",
+  "description": "天气（Open-Meteo，免费、不用 key）：侧边栏多一个「天气」：顶部当前天气（温度、体感、风、湿度，和今天的最高最低），中间未来 24 小时气温折线，下面 7 天预报（星期、图标、高低温、降水概率），再往下空气质量一张卡；设了多个城市在右上角切换，下拉或按钮刷新。助手能用工具查当前天气、预报和空气质量，城市名没存过的自动搜。只读公开数据，不用账号。",
+  "publisher": "nwverse",
+  "tags": ["天气", "预报", "空气质量"],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/weather-linux-amd64",
+      "linux-arm64": "bin/weather-linux-arm64",
+      "darwin-arm64": "bin/weather-darwin-arm64",
+      "darwin-amd64": "bin/weather-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "weather",
+        "name": "天气",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "api.open-meteo.com",
+          "air-quality-api.open-meteo.com",
+          "geocoding-api.open-meteo.com"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "weather",
+        "title": "天气",
+        "placement": "nav_page",
+        "icon": "gauge"
+      },
+      {
+        "id": "page",
+        "title": "天气",
+        "placement": "plugin_page"
+      }
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "cities": {
+        "type": "array",
+        "title": "城市",
+        "description": "要看天气的城市，第一个是默认。每个城市填名字、纬度、经度（在 https://open-meteo.com 搜城市名就能看到）；时区可留空（自动按城市的时区）。默认是上海。",
+        "default": [
+          {
+            "name": "上海",
+            "latitude": 31.22,
+            "longitude": 121.46,
+            "timezone": "Asia/Shanghai"
+          }
+        ],
+        "items": {
+          "type": "object",
+          "required": ["name", "latitude", "longitude"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "名字",
+              "minLength": 1
+            },
+            "latitude": {
+              "type": "number",
+              "title": "纬度",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "longitude": {
+              "type": "number",
+              "title": "经度",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "timezone": {
+              "type": "string",
+              "title": "时区"
+            }
+          }
+        }
+      },
+      "temperature_unit": {
+        "type": "string",
+        "title": "温度单位",
+        "default": "celsius",
+        "oneOf": [
+          {
+            "const": "celsius",
+            "title": "摄氏度（℃）"
+          },
+          {
+            "const": "fahrenheit",
+            "title": "华氏度（℉）"
+          }
+        ]
+      },
+      "wind_unit": {
+        "type": "string",
+        "title": "风速单位",
+        "default": "kmh",
+        "oneOf": [
+          {
+            "const": "kmh",
+            "title": "千米/时（km/h）"
+          },
+          {
+            "const": "ms",
+            "title": "米/秒（m/s）"
+          }
+        ]
+      }
+    }
+  },
+  "permissions": {
+    "network": [
+      "api.open-meteo.com",
+      "air-quality-api.open-meteo.com",
+      "geocoding-api.open-meteo.com"
+    ]
+  }
+}
