@@ -1,0 +1,40 @@
+{
+  "manifest_version": 1,
+  "id": "miniflux",
+  "name": "Miniflux 阅读",
+  "version": "0.1.0",
+  "description": "在 Persona 里阅读自建 Miniflux 的个人队列：查看未读或收藏文章，搜索并阅读纯文本正文；标记已读或切换收藏前在手机上确认。API key 加密存在 hub，不保存账号密码，不删除订阅。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/miniflux/README.md",
+  "tags": ["Miniflux", "RSS", "稍后阅读", "自托管"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/miniflux-linux-amd64",
+      "linux-arm64": "bin/miniflux-linux-arm64",
+      "darwin-arm64": "bin/miniflux-darwin-arm64",
+      "darwin-amd64": "bin/miniflux-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "miniflux", "name": "Miniflux", "capabilities": ["status", "tools", "actions"],
+      "hosts": [], "agent_tools": ["miniflux_*"],
+      "confirm_always": ["miniflux_mark_read", "miniflux_toggle_bookmark"]
+    }],
+    "ui": [{"id": "reading", "title": "Miniflux 阅读", "placement": "nav_page", "icon": "doc"}]
+  },
+  "configuration": {
+    "type": "object",
+    "required": ["instance_url"],
+    "properties": {
+      "instance_url": {"type": "string", "title": "Miniflux 实例地址", "description": "你的 Miniflux HTTPS 地址；同一台机器上的实例可写 http://127.0.0.1", "format": "uri"}
+    }
+  },
+  "secrets": [{
+    "name": "api_key", "title": "Miniflux API key",
+    "description": "在 Miniflux 的「设置 › API Keys」中创建；只通过 X-Auth-Token 发往配置的实例，不保存账号密码",
+    "required": true
+  }],
+  "permissions": {"network": []}
+}
