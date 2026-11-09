@@ -10,7 +10,7 @@ from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import catalog
-from test_support import CatalogFixture
+from test_support import CatalogFixture, isolated_environ
 
 spec = importlib.util.spec_from_file_location("sign_index", pathlib.Path(__file__).with_name("sign-index.py"))
 sign_index = importlib.util.module_from_spec(spec)
@@ -28,7 +28,7 @@ class SigningTests(CatalogFixture, unittest.TestCase):
     def test_new_signature_requires_signed_provenance(self):
         self.body.pop("generation")
         self.payload_path.write_bytes(catalog.encode(self.body))
-        with mock.patch.dict(os.environ, {"EXTENSION_MARKET_SIGNING_KEY": self.key.read_text()}, clear=True):
+        with mock.patch.dict(os.environ, isolated_environ(EXTENSION_MARKET_SIGNING_KEY=self.key.read_text()), clear=True):
             with self.assertRaisesRegex(ValueError, "provenance"):
                 sign_index.sign(self.payload_path, self.directory / "new.json")
 
@@ -58,7 +58,7 @@ class SigningTests(CatalogFixture, unittest.TestCase):
         sig_path.write_bytes(catalog.encode(signature))
         public = self.directory / "public"
         public.write_text(self.public)
-        with mock.patch.dict(os.environ, {}, clear=True):
+        with mock.patch.dict(os.environ, isolated_environ(), clear=True):
             sign_index.convert_legacy(legacy, sig_path, public, self.catalog_path)
         actual, result = catalog.verified(self.catalog_path)
         self.assertEqual(actual, payload)
@@ -95,7 +95,7 @@ class SigningTests(CatalogFixture, unittest.TestCase):
 
     def test_without_secret_fails_without_output(self):
         output = self.directory / "new.json"
-        with mock.patch.dict(os.environ, {}, clear=True):
+        with mock.patch.dict(os.environ, isolated_environ(), clear=True):
             with self.assertRaisesRegex(ValueError, "required"):
                 sign_index.sign(self.payload_path, output)
         self.assertFalse(output.exists())
@@ -104,21 +104,21 @@ class SigningTests(CatalogFixture, unittest.TestCase):
         other = self.directory / "other.pem"
         catalog.openssl("genpkey", "-algorithm", "ed25519", "-out", other)
         output = self.directory / "new.json"
-        with mock.patch.dict(os.environ, {"EXTENSION_MARKET_SIGNING_KEY": other.read_text()}, clear=True):
+        with mock.patch.dict(os.environ, isolated_environ(EXTENSION_MARKET_SIGNING_KEY=other.read_text()), clear=True):
             with self.assertRaisesRegex(ValueError, "private key"):
                 sign_index.sign(self.payload_path, output)
         self.assertFalse(output.exists())
 
     def test_signs_raw_payload_with_existing_synthetic_key(self):
         output = self.directory / "new.json"
-        with mock.patch.dict(os.environ, {"EXTENSION_MARKET_SIGNING_KEY": self.key.read_text()}, clear=True):
+        with mock.patch.dict(os.environ, isolated_environ(EXTENSION_MARKET_SIGNING_KEY=self.key.read_text()), clear=True):
             sign_index.sign(self.payload_path, output)
         self.assertEqual(catalog.verified(output)[0], self.payload_path.read_bytes())
 
     def test_actions_empty_secret_fails_closed(self):
         output = self.directory / "actions.json"
         for secret in ("", " \n\t"):
-            with mock.patch.dict(os.environ, {"EXTENSION_MARKET_SIGNING_KEY": secret}, clear=True):
+            with mock.patch.dict(os.environ, isolated_environ(EXTENSION_MARKET_SIGNING_KEY=secret), clear=True):
                 with self.assertRaisesRegex(ValueError, "required"):
                     sign_index.sign(self.payload_path, output)
         self.assertFalse(output.exists())

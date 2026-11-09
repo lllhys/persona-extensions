@@ -12,7 +12,7 @@ from unittest import mock
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import catalog
 import oci
-from test_support import CatalogFixture, archive
+from test_support import CatalogFixture, archive, isolated_environ
 
 
 def load(name, filename):
@@ -107,7 +107,7 @@ class PublisherTests(CatalogFixture, unittest.TestCase):
         def factory(path):
             calls.append(path)
             return oci.Registry(path, transport=self.server)
-        with mock.patch.dict(os.environ, {"GHCR_TOKEN": "synthetic-unused", "GH_TOKEN": "synthetic-unused"}, clear=True):
+        with mock.patch.dict(os.environ, isolated_environ(GHCR_TOKEN="synthetic-unused", GH_TOKEN="synthetic-unused"), clear=True):
             result = catalog.loads(publisher.generate_payload(self.plan, self.catalog_path, SHA, factory))
         self.assertEqual(result["extensions"], [self.candidate])
         self.assertEqual(calls, [oci.repository("demo")])
