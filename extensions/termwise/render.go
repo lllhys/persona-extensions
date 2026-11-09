@@ -36,7 +36,8 @@ type renderOption struct {
 	Failed    func(error) string
 }
 
-var wordRE = regexp.MustCompile(`[A-Za-z]+(?:'[A-Za-z]+)?`)
+// wordRE matches a word and a contraction (don't); articles often set its apostrophe as ’ (U+2019).
+var wordRE = regexp.MustCompile(`[A-Za-z]+(?:['’][A-Za-z]+)?`)
 
 var skipTags = map[string]bool{
 	"script": true, "style": true, "noscript": true, "textarea": true, "input": true,
@@ -140,7 +141,7 @@ func replaceText(parent, text *html.Node, opt *renderOption, hits *[]hit) {
 			nodes = append(nodes, &html.Node{Type: html.TextNode, Data: text.Data[last:span[0]]})
 		}
 		surface := text.Data[span[0]:span[1]]
-		saved := opt.Saved[strings.ToLower(surface)]
+		saved := opt.Saved[foldWord(surface)]
 		lemma, g, ok := lexicon.lookup(surface, false)
 		if ok {
 			saved = saved || opt.Saved[lemma]
