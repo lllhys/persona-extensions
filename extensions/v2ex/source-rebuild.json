@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "bundle": "source-reference/bundle.mjs",
+  "build": "build:source",
+  "output": "build/v2ex.mjs",
+  "archive": "build/v2ex-source.tar.gz",
+  "extracted_extension": "authoring/extensions/v2ex",
+  "extracted_sdk": "authoring/sdk/ts"
+}

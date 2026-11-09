@@ -1,0 +1,57 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"testing"
+	"time"
+)
+
+func TestRound2OriginalCounterexamples(t *testing.T) {
+	for _, body := range []string{`[{"id":1,2:3}]`, `[{"id":1.00000000000000001}]`, `[{"id":1e3}]`} {
+		if _, err := parseTopics([]byte(body)); err == nil {
+			t.Fatalf("accepted malformed syntax or integer lexeme")
+		}
+	}
+	for _, token := range []string{`-0`, `"` + string(rune(92)) + `u0030"`} {
+		ts, err := parseTopics([]byte(fmt.Sprintf(`[{"id":1,"deleted":%s}]`, token)))
+		if err != nil || len(ts) != 0 {
+			t.Fatalf("RawMessage deletion mismatch: %v", err)
+		}
+	}
+	for _, n := range []int64{9007199254740992, 9007199254740993, 9223372036854775807, -9223372036854775808} {
+		ts, err := parseTopics([]byte(fmt.Sprintf(`[{"id":1,"created":%d,"last_touched":%d,"replies":%d}]`, n, n, n)))
+		if err != nil || ts[0].Created != n || ts[0].LastTouched != n || int64(ts[0].Replies) != n {
+			t.Fatalf("int64 projection mismatch: %v", err)
+		}
+		t.Logf("seconds=%d UTC=%s age=%s", n, time.Unix(n, 0).UTC().Format("01-02 15:04"), ts[0].meta(time.UnixMilli(1700000000000)))
+	}
+	for _, token := range []string{`1.00000000000000001`, `1e3`} {
+		if _, err := topicID(json.RawMessage(token)); err == nil {
+			t.Fatal("accepted fractional/exponent numeric input")
+		}
+		if _, err := newApp().callTool(context.Background(), "v2ex_hot", json.RawMessage(fmt.Sprintf(`{"limit":%s}`, token))); err == nil {
+			t.Fatal("accepted fractional/exponent counter")
+		}
+		var state pageState
+		if err := json.Unmarshal([]byte(fmt.Sprintf(`{"t":%s}`, token)), &state); err == nil {
+			t.Fatal("accepted fractional/exponent state")
+		}
+	}
+	if id, err := topicID(json.RawMessage(`9223372036854775807`)); err != nil || id != 9223372036854775807 {
+		t.Fatalf("full numeric int64 ID: %v", err)
+	}
+	if limitPause(http.Header{}, 9223372036854775807) != pauseFor {
+		t.Fatal("Go Unix internal edge must use the default pause")
+	}
+	for _, token := range []string{`1.5`, `1.00000000000000001`, `1e3`, `9223372036854775808`, `"2"`, `true`, `{}`, `[]`} {
+		s := newSite("https://example.com")
+		_, err := s.judge(&http.Response{StatusCode: 200, Header: http.Header{}}, []byte(fmt.Sprintf(`{"rate_limit":{"used":%s,"quota":1}}`, token)))
+		if !errors.Is(err, errBadAnswer) || s.isPaused() {
+			t.Fatalf("quota parse: err=%v paused=%t", err, s.isPaused())
+		}
+	}
+}

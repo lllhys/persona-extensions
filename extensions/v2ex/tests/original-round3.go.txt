@@ -1,0 +1,111 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/sdk/go/ext"
+	"github.com/nwverse/persona/sdk/go/wire"
+)
+
+func TestRound3OriginalCounterexamples(t *testing.T) {
+	t.Run("typed-occurrences", func(t *testing.T) {
+		for _, body := range []string{`[{"id":"invalid","id":1}]`, `[{"id":1.00000000000000001,"id":1}]`, `[{"node":{"name":1},"node":{"name":"go"}}]`, `[{"member":{"username":1},"Member":{"username":"fixture"}}]`} {
+			if _, err := parseTopics([]byte(body)); err == nil {
+				t.Fatal("overwritten type error was lost")
+			}
+		}
+		ts, err := parseTopics([]byte(`[{"id":1,"id":null,"TITLE":"retained","Title":null,"Node":{"name":"go"},"node":null,"node":{"title":"Go"}}]`))
+		if err != nil || ts[0].Node.Name != "go" || ts[0].Node.Title != "Go" || ts[0].Title != "retained" || ts[0].ID != 1 {
+			t.Fatalf("merge/null semantics: %v %+v", err, ts)
+		}
+	})
+	t.Run("folded-fields-and-raw-deletion", func(t *testing.T) {
+		for _, body := range []string{`[{"id":1,"Deleted":true}]`, `[{"id":1,"deleted":0,"Deleted":true}]`, `[{"ID":1,"DELETED":-0}]`, `[{"id":1,"Deleted":" 0"}]`} {
+			ts, err := parseTopics([]byte(body))
+			if err != nil || len(ts) != 0 {
+				t.Fatalf("deletion: %v", err)
+			}
+		}
+		ts, err := parseTopics([]byte(`[{"id":1,"last_touched":1,"laſt_touched":2}]`))
+		if err != nil || ts[0].LastTouched != 2 {
+			t.Fatal("Go simple-fold matching mismatch")
+		}
+	})
+	t.Run("partial-refusal", func(t *testing.T) {
+		for _, body := range []string{`{"rate_limit":{"used":1},"rate_limit":{"quota":1}}`, `{"rate_limit":{"used":2,"used":1.5,"quota":1}}`, `{"rate_limit":{"used":2,"used":null,"quota":1}}`, `{"RATE_LIMIT":{"USED":2},"rate_limit":{"Quota":1}}`, `{"message":"rate limit","message":false}`} {
+			s := newSite("https://example.com")
+			_, err := s.judge(&http.Response{StatusCode: 200, Header: http.Header{}}, []byte(body))
+			if !errors.Is(err, errRateLimited) || !s.isPaused() {
+				t.Fatalf("partial refusal: %v", err)
+			}
+		}
+	})
+	t.Run("whole-state", func(t *testing.T) {
+		for _, raw := range []string{`{"l":"latest","t":1,"a":"invalid"}`, `{"l":1,"t":1}`, `{"t":1.5,"t":1}`, `{"t":1,"T":1e0}`, `{"t":"1"}`} {
+			var state pageState
+			if json.Unmarshal([]byte(raw), &state) == nil {
+				t.Fatal("state type error was accepted")
+			}
+			a := newApp()
+			state = a.readState(&ext.UIRequest{UIParams: wire.UIParams{State: raw}})
+			if state.Topic != 0 || state.List != "hot" || state.All {
+				t.Fatalf("state was not reset: %+v", state)
+			}
+		}
+	})
+	t.Run("simple-fold", func(t *testing.T) {
+		for _, pair := range [][2]string{{"Σ", "ς"}, {"K", "K"}, {"s", "ſ"}, {"ẞ", "ß"}} {
+			if !strings.EqualFold(pair[0], pair[1]) {
+				t.Fatalf("missing fold %q", pair)
+			}
+			f := filter{ExcludeNodes: []string{pair[0]}}
+			var topic topic
+			topic.Node.Title = pair[1]
+			if f.keep(topic) {
+				t.Fatal("folded node not excluded")
+			}
+		}
+		for _, pair := range [][2]string{{"İ", "i"}, {"ı", "I"}, {"ß", "ss"}, {"ﬀ", "ff"}, {"é", "é"}} {
+			if strings.EqualFold(pair[0], pair[1]) {
+				t.Fatal("not simple folding")
+			}
+		}
+	})
+	t.Run("valid-aggregate-frame", func(t *testing.T) {
+		var rows []map[string]any
+		for i := 1; i <= 200; i++ {
+			rows = append(rows, map[string]any{"id": i, "title": strings.Repeat("😀", 300), "node": map[string]any{"name": "go", "title": strings.Repeat("😀", 1900)}})
+		}
+		body, err := json.Marshal(rows)
+		if err != nil || int64(len(body)) >= answerMost {
+			t.Fatal("response is not legal")
+		}
+		a := newApp()
+		a.site.store("/topics/hot.json", body, time.Now())
+		view := a.listPage(context.Background(), &ext.UIRequest{UIParams: wire.UIParams{UIVersion: 1}}, pageState{List: "hot"}, false)
+		if err := wire.CheckView(view); err != nil {
+			t.Fatalf("Go rejects legal aggregate: %v", err)
+		}
+		data, err := json.Marshal(view)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("Go response bytes=%d view bytes=%d", len(body), len(data))
+	})
+	t.Run("unbounded-filter-annotation", func(t *testing.T) {
+		a := newApp()
+		a.cfg.ExcludeKeywords = []string{strings.Repeat("x", 35000)}
+		a.site.store("/topics/hot.json", []byte(`[{"id":1,"title":"fixture"}]`), time.Now())
+		text, err := a.callTool(context.Background(), "v2ex_hot", json.RawMessage(`{}`))
+		if err != nil || !strings.Contains(fmt.Sprint(text), "id 1") {
+			t.Fatalf("Go lost topic: %v", err)
+		}
+	})
+}
