@@ -1,0 +1,145 @@
+{
+  "manifest_version": 1,
+  "id": "x",
+  "name": "X",
+  "version": "0.1.0",
+  "description": "X（原 Twitter）进 Persona，两种方式任选：一是官方 X API v2，用你自己的开发者应用的密钥（按量付费，额度花你自己的，动态和 @我 都读得全）；二是 Grok，不用 X 账号登录、不用 X 的密钥，只要 hub 这台机器上装了 xAI 官方的 grok 命令行并用 SuperGrok 或 X Premium+ 订阅登录过（grok login），扩展就让它用 X 搜索整理你关注的账号和话题（走订阅，不额外付费，但只是搜索，可能不全，也读不到 @我）。收件箱里是 @你 和回复你的帖子；侧边栏的「X」页是整理好的摘要，不是无限刷的时间线：用 X API 时是过去 24 小时 / 3 天的热门帖子、分享最多的链接、长串、发得最多的关注账号，用 Grok 时是 Grok 对过去 24 小时的总结、话题和帖子；助手能看摘要、搜读到的帖子、看关注的人、读一条帖子，有 Grok 时还能现搜 X。每天读多少帖子有预算上限；读到的帖子只存在扩展自己的目录里几天：用 X API 读到的退出登录就删掉；Grok 找到的同样只留几天，退出 X 登录不影响它，把来源改成 x_api 时删掉。只读，不发帖、不点赞、不读私信，不抓网页、不用 cookie。密钥加密存在 hub 的数据库里。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/x",
+  "tags": ["社交", "资讯", "收件箱"],
+  "engines": {
+    "persona": ">=202611051346",
+    "extension_protocol": 1
+  },
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/x-linux-amd64",
+      "linux-arm64": "bin/x-linux-arm64",
+      "darwin-arm64": "bin/x-darwin-arm64",
+      "darwin-amd64": "bin/x-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "x",
+        "name": "X",
+        "capabilities": ["status", "tools", "inbox", "login", "fallback"],
+        "hosts": ["x.com", "twitter.com"],
+        "kinds": ["mention"],
+        "kind_descriptions": {
+          "mention": "X 上 @ 了用户或回复了用户的帖子"
+        }
+      }
+    ],
+    "ui": [
+      {"id": "x", "title": "X", "placement": "nav_page", "icon": "list"}
+    ],
+    "assistant": [
+      {"id": "x", "skills": ["skills/x"]}
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "triage_rules": {
+        "type": "string",
+        "title": "分拣规则",
+        "maxLength": 4000,
+        "description": "X的条目按什么分「需要你 / 知悉即可 / 噪音」，用你自己的话写；填了就只用它、不用收件箱的全局规则（只管X）。一般不在这里改：和助手说（比如「X 上陌生账号的 @ 都算知悉」），它来改。写 \\n 换行；空着用全局规则"
+      },
+      "feed_source": {
+        "type": "string",
+        "title": "读哪些帖子",
+        "default": "home",
+        "description": "整理页和助手用的帖子从哪里读。X 按返回的每条帖子（大约 0.005 美元）和用户（大约 0.010 美元）收费，受每日预算限制；只读几个列表更省",
+        "oneOf": [
+          {"const": "home", "title": "主页时间线（关注的人）"},
+          {"const": "lists", "title": "只读下面的列表"},
+          {"const": "off", "title": "不读（只收 @我）"}
+        ]
+      },
+      "list_ids": {
+        "type": "array",
+        "title": "列表",
+        "description": "「只读下面的列表」时读这些 X 列表：写列表的数字 id（列表网址 x.com/i/lists/ 后面那串数字）",
+        "maxItems": 20,
+        "uniqueItems": true,
+        "items": {"type": "string", "pattern": "^[0-9]{1,20}$"}
+      },
+      "daily_post_budget": {
+        "type": "integer",
+        "title": "每日帖子预算",
+        "default": 200,
+        "minimum": 0,
+        "maximum": 5000,
+        "description": "每天（按 UTC 算）最多读多少条帖子和用户（X 按返回的每条收费：帖子大约 0.005 美元，用户大约 0.010 美元；默认 200 条每天大约 1–2 美元，每月 30–60 美元）。到了就停，第二天再读；0 是不读动态。@我 和每周刷新一次的关注列表不算在里面（关注列表另外收费，每次刷新每 1,000 个关注大约 1 美元，见扩展说明）"
+      },
+      "retention_days": {
+        "type": "integer",
+        "title": "帖子保留天数",
+        "default": 3,
+        "minimum": 1,
+        "maximum": 7,
+        "description": "读到的帖子在扩展的目录里留几天，过了就删（X 要求删除已经删掉的帖子的副本，所以只存几天）。@我 留 8 天"
+      },
+      "source": {
+        "type": "string",
+        "title": "用哪种方式",
+        "default": "auto",
+        "description": "自动：登录了 X API 就用 X API，没登录、hub 这台机器上有 grok 就用 Grok。只用 X API：不跑 grok，Grok 找到的内容删掉。只用 Grok：摘要和整理页都来自 Grok；登录了 X API 也只用它收 @我 和读关注列表，不读按量付费的时间线",
+        "oneOf": [
+          {"const": "auto", "title": "自动"},
+          {"const": "x_api", "title": "只用 X API"},
+          {"const": "grok", "title": "只用 Grok"}
+        ]
+      },
+      "grok_path": {
+        "type": "string",
+        "title": "grok 的路径",
+        "maxLength": 1024,
+        "description": "hub 这台机器上 grok 命令行的完整路径。空着自动找：先找 PATH 里的 grok，再找 ~/.grok/bin/grok、~/.local/bin/grok、/usr/local/bin/grok、/opt/homebrew/bin/grok"
+      },
+      "handles": {
+        "type": "array",
+        "title": "Grok 看哪些账号",
+        "description": "用 Grok 时整理这些账号的帖子：写用户名，不带 @（比如 example_user）。每次搜 20 个，一次刷新最多搜 5 批，多的下次接着搜。空着的话，如果 X API 读过你的关注列表，就用其中最近最活跃、粉丝最多的 100 个",
+        "maxItems": 200,
+        "uniqueItems": true,
+        "items": {"type": "string", "pattern": "^@?[A-Za-z0-9_]{1,15}$"}
+      },
+      "topics": {
+        "type": "array",
+        "title": "Grok 还搜哪些话题",
+        "description": "用 Grok 时每次刷新再搜一下这些话题（每个不超过 100 个字），比如「Go 语言」「开源大模型」",
+        "maxItems": 10,
+        "uniqueItems": true,
+        "items": {"type": "string", "minLength": 1, "maxLength": 100}
+      },
+      "grok_every_hours": {
+        "type": "integer",
+        "title": "Grok 多久刷新一次（小时）",
+        "default": 6,
+        "minimum": 1,
+        "maximum": 24,
+        "description": "用 Grok 时每隔几小时让它重新搜一遍、整理过去 24 小时的帖子"
+      },
+      "grok_searches_per_day": {
+        "type": "integer",
+        "title": "每天最多跑几次 Grok",
+        "default": 30,
+        "minimum": 0,
+        "maximum": 200,
+        "description": "每天（按 UTC 算）最多运行多少次 grok：整理页的每一批账号、话题，和助手的每次现搜（x_search）都算一次。到了就停，第二天再搜；0 是不用 Grok。订阅的额度是 xAI 定的，这里只是你自己的上限"
+      },
+      "proxy": {
+        "type": "string",
+        "title": "代理",
+        "description": "hub 这台机器连不上 X 时填一个代理（http://、https://、socks5:// 或 socks5h://，可带 用户名:密码@），X API 的所有请求都走它；填错了每个请求都失败，不会绕过它直连。空着直连。grok 不走这里，用它自己的网络设置"
+      }
+    }
+  },
+  "permissions": {
+    "network": ["api.x.com", "x.com", "*.twimg.com", "x.ai", "*.x.ai"]
+  }
+}
