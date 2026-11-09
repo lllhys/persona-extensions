@@ -1,0 +1,39 @@
+{
+  "manifest_version": 1,
+  "id": "goodlinks",
+  "name": "GoodLinks 阅读",
+  "version": "0.1.0",
+  "description": "在 Persona 里读取本机 GoodLinks 阅读库：未读或收藏文章、全文搜索、缓存正文和划线备注；标记已读或切换收藏前在手机上确认。API token 加密存在 hub，默认只连本机，不删除链接，不控制桌面应用。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/goodlinks/README.md",
+  "tags": ["GoodLinks", "稍后阅读", "划线", "本地"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/goodlinks-linux-amd64",
+      "linux-arm64": "bin/goodlinks-linux-arm64",
+      "darwin-arm64": "bin/goodlinks-darwin-arm64",
+      "darwin-amd64": "bin/goodlinks-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "goodlinks", "name": "GoodLinks", "capabilities": ["status", "tools", "actions"],
+      "hosts": [], "agent_tools": ["goodlinks_*"],
+      "confirm_always": ["goodlinks_mark_read", "goodlinks_toggle_star"]
+    }],
+    "ui": [{"id": "reading", "title": "GoodLinks 阅读", "placement": "nav_page", "icon": "doc"}]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "instance_url": {"type": "string", "title": "GoodLinks API 地址", "description": "默认 http://127.0.0.1:9428；只允许本机或 localhost API 地址", "format": "uri", "default": "http://127.0.0.1:9428"}
+    }
+  },
+  "secrets": [{
+    "name": "api_token", "title": "GoodLinks API token",
+    "description": "在 GoodLinks 设置的 API 中复制；只作为 Bearer 令牌发往本机 API",
+    "required": true
+  }],
+  "permissions": {"network": []}
+}
