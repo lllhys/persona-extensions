@@ -253,8 +253,10 @@ func TestHomeTimelineResumesSinceID(t *testing.T) {
 	again := x.New(x.Settings{}, x.Options{Base: e.f.URL(), DataDir: e.dir, Now: e.clk.Now})
 	again.UseSecrets(e.sec)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go again.Run(ctx)
+	stopped := make(chan struct{})
+	go func() { again.Run(ctx); close(stopped) }()
+	// Run writes to e.dir until it returns, so wait for it before t.TempDir's cleanup removes the directory.
+	defer func() { cancel(); <-stopped }()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		out, err := again.Call(context.Background(), "x_feed", json.RawMessage(`{"limit":50}`))
@@ -818,8 +820,10 @@ func TestBudgetReservedAndKept(t *testing.T) {
 	again := x.New(cfg, x.Options{Base: e.f.URL(), DataDir: e.dir, Now: e.clk.Now})
 	again.UseSecrets(e.sec)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go again.Run(ctx)
+	stopped := make(chan struct{})
+	go func() { again.Run(ctx); close(stopped) }()
+	// Run writes to e.dir until it returns, so wait for it before t.TempDir's cleanup removes the directory.
+	defer func() { cancel(); <-stopped }()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		if used, _ := again.Budget(); used == 6 {
