@@ -10,6 +10,12 @@ Persona 的公开扩展：接入数据源，为助手添加工具和技能，并
 
 [观看视频介绍（含配音）](#视频介绍)
 
+## 视频介绍
+
+https://github.com/user-attachments/assets/172bb2bb-6c28-401e-aae2-695f67e8356d
+
+[下载高清版和字幕](https://github.com/nwverse/persona-extensions/releases/tag/promo-persona-extensions-v1)
+
 ## 快速开始
 
 在 Persona App 中打开 **设置 → 扩展 → 扩展市场 → 添加**，输入：
@@ -27,12 +33,6 @@ personad extension market add github:nwverse/persona-extensions
 ```
 
 本地安装包、旧版 hub 兼容以及扩展特有的设置见[安装说明](docs/installation.md)（英文）。
-
-## 视频介绍
-
-https://github.com/user-attachments/assets/172bb2bb-6c28-401e-aae2-695f67e8356d
-
-[下载高清版和字幕](https://github.com/nwverse/persona-extensions/releases/tag/promo-persona-extensions-v1)
 
 ## 扩展
 

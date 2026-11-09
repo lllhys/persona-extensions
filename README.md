@@ -10,6 +10,12 @@ New catalog signatures also cover their predecessor and source inventory, which 
 
 [Watch the video tour (with voice-over)](#video-tour)
 
+## Video tour
+
+https://github.com/user-attachments/assets/0198ecd2-1e5f-4ca1-95f4-0473b0488670
+
+[Download the HD version and subtitles](https://github.com/nwverse/persona-extensions/releases/tag/promo-persona-extensions-v1)
+
 ## Quick start
 
 In the Persona app, open **Settings → Extensions → Extension markets → Add** and enter:
@@ -27,12 +33,6 @@ personad extension market add github:nwverse/persona-extensions
 ```
 
 See [installation](docs/installation.md) for local packages, older hubs and extension-specific setup.
-
-## Video tour
-
-https://github.com/user-attachments/assets/0198ecd2-1e5f-4ca1-95f4-0473b0488670
-
-[Download the HD version and subtitles](https://github.com/nwverse/persona-extensions/releases/tag/promo-persona-extensions-v1)
 
 ## Extensions
 
