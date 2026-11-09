@@ -1,0 +1,56 @@
+{
+  "manifest_version": 1,
+  "id": "feishu-sidebar",
+  "name": "飞书侧边栏",
+  "version": "0.1.0",
+  "description": "从飞书侧边栏打开 Persona 网页版：这一页生成一个飞书 applink，在飞书里点开（或复制后发到飞书）就会在侧边栏打开你的 Persona 网页。不用建飞书网页应用、不向飞书发请求、不存任何凭证；助手也能用工具拼出链接。",
+  "publisher": "nwverse",
+  "tags": ["飞书", "侧边栏", "工具"],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/feishu-sidebar-linux-amd64",
+      "linux-arm64": "bin/feishu-sidebar-linux-arm64",
+      "darwin-arm64": "bin/feishu-sidebar-darwin-arm64",
+      "darwin-amd64": "bin/feishu-sidebar-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "feishu",
+        "name": "飞书侧边栏",
+        "capabilities": [
+          "status",
+          "tools"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "feishu-sidebar",
+        "title": "飞书侧边栏",
+        "placement": "nav_page",
+        "icon": "link"
+      }
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "hub_url": {
+        "type": "string",
+        "title": "hub 对外地址",
+        "description": "飞书内置浏览器能访问到的 hub 地址，如 https://persona.example.com。留空则自动取 hub 自己报告的地址（public_url）；取不到时这一页会提示你来这里填。"
+      },
+      "path": {
+        "type": "string",
+        "title": "默认打开哪个页面",
+        "description": "站内相对路径，以 / 开头，如 / 或 /j/<对话id>；不填就是 /。",
+        "default": "/"
+      }
+    }
+  }
+}
