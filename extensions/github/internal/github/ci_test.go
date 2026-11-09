@@ -21,11 +21,19 @@ type fakeCI struct {
 	runs          map[string]string // branch -> workflow_runs JSON
 	branches      map[string]bool
 	prMerged      bool
+	changes       int // notifications added: their Last-Modified; If-Modified-Since with it answers 304
+	notModified   int // polls answered 304
+}
+
+// lastModified is the Last-Modified of the notifications as they are now.
+func (f *fakeCI) lastModified() string {
+	return time.Date(2026, 1, 1, 0, 0, f.changes, 0, time.UTC).Format(http.TimeFormat)
 }
 
 func (f *fakeCI) note(id, title string, repo string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.changes++
 	f.notifications = append(f.notifications, map[string]any{"id": id, "reason": "ci_activity", "updated_at": time.Now().UTC().Format(time.RFC3339),
 		"subject":    map[string]any{"title": title, "url": nil, "type": "CheckSuite"},
 		"repository": map[string]string{"full_name": repo, "html_url": "https://github.com/" + repo}})
@@ -48,6 +56,12 @@ func (f *fakeCI) server(t *testing.T) *Connector {
 		case p == "/user":
 			w.Write([]byte(`{"login":"me"}`))
 		case p == "/notifications":
+			if r.Header.Get("If-Modified-Since") == f.lastModified() {
+				f.notModified++
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+			w.Header().Set("Last-Modified", f.lastModified())
 			json.NewEncoder(w).Encode(f.notifications)
 		case p == "/repos/example-org/example-repo":
 			w.Write([]byte(`{"default_branch":"main"}`))
@@ -212,12 +226,9 @@ func TestCIThingKeepsNewestFailure(t *testing.T) {
 
 	// Later failures from another account's pushes: no notification; the follow-up finds them in the branch's runs.
 	settled, fresh := time.Now().Add(-time.Hour).UTC().Truncate(time.Second), time.Now().Add(-30*time.Second).UTC().Truncate(time.Second)
-	run := func(name, status, conclusion string, at time.Time) string {
-		return `{"name":"` + name + `","status":"` + status + `","conclusion":"` + conclusion + `","updated_at":"` + at.Format(time.RFC3339) + `"}`
-	}
 	f.mu.Lock()
-	f.runs = map[string]string{"main": "[" + run("contracts", "completed", "failure", settled.Add(-time.Minute)) + "," +
-		run("android", "completed", "failure", settled) + "," + run("contracts", "completed", "success", base) + "]"}
+	f.runs = map[string]string{"main": "[" + runJSON("contracts", "completed", "failure", settled.Add(-time.Minute)) + "," +
+		runJSON("android", "completed", "failure", settled) + "," + runJSON("contracts", "completed", "success", base) + "]"}
 	f.mu.Unlock()
 	if !c.followUpCI(context.Background()) {
 		t.Fatal("a newer failed run did not move the thing")
@@ -230,7 +241,7 @@ func TestCIThingKeepsNewestFailure(t *testing.T) {
 
 	// A run that ended moments ago waits: its notification, if it is the user's, is the same failure.
 	f.mu.Lock()
-	f.runs["main"] = "[" + run("apple", "completed", "failure", fresh) + "," + f.runs["main"][1:]
+	f.runs["main"] = "[" + runJSON("apple", "completed", "failure", fresh) + "," + f.runs["main"][1:]
 	f.mu.Unlock()
 	if c.followUpCI(context.Background()) {
 		t.Fatalf("a run that just ended moved the thing: %+v", things(t, c)[thread])
@@ -241,6 +252,83 @@ func TestCIThingKeepsNewestFailure(t *testing.T) {
 	c.poll(context.Background())
 	if th := things(t, c)[thread]; !th.At.Equal(settled) {
 		t.Fatalf("an older notification wound the thing back to %v", th.At)
+	}
+}
+
+// An item due for its follow-up is checked at the next poll even when the notifications did not change (304)
+// (#184): failed runs GitHub sent no notification of join it then, not at a full read ten or twenty minutes later.
+func TestCIFollowUpWhileNotificationsUnchanged(t *testing.T) {
+	base := time.Now().Add(-2 * time.Hour).UTC().Truncate(time.Second)
+	f := &fakeCI{branches: map[string]bool{"main": true}}
+	f.noteAt("1", "CI workflow run failed for main branch", "example-org/example-repo", base)
+	c := f.server(t)
+	const thread = "ci:example-org/example-repo@main"
+	if _, _, err := c.poll(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	failed := time.Now().Add(-5 * time.Minute).UTC().Truncate(time.Second)
+	f.mu.Lock()
+	f.runs = map[string]string{"main": "[" + runJSON("CI", "completed", "failure", failed) + "]"}
+	f.mu.Unlock()
+	// ciRecheck has passed since the item's last check; the last full read was moments ago.
+	c.inbox.mu.Lock()
+	c.inbox.ci[thread].checked = time.Now().Add(-ciRecheck)
+	c.inbox.mu.Unlock()
+	_, moved, err := c.poll(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	notModified := f.notModified
+	f.mu.Unlock()
+	if notModified != 1 {
+		t.Fatalf("the poll was not answered 304 (%d)", notModified)
+	}
+	if th := things(t, c)[thread]; !moved || !th.At.Equal(failed) {
+		t.Fatalf("the due follow-up waited for a full read: moved %v, at %v, want %v", moved, th.At, failed)
+	}
+}
+
+// A failure too fresh to add (ciFoldAfter) keeps the branch failing but does not hide its workflow's earlier, settled
+// failure (#184); a success between them still ends what that workflow offers.
+func TestCIFreshFailureLeavesEarlierOne(t *testing.T) {
+	old := ciRecheck
+	ciRecheck = 0
+	t.Cleanup(func() { ciRecheck = old })
+	now := time.Now().UTC().Truncate(time.Second)
+	f := &fakeCI{branches: map[string]bool{"main": true}}
+	f.noteAt("1", "CI workflow run failed for main branch", "example-org/example-repo", now.Add(-2*time.Hour))
+	c := f.server(t)
+	const thread = "ci:example-org/example-repo@main"
+	c.poll(context.Background())
+	follow := func(runs ...string) connector.InboxThing {
+		t.Helper()
+		f.mu.Lock()
+		f.runs = map[string]string{"main": "[" + strings.Join(runs, ",") + "]"}
+		f.mu.Unlock()
+		c.followUpCI(context.Background())
+		th := things(t, c)[thread]
+		if th.Done != "" {
+			t.Fatalf("the branch still fails, but the item is over: %s", th.Why)
+		}
+		return th
+	}
+
+	contracts := now.Add(-20 * time.Minute)
+	th := follow(runJSON("contracts", "completed", "failure", now.Add(-time.Minute)),
+		runJSON("contracts", "completed", "failure", contracts),
+		runJSON("kotlin", "completed", "failure", now.Add(-40*time.Minute)))
+	if !th.At.Equal(contracts) || th.Preview != "contracts workflow run failed for main branch" {
+		t.Fatalf("took %v (%s), want contracts' settled failure at %v", th.At, th.Preview, contracts)
+	}
+
+	kotlin := now.Add(-15 * time.Minute)
+	th = follow(runJSON("contracts", "completed", "failure", now.Add(-time.Minute)),
+		runJSON("contracts", "completed", "success", now.Add(-8*time.Minute)),
+		runJSON("contracts", "completed", "failure", now.Add(-10*time.Minute)),
+		runJSON("kotlin", "completed", "failure", kotlin))
+	if !th.At.Equal(kotlin) || th.Preview != "kotlin workflow run failed for main branch" {
+		t.Fatalf("took %v (%s), want kotlin's failure at %v: contracts' earlier one passed since", th.At, th.Preview, kotlin)
 	}
 }
 
@@ -304,6 +392,11 @@ func TestTierOfPeopleAndBots(t *testing.T) {
 			t.Errorf("%s %+v: %q, want %q", tc.reason, tc.moves, tier, tc.tier)
 		}
 	}
+}
+
+// runJSON is one entry of a branch's workflow_runs.
+func runJSON(name, status, conclusion string, at time.Time) string {
+	return `{"name":"` + name + `","status":"` + status + `","conclusion":"` + conclusion + `","updated_at":"` + at.Format(time.RFC3339) + `"}`
 }
 
 func keys(m map[string]connector.InboxThing) []string {
