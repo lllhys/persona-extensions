@@ -15,7 +15,7 @@ import (
 )
 
 func TestConformance(t *testing.T) {
-	a := testApp(t, `{"hub_url": "https://persona.example.com", "path": "/j/abc"}`, "")
+	a := testApp(t, `{"hub_url": "https://persona.example.com", "path": "/j/abc"}`)
 	exttest.Check(t, manifest, exttest.Serve(t, program(a)), json.RawMessage(`{"hub_url": "https://persona.example.com", "path": "/j/abc"}`))
 }
 
@@ -37,6 +37,7 @@ func TestManifestMatchesTheCode(t *testing.T) {
 			UI []struct{ ID, Title, Placement, Icon string }
 		}
 		Configuration struct {
+			Required   []string
 			Properties map[string]struct {
 				Default string
 			}
@@ -84,6 +85,9 @@ func TestManifestMatchesTheCode(t *testing.T) {
 	if m.Configuration.Properties["path"].Default != "/" {
 		t.Fatalf("path default %q", m.Configuration.Properties["path"].Default)
 	}
+	if !slices.Contains(m.Configuration.Required, "hub_url") {
+		t.Fatalf("configuration.required %v", m.Configuration.Required)
+	}
 }
 
 func code(err error) string {
@@ -95,7 +99,7 @@ func code(err error) string {
 }
 
 func TestConnector(t *testing.T) {
-	a := testApp(t, `{"hub_url": "https://persona.example.com", "path": "/"}`, "")
+	a := testApp(t, `{"hub_url": "https://persona.example.com", "path": "/"}`)
 	call := func(method, params string) (map[string]any, error) {
 		t.Helper()
 		var raw json.RawMessage
@@ -129,7 +133,7 @@ func TestConnector(t *testing.T) {
 	}
 
 	// Without an address: the status says so, and the tool refuses to build a wrong link.
-	b := testApp(t, "", "")
+	b := testApp(t, "")
 	stRaw, err := b.connector(context.Background(), "status", json.RawMessage(`{"contribution": "feishu"}`))
 	if err != nil || stRaw.(map[string]any)["state"] != "not_configured" {
 		t.Fatalf("status without an address: %v %v", stRaw, err)

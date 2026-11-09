@@ -28,7 +28,7 @@ func (a *app) page() *wire.View {
 	if a.hubURL == "" {
 		return &wire.View{Title: "飞书侧边栏", Sections: []wire.Section{{Items: []wire.Component{
 			text("还没有 hub 的对外地址，拼不出链接。", wire.TextStyleBody),
-			text("去「设置 › 扩展 › 飞书侧边栏」填 hub 的对外地址（飞书内置浏览器能访问到的地址），或者给 hub 配好它的对外地址（public_url）。", wire.TextStyleSecondary),
+			text("去「设置 › 扩展 › 飞书侧边栏」填「hub 对外地址」（飞书内置浏览器能访问到的地址）。", wire.TextStyleSecondary),
 		}}}}
 	}
 

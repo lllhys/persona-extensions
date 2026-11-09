@@ -19,20 +19,19 @@ type Config struct {
 // app is the running extension: the settings, and the hub address they resolve to.
 type app struct {
 	cfg    Config
-	hubURL string // the hub's public address ("" until it is set or read from the hub)
+	hubURL string // the hub's public address ("" until the user sets it)
 }
 
 func newApp() *app { return &app{} }
 
-// init reads the settings and the hub's own address. The user's setting wins; with none, the link uses the address
-// the hub reports for itself (its public_url, the only hub address this protocol revision hands over).
+// init reads the settings. hub_url comes only from the configuration; there is no hub-provided fallback.
 func (a *app) init(_ context.Context, in *ext.Init, _ *ext.Hub) (map[string]any, error) {
 	var cfg Config
 	if err := in.Config(&cfg); err != nil {
 		return nil, fmt.Errorf("config: %w", err)
 	}
 	a.cfg = cfg
-	a.hubURL = resolveHubURL(cfg.HubURL, in.InitializeParams.Hub.URL)
+	a.hubURL = strings.TrimSpace(cfg.HubURL)
 	return nil, nil
 }
 
@@ -48,7 +47,7 @@ func (a *app) defaultPath() string {
 func (a *app) status() map[string]any {
 	if a.hubURL == "" {
 		return map[string]any{"state": "not_configured", "error": "还没有 hub 的对外地址",
-			"guide": []string{"在扩展设置里填「hub 对外地址」，或给 hub 配好它的对外地址（public_url）"}}
+			"guide": []string{"在这个扩展的设置里填「hub 对外地址」（飞书内置浏览器能访问到的地址）"}}
 	}
 	if _, err := normalizeBase(a.hubURL); err != nil {
 		return map[string]any{"state": "error", "error": err.Error(),

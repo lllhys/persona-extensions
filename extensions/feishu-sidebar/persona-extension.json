@@ -39,11 +39,14 @@
   },
   "configuration": {
     "type": "object",
+    "required": [
+      "hub_url"
+    ],
     "properties": {
       "hub_url": {
         "type": "string",
         "title": "hub 对外地址",
-        "description": "飞书内置浏览器能访问到的 hub 地址，如 https://persona.example.com。留空则自动取 hub 自己报告的地址（public_url）；取不到时这一页会提示你来这里填。"
+        "description": "飞书内置浏览器能访问到的 hub 地址，如 https://persona.example.com。必填。"
       },
       "path": {
         "type": "string",

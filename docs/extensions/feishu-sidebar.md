@@ -2,7 +2,7 @@
 
 [Documentation](../README.md) · [Source](../../extensions/feishu-sidebar/)
 
-Open the user's Persona web from a Feishu sidebar. The extension builds a Feishu applink from the hub's own address; opening the link in Feishu opens Persona in a half-width sidebar. It needs no Feishu app id, makes no request to Feishu, and keeps no credentials.
+Open the user's Persona web from a Feishu sidebar. The extension builds a Feishu applink from the hub address the user configured; opening the link in Feishu opens Persona in a half-width sidebar. It needs no Feishu app id, makes no request to Feishu, and keeps no credentials.
 
 ## How it works
 
@@ -20,7 +20,7 @@ The extension percent-encodes the target URL the way JavaScript's `encodeURIComp
 
 | Setting | Purpose |
 | --- | --- |
-| `hub_url` | The address Feishu's built-in browser can reach the hub at, such as `https://persona.example.com`. Empty: use the address the hub reports for itself (`public_url`); when that is not available, the page prompts for this instead of building a broken link. |
+| `hub_url` | **Required.** The address Feishu's built-in browser can reach the hub at, such as `https://persona.example.com`. The page and `status` stay `not_configured` until it is set. |
 | `path` | The same-site path to open by default, such as `/` or `/j/<conversation-id>`; starts with `/`. Default `/`. |
 
 A trailing `/` on the address is normalized away. Only same-site relative paths are accepted (they start with `/`, are not a full or scheme-relative URL, and have no `..` segment); a path that fails these is refused rather than escaped into a different site.

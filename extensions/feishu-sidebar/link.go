@@ -13,17 +13,9 @@ import (
 const applink = "https://applink.feishu.cn/client/web_url/open?mode=sidebar-semi&url="
 
 var (
-	errNoHubURL = errors.New("还没有 hub 的对外地址")
+	errNoHubURL = errors.New("还没有 hub 的对外地址：在这个扩展的设置里填「hub 对外地址」")
 	errBadPath  = errors.New("path 要是站内相对路径（以 / 开头、不是完整 URL、不含 ..）")
 )
-
-// resolveHubURL is the address the links use: the user's own setting, else the hub's as it reports itself.
-func resolveHubURL(setting, given string) string {
-	if s := strings.TrimSpace(setting); s != "" {
-		return s
-	}
-	return strings.TrimSpace(given)
-}
 
 // normalizeBase is the hub address without its trailing slash, or why it cannot be one. A path already in the
 // address (a hub behind a prefix) is kept; only a trailing slash is dropped so the path below joins cleanly.

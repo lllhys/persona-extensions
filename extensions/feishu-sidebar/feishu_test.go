@@ -12,15 +12,14 @@ import (
 	"github.com/nwverse/persona/sdk/go/wire"
 )
 
-// testApp is the extension initialized with config (JSON; "" for none) and the hub's own reported URL ("" for none).
-func testApp(t *testing.T, config, hubURL string) *app {
+// testApp is the extension initialized with config (JSON; "" for none).
+func testApp(t *testing.T, config string) *app {
 	t.Helper()
 	a := newApp()
 	in := &ext.Init{}
 	if config != "" {
 		in.InitializeParams.Config = json.RawMessage(config)
 	}
-	in.InitializeParams.Hub.URL = hubURL
 	if _, err := a.init(context.Background(), in, nil); err != nil {
 		t.Fatal(err)
 	}

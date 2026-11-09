@@ -31,7 +31,7 @@ func applinkURL(t *testing.T, link string) string {
 }
 
 func TestBuildLink(t *testing.T) {
-	a := testApp(t, `{"hub_url": "https://persona.example.com", "path": "/"}`, "")
+	a := testApp(t, `{"hub_url": "https://persona.example.com", "path": "/"}`)
 	for path, want := range map[string]string{
 		"/":                   "https://persona.example.com/",
 		"/j/abc":              "https://persona.example.com/j/abc",
@@ -55,7 +55,7 @@ func TestBuildLink(t *testing.T) {
 }
 
 func TestBuildLinkNormalizesTrailingSlash(t *testing.T) {
-	a := testApp(t, `{"hub_url": "https://persona.example.com/", "path": "/j/abc"}`, "")
+	a := testApp(t, `{"hub_url": "https://persona.example.com/", "path": "/j/abc"}`)
 	link, target, err := a.buildLink("/j/abc")
 	if err != nil {
 		t.Fatal(err)
@@ -68,20 +68,8 @@ func TestBuildLinkNormalizesTrailingSlash(t *testing.T) {
 	}
 }
 
-func TestBuildLinkFromHub(t *testing.T) {
-	// The setting is empty: the link uses the hub's own reported URL (its public_url).
-	a := testApp(t, `{"path": "/"}`, "https://persona.example.com:8443/")
-	_, target, err := a.buildLink("/")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if target != "https://persona.example.com:8443/" {
-		t.Errorf("target %q", target)
-	}
-}
-
 func TestBuildLinkNoAddress(t *testing.T) {
-	for _, a := range []*app{testApp(t, "", ""), testApp(t, `{"path": "/"}`, "")} {
+	for _, a := range []*app{testApp(t, ""), testApp(t, `{"path": "/"}`)} {
 		if _, _, err := a.buildLink("/"); err == nil {
 			t.Errorf("no address answered")
 		}
@@ -89,23 +77,10 @@ func TestBuildLinkNoAddress(t *testing.T) {
 }
 
 func TestBuildLinkBadPath(t *testing.T) {
-	a := testApp(t, `{"hub_url": "https://persona.example.com"}`, "")
+	a := testApp(t, `{"hub_url": "https://persona.example.com"}`)
 	for _, path := range []string{"j/abc", "https://evil.com/x", "//evil.com", "/j/../secret"} {
 		if _, _, err := a.buildLink(path); err == nil {
 			t.Errorf("buildLink(%q) answered", path)
-		}
-	}
-}
-
-func TestResolveHubURL(t *testing.T) {
-	for _, c := range []struct{ setting, given, want string }{
-		{"https://set.example.com", "https://given.example.com", "https://set.example.com"},
-		{"", "https://given.example.com", "https://given.example.com"},
-		{"", "", ""},
-		{"  https://set.example.com  ", "https://given.example.com", "https://set.example.com"},
-	} {
-		if got := resolveHubURL(c.setting, c.given); got != c.want {
-			t.Errorf("resolveHubURL(%q, %q) = %q, want %q", c.setting, c.given, got, c.want)
 		}
 	}
 }
