@@ -12,6 +12,7 @@
 - [LINUX DO](extensions/linuxdo.md): public topics, filtering, request limits and the app view.
 - [Sentry](extensions/sentry.md): the errors and crashes of the hub, the web and the apps, scrubbed by the hub, sent to your Sentry project; events, settings, limits and network.
 - [V2EX](extensions/v2ex.md): public hot, latest and followed-node topics, filtering, request limits and the app view.
+- [Feishu Sidebar](extensions/feishu-sidebar.md): open the user's Persona web from a Feishu sidebar through a built applink (no Feishu app, no requests, no credentials), and an assistant tool for the same link.
 - [RSSHub](extensions/rsshub.md): subscribe to RSSHub routes or any RSS, Atom or JSON feed on the public or your own instance (with its access key); the navigation page with unread entries, tags and route previews, the background refresh with ETag caching, assistant tools with confirmed subscription changes, and the sandbox.
 - [Markets](extensions/markets.md): cryptocurrency (OKX) and A-share, Hong Kong and US stock (Tencent) watchlist on the main navigation, price and volume charts, assistant tools and rate limits.
 - [Telegram](extensions/telegram.md): login, inbox, archives, network requirements, tools and the `tg` CLI.
