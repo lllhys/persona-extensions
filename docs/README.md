@@ -8,6 +8,7 @@
 - [GitHub](extensions/github.md): the inbox, knowledge-base archive, assistant tools and sign-in of the GitHub connector (moved out of the hub), and a GitHub page: what needs you, repositories and their code, and PR / issue review.
 - [Home Assistant](extensions/homeassistant.md): areas, devices, controls and history from your own Home Assistant; the logbook, statistics and energy, automations, calls by area, speakers, cameras, watch rules that notify or wake the assistant, confirmed assistant writes, writable domains and the sandbox.
 - [Hacker News](extensions/hackernews.md): public Top, New, Best, Ask HN and Show HN stories, top-level comments, filtering, the localized app view and assistant tools.
+- [Termwise](extensions/termwise.md): a reading page with translation mode and vocabulary mode. Vocabulary mode underlines candidate words; choosing one shows the gloss and can remember it.
 - [LINUX DO](extensions/linuxdo.md): public topics, filtering, request limits and the app view.
 - [Sentry](extensions/sentry.md): the errors and crashes of the hub, the web and the apps, scrubbed by the hub, sent to your Sentry project; events, settings, limits and network.
 - [V2EX](extensions/v2ex.md): public hot, latest and followed-node topics, filtering, request limits and the app view.

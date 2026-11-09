@@ -1,0 +1,27 @@
+{
+  "manifest_version": 1,
+  "id": "termwise",
+  "name": "Termwise",
+  "version": "0.1.0",
+  "description": "阅读页的两种模式：翻译模式保留原文并附上译文；生词模式像划词记忆一样给词加下划线，点开可看释义并记下。记下的词写在扩展自己的数据目录里。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/docs/extensions/termwise.md",
+  "tags": ["阅读", "翻译", "生词", "英语"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/termwise-linux-amd64",
+      "linux-arm64": "bin/termwise-linux-arm64",
+      "darwin-arm64": "bin/termwise-darwin-arm64",
+      "darwin-amd64": "bin/termwise-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "ui": [
+      {"id": "read", "title": "阅读", "placement": "plugin_page"}
+    ]
+  },
+  "permissions": {
+    "network": ["api.mymemory.translated.net"]
+  }
+}

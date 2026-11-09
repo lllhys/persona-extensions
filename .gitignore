@@ -7,5 +7,6 @@ __pycache__/
 /extensions/*/sentry
 /extensions/*/showcase
 /extensions/*/v2ex
+/extensions/*/termwise
 # personad extension test / dev build the program where the manifest says (bin/…).
 /extensions/*/bin/
