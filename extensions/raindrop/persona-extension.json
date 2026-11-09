@@ -1,0 +1,57 @@
+{
+  "manifest_version": 1,
+  "id": "raindrop",
+  "name": "Raindrop 书签",
+  "version": "0.1.0",
+  "description": "在 Persona 里查自己的 Raindrop 书签：按集合浏览、搜索标题/正文/标签，看笔记和划线，在 App 内打开原链接。说「收藏这个链接」可按集合和标签保存，保存前在手机上确认；token 加密存在 hub。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/raindrop/README.md",
+  "tags": ["书签", "稍后读", "收藏", "Raindrop"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/raindrop-linux-amd64",
+      "linux-arm64": "bin/raindrop-linux-arm64",
+      "darwin-arm64": "bin/raindrop-darwin-arm64",
+      "darwin-amd64": "bin/raindrop-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "raindrop",
+        "name": "Raindrop",
+        "capabilities": ["status", "tools", "actions"],
+        "hosts": ["raindrop.io"],
+        "agent_tools": ["raindrop_*"],
+        "confirm_always": ["raindrop_save"]
+      }
+    ],
+    "ui": [
+      {"id": "bookmarks", "title": "书签", "placement": "nav_page", "icon": "link"}
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "default_collection": {
+        "type": "string",
+        "title": "打开时看的集合",
+        "description": "Raindrop 集合的数字 ID；0 全部，-1 未分类",
+        "pattern": "^-?[0-9]{1,15}$",
+        "default": "0"
+      }
+    }
+  },
+  "secrets": [
+    {
+      "name": "access_token",
+      "title": "Raindrop 访问令牌",
+      "description": "在 Raindrop 设置的 Integrations 中创建应用，再创建 Test Token；只作为 Bearer 令牌发往 api.raindrop.io",
+      "required": true
+    }
+  ],
+  "permissions": {
+    "network": ["api.raindrop.io"]
+  }
+}
