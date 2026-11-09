@@ -1,0 +1,68 @@
+{
+  "manifest_version": 1,
+  "id": "search-as-code",
+  "name": "代码化搜索",
+  "version": "0.1.0",
+  "description": "受 Perplexity「Rethinking Search as Code Generation」与 CASS 会话检索启发：把复杂的多步检索与排查任务编译为可执行的搜索代码（Search as Code），跨本机 Coding Agent 会话历史（Claude Code、Codex，支持排除工具噪音的纯对话检索、角色过滤与报错排查）和本地代码仓库执行流水线算子（过滤、正则匹配、跨会话文件关联、聚合统计、相关性与新鲜度排序）。界面透明展示生成的搜索程序与每一步算子的耗时和命中轨迹，支持保存为可复用的搜索配方；附带本机 MCP 服务器（search-as-code mcp），只读检索工具直接运行，保存与删除配方按对话权限询问。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/docs/extensions/search-as-code.md",
+  "tags": ["搜索", "Search as Code", "会话检索", "MCP"],
+  "engines": {"extension_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/search-as-code-linux-amd64",
+      "linux-arm64": "bin/search-as-code-linux-arm64",
+      "darwin-amd64": "bin/search-as-code-darwin-amd64",
+      "darwin-arm64": "bin/search-as-code-darwin-arm64"
+    }
+  },
+  "contributes": {
+    "ui": [
+      {"id": "search-as-code", "title": "代码化搜索", "placement": "nav_page", "icon": "search"},
+      {"id": "search-as-code-card", "title": "代码化搜索", "placement": "overview_card", "opens": "search-as-code"}
+    ],
+    "skills": [
+      {"id": "search-as-code", "dir": "skills/search-as-code"}
+    ],
+    "mcp_servers": [
+      {
+        "id": "search-as-code",
+        "command": "search-as-code",
+        "env": "PERSONA_SEARCH_AS_CODE_BIN",
+        "args": ["mcp"],
+        "requires": ["mcp"],
+        "allow": ["sac_execute", "sac_session_search", "sac_recipes_list"]
+      }
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "session_dirs": {
+        "type": "string",
+        "title": "额外会话目录",
+        "description": "除默认的 ~/.claude/projects 与 ~/.codex/sessions 外，额外扫描的 Agent 会话日志目录（多个路径用逗号或分号分隔）",
+        "default": ""
+      },
+      "repo_dirs": {
+        "type": "string",
+        "title": "本地代码与文档目录",
+        "description": "供 scan_files 算子检索的本地仓库或文档目录（多个路径用逗号或分号分隔）",
+        "default": ""
+      },
+      "default_scope": {
+        "type": "string",
+        "title": "默认检索范围",
+        "description": "conversation 默认排除工具调用噪音，只搜用户与助手对话；all 包含工具调用与输出；errors 只看报错与异常",
+        "default": "conversation",
+        "oneOf": [
+          {"const": "conversation", "title": "纯对话（不含工具噪音）"},
+          {"const": "all", "title": "全部（含工具调用与输出）"},
+          {"const": "user", "title": "仅用户提问"},
+          {"const": "assistant", "title": "仅助手回复"},
+          {"const": "errors", "title": "报错与异常"}
+        ]
+      }
+    }
+  }
+}
