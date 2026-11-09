@@ -1,0 +1,34 @@
+{
+  "manifest_version": 1,
+  "id": "pinboard",
+  "name": "Pinboard 书签",
+  "version": "0.1.0",
+  "description": "在 Persona 里查看 Pinboard 个人书签：最近收藏、按标签筛选、分页浏览归档；保存私有的稍后读书签前在手机上确认。API token 加密存在 hub，不保存账号密码，不覆盖或删除已有书签。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/pinboard/README.md",
+  "tags": ["Pinboard", "书签", "稍后阅读", "个人归档"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/pinboard-linux-amd64",
+      "linux-arm64": "bin/pinboard-linux-arm64",
+      "darwin-arm64": "bin/pinboard-darwin-arm64",
+      "darwin-amd64": "bin/pinboard-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "pinboard", "name": "Pinboard", "capabilities": ["status", "tools", "actions"],
+      "hosts": ["api.pinboard.in"], "agent_tools": ["pinboard_*"],
+      "confirm_always": ["pinboard_add"]
+    }],
+    "ui": [{"id": "bookmarks", "title": "Pinboard 书签", "placement": "nav_page", "icon": "star"}]
+  },
+  "configuration": {"type": "object", "properties": {}},
+  "secrets": [{
+    "name": "api_token", "title": "Pinboard API token",
+    "description": "Pinboard 设置页中 username:TOKEN 形式的 API token；只用于固定的 api.pinboard.in HTTPS API",
+    "required": true
+  }],
+  "permissions": {"network": ["api.pinboard.in"]}
+}
