@@ -1,0 +1,46 @@
+{
+  "manifest_version": 1,
+  "id": "rsshub",
+  "name": "RSSHub",
+  "version": "0.1.0",
+  "description": "订阅 RSSHub 路由（如 /github/issue/nwverse/persona、/arxiv/search/...、/bilibili/user/video/...）或任意 RSS / Atom / JSON Feed：主导航上多一个「RSSHub」，按分类看订阅、未读条目和正文，一键刷新、标为已读，也能先预览一条路由再订阅；hub 定时在后台刷新（带 ETag / If-Modified-Since 缓存），导航角标是未读数。助手能列订阅、读条目、预览路由；新增和取消订阅每次都在手机上确认。默认用公共实例 rsshub.app，也可以填自建实例和访问密钥。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/docs/extensions/rsshub.md",
+  "tags": ["RSS", "RSSHub", "订阅", "阅读"],
+  "engines": {"extension_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/rsshub-linux-amd64",
+      "linux-arm64": "bin/rsshub-linux-arm64",
+      "darwin-arm64": "bin/rsshub-darwin-arm64",
+      "darwin-amd64": "bin/rsshub-darwin-amd64"
+    }
+  },
+  "activation_events": ["on_startup"],
+  "contributes": {
+    "connectors": [
+      {
+        "id": "rsshub",
+        "name": "RSSHub",
+        "capabilities": ["status", "tools", "actions"],
+        "confirm_always": ["rsshub_subscribe", "rsshub_unsubscribe"]
+      }
+    ],
+    "ui": [
+      {"id": "feeds", "title": "RSSHub", "placement": "nav_page", "icon": "list"}
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "instance_url": {"type": "string", "title": "RSSHub 实例地址", "description": "默认公共实例 https://rsshub.app。自建实例写 https:// 地址；同一台机器上的实例可以写 http://127.0.0.1:1200、http://localhost:1200 或 http://[::1]:1200（沙盒里会自动改成 host.persona.internal）", "format": "uri", "default": "https://rsshub.app"},
+      "access_auth": {"type": "string", "title": "访问密钥的用法", "description": "填了访问密钥时怎么带上：key 直接附加 ?key=密钥；code 附加 ?code=md5(路由+密钥)，密钥本身不出现在网址里", "default": "key", "oneOf": [{"const": "key", "title": "?key=密钥"}, {"const": "code", "title": "?code=md5(路由+密钥)"}]},
+      "refresh_minutes": {"type": "integer", "title": "刷新间隔（分钟）", "description": "后台多久刷新一次全部订阅，5 到 1440", "default": 30, "minimum": 5, "maximum": 1440},
+      "prefer_json": {"type": "boolean", "title": "向 RSSHub 要 JSON Feed", "description": "打开后路由都附加 ?format=json；关着就用默认的 RSS。两种都能读", "default": false}
+    }
+  },
+  "secrets": [
+    {"name": "access_key", "title": "访问密钥", "description": "自建 RSSHub 设了 ACCESS_KEY 才需要；公共实例不用填。只附加在实例的路由上，不会发给别的订阅源", "required": false}
+  ],
+  "permissions": {"network": ["rsshub.app", "host.persona.internal"]}
+}
