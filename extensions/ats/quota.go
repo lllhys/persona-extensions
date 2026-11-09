@@ -190,9 +190,16 @@ func ParseQuotaSnapshot(raw []byte, now time.Time) (QuotaStatus, error) {
 	}
 
 	allWindows := slices.Clone(snap.Windows)
-	for _, p := range snap.Pools {
-		allWindows = append(allWindows, p.Windows...)
-		if strings.EqualFold(p.State, "exhausted") || strings.EqualFold(p.State, "cooldown") {
+	if len(snap.Pools) > 0 {
+		inactivePools := 0
+		for _, p := range snap.Pools {
+			if strings.EqualFold(p.State, "exhausted") || strings.EqualFold(p.State, "cooldown") {
+				inactivePools++
+				continue
+			}
+			allWindows = append(allWindows, p.Windows...)
+		}
+		if inactivePools == len(snap.Pools) {
 			st.Exhausted = true
 		}
 	}
@@ -281,7 +288,7 @@ func ParseGatewayAccounts(ga GenericGatewayAccounts, now time.Time) QuotaStatus 
 	activeAccounts := 0
 	var sumRemaining float64
 	var earliestReset *time.Time
-	var latestCooldown *time.Time
+	var earliestCooldown *time.Time
 
 	tierSums := map[string]float64{}
 	tierCounts := map[string]int{}
@@ -295,8 +302,8 @@ func ParseGatewayAccounts(ga GenericGatewayAccounts, now time.Time) QuotaStatus 
 		inCooldown := acc.CooldownUntil != nil && acc.CooldownUntil.After(now)
 		if inCooldown {
 			t := acc.CooldownUntil.UTC()
-			if latestCooldown == nil || t.Before(*latestCooldown) {
-				latestCooldown = &t
+			if earliestCooldown == nil || t.Before(*earliestCooldown) {
+				earliestCooldown = &t
 			}
 		}
 
@@ -312,9 +319,11 @@ func ParseGatewayAccounts(ga GenericGatewayAccounts, now time.Time) QuotaStatus 
 			if winReset != nil && (earliestReset == nil || winReset.Before(*earliestReset)) {
 				earliestReset = winReset
 			}
-			for tk, tv := range winTiers {
-				tierSums[tk] += tv
-				tierCounts[tk]++
+			if isActive && accRem > 0 {
+				for tk, tv := range winTiers {
+					tierSums[tk] += tv
+					tierCounts[tk]++
+				}
 			}
 		} else if !isActive {
 			accRem = 0
@@ -344,15 +353,25 @@ func ParseGatewayAccounts(ga GenericGatewayAccounts, now time.Time) QuotaStatus 
 		TierStandard: overallRem,
 		TierStrong:   overallRem,
 	}
-	for _, tk := range []string{TierFast, TierStandard, TierStrong} {
-		if c := tierCounts[tk]; c > 0 {
-			tierRem[tk] = roundPct(tierSums[tk] / float64(c))
+	if activeAccounts > 0 {
+		availScale := float64(activeAccounts) / float64(totalAccounts)
+		for _, tk := range []string{TierFast, TierStandard, TierStrong} {
+			if c := tierCounts[tk]; c > 0 {
+				tierRem[tk] = roundPct((tierSums[tk] / float64(c)) * availScale)
+			}
 		}
 	}
 
+	// Account-level cooldown only affects activeAccounts and RemainingPct when other schedulable accounts
+	// are still active; only set global CooldownUntil when all schedulable accounts are inactive/cooling.
+	var globalCooldown *time.Time
+	if activeAccounts == 0 {
+		globalCooldown = earliestCooldown
+	}
+
 	resetAt := earliestReset
-	if resetAt == nil && latestCooldown != nil {
-		resetAt = latestCooldown
+	if globalCooldown != nil && (resetAt == nil || globalCooldown.Before(*resetAt)) {
+		resetAt = globalCooldown
 	}
 
 	return QuotaStatus{
@@ -360,7 +379,7 @@ func ParseGatewayAccounts(ga GenericGatewayAccounts, now time.Time) QuotaStatus 
 		RemainingPct:     overallRem,
 		UsedRatio:        clampRatio(1.0 - overallRem/100.0),
 		Exhausted:        exhausted,
-		CooldownUntil:    latestCooldown,
+		CooldownUntil:    globalCooldown,
 		ResetAt:          resetAt,
 		ActiveAccounts:   activeAccounts,
 		TotalAccounts:    totalAccounts,

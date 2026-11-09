@@ -831,3 +831,139 @@ func TestGenericQuotaProviderAndPanelView(t *testing.T) {
 		t.Fatalf("expected queued task to be canceled after cancel action, got %s", canceledTask.State)
 	}
 }
+
+func TestGatewayAccountsPartialCooldownDoesNotPauseQueue(t *testing.T) {
+	now := time.Date(2026, 11, 9, 17, 0, 0, 0, time.UTC)
+	cooldown10m := now.Add(10 * time.Minute)
+	cooldown25m := now.Add(25 * time.Minute)
+
+	q, err := NewQueue(t.TempDir(), DefaultQueueConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p0Res, err := q.Enqueue(EnqueueInput{
+		ID:         "task_p0_partial_cd",
+		Title:      "Urgent P0 task",
+		Prompt:     "Run P0 check",
+		Priority:   PriorityP0,
+		Difficulty: DifficultyMedium,
+		Now:        now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p2Res, err := q.Enqueue(EnqueueInput{
+		ID:         "task_p2_partial_cd",
+		Title:      "Normal P2 task",
+		Prompt:     "Run P2 check",
+		Priority:   PriorityP2,
+		Difficulty: DifficultyMedium,
+		Now:        now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. 4 accounts: 3 active, 1 cooling down for 10m -> RemainingPct=75, ActiveAccounts=3, CooldownUntil=nil, mode=full.
+	stPartial := ParseGatewayAccounts(GenericGatewayAccounts{
+		Sources: []GenericGatewaySource{{ID: "pool", Name: "AccountPool", Type: "relay"}},
+		Accounts: []GenericGatewayAccount{
+			{Source: "pool", AccountID: "acc_1", Status: "active"},
+			{Source: "pool", AccountID: "acc_2", Status: "active"},
+			{Source: "pool", AccountID: "acc_3", Status: "active"},
+			{Source: "pool", AccountID: "acc_4", Status: "cooldown", CooldownUntil: &cooldown10m},
+		},
+	}, now)
+	if stPartial.ActiveAccounts != 3 || stPartial.TotalAccounts != 4 {
+		t.Fatalf("expected 3/4 active accounts, got %d/%d", stPartial.ActiveAccounts, stPartial.TotalAccounts)
+	}
+	if stPartial.RemainingPct != 75 || stPartial.Exhausted {
+		t.Fatalf("expected RemainingPct=75 and Exhausted=false, got rem=%v exhausted=%v", stPartial.RemainingPct, stPartial.Exhausted)
+	}
+	if stPartial.CooldownUntil != nil {
+		t.Fatalf("expected global CooldownUntil to be nil when activeAccounts > 0, got %v", stPartial.CooldownUntil)
+	}
+
+	_ = q.SetQuotaStatus(stPartial)
+	planPartial := q.PlanSchedule(now)
+	if planPartial.AdmissionMode != AdmissionFull {
+		t.Fatalf("expected full admission mode with 3/4 active accounts, got %s", planPartial.AdmissionMode)
+	}
+	if len(planPartial.AdmittedCandidates) != 2 {
+		t.Fatalf("expected both P0 and P2 tasks admitted, got %d", len(planPartial.AdmittedCandidates))
+	}
+
+	leased, attempts, _, err := q.DispatchNext(1, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(leased) != 1 || len(attempts) != 1 || leased[0].ID != p0Res.Task.ID {
+		t.Fatalf("expected DispatchNext to lease P0 task %s, got %+v", p0Res.Task.ID, leased)
+	}
+
+	// Re-enqueue another P0 task to test priority_only and all-cooldown transitions.
+	p0Res2, err := q.Enqueue(EnqueueInput{
+		ID:         "task_p0_reserve_cd",
+		Title:      "Second P0 task",
+		Prompt:     "Run P0 under reserve",
+		Priority:   PriorityP0,
+		Difficulty: DifficultyMedium,
+		Now:        now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 4 accounts: 1 active, 3 cooling down -> RemainingPct=25 (<30 reserve), CooldownUntil=nil, mode=priority_only.
+	stReserve := ParseGatewayAccounts(GenericGatewayAccounts{
+		Sources: []GenericGatewaySource{{ID: "pool", Name: "AccountPool", Type: "relay"}},
+		Accounts: []GenericGatewayAccount{
+			{Source: "pool", AccountID: "acc_1", Status: "active"},
+			{Source: "pool", AccountID: "acc_2", Status: "cooldown", CooldownUntil: &cooldown10m},
+			{Source: "pool", AccountID: "acc_3", Status: "cooldown", CooldownUntil: &cooldown25m},
+			{Source: "pool", AccountID: "acc_4", Status: "cooldown", CooldownUntil: &cooldown25m},
+		},
+	}, now)
+	if stReserve.ActiveAccounts != 1 || stReserve.RemainingPct != 25 || stReserve.Exhausted || stReserve.CooldownUntil != nil {
+		t.Fatalf("unexpected reserve quota status: %+v", stReserve)
+	}
+	_ = q.SetQuotaStatus(stReserve)
+	planReserve := q.PlanSchedule(now)
+	if planReserve.AdmissionMode != AdmissionPriorityOnly {
+		t.Fatalf("expected priority_only mode when 1/4 accounts active (25%%), got %s", planReserve.AdmissionMode)
+	}
+	if len(planReserve.AdmittedCandidates) != 1 || planReserve.AdmittedCandidates[0].TaskID != p0Res2.Task.ID {
+		t.Fatalf("expected only P0 task admitted in priority_only mode, got %+v", planReserve.AdmittedCandidates)
+	}
+	if len(planReserve.DeferredCandidates) != 1 || planReserve.DeferredCandidates[0].TaskID != p2Res.Task.ID {
+		t.Fatalf("expected P2 task deferred in priority_only mode, got %+v", planReserve.DeferredCandidates)
+	}
+
+	// 3. All schedulable accounts in cooldown (activeAccounts == 0) -> Exhausted=true, CooldownUntil=earliest cooldown, mode=paused_quota.
+	notSchedulable := false
+	stAllCooling := ParseGatewayAccounts(GenericGatewayAccounts{
+		Sources: []GenericGatewaySource{{ID: "pool", Name: "AccountPool", Type: "relay"}},
+		Accounts: []GenericGatewayAccount{
+			{Source: "pool", AccountID: "acc_1", Status: "cooldown", CooldownUntil: &cooldown25m},
+			{Source: "pool", AccountID: "acc_2", Status: "cooldown", CooldownUntil: &cooldown10m},
+			{Source: "pool", AccountID: "acc_3", Status: "disabled", Schedulable: &notSchedulable},
+		},
+	}, now)
+	if stAllCooling.ActiveAccounts != 0 || !stAllCooling.Exhausted || stAllCooling.RemainingPct != 0 {
+		t.Fatalf("expected activeAccounts=0, Exhausted=true, RemainingPct=0 when all accounts cooling/disabled, got %+v", stAllCooling)
+	}
+	if stAllCooling.CooldownUntil == nil || !stAllCooling.CooldownUntil.Equal(cooldown10m) {
+		t.Fatalf("expected global CooldownUntil=%v (earliest cooldown), got %v", cooldown10m, stAllCooling.CooldownUntil)
+	}
+	_ = q.SetQuotaStatus(stAllCooling)
+	planPaused := q.PlanSchedule(now)
+	if planPaused.AdmissionMode != AdmissionPausedQuota || len(planPaused.AdmittedCandidates) != 0 {
+		t.Fatalf("expected paused_quota with 0 admitted when all accounts cooling, got mode=%s admitted=%d",
+			planPaused.AdmissionMode, len(planPaused.AdmittedCandidates))
+	}
+	leasedPaused, _, _, err := q.DispatchNext(1, now)
+	if err != nil || len(leasedPaused) != 0 {
+		t.Fatalf("expected DispatchNext to lease 0 tasks in paused_quota, got %d (err=%v)", len(leasedPaused), err)
+	}
+}
