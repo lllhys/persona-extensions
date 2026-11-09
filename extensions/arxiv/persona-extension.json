@@ -1,0 +1,29 @@
+{
+  "manifest_version": 1,
+  "id": "arxiv",
+  "name": "arXiv 研究阅读",
+  "version": "0.1.0",
+  "description": "在 Persona 里检索 arXiv 研究论文：按主题搜索或查看最近提交，阅读标题、作者、摘要和分类，打开原始论文页面。使用官方公开 Atom API，不下载附件，不执行论文内容。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/arxiv/README.md",
+  "tags": ["arXiv", "研究", "论文", "学术阅读"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/arxiv-linux-amd64",
+      "linux-arm64": "bin/arxiv-linux-arm64",
+      "darwin-arm64": "bin/arxiv-darwin-arm64",
+      "darwin-amd64": "bin/arxiv-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "arxiv", "name": "arXiv", "capabilities": ["status", "tools"],
+      "hosts": ["export.arxiv.org"], "agent_tools": ["arxiv_*"]
+    }],
+    "ui": [{"id": "papers", "title": "arXiv 研究阅读", "placement": "nav_page", "icon": "doc"}]
+  },
+  "configuration": {"type": "object", "properties": {}},
+  "secrets": [],
+  "permissions": {"network": ["export.arxiv.org"]}
+}
