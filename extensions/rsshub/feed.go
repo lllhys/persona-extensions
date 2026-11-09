@@ -453,6 +453,14 @@ func htmlText(s string) string {
 			b.WriteString(s[:i])
 		}
 		s = s[i:]
+		if !opensTag(s[1:]) {
+			// a < that opens no tag (3 < 5, <3, <=) is text, as a browser reads it
+			if skip == "" {
+				b.WriteByte('<')
+			}
+			s = s[1:]
+			continue
+		}
 		if strings.HasPrefix(s, "<!--") {
 			end := strings.Index(s, "-->")
 			if end < 0 {
@@ -507,6 +515,16 @@ func htmlText(s string) string {
 		}
 	}
 	return tidy(html.UnescapeString(b.String()))
+}
+
+// opensTag reports whether the text after a < makes it a tag, a comment or a declaration: a letter, /, ! or ?
+// follows it.
+func opensTag(rest string) bool {
+	if rest == "" {
+		return false
+	}
+	c := rest[0]
+	return 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || c == '/' || c == '!' || c == '?'
 }
 
 // attr reads one attribute's value from a tag's inside.
