@@ -18,7 +18,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import catalog
 import index
 import oci
-from test_support import CatalogFixture
+from test_support import CatalogFixture, isolated_environ
 
 spec = importlib.util.spec_from_file_location("publisher_regressions", pathlib.Path(__file__).with_name("publish-oci.py"))
 publisher = importlib.util.module_from_spec(spec)
@@ -145,7 +145,7 @@ class InventoryRegressions(CatalogFixture, unittest.TestCase):
         args = argparse.Namespace(catalog=self.catalog_path, mode="versions", output=output, head_sha="1" * 40)
         with mock.patch.object(publisher, "cutover_gate"), mock.patch.object(publisher.manifests, "ids", return_value=[]), \
              mock.patch.object(publisher.oci, "Registry") as registry, \
-             mock.patch.dict(os.environ, {"GHCR_TOKEN": "synthetic", "GITHUB_ACTOR": "fixture"}, clear=True):
+             mock.patch.dict(os.environ, isolated_environ(GHCR_TOKEN="synthetic", GITHUB_ACTOR="fixture"), clear=True):
             publisher.push(args)
         registry.assert_not_called()
         plan = catalog.loads((output / "plan.json").read_bytes())

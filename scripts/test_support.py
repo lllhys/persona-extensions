@@ -1,6 +1,7 @@
 """Synthetic, ephemeral signing and archive fixtures; never use an official private key."""
 import base64
 import io
+import os
 import pathlib
 import tarfile
 import tempfile
@@ -48,6 +49,12 @@ class CatalogFixture:
         sig = self.signature(payload)
         self.catalog_path.write_bytes(catalog.encode(catalog.envelope(payload, [sig])))
         return payload, sig
+
+
+def isolated_environ(**values):
+    """The environment for a test that must not see the caller's variables. PATH stays: without it Python looks up
+    openssl in /bin:/usr/bin, which on macOS is LibreSSL without Ed25519, not the OpenSSL the fixtures used."""
+    return {"PATH": os.environ.get("PATH", os.defpath), **values}
 
 
 def archive(manifest, files=()):

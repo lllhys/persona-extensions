@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "x",
   "name": "X",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "X（原 Twitter）进 Persona，两种方式任选：一是官方 X API v2，用你自己的开发者应用的密钥（按量付费，额度花你自己的，动态和 @我 都读得全）；二是 Grok，不用 X 账号登录、不用 X 的密钥，只要 hub 这台机器上装了 xAI 官方的 grok 命令行并用 SuperGrok 或 X Premium+ 订阅登录过（grok login），扩展就让它用 X 搜索整理你关注的账号和话题（走订阅，不额外付费，但只是搜索，可能不全，也读不到 @我）。收件箱里是 @你 和回复你的帖子；侧边栏的「X」页是整理好的摘要，不是无限刷的时间线：用 X API 时是过去 24 小时 / 3 天的热门帖子、分享最多的链接、长串、发得最多的关注账号，用 Grok 时是 Grok 对过去 24 小时的总结、话题和帖子；助手能看摘要、搜读到的帖子、看关注的人、读一条帖子，有 Grok 时还能现搜 X。每天读多少帖子有预算上限；读到的帖子只存在扩展自己的目录里几天：用 X API 读到的退出登录就删掉；Grok 找到的同样只留几天，退出 X 登录不影响它，把来源改成 x_api 时删掉。只读，不发帖、不点赞、不读私信，不抓网页、不用 cookie。密钥加密存在 hub 的数据库里。",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/x",
