@@ -206,6 +206,12 @@ func TestHTMLText(t *testing.T) {
 		"<table><tr><td>1</td><td>2</td></tr></table>": "1 2",
 		"&lt;tag&gt; &#20013;&#25991;":                 "<tag> 中文",
 		"a b":                                          "a b",
+		// a < that opens no tag is text
+		"Is 3 < 5? Yes, and 7 > 6": "Is 3 < 5? Yes, and 7 > 6",
+		"I <3 Go, x>y":             "I <3 Go, x>y",
+		"a <= b, c >= d":           "a <= b, c >= d",
+		"<p>1 < 2</p><p>ok</p>":    "1 < 2\nok",
+		"tail <":                   "tail <",
 	} {
 		if got := htmlText(in); got != want {
 			t.Errorf("htmlText(%q) = %q, want %q", in, got, want)
