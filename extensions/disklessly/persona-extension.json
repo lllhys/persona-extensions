@@ -1,0 +1,38 @@
+{
+  "manifest_version": 1,
+  "id": "disklessly",
+  "name": "Disklessly 机器磁盘",
+  "version": "0.1.0",
+  "description": "接入 Persona 机器管理的多机磁盘水位、可回收缓存与 Coding Agent 冷会话分层管理：自动发现并纳管本机及 SSH 远程机器，单次探测根分区水位（超过 80% 橙色预警、90% 红色告警）、可回收缓存明细（Go、Node/Python、Docker、Rust/Xcode、系统与临时日志）与 Claude Code / Codex 会话冷热分布；支持生成安全清理计划（Dry-Run Plan）、按机器或分类一键安全清理并记录 df 实测释放台账，以及一键归档 7 天外冷会话。附带 stdio MCP 服务器（disklessly mcp），只读查询直接运行，清理与机器变更按对话权限确认。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/docs/extensions/disklessly.md",
+  "tags": ["disklessly", "机器管理", "磁盘清理", "冷会话"],
+  "engines": {"extension_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/disklessly-linux-amd64",
+      "linux-arm64": "bin/disklessly-linux-arm64",
+      "darwin-amd64": "bin/disklessly-darwin-amd64",
+      "darwin-arm64": "bin/disklessly-darwin-arm64"
+    }
+  },
+  "contributes": {
+    "ui": [
+      {"id": "disklessly", "title": "机器磁盘", "placement": "nav_page", "icon": "gauge"},
+      {"id": "disklessly-card", "title": "机器磁盘", "placement": "overview_card", "opens": "disklessly"}
+    ],
+    "skills": [
+      {"id": "disklessly", "dir": "skills/disklessly"}
+    ],
+    "mcp_servers": [
+      {
+        "id": "disklessly",
+        "command": "disklessly",
+        "env": "PERSONA_DISKLESSLY_BIN",
+        "args": ["mcp"],
+        "requires": ["mcp"],
+        "allow": ["disklessly_machines_status", "disklessly_scan", "disklessly_history"]
+      }
+    ]
+  }
+}
