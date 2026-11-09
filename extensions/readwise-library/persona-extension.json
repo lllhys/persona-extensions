@@ -1,0 +1,34 @@
+{
+  "manifest_version": 1,
+  "id": "readwise-library",
+  "name": "Readwise 划线库",
+  "version": "0.1.0",
+  "description": "在 Persona 里整理 Readwise Library 的划线知识：浏览书籍和文章、阅读划线与备注；从选中文本保存划线、编辑备注或给书籍加标签前在手机上确认。访问令牌加密存在 hub，不删除划线，不与 Reader 阅读队列混用。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/readwise-library/README.md",
+  "tags": ["Readwise", "划线", "知识管理", "阅读笔记"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/readwise-library-linux-amd64",
+      "linux-arm64": "bin/readwise-library-linux-arm64",
+      "darwin-arm64": "bin/readwise-library-darwin-arm64",
+      "darwin-amd64": "bin/readwise-library-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "readwiselibrary", "name": "Readwise Library", "capabilities": ["status", "tools", "actions"],
+      "hosts": ["readwise.io"], "agent_tools": ["readwise_library_*"],
+      "confirm_always": ["readwise_library_create_highlight", "readwise_library_update_note", "readwise_library_add_book_tag"]
+    }],
+    "ui": [{"id": "highlights", "title": "Readwise 划线库", "placement": "nav_page", "icon": "doc"}]
+  },
+  "configuration": {"type": "object", "properties": {}},
+  "secrets": [{
+    "name": "access_token", "title": "Readwise API token",
+    "description": "在 readwise.io/access_token 获取；只作为 Token 认证发往固定的 readwise.io Library API",
+    "required": true
+  }],
+  "permissions": {"network": ["readwise.io"]}
+}
