@@ -14,6 +14,7 @@
 - [V2EX](extensions/v2ex.md): public hot, latest and followed-node topics, filtering, request limits and the app view.
 - [Markets](extensions/markets.md): cryptocurrency (OKX) and A-share, Hong Kong and US stock (Tencent) watchlist on the main navigation, price and volume charts, assistant tools and rate limits.
 - [Telegram](extensions/telegram.md): login, inbox, archives, network requirements, tools and the `tg` CLI.
+- [Discord](extensions/discord.md): your own bot as a read-only source: setting it up, what goes into the knowledge base and how nothing is skipped, the assistant tools, status, network and the sandbox.
 - [X](extensions/x.md): two optional ways in: the official X API with your own developer app (mentions in the inbox, a daily-budgeted digest of your timeline or lists, cost and X's terms), or the `grok` CLI on the hub signed in with a SuperGrok or X Premium+ subscription (searches chosen accounts and topics, no X keys); read-only assistant tools and retention.
 - [Bypass auto-allow (Claude Code)](extensions/agent-bypass-allow.md): auto-allow Claude Code's remaining Bash, read-only and subagent prompts in bypassPermissions sessions on chosen computers; deletion and overwriting ask unless inside temporary or work directories (or a setting allows them all); force pushes, permission changes and your own ask/deny rules still ask; audit log and limits.
 - [mnemo](../extensions/mnemo/README.md): let the Claude assistant search past coding-agent sessions through mnemo's MCP server, when mnemo is installed on its computer; read-only tools only.

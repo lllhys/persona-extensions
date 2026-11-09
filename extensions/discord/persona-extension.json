@@ -1,0 +1,63 @@
+{
+  "manifest_version": 1,
+  "id": "discord",
+  "name": "Discord",
+  "version": "0.1.0",
+  "description": "用你自己的 Discord 机器人（在 Discord 开发者后台建的应用，填 bot token）：机器人能看到的服务器频道、话题和论坛帖进知识库（第一次往回补，之后每 5 分钟收新的），助手有只读的 Discord 工具。只读，不发消息；收哪些频道由你在 Discord 里给机器人的权限决定。token 加密存在 hub 的数据库里，不在扩展目录。",
+  "publisher": "nwverse",
+  "tags": ["聊天", "知识库"],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/discord-linux-amd64",
+      "linux-arm64": "bin/discord-linux-arm64",
+      "darwin-arm64": "bin/discord-darwin-arm64",
+      "darwin-amd64": "bin/discord-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "discord",
+        "name": "Discord",
+        "capabilities": [
+          "status",
+          "tools",
+          "archive",
+          "login"
+        ],
+        "poll_seconds": 300,
+        "hosts": [
+          "discord.com"
+        ]
+      }
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "history_days": {
+        "type": "integer",
+        "title": "第一次往回补几天",
+        "default": 30,
+        "minimum": 1,
+        "maximum": 365,
+        "description": "机器人第一次看到一个频道时，往回收这么多天的消息（每个频道最多 500 条）；之后只收新消息"
+      }
+    }
+  },
+  "secrets": [
+    {
+      "name": "proxy",
+      "title": "代理",
+      "description": "hub 这台机器连不上 Discord 时填一个代理：http://、https://、socks5:// 或 socks5h://，可带用户名和密码（http://用户名:密码@主机:端口）。登录和读取都走它；填错了每个请求都失败，不会绕过它直连。空着直连（在沙箱里时走 hub 的出口代理）"
+    }
+  ],
+  "permissions": {
+    "network": [
+      "discord.com"
+    ]
+  }
+}
