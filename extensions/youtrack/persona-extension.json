@@ -1,0 +1,40 @@
+{
+  "manifest_version": 1,
+  "id": "youtrack",
+  "name": "YouTrack 工作项",
+  "version": "0.1.0",
+  "description": "在 Persona 里处理 YouTrack 个人工作项：查看分配给自己的未解决 issue、描述和评论；选择项目并创建 issue 前在手机上确认。永久令牌加密存在 hub，不执行任意命令，不删除 issue，不管理项目。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/youtrack/README.md",
+  "tags": ["YouTrack", "工作项", "研发协作", "自托管"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/youtrack-linux-amd64",
+      "linux-arm64": "bin/youtrack-linux-arm64",
+      "darwin-arm64": "bin/youtrack-darwin-arm64",
+      "darwin-amd64": "bin/youtrack-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "youtrack", "name": "YouTrack", "capabilities": ["status", "tools", "actions"],
+      "hosts": [], "agent_tools": ["youtrack_*"],
+      "confirm_always": ["youtrack_create_issue"]
+    }],
+    "ui": [{"id": "issues", "title": "YouTrack 工作项", "placement": "nav_page", "icon": "check"}]
+  },
+  "configuration": {
+    "type": "object",
+    "required": ["instance_url"],
+    "properties": {
+      "instance_url": {"type": "string", "title": "YouTrack 实例地址", "description": "你的 YouTrack Cloud 或自建实例 HTTPS 地址；同一台机器上的实例可写 http://127.0.0.1", "format": "uri"}
+    }
+  },
+  "secrets": [{
+    "name": "access_token", "title": "YouTrack 永久令牌",
+    "description": "在 YouTrack 个人资料的 Permanent Tokens 中创建；只作为 Bearer 令牌发往配置的实例",
+    "required": true
+  }],
+  "permissions": {"network": []}
+}
