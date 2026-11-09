@@ -1,0 +1,86 @@
+{
+  "manifest_version": 1,
+  "id": "ats",
+  "name": "ATS 任务调度",
+  "version": "0.3.0",
+  "description": "自包含 Go 原生 Agent 任务调度扩展：内置持久化任务队列（R2 Worker 租约与 fence 写保护、R6 确定性指数退避+jitter 重试、R8 排队准入上限保护），支持按标签区分优先级（priority=p0..p3）与难度（difficulty=easy|medium|hard|extreme 映射模型档位 fast|standard|strong）并结合机器槽位与通用 Quota Provider 额度水位进行离线计算队列式削峰填谷综合调度。单二进制同时提供扩展队列面板、基于 todos.write 的幂等 outcome decision 验收写回，以及 stdio MCP 服务（只读 list_tasks / get_task / get_evidence 默认放行；写工具 enqueue_task 强制绑定 persona_todo 标签、默认 readonly 权限且每次调用均需用户确认）。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/ats",
+  "tags": ["agents", "assistant", "todos", "scheduler", "mcp"],
+  "engines": {"persona": ">=202611051918", "extension_protocol": 1},
+  "activation_events": ["on_startup"],
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/ats-linux-amd64",
+      "linux-arm64": "bin/ats-linux-arm64",
+      "darwin-arm64": "bin/ats-darwin-arm64",
+      "darwin-amd64": "bin/ats-darwin-amd64"
+    },
+    "args": ["hub"]
+  },
+  "contributes": {
+    "mcp_servers": [
+      {
+        "id": "ats",
+        "command": "ats",
+        "env": "PERSONA_ATS_BIN",
+        "args": ["mcp", "--enqueue"],
+        "requires": ["mcp"],
+        "allow": ["list_tasks", "get_task", "get_evidence"]
+      }
+    ],
+    "skills": [
+      {"id": "ats-todo", "dir": "skills/ats-todo"}
+    ],
+    "ui": [
+      {"id": "queue", "title": "ATS 队列", "placement": "nav_page", "icon": "list"}
+    ]
+  },
+  "permissions": {
+    "usage_gateways": true,
+    "hub": ["todos.write", "machines.read"]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "max_queued": {
+        "type": "integer",
+        "title": "最大排队任务数",
+        "description": "队列准入上限（R8）：排队任务达到该上限时拒绝新任务入队并返回 too_many_queued (429)。",
+        "minimum": 1,
+        "maximum": 10000,
+        "default": 100
+      },
+      "lease_ttl_seconds": {
+        "type": "integer",
+        "title": "Worker 租约秒数",
+        "description": "单次执行尝试（attempt）的租约有效期（R2），超时未续期时自动回收重排。",
+        "minimum": 10,
+        "maximum": 3600,
+        "default": 75
+      },
+      "max_retries": {
+        "type": "integer",
+        "title": "默认最大重试次数",
+        "description": "任务普通失败后的自动重入队列次数上限（R6 确定性指数退避 + jitter）。",
+        "minimum": 0,
+        "maximum": 10,
+        "default": 2
+      },
+      "quota_url": {
+        "type": "string",
+        "title": "通用额度快照来源",
+        "description": "可选：通用 Quota Provider 快照接口地址或本地文件路径，留空时读取 Hub 的 usage.gateway_accounts 额度窗口。",
+        "default": ""
+      },
+      "reserve_headroom_pct": {
+        "type": "integer",
+        "title": "离线任务额度保留水位 (%)",
+        "description": "当剩余额度百分比低于该水位时进入「仅 P0-P1 保底」模式，暂停 P2/P3 与高消耗离线任务，优先保障 P0/P1。",
+        "minimum": 5,
+        "maximum": 90,
+        "default": 30
+      }
+    }
+  }
+}

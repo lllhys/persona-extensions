@@ -3712,6 +3712,53 @@ type KBForgottenEvent struct {
 	Source string `json:"source"`
 }
 
+// TodoEventThread: the chat thread a to-do is bound to: the channel it lives on (feishu…), the chat and the thread in
+// it, and the title shown for it.
+type TodoEventThread struct {
+	Channel  string `json:"channel"`
+	ChatID   string `json:"chat_id"`
+	ThreadID string `json:"thread_id"`
+	Title    string `json:"title"`
+}
+
+// TodoChangedEvent: event.todo.changed: a to-do was created or deleted, or its title, whether it is done (or failed
+// to start), or the thread it is bound to changed. Changes within about a second of each other are told once, as the
+// to-do is at the end of them. title, thread and done are as after the change (the last ones for a deleted to-do);
+// thread is left out when the to-do has none, done unless the to-do is done (closed, or its task failed to start).
+// Notes, agents and decisions changing do not send it (decisions have event.todo.decision). Read the to-do again if
+// it matters.
+type TodoChangedEvent struct {
+	ID     string           `json:"id"`
+	Title  string           `json:"title"`
+	Thread *TodoEventThread `json:"thread,omitempty"`
+	Done   bool             `json:"done,omitempty"`
+	What   string           `json:"what"`
+}
+
+// TodoEventDecision: A decision on a to-do: what was asked and chosen (reason and supersedes_id left out when empty),
+// and where it came from: manual (written in the to-do), card (the user answered an Agent's question card), outcome
+// (pulled out of an Agent's finished work, not made by the user), agent (an Agent noted it), thread (the user's reply
+// in the to-do's chat thread).
+type TodoEventDecision struct {
+	ID           string `json:"id"`
+	Question     string `json:"question"`
+	Choice       string `json:"choice"`
+	Reason       string `json:"reason,omitempty"`
+	Source       string `json:"source"`
+	SupersedesID string `json:"supersedes_id,omitempty"`
+}
+
+// TodoDecisionEvent: event.todo.decision: a decision was written on a to-do, whatever its source (a decision from the
+// to-do's own thread has source thread: an extension that posts decisions into that thread should skip it). Sent once
+// for each decision written, not for one marked superseded later. title and thread are the to-do's now; thread is
+// left out when it has none.
+type TodoDecisionEvent struct {
+	ID       string            `json:"id"`
+	Title    string            `json:"title"`
+	Thread   *TodoEventThread  `json:"thread,omitempty"`
+	Decision TodoEventDecision `json:"decision"`
+}
+
 // newDef makes a value of each definition, for tests that read examples by definition name.
 var newDef = map[string]func() any{
 	"Manifest":                     func() any { return new(Manifest) },
@@ -4020,6 +4067,10 @@ var newDef = map[string]func() any{
 	"KBOwner":                      func() any { return new(KBOwner) },
 	"KBChangedEvent":               func() any { return new(KBChangedEvent) },
 	"KBForgottenEvent":             func() any { return new(KBForgottenEvent) },
+	"TodoEventThread":              func() any { return new(TodoEventThread) },
+	"TodoChangedEvent":             func() any { return new(TodoChangedEvent) },
+	"TodoEventDecision":            func() any { return new(TodoEventDecision) },
+	"TodoDecisionEvent":            func() any { return new(TodoDecisionEvent) },
 }
 
 // Call is one call or event of an extension point's protocol (the schemas' x-methods and x-events): who
@@ -4081,4 +4132,6 @@ var Calls = map[string]Call{
 	"kb.owner":                       {Name: "kb.owner", From: "program", Params: "KBOwnerParams", Result: "KBOwner"},
 	"event.kb.changed":               {Name: "event.kb.changed", From: "hub", Params: "KBChangedEvent", Result: "", Event: true},
 	"event.kb.forgotten":             {Name: "event.kb.forgotten", From: "hub", Params: "KBForgottenEvent", Result: "", Event: true},
+	"event.todo.changed":             {Name: "event.todo.changed", From: "hub", Params: "TodoChangedEvent", Result: "", Event: true},
+	"event.todo.decision":            {Name: "event.todo.decision", From: "hub", Params: "TodoDecisionEvent", Result: "", Event: true},
 }
