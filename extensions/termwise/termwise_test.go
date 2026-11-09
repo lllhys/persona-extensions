@@ -123,6 +123,33 @@ func TestLexiconCandidates(t *testing.T) {
 	}
 }
 
+// Articles set a contraction's apostrophe as ’ (U+2019) as often as '. Both read the same: the contraction is one word,
+// not a fragment looked up alone ("don" would be a Spanish nobleman), and a saved one is still marked saved.
+func TestTypographicApostrophe(t *testing.T) {
+	const ascii = "<p>I don't think they're sure we won't go; she'd say it isn't fair, and I've said we'll see.</p>"
+	curly := strings.ReplaceAll(ascii, "'", "’")
+	_, want, err := apply(ascii, renderOption{Mode: modeVocabulary})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, got, err := apply(curly, renderOption{Mode: modeVocabulary, Saved: map[string]bool{"they're": true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lemmas := func(hs []hit) (out []string) {
+		for _, h := range hs {
+			out = append(out, h.Lemma)
+		}
+		return out
+	}
+	if len(want) == 0 || strings.Join(lemmas(got), " ") != strings.Join(lemmas(want), " ") {
+		t.Fatalf("with ’: %q, with ': %q", lemmas(got), lemmas(want))
+	}
+	if !strings.Contains(out, "don’t</button>") || !strings.Contains(out, `class="tw-term tw-saved"`) {
+		t.Fatalf("the article's ’ or the saved mark is lost: %s", out)
+	}
+}
+
 func TestAnnotateSkipsNonReading(t *testing.T) {
 	const src = `<header>harbor</header><nav><a href="/keep">harbor home</a></nav>` +
 		`<style>.harbor{color:red}</style><script>var harbor = "merchant";</script>` +
@@ -566,7 +593,7 @@ func TestManifest(t *testing.T) {
 	if err := json.Unmarshal(manifest, &m); err != nil {
 		t.Fatal(err)
 	}
-	if m.ID != "termwise" || m.ID != about.ID || m.Version != about.Version || m.Version != "0.1.0" {
+	if m.ID != "termwise" || m.ID != about.ID || m.Version != about.Version || m.Version != "0.1.1" {
 		t.Fatalf("%+v", m)
 	}
 	if len(m.Contributes.UI) != 1 || m.Contributes.UI[0].ID != pageUI || m.Contributes.UI[0].Placement != "plugin_page" {

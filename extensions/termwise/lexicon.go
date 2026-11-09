@@ -84,7 +84,7 @@ func (lx *wordLexicon) lookup(surface string, remember bool) (lemma string, g gl
 	if !remember && isShortAcronym(surface) {
 		return "", gloss{}, false
 	}
-	word := strings.ToLower(surface)
+	word := foldWord(surface)
 	if !surfaceOK(word) {
 		return "", gloss{}, false
 	}
@@ -102,6 +102,11 @@ func (lx *wordLexicon) lookup(surface string, remember bool) (lemma string, g gl
 		return "", gloss{}, false
 	}
 	return lemma, g, true
+}
+
+// foldWord is surface as the lexicon and the saved words spell it: lower case, with a typographic apostrophe (’) as '.
+func foldWord(surface string) string {
+	return strings.ToLower(strings.ReplaceAll(surface, "’", "'"))
 }
 
 func parseWordList(raw string) map[string]bool {
