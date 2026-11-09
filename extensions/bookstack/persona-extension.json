@@ -1,0 +1,39 @@
+{
+  "manifest_version": 1,
+  "id": "bookstack",
+  "name": "BookStack 知识库",
+  "version": "0.1.0",
+  "description": "在 Persona 里阅读和整理自建 BookStack 知识库：搜索文档、浏览书籍和页面、阅读 Markdown；在指定书籍新建页面或更新页面内容前在手机上确认。Token ID 和 Secret 加密存在 hub，不移动或删除页面，不管理实例。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/bookstack/README.md",
+  "tags": ["BookStack", "知识库", "文档", "自托管"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/bookstack-linux-amd64",
+      "linux-arm64": "bin/bookstack-linux-arm64",
+      "darwin-arm64": "bin/bookstack-darwin-arm64",
+      "darwin-amd64": "bin/bookstack-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "bookstack", "name": "BookStack", "capabilities": ["status", "tools", "actions"],
+      "hosts": [], "agent_tools": ["bookstack_*"],
+      "confirm_always": ["bookstack_create_page", "bookstack_update_page"]
+    }],
+    "ui": [{"id": "knowledge", "title": "BookStack 知识库", "placement": "nav_page", "icon": "doc"}]
+  },
+  "configuration": {
+    "type": "object",
+    "required": ["instance_url"],
+    "properties": {
+      "instance_url": {"type": "string", "title": "BookStack 实例地址", "description": "你的 BookStack HTTPS 地址；同一台机器上的实例可写 http://127.0.0.1", "format": "uri"}
+    }
+  },
+  "secrets": [
+    {"name": "token_id", "title": "BookStack Token ID", "description": "BookStack 用户资料中创建的 API Token ID", "required": true},
+    {"name": "token_secret", "title": "BookStack Token Secret", "description": "BookStack 用户资料中创建的 API Token Secret；只与 Token ID 组合发往配置的实例", "required": true}
+  ],
+  "permissions": {"network": []}
+}
