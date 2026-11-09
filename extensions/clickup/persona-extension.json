@@ -1,0 +1,34 @@
+{
+  "manifest_version": 1,
+  "id": "clickup",
+  "name": "ClickUp 任务",
+  "version": "0.1.0",
+  "description": "在 Persona 里处理 ClickUp 个人任务：查看分配给自己的任务、描述、截止日期和状态；选择列表创建任务或更新状态前在手机上确认。个人 API key 加密存在 hub，不删除任务，不修改自定义字段，不管理团队。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/clickup/README.md",
+  "tags": ["ClickUp", "任务", "项目管理", "团队协作"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/clickup-linux-amd64",
+      "linux-arm64": "bin/clickup-linux-arm64",
+      "darwin-arm64": "bin/clickup-darwin-arm64",
+      "darwin-amd64": "bin/clickup-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "clickup", "name": "ClickUp", "capabilities": ["status", "tools", "actions"],
+      "hosts": ["api.clickup.com"], "agent_tools": ["clickup_*"],
+      "confirm_always": ["clickup_create_task", "clickup_update_status"]
+    }],
+    "ui": [{"id": "tasks", "title": "ClickUp 任务", "placement": "nav_page", "icon": "check"}]
+  },
+  "configuration": {"type": "object", "properties": {}},
+  "secrets": [{
+    "name": "api_token", "title": "ClickUp 个人 API key",
+    "description": "在 ClickUp 用户设置的 Apps 中创建；只通过 Authorization 发往固定的 api.clickup.com",
+    "required": true
+  }],
+  "permissions": {"network": ["api.clickup.com"]}
+}
