@@ -1,0 +1,40 @@
+{
+  "manifest_version": 1,
+  "id": "gitea",
+  "name": "Gitea 评审",
+  "version": "0.1.0",
+  "description": "在 Persona 里处理自建 Gitea 的代码评审：查看仓库中的开放 PR、描述和讨论；发表评论或提交 APPROVED 评审前在手机上确认。API token 加密存在 hub，不合并、不拒绝、不删除 PR，不管理仓库。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/gitea/README.md",
+  "tags": ["Gitea", "代码评审", "PR", "自托管"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/gitea-linux-amd64",
+      "linux-arm64": "bin/gitea-linux-arm64",
+      "darwin-arm64": "bin/gitea-darwin-arm64",
+      "darwin-amd64": "bin/gitea-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "gitea", "name": "Gitea", "capabilities": ["status", "tools", "actions"],
+      "hosts": [], "agent_tools": ["gitea_*"],
+      "confirm_always": ["gitea_approve", "gitea_comment"]
+    }],
+    "ui": [{"id": "reviews", "title": "代码评审", "placement": "nav_page", "icon": "pull_request"}]
+  },
+  "configuration": {
+    "type": "object",
+    "required": ["instance_url"],
+    "properties": {
+      "instance_url": {"type": "string", "title": "Gitea 实例地址", "description": "你的 Gitea HTTPS 地址；同一台机器上的实例可写 http://127.0.0.1", "format": "uri"}
+    }
+  },
+  "secrets": [{
+    "name": "access_token", "title": "Gitea 个人访问令牌",
+    "description": "在 Gitea 的应用访问令牌设置中创建，需要读取仓库和提交评审的权限；只作为 Authorization: token 发往配置的实例",
+    "required": true
+  }],
+  "permissions": {"network": []}
+}
