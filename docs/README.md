@@ -9,6 +9,7 @@
 - [Home Assistant](extensions/homeassistant.md): areas, devices, controls and history from your own Home Assistant; the logbook, statistics and energy, automations, calls by area, speakers, cameras, watch rules that notify or wake the assistant, confirmed assistant writes, writable domains and the sandbox.
 - [Hacker News](extensions/hackernews.md): public Top, New, Best, Ask HN and Show HN stories, top-level comments, filtering, the localized app view and assistant tools.
 - [Termwise](extensions/termwise.md): a reading page with translation mode and vocabulary mode. Vocabulary mode underlines candidate words; choosing one shows the gloss and can remember it.
+- [Spaces](extensions/spaces.md): spaces whose types, typed fields, statuses and views you or the assistant define; entities and relations in one local store, pages generated from the schema, and a local MCP server with the read tools allowed.
 - [LINUX DO](extensions/linuxdo.md): public topics, filtering, request limits and the app view.
 - [Sentry](extensions/sentry.md): the errors and crashes of the hub, the web and the apps, scrubbed by the hub, sent to your Sentry project; events, settings, limits and network.
 - [V2EX](extensions/v2ex.md): public hot, latest and followed-node topics, filtering, request limits and the app view.
