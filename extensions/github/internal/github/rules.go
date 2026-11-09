@@ -364,19 +364,25 @@ func (c *Connector) ciCheck(ctx context.Context, m ciMeta, now time.Time) (ciSta
 		return s, err
 	}
 	// Each workflow stands where its newest run that succeeded or failed left it (newest first; runs still going,
-	// cancelled or skipped say neither).
-	settled, failing := map[string]bool{}, false
+	// cancelled or skipped say neither). The failure a workflow offers to add is its newest one settled for
+	// ciFoldAfter: one too fresh is passed over for an earlier one, but not past a success.
+	settled, offered, failing := map[string]bool{}, map[string]bool{}, false
 	for _, r := range runs.Runs {
-		if settled[r.Name] || r.Status != "completed" {
+		if offered[r.Name] || r.Status != "completed" {
 			continue
 		}
 		switch r.Conclusion {
 		case "success":
-			settled[r.Name] = true
+			settled[r.Name], offered[r.Name] = true, true
 		case "failure", "timed_out", "startup_failure":
-			settled[r.Name], failing = true, true
-			if r.UpdatedAt.After(s.failed.at) && now.Sub(r.UpdatedAt) >= ciFoldAfter {
-				s.failed.workflow, s.failed.at = r.Name, r.UpdatedAt
+			if !settled[r.Name] {
+				settled[r.Name], failing = true, true
+			}
+			if now.Sub(r.UpdatedAt) >= ciFoldAfter {
+				offered[r.Name] = true
+				if r.UpdatedAt.After(s.failed.at) {
+					s.failed.workflow, s.failed.at = r.Name, r.UpdatedAt
+				}
 			}
 		}
 	}

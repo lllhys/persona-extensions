@@ -76,9 +76,9 @@ func (c *Connector) Watch(ctx context.Context, changed func(connector.Scope)) er
 	}
 }
 
-// poll reads the unread notifications (not at all when nothing changed: 304) and returns how long GitHub wants
-// the next poll to wait and whether a thing changed. They come 50 to a page, newest first: poll follows the pages
-// up to notificationPages (only the first while requests run low).
+// poll reads the unread notifications (not at all when nothing changed: 304), follows up the open CI items that are
+// due, and returns how long GitHub wants the next poll to wait and whether a thing changed. They come 50 to a page,
+// newest first: poll follows the pages up to notificationPages (only the first while requests run low).
 func (c *Connector) poll(ctx context.Context) (time.Duration, bool, error) {
 	st := &c.inbox
 	st.mu.Lock()
@@ -119,7 +119,8 @@ func (c *Connector) poll(ctx context.Context) (time.Duration, bool, error) {
 		wait = time.Duration(s) * time.Second
 	}
 	if code == http.StatusNotModified {
-		return wait, false, nil
+		// No notification moved; open CI items are still followed up when due (followUpCI paces each one).
+		return wait, c.followUpCI(ctx), nil
 	}
 	st.mu.Lock()
 	st.lastModified = h.Get("Last-Modified")
