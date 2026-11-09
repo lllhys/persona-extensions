@@ -228,6 +228,29 @@ func TestParseTime(t *testing.T) {
 	}
 }
 
+// RFC 822 zone names and GMT with an offset keep their offset, whatever the computer's own zone is (EDT and PDT are
+// never both the local zone, so one of them was read as UTC on any computer).
+func TestParseTimeZoneNames(t *testing.T) {
+	for s, want := range map[string]time.Time{
+		"Tue, 10 Jun 2003 04:00:00 EDT":      time.Date(2003, 6, 10, 8, 0, 0, 0, time.UTC),
+		"Tue, 10 Jun 2003 04:00:00 PDT":      time.Date(2003, 6, 10, 11, 0, 0, 0, time.UTC),
+		"Tue, 3 Nov 2026 05:00:00 EST":       time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC),
+		"03 Nov 26 02:00 PST":                time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC),
+		"Tue, 03 Nov 2026 18:00:00 GMT+8":    time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC),
+		"Tue, 03 Nov 2026 18:00:00 GMT+0800": time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC),
+		"Tue, 03 Nov 2026 18:30:00 UTC+8:30": time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC),
+		"Tue, 03 Nov 2026 05:00:00 GMT-05":   time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC),
+		"Tue, 03 Nov 2026 10:00:00 GMT":      time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC),
+	} {
+		if got := parseTime(s); !got.Equal(want) {
+			t.Errorf("parseTime(%q) = %v, want %v", s, got, want)
+		}
+	}
+	if !parseTime("Tue, 03 Nov 2026 18:00:00 GMT+99").IsZero() {
+		t.Error("an impossible offset was read")
+	}
+}
+
 // --- instance, routes and the access key ---
 
 func TestParseInstance(t *testing.T) {

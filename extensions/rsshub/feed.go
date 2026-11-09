@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -372,7 +374,7 @@ var timeLayouts = []string{
 
 // parseTime reads a feed's date in the many forms feeds write it; an unreadable one is the zero time.
 func parseTime(s string) time.Time {
-	s = strings.Join(strings.Fields(s), " ")
+	s = numericZone(strings.Join(strings.Fields(s), " "))
 	if s == "" {
 		return time.Time{}
 	}
@@ -381,13 +383,44 @@ func parseTime(s string) time.Time {
 			return t.UTC()
 		}
 	}
-	// "GMT+8" and the like
-	if i := strings.LastIndex(s, " GMT"); i > 0 {
-		if t, err := time.Parse("Mon, 2 Jan 2006 15:04:05", s[:i]); err == nil {
-			return t.UTC()
-		}
-	}
 	return time.Time{}
+}
+
+// rfc822Zones are the zone names RFC 822 defines beside GMT and UT, as offsets. time.Parse knows a zone name only when
+// the computer's own zone uses it and reads any other as UTC, so EDT would be four hours off on most hubs. CST is left
+// to time.Parse: RFC 822 makes it US Central, but Chinese feeds write it for UTC+8.
+var rfc822Zones = map[string]string{
+	"EST": "-0500", "EDT": "-0400", "CDT": "-0500", "MST": "-0700", "MDT": "-0600", "PST": "-0800", "PDT": "-0700",
+}
+
+// numericZone is s with its trailing zone written as an offset when it is an RFC 822 zone name (EDT) or GMT or UTC
+// with an offset (GMT+8, GMT+0800, UTC+08:00); any other s is returned as it is.
+func numericZone(s string) string {
+	i := strings.LastIndexByte(s, ' ')
+	if i < 0 {
+		return s
+	}
+	zone := strings.ToUpper(s[i+1:])
+	if off, ok := rfc822Zones[zone]; ok {
+		return s[:i+1] + off
+	}
+	for _, p := range []string{"GMT", "UTC"} {
+		rest, ok := strings.CutPrefix(zone, p)
+		if !ok || len(rest) < 2 || (rest[0] != '+' && rest[0] != '-') {
+			continue
+		}
+		hh, mm, _ := strings.Cut(rest[1:], ":")
+		if mm == "" && len(hh) > 2 {
+			hh, mm = hh[:len(hh)-2], hh[len(hh)-2:]
+		}
+		h, herr := strconv.Atoi(hh)
+		m, merr := strconv.Atoi(cmp.Or(mm, "0"))
+		if herr != nil || merr != nil || len(hh) > 2 || len(mm) > 2 || h > 14 || m > 59 {
+			return s
+		}
+		return fmt.Sprintf("%s%c%02d%02d", s[:i+1], rest[0], h, m)
+	}
+	return s
 }
 
 // --- HTML to text ---
