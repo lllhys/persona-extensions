@@ -1,0 +1,41 @@
+{
+  "manifest_version": 1,
+  "id": "memos",
+  "name": "Memos 笔记",
+  "version": "0.1.0",
+  "description": "在 Persona 里记录和整理自建 Memos 的个人笔记：查看自己的笔记、搜索内容、置顶重要记录；创建私有 Markdown 笔记、编辑正文或切换置顶前在手机上确认。访问令牌加密存在 hub，不保存密码，不公开或删除笔记。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/memos/README.md",
+  "tags": ["Memos", "笔记", "快速记录", "自托管"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/memos-linux-amd64",
+      "linux-arm64": "bin/memos-linux-arm64",
+      "darwin-arm64": "bin/memos-darwin-arm64",
+      "darwin-amd64": "bin/memos-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "memos", "name": "Memos", "capabilities": ["status", "tools", "actions"],
+      "hosts": [], "agent_tools": ["memos_*"],
+      "confirm_always": ["memos_create", "memos_update", "memos_toggle_pin"]
+    }],
+    "ui": [{"id": "notes", "title": "Memos 笔记", "placement": "nav_page", "icon": "doc"}]
+  },
+  "configuration": {
+    "type": "object",
+    "required": ["instance_url", "username"],
+    "properties": {
+      "instance_url": {"type": "string", "title": "Memos 实例地址", "description": "你的 Memos HTTPS 地址；同一台机器上的实例可写 http://127.0.0.1", "format": "uri"},
+      "username": {"type": "string", "title": "Memos 用户名", "description": "用于 creator == \"users/{username}\" 过滤你自己的笔记，不是密码"}
+    }
+  },
+  "secrets": [{
+    "name": "access_token", "title": "Memos 访问令牌",
+    "description": "在 Memos 账户设置中创建 Personal Access Token；只作为 Bearer 令牌发往配置的实例",
+    "required": true
+  }],
+  "permissions": {"network": []}
+}
