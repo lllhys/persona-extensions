@@ -1,0 +1,39 @@
+{
+  "manifest_version": 1,
+  "id": "anytype",
+  "name": "Anytype 知识库",
+  "version": "0.1.0",
+  "description": "在 Persona 里读取本地 Anytype 知识库：浏览空间、搜索对象、阅读页面正文；在指定空间创建 Markdown 页面前在手机上确认。API key 加密存在 hub，默认只连本机 Anytype API，不启动桌面应用，不删除对象。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/anytype/README.md",
+  "tags": ["Anytype", "知识库", "笔记", "本地"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/anytype-linux-amd64",
+      "linux-arm64": "bin/anytype-linux-arm64",
+      "darwin-arm64": "bin/anytype-darwin-arm64",
+      "darwin-amd64": "bin/anytype-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "anytype", "name": "Anytype", "capabilities": ["status", "tools", "actions"],
+      "hosts": [], "agent_tools": ["anytype_*"],
+      "confirm_always": ["anytype_create_object"]
+    }],
+    "ui": [{"id": "knowledge", "title": "Anytype 知识库", "placement": "nav_page", "icon": "doc"}]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "instance_url": {"type": "string", "title": "Anytype API 地址", "description": "默认 http://127.0.0.1:31009；远程 headless 实例必须使用 HTTPS", "format": "uri", "default": "http://127.0.0.1:31009"}
+    }
+  },
+  "secrets": [{
+    "name": "api_key", "title": "Anytype API key",
+    "description": "在 Anytype 桌面设置的 API Keys 中创建；只作为 Bearer 令牌发往配置的本地或 headless API",
+    "required": true
+  }],
+  "permissions": {"network": []}
+}
