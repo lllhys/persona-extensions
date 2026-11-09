@@ -13,6 +13,7 @@
 - [Sentry](extensions/sentry.md): the errors and crashes of the hub, the web and the apps, scrubbed by the hub, sent to your Sentry project; events, settings, limits and network.
 - [V2EX](extensions/v2ex.md): public hot, latest and followed-node topics, filtering, request limits and the app view.
 - [RSSHub](extensions/rsshub.md): subscribe to RSSHub routes or any RSS, Atom or JSON feed on the public or your own instance (with its access key); the navigation page with unread entries, tags and route previews, the background refresh with ETag caching, assistant tools with confirmed subscription changes, and the sandbox.
+- [Weather](extensions/weather.md): Open-Meteo's current weather, next-24-hours line, 7-day forecast and air quality on the main navigation, with assistant tools, no key needed.
 - [Markets](extensions/markets.md): cryptocurrency (OKX) and A-share, Hong Kong and US stock (Tencent) watchlist on the main navigation, price and volume charts, assistant tools and rate limits.
 - [Telegram](extensions/telegram.md): login, inbox, archives, network requirements, tools and the `tg` CLI.
 - [Discord](extensions/discord.md): your own bot as a read-only source: setting it up, what goes into the knowledge base and how nothing is skipped, the assistant tools, status, network and the sandbox.
