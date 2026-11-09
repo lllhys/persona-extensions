@@ -169,6 +169,11 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func (f *fakeDiscord) serve(w http.ResponseWriter, r *http.Request) {
+	// The node's exact unauthenticated discovery probe is not a Discord API call.
+	if isNodePortProbe(r) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	path := strings.TrimPrefix(r.URL.Path, "/api/v10")
 	f.mu.Lock()
 	defer f.mu.Unlock()

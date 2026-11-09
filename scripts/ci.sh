@@ -5,6 +5,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 step() { printf '\n== %s\n' "$*"; }
 
+step workflow
+python3 -I scripts/test-ci-policy.py
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/ci.yml
+
 step docs
 python3 -I scripts/check-docs.py
 python3 -I scripts/test-docs.py
