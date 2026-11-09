@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -141,6 +142,20 @@ func (e ExecGrok) Run(ctx context.Context, path, prompt string) (string, error) 
 	}
 	jerr := json.Unmarshal(out, &res)
 	if err != nil || res.Type == "error" {
+		if cmd.Process == nil {
+			// grok never started (missing, not executable, no interpreter): its path is not grok speaking, so the
+			// reason is told without it and is never a sign-in or a rate limit.
+			why := err
+			var nf *exec.Error
+			var pe *fs.PathError
+			switch {
+			case errors.As(err, &nf):
+				why = nf.Err
+			case errors.As(err, &pe):
+				why = pe.Err
+			}
+			return "", &GrokError{Kind: GrokFailed, Msg: "cannot run grok: " + scrubLine(why.Error())}
+		}
 		msg := res.Message
 		if jerr != nil || msg == "" {
 			msg = lastLine(stderr.buf.String())
@@ -148,11 +163,8 @@ func (e ExecGrok) Run(ctx context.Context, path, prompt string) (string, error) 
 		if msg == "" && err != nil {
 			msg = err.Error()
 		}
-		var nf *exec.Error
-		if errors.As(err, &nf) {
-			return "", &GrokError{Kind: GrokFailed, Msg: "cannot run grok: " + scrubLine(nf.Err.Error())}
-		}
-		return "", &GrokError{Kind: classifyGrok(msg), Msg: scrubLine(msg)}
+		home, _ := os.UserHomeDir()
+		return "", &GrokError{Kind: classifyGrok(withoutPaths(msg, dir, path, home)), Msg: scrubLine(msg)}
 	}
 	if jerr != nil || res.Text == nil {
 		return "", &GrokError{Kind: GrokFailed, Msg: "grok's answer is not the JSON of --output-format json"}
@@ -211,6 +223,18 @@ func classifyGrok(msg string) string {
 		}
 	}
 	return GrokFailed
+}
+
+// withoutPaths is msg with this run's paths (grok's directory, grok itself, the home directory) taken out, most
+// specific first, for classifyGrok: their names are not grok's words, and a user called login or a temporary
+// directory ending in 401 is neither a sign-in nor a rate limit.
+func withoutPaths(msg string, paths ...string) string {
+	for _, p := range paths {
+		if len(p) > 1 {
+			msg = strings.ReplaceAll(msg, p, " ")
+		}
+	}
+	return msg
 }
 
 // lastLine is s's last non-empty line.
