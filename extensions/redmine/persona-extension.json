@@ -1,0 +1,40 @@
+{
+  "manifest_version": 1,
+  "id": "redmine",
+  "name": "Redmine 工作项",
+  "version": "0.1.0",
+  "description": "在 Persona 里处理自建 Redmine 的个人工作项：查看分配给自己的开放 issue、描述和 journals；选择项目并创建 issue 前在手机上确认。API key 加密存在 hub，不删除 issue，不修改自定义字段，不管理项目。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/redmine/README.md",
+  "tags": ["Redmine", "工作项", "自托管", "问题跟踪"],
+  "engines": {"plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/redmine-linux-amd64",
+      "linux-arm64": "bin/redmine-linux-arm64",
+      "darwin-arm64": "bin/redmine-darwin-arm64",
+      "darwin-amd64": "bin/redmine-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "redmine", "name": "Redmine", "capabilities": ["status", "tools", "actions"],
+      "hosts": [], "agent_tools": ["redmine_*"],
+      "confirm_always": ["redmine_create_issue"]
+    }],
+    "ui": [{"id": "issues", "title": "Redmine 工作项", "placement": "nav_page", "icon": "check"}]
+  },
+  "configuration": {
+    "type": "object",
+    "required": ["instance_url"],
+    "properties": {
+      "instance_url": {"type": "string", "title": "Redmine 实例地址", "description": "你的 Redmine HTTPS 地址；同一台机器上的实例可写 http://127.0.0.1", "format": "uri"}
+    }
+  },
+  "secrets": [{
+    "name": "api_key", "title": "Redmine API key",
+    "description": "在 Redmine 的「我的账户」中获取；只通过 X-Redmine-API-Key 发往配置的实例",
+    "required": true
+  }],
+  "permissions": {"network": []}
+}
