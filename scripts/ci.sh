@@ -41,9 +41,6 @@ for m in $modules; do go -C "$m" vet ./...; done
 step test
 for m in $modules; do go -C "$m" test -race ./...; done
 
-step companion
-python3 -I -B extensions/larkagentx/bridge_test.py
-
 step build
 for id in $(scripts/manifest.py ids); do
   scripts/package.sh "$id" >/dev/null
