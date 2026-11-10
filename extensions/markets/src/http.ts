@@ -42,7 +42,7 @@ export class HTTP {
       const control = new AbortController(); const cancel = () => control.abort(signal?.reason);
       signal?.addEventListener("abort", cancel, { once: true }); const timer = setTimeout(() => control.abort(new ReadError("timeout", "Market request timed out")), 15_000);
       try {
-        const response = await this.fetch(url, { method: "GET", headers: { "User-Agent": "persona-markets/0.6.5", Accept: "application/json" }, signal: control.signal, redirect: "error" });
+        const response = await this.fetch(url, { method: "GET", headers: { "User-Agent": "persona-markets/0.6.6", Accept: "application/json" }, signal: control.signal, redirect: "error" });
         if (response.status === 429) { await response.body?.cancel(); throw new ReadError("rate_limited", "Too many requests; try later", 429); }
         if (!response.ok) { await response.body?.cancel(); throw new ReadError("http", `Market returned HTTP ${response.status}`, response.status); }
         const reader = response.body?.getReader(); if (!reader) throw new ReadError("invalid", "Empty market response");

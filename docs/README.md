@@ -25,6 +25,8 @@
 - [ATS](../extensions/ats/README.md): self-contained Go native agent task scheduler with tag-driven priority/difficulty and generic quota-provider scheduling, a queue navigation page, idempotent `todos.write` outcome decision write-back, read-only MCP tools (`list_tasks`, `get_task`, `get_evidence`) and `enqueue_task` (asks every time).
 - [Disklessly](extensions/disklessly.md): fleet disk watermarks, rebuildable developer cache cleanup with `df`-measured freed space, dry-run plans, and coding-agent cold session tiering across local and SSH machines.
 - [mnemo](../extensions/mnemo/README.md): let the Claude assistant search past coding-agent sessions through mnemo's MCP server, when mnemo is installed on its computer; read-only tools only.
+- [Spaces](extensions/spaces.md): types, properties, relations and status flows you define yourself, with the overview card, views, four templates, rollups, derive and the assistant's seven tools; the MCP server needs the `spaces` binary on `PATH` or in `~/bin`, or `PERSONA_SPACES_BIN`.
+- [Custom looks](extensions/custom-looks.md): five avatars (looks) with pictures, colors and status dots; images only. A hub pack of the same id wins until it is removed, and the chosen look carries on.
 
 ## Developing and maintaining extensions
 

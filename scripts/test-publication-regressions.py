@@ -114,6 +114,20 @@ class ArchiveRegressions(unittest.TestCase):
             publisher.check_archive(package(self.m, files), self.m)
         files.append(("skills/demo/missing.py", b"script", 0o644))
         publisher.check_archive(package(self.m, files), self.m)
+    def test_source_runtime_requires_matching_bundle_digest(self):
+        self.m["runtime"] = {"mode": "deno", "source": {"entry": "src/index.ts", "bundle": "build/main.mjs", "sha256": "0" * 64}}
+        data = package(self.m, [("build/main.mjs", b"export default {};\n", 0o644)])
+        with self.assertRaisesRegex(ValueError, "digest"):
+            publisher.check_archive(data, self.m)
+        import hashlib
+        self.m["runtime"]["source"]["sha256"] = hashlib.sha256(b"export default {};\n").hexdigest()
+        data = package(self.m, [("build/main.mjs", b"export default {};\n", 0o644)])
+        publisher.check_archive(data, self.m)
+        changed = package(self.m, [("build/main.mjs", b"different", 0o644)])
+        with self.assertRaisesRegex(ValueError, "digest"):
+            publisher.check_archive(changed, self.m)
+        with self.assertRaisesRegex(ValueError, "runtime"):
+            publisher.check_archive(package(self.m, [("build/main.mjs", b"different", 0o644)]), self.m)
 
 
 class InventoryRegressions(CatalogFixture, unittest.TestCase):

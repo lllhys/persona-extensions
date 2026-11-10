@@ -6,6 +6,7 @@ The read-only audit can run before cutover. All publication commands require the
 import argparse
 import copy
 import gzip
+import hashlib
 import io
 import os
 import posixpath
@@ -175,6 +176,8 @@ def check_archive(data, expected, strict=False, platform="any"):
     commands = expected.get("runtime", {}).get("command", {})
     if actual.get("runtime", {}).get("command", {}) != commands:
         raise ValueError("archive runtime platform mapping differs from catalog")
+    if actual.get("runtime", {}) != expected.get("runtime", {}):
+        raise ValueError("archive source runtime differs from catalog")
     oci.version_tag(expected["version"], platform)
     if commands and platform != "any" and platform not in commands:
         raise ValueError("archive runtime does not declare package platform")
@@ -191,6 +194,15 @@ def check_archive(data, expected, strict=False, platform="any"):
     # Node programs are shipped to other computers: hub checks all declared node commands.
     for path in actual.get("node", {}).get("command", {}).values():
         required(path, True)
+    runtime = actual.get("runtime", {})
+    if runtime.get("mode") == "deno":
+        source = runtime.get("source", {})
+        if not re.fullmatch(r"[0-9a-f]{64}", source.get("sha256", "")) or not source.get("entry") or not source.get("bundle"):
+            raise ValueError("source runtime is incomplete")
+        required(source["bundle"])
+        _, _, source_data = scan_archive(data, expected["id"], capture={source["bundle"]})
+        if not source_data[source["bundle"]] or hashlib.sha256(source_data[source["bundle"]]).hexdigest() != source["sha256"]:
+            raise ValueError("source runtime bundle digest mismatch")
     for m in (actual, expected):
         for _, path, kind in manifests.referenced(m):
             if not safe_path(path):

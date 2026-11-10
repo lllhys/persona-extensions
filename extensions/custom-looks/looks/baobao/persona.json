@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "id": "baobao",
+  "name": "包包",
+  "avatar": {
+    "sizes": {
+      "64": "avatar/64.png",
+      "128": "avatar/128.png",
+      "256": "avatar/256.png",
+      "512": "avatar/512.png"
+    },
+    "safe": 1.0
+  },
+  "dot": {
+    "size": 144,
+    "states": {
+      "idle": {
+        "file": "dot/idle.png",
+        "fps": 8,
+        "frames": 24
+      },
+      "thinking": {
+        "file": "dot/thinking.png",
+        "fps": 8,
+        "frames": 16
+      },
+      "working": {
+        "file": "dot/working.png",
+        "fps": 10,
+        "frames": 12
+      },
+      "needs_you": {
+        "file": "dot/needs_you.png",
+        "fps": 6,
+        "frames": 12
+      },
+      "offline": {
+        "file": "dot/offline.png",
+        "fps": 4,
+        "frames": 12
+      }
+    }
+  },
+  "colors": {
+    "light": {
+      "primary": "#8EC1EE",
+      "secondary": "#99C0E8",
+      "accent": "#1E78C8",
+      "bubble": "#1D75C3",
+      "bubble_text": "#FFFFFF"
+    },
+    "dark": {
+      "primary": "#8EC1EE",
+      "secondary": "#99C0E8",
+      "accent": "#2889DF",
+      "bubble": "#1E77C5",
+      "bubble_text": "#FFFFFF"
+    }
+  },
+  "subtitle": "穿浅蓝连帽衫的短发女孩"
+}

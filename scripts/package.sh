@@ -17,11 +17,36 @@ rm -rf "${out:?}" && mkdir -p "$out/bin"
 # stop writing persona-plugin.json once the compatibility period ends (docs/reference.md, "Compatibility").
 scripts/manifest.py packaged "$id" >"$out/persona-extension.json"
 cp "$out/persona-extension.json" "$out/persona-plugin.json"
-# What the manifest points at besides the program: the assistant's skills and instructions, and the manifest's
-# translations the hub reads from l10n/.
-for extra in skills assistant l10n; do
+# What the manifest points at besides the program: the assistant's skills and instructions, the looks' images, and
+# the manifest's translations the hub reads from l10n/.
+for extra in skills assistant looks l10n; do
   [ -d "$src/$extra" ] && cp -R "$src/$extra" "$out/"
 done
+# Native TypeScript source packages ship the import-free bundle and its verified digest.
+if python3 -I -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("runtime", {}).get("mode") == "deno" else 1)' "$manifest"; then
+  # A clean checkout has no build output. Compile through the extension's locked
+  # public dependencies, not a pre-existing local bundle or an untracked SDK edit.
+  if [ ! -x "$src/node_modules/.bin/esbuild" ]; then
+    npm --prefix sdk/ts ci --ignore-scripts --registry=https://registry.npmjs.org --no-audit --no-fund
+    npm --prefix "$src" ci --ignore-scripts --registry=https://registry.npmjs.org --no-audit --no-fund
+  fi
+  npm --prefix "$src" run build:source
+  python3 -I - "$src" "$out" <<'PY'
+import hashlib, json, pathlib, sys
+src, out = map(pathlib.Path, sys.argv[1:])
+m = json.loads((src / "persona-extension.json").read_text())
+source = m["runtime"]["source"]
+bundle = src / source["bundle"]
+data = bundle.read_bytes()
+if not data or hashlib.sha256(data).hexdigest() != source["sha256"]:
+    raise SystemExit("source bundle digest does not match the manifest")
+for name in ("persona-extension.json", "persona-plugin.json"):
+    (out / name).write_bytes((out / name).read_bytes())
+target = out / source["bundle"]
+target.parent.mkdir(parents=True, exist_ok=True)
+target.write_bytes(data)
+PY
+fi
 # A declarative extension (no runtime: skills, prompts, themes, a pack…) has no program to build.
 # -I: with -c, Python would otherwise put the cwd (repo root, an untrusted PR tree in CI) first on sys.path,
 # letting a planted json.py shadow the stdlib module. The snippet uses only stdlib json/sys and an explicit argv path.

@@ -1,0 +1,28 @@
+{
+  "manifest_version": 1,
+  "id": "spaces",
+  "name": "空间",
+  "version": "0.1.0",
+  "description": "用类型、属性和关联管理任何一类事情：结构自己定义，页面、看板、进度和助手工具都从结构生成。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/docs/extensions/spaces.md",
+  "tags": ["空间", "本体", "知识管理", "项目", "清单"],
+  "engines": {"extension_protocol": 1},
+  "runtime": {"command": {
+    "linux-amd64": "bin/spaces-linux-amd64",
+    "linux-arm64": "bin/spaces-linux-arm64",
+    "darwin-amd64": "bin/spaces-darwin-amd64",
+    "darwin-arm64": "bin/spaces-darwin-arm64"
+  }},
+  "contributes": {
+    "ui": [
+      {"id": "spaces", "title": "空间", "placement": "nav_page", "icon": "list"},
+      {"id": "spaces-card", "title": "空间", "placement": "overview_card", "opens": "spaces"}
+    ],
+    "skills": [{"id": "spaces", "dir": "skills/spaces"}],
+    "mcp_servers": [{
+      "id": "spaces", "command": "spaces", "env": "PERSONA_SPACES_BIN",
+      "args": ["mcp"], "requires": ["mcp"], "allow": ["schema", "query"]
+    }]
+  }
+}

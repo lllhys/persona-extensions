@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "bundle": "source-reference/bundle.mjs",
+  "build": "build:source",
+  "output": "build/wikipedia.mjs",
+  "archive": "build/wikipedia-source.tar.gz",
+  "extracted_extension": "authoring/extensions/wikipedia",
+  "extracted_sdk": "authoring/sdk/ts"
+}

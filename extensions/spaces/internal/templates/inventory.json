@@ -1,0 +1,111 @@
+{
+  "key": "inventory",
+  "name": "清单与物品",
+  "icon": "list",
+  "about": "东西在哪、还剩多少、想买什么、出门带齐没有。",
+  "types": [
+    {
+      "key": "place",
+      "name": "位置",
+      "props": [
+        {"key": "note", "name": "备注", "kind": "text"},
+        {"key": "items", "name": "物品数", "kind": "rollup", "via": "item.place", "op": "count"},
+        {"key": "worth", "name": "总价值", "kind": "rollup", "via": "item.place", "op": "sum", "of": "price", "unit": "元"}
+      ],
+      "card": {"lead": "note", "pills": ["items", "worth"]},
+      "views": [
+        {"name": "列表", "kind": "list"}
+      ]
+    },
+    {
+      "key": "item",
+      "name": "物品",
+      "flow": [
+        {"name": "缺货", "phase": "todo"},
+        {"name": "待补", "phase": "doing"},
+        {"name": "充足", "phase": "done"},
+        {"name": "停用", "phase": "dropped"}
+      ],
+      "props": [
+        {"key": "category", "name": "分类", "kind": "enum", "options": ["食品", "日用", "药品", "数码", "工具", "其他"]},
+        {"key": "place", "name": "位置", "kind": "relation", "target": "place", "back": "物品"},
+        {"key": "qty", "name": "数量", "kind": "number"},
+        {"key": "price", "name": "单价", "kind": "number", "unit": "元"},
+        {"key": "expires", "name": "保质期", "kind": "date"},
+        {"key": "staple", "name": "常备", "kind": "boolean"}
+      ],
+      "card": {"pills": ["category", "place", "qty"]},
+      "views": [
+        {"name": "表格", "kind": "table", "sort": [{"by": "expires"}], "agg": [{"op": "count"}, {"op": "sum", "of": "price"}]},
+        {"name": "库存", "kind": "board"},
+        {"name": "按位置", "kind": "list", "group": "place"},
+        {"name": "最近变动", "kind": "feed"}
+      ]
+    },
+    {
+      "key": "wish",
+      "name": "心愿",
+      "flow": [
+        {"name": "想要", "phase": "todo"},
+        {"name": "观望", "phase": "doing"},
+        {"name": "已入手", "phase": "done"},
+        {"name": "放弃", "phase": "dropped"}
+      ],
+      "props": [
+        {"key": "category", "name": "分类", "kind": "enum", "options": ["食品", "日用", "药品", "数码", "工具", "其他"]},
+        {"key": "price", "name": "预算", "kind": "number", "unit": "元"},
+        {"key": "url", "name": "链接", "kind": "url"},
+        {"key": "priority", "name": "优先级", "kind": "enum", "options": ["高", "中", "低"]},
+        {"key": "reason", "name": "理由", "kind": "text"}
+      ],
+      "card": {"lead": "reason", "pills": ["priority", "price"]},
+      "views": [
+        {"name": "看板", "kind": "board"},
+        {"name": "表格", "kind": "table", "agg": [{"op": "sum", "of": "price"}]}
+      ]
+    },
+    {
+      "key": "kit",
+      "name": "清单",
+      "flow": [
+        {"name": "准备中", "phase": "todo"},
+        {"name": "就绪", "phase": "done"}
+      ],
+      "props": [
+        {"key": "items", "name": "物品", "kind": "relation", "target": "item", "many": true, "back": "所在清单"},
+        {"key": "ready", "name": "备齐度", "kind": "rollup", "via": "items", "op": "percent_done"},
+        {"key": "date", "name": "日期", "kind": "date"}
+      ],
+      "card": {"pills": ["date"], "progress": {"of": "ready"}},
+      "views": [
+        {"name": "进度", "kind": "progress"}
+      ]
+    }
+  ],
+  "samples": [
+    {"ref": "place_kitchen", "type": "place", "title": "厨房",
+     "values": {"note": "调料、主食和零食都放在这里。"}},
+    {"ref": "place_locker", "type": "place", "title": "储物柜",
+     "values": {"note": "卫生用品、应急药品和户外装备。"}},
+    {"ref": "place_desk", "type": "place", "title": "书桌",
+     "values": {"note": "充电线和小工具。"}},
+    {"ref": "item_tissue", "type": "item", "title": "纸巾", "status": "待补",
+     "values": {"category": "日用", "place": "@place_locker", "qty": 1, "staple": true}},
+    {"ref": "item_rice", "type": "item", "title": "大米", "status": "充足",
+     "values": {"category": "食品", "place": "@place_kitchen", "qty": 2, "expires": "+200d", "staple": true}},
+    {"ref": "item_bandage", "type": "item", "title": "创可贴", "status": "缺货",
+     "values": {"category": "药品", "place": "@place_locker", "qty": 0}},
+    {"ref": "item_powerbank", "type": "item", "title": "充电宝", "status": "充足",
+     "values": {"category": "数码", "place": "@place_desk", "qty": 1, "price": 129}},
+    {"ref": "item_headlamp", "type": "item", "title": "头灯", "status": "充足",
+     "values": {"category": "工具", "place": "@place_locker", "qty": 1, "price": 59}},
+    {"ref": "wish_lamp", "type": "wish", "title": "一盏台灯", "status": "观望",
+     "values": {"category": "工具", "priority": "中", "price": 200, "reason": "夜里看书需要更亮、不刺眼的光。", "url": "https://example.com/products/desk-lamp"}},
+    {"ref": "wish_chair", "type": "wish", "title": "折叠椅", "status": "已入手",
+     "values": {"category": "工具", "priority": "低", "price": 150, "reason": "周末露营要用，买一把就够了。"}},
+    {"ref": "item_chair", "type": "item", "from": "wish_chair", "title": "折叠椅", "status": "充足",
+     "values": {"place": "@place_locker", "qty": 1}},
+    {"ref": "kit_camp", "type": "kit", "title": "周末露营", "status": "准备中",
+     "values": {"date": "+14d", "items": ["@item_headlamp", "@item_powerbank", "@item_bandage", "@item_chair"]}}
+  ]
+}

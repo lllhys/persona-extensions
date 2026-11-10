@@ -256,7 +256,7 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 		v.Search = &pluginkit.Search{Placeholder: "搜代码或名称：" + strings.Join(ex, "、"), Value: st.Q, Action: pluginkit.UIAction{ID: "search"}}
 	}
 	if st.Q != "" {
-		v.Sections = append(v.Sections, p.searchSections(ctx, st.Q, d.v3, refresh)...)
+		v.Sections = append(v.Sections, p.searchSections(ctx, st.Q, d, refresh)...)
 		if !d.v3 {
 			v.Sections = append(v.Sections, p.addSection(false))
 		}
@@ -299,7 +299,7 @@ func (p *plugin) listPage(ctx context.Context, d draw, st pageState, refresh boo
 	}
 	if len(watch) == 0 {
 		v.Sections = append(v.Sections, pluginkit.Section{Title: "自选 · 0",
-			Items: []pluginkit.Item{{Type: "text", Text: "自选是空的：搜一个加进来", Style: "secondary"}}})
+			Items: []pluginkit.Item{emptyItem(d, "自选是空的", "搜一个加进来")}})
 	}
 
 	// the sources the watchlist has, for the filter
@@ -407,8 +407,8 @@ func (p *plugin) moversSection(watch []Ref, qs map[Ref]Quote, marked alertMarks)
 	return sec, true
 }
 
-// orderSection is the watchlist's order and the market shown: one row saying what is chosen (自选顺序 unless the
-// user chose otherwise) that opens the choices; choosing folds them back.
+// orderSection is the watchlist's order and the market shown: both controls stay visible, so changing either
+// takes one tap and the page says what it is ordered by without a folded row.
 func (p *plugin) orderSection(st pageState, present []Source) pluginkit.Section {
 	sorts := []pluginkit.Choice{{Value: "order", Title: "自选顺序"}, {Value: "up", Title: "涨幅"}, {Value: "down", Title: "跌幅"}}
 	mkts := []pluginkit.Choice{{Value: "all", Title: "全部"}}
@@ -417,27 +417,21 @@ func (p *plugin) orderSection(st pageState, present []Source) pluginkit.Section 
 			mkts = append(mkts, pluginkit.Choice{Value: src.ID(), Title: src.Market()})
 		}
 	}
-	title := func(cs []pluginkit.Choice, v string) string {
-		if i := slices.IndexFunc(cs, func(c pluginkit.Choice) bool { return c.Value == v }); i >= 0 {
-			return cs[i].Title
-		}
-		return cs[0].Title
-	}
-	row := pluginkit.Item{Type: "row", Title: "排序 · " + title(sorts, st.Sort), Action: &pluginkit.UIAction{ID: "opts"}}
-	if len(mkts) > 1 {
-		row.Title += " · " + title(mkts, st.Mkt)
-	}
-	if !st.Opts {
-		return pluginkit.Section{Items: []pluginkit.Item{row}}
-	}
-	row.Value = "收起"
-	sec := pluginkit.Section{Items: []pluginkit.Item{row,
+	sec := pluginkit.Section{Title: "排序", Items: []pluginkit.Item{
 		{Type: "segmented", Name: "sort", Value: or(st.Sort, "order"), Action: &pluginkit.UIAction{ID: "sort"}, Choices: sorts}}}
 	if len(mkts) > 1 {
 		sec.Items = append(sec.Items, pluginkit.Item{Type: "segmented", Name: "mkt", Value: or(st.Mkt, "all"),
 			Action: &pluginkit.UIAction{ID: "mkt"}, Choices: mkts})
 	}
 	return sec
+}
+
+// emptyItem is what a list with nothing says: the app's empty state (UI version 3), a secondary line before.
+func emptyItem(d draw, title, detail string) pluginkit.Item {
+	if d.v3 {
+		return pluginkit.Item{Type: "empty", Title: title, Detail: detail}
+	}
+	return pluginkit.Item{Type: "text", Text: title + "：" + detail, Style: "secondary"}
 }
 
 // alertMarks are, by instrument, what its row says of its price alerts: one met, else one close to its price.
@@ -584,12 +578,12 @@ func (p *plugin) quoteRow(r Ref, q Quote, ok, search bool) pluginkit.Item {
 // in the sources' order; each its best first): a row each, opening the instrument (whose page adds it to the
 // watchlist). With a search box (v3) a query that is itself a code (cn:600519, BTC-USDT-SWAP) comes first as its
 // own row, since the search box is then the only way to add one.
-func (p *plugin) searchSections(ctx context.Context, q string, v3, refresh bool) []pluginkit.Section {
+func (p *plugin) searchSections(ctx context.Context, q string, d draw, refresh bool) []pluginkit.Section {
 	title := "搜索「" + q + "」"
 	back := pluginkit.Item{Type: "button", Title: "返回自选", Action: &pluginkit.UIAction{ID: "clear"}}
 	hits, err := p.search(ctx, q, searchMost, refresh)
 	var exact *hit
-	if v3 {
+	if d.v3 {
 		if r, ok := p.srcs.parse(q); ok && !slices.ContainsFunc(hits, func(h hit) bool { return h.Ref == r }) {
 			if x, qerr := p.quote(ctx, r); qerr == nil {
 				exact = &hit{r, x}
@@ -602,7 +596,7 @@ func (p *plugin) searchSections(ctx context.Context, q string, v3, refresh bool)
 	}
 	if len(hits) == 0 && exact == nil {
 		return []pluginkit.Section{{Title: title, Items: []pluginkit.Item{
-			{Type: "text", Text: "没有和「" + q + "」对得上的：" + p.srcs.markets(), Style: "secondary"}, back}}}
+			emptyItem(d, "没有和「"+q+"」对得上的", p.srcs.markets()), back}}}
 	}
 	// a result, and under one not in the watchlist a button adding it there and then (the search stays)
 	result := func(h hit) []pluginkit.Item {
@@ -819,9 +813,9 @@ func (p *plugin) instPage(ctx context.Context, d draw, st pageState, r Ref) plug
 	}
 	more := pluginkit.Section{Title: "详情"}
 	if d.v2 {
-		more.Items = append(more.Items, pluginkit.Item{Type: "stat_grid", Stats: figures})
-		for i := 0; i < len(facts); i += statsMost { // a grid takes at most 6
-			more.Items = append(more.Items, pluginkit.Item{Type: "stat_grid", Stats: facts[i:min(i+statsMost, len(facts))]})
+		all := append(append([]pluginkit.Stat{}, figures...), facts...)
+		for i := 0; i < len(all); i += statsMost { // a grid takes at most 6
+			more.Items = append(more.Items, pluginkit.Item{Type: "stat_grid", Stats: all[i:min(i+statsMost, len(all))]})
 		}
 	} else {
 		for _, s := range append(figures, facts...) {

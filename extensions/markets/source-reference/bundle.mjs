@@ -1008,7 +1008,7 @@ var HTTP = class {
       signal?.addEventListener("abort", cancel, { once: true });
       const timer = setTimeout(() => control.abort(new ReadError("timeout", "Market request timed out")), 15e3);
       try {
-        const response = await this.fetch(url, { method: "GET", headers: { "User-Agent": "persona-markets/0.6.5", Accept: "application/json" }, signal: control.signal, redirect: "error" });
+        const response = await this.fetch(url, { method: "GET", headers: { "User-Agent": "persona-markets/0.6.6", Accept: "application/json" }, signal: control.signal, redirect: "error" });
         if (response.status === 429) {
           await response.body?.cancel();
           throw new ReadError("rate_limited", "Too many requests; try later", 429);
@@ -2386,7 +2386,8 @@ function page(props) {
     const q = l.quotes.get(alert.ref), title = alertWhat(alert, q);
     return /* @__PURE__ */ jsx(Row, { title: detail ? title : (alert.name || parseRef(alert.ref).symbol) + " " + title, subtitle: alert.met ? `${t("met")} \xB7 ${stamp(Date.parse(alert.met), zone, "short")} \xB7 ${price({ decimals: alert.decimals ?? 0 }, alert.price ?? 0)}` : t("waiting"), badge: alert.met ? { text: t("met"), tone: "caution" } : void 0, action: a(detail ? "unalert:" + alert.id : "open:" + alert.ref, detail ? { confirm: t("alertConfirm") } : {}) }, alert.id);
   });
-  const readAt = /* @__PURE__ */ jsxs(Section, { children: [
+  const readAt = (hint = false) => /* @__PURE__ */ jsxs(Section, { children: [
+    hint && /* @__PURE__ */ jsx(Text, { text: t("periodHint"), style: "caption" }, "period"),
     /* @__PURE__ */ jsx(Text, { text: t("readAt", { at: stamp(l.at || service.clock(), zone, "time") }), style: "caption" }, "at"),
     !card && b("refresh", t("refresh"))
   ] }, "section-read-at");
@@ -2431,7 +2432,7 @@ function page(props) {
           v >= 2 ? /* @__PURE__ */ jsx(StatGrid, { stats: rangeStats }, "range") : rangeStats.map((s) => /* @__PURE__ */ jsx(Metric, { ...s }, s.label))
         ] })
       ] }, "section-candles"),
-      /* @__PURE__ */ jsx(Section, { title: t("details"), children: v >= 2 ? [/* @__PURE__ */ jsx(StatGrid, { stats: details.slice(0, q.turnover > 0 ? 3 : 2) }, "figures"), ...Array.from({ length: Math.ceil(q.facts.length / 6) }, (_, i2) => /* @__PURE__ */ jsx(StatGrid, { stats: q.facts.slice(i2 * 6, i2 * 6 + 6).map((f) => ({ label: t(f.label), value: localizeValue(f.value, props.locale) })) }, "facts-" + i2))] : details.map((s) => /* @__PURE__ */ jsx(Metric, { ...s }, s.label)) }, "section-details"),
+      /* @__PURE__ */ jsx(Section, { title: t("details"), children: v >= 2 ? Array.from({ length: Math.ceil(details.length / 6) }, (_, i2) => /* @__PURE__ */ jsx(StatGrid, { stats: details.slice(i2 * 6, i2 * 6 + 6) }, "figures-" + i2)) : details.map((s) => /* @__PURE__ */ jsx(Metric, { ...s }, s.label)) }, "section-details"),
       /* @__PURE__ */ jsxs(Section, { title: t("alerts"), footer: t("alertsHint"), children: [
         alertRows(alerts.filter((a2) => a2.ref === st.i), true),
         st.f ? /* @__PURE__ */ jsxs(Fragment, { children: [
@@ -2460,35 +2461,32 @@ function page(props) {
         row(key(l.exact.ref), l.exact.quote, true),
         !watch.includes(key(l.exact.ref)) && b("add:" + key(l.exact.ref), t("add") + " \xB7 " + clip(l.exact.quote.name || l.exact.ref.symbol, 20))
       ] }, "section-exact"),
-      !l.hits.length && !l.exact && /* @__PURE__ */ jsx(Section, { title: t("searchTitle", { q: st.q }), children: /* @__PURE__ */ jsx(Text, { text: t("none"), style: "secondary" }, "none") }, "section-empty"),
+      !l.hits.length && !l.exact && /* @__PURE__ */ jsx(Section, { title: t("searchTitle", { q: st.q }), children: v >= 3 ? /* @__PURE__ */ jsx(Empty, { title: t("none"), icon: "search" }, "none") : /* @__PURE__ */ jsx(Text, { text: t("none"), style: "secondary" }, "none") }, "section-empty"),
       groups.map((g) => /* @__PURE__ */ jsx(Section, { title: `${t("searchTitle", { q: st.q })} \xB7 ${t(g.id)} \xB7 ${g.hits.length}`, footer: l.hits.length >= 30 ? t("moreHits") : void 0, children: g.hits.flatMap((h) => [row(key(h.ref), h.quote, true), !watch.includes(key(h.ref)) ? b("add:" + key(h.ref), t("add") + " \xB7 " + (h.quote.name || h.ref.symbol)) : null]) }, g.id)),
       /* @__PURE__ */ jsx(Section, { children: b("clear", t("clear")) }, "section-back"),
       v < 3 && addFields,
-      readAt
+      readAt()
     ] }, "markets-view");
   }
   const present = sourceIDs.filter((id) => watch.some((ref) => parseRef(ref)?.source === id)), movers = watch.filter((s) => change(l.quotes.get(s)) !== void 0).sort((a2, b2) => Math.abs(change(l.quotes.get(b2))) - Math.abs(change(l.quotes.get(a2))));
   return /* @__PURE__ */ jsxs(View, { title: t("markets"), state: JSON.stringify(st), search: v >= 3 ? { placeholder: t("searchHint"), value: st.q, action: a("search") } : void 0, children: [
     v >= 2 && stats(l.quotes).length > 1 && /* @__PURE__ */ jsx(Section, { title: t("benchmarks"), children: /* @__PURE__ */ jsx(StatGrid, { stats: stats(l.quotes) }, "stats") }, "section-benchmarks"),
-    !watch.length && /* @__PURE__ */ jsx(Section, { title: t("watch") + " \xB7 0", children: /* @__PURE__ */ jsx(Text, { text: t("empty"), style: "secondary" }, "empty") }, "section-empty"),
+    !watch.length && /* @__PURE__ */ jsx(Section, { title: t("watch") + " \xB7 0", children: v >= 3 ? /* @__PURE__ */ jsx(Empty, { title: t("empty"), icon: "search" }, "empty") : /* @__PURE__ */ jsx(Text, { text: t("empty"), style: "secondary" }, "empty") }, "section-empty"),
     movers.length > 3 && /* @__PURE__ */ jsx(Section, { title: t("movers"), children: sortByChange(movers.slice(0, 3), l.quotes).map((ref) => row(ref, l.quotes.get(ref), false, true, true)) }, "section-movers"),
-    v >= 2 && watch.length > 1 && /* @__PURE__ */ jsxs(Section, { children: [
-      /* @__PURE__ */ jsx(Row, { title: `${t("sort")} \xB7 ${t(st.s === "up" ? "upSort" : st.s === "down" ? "downSort" : "order")} \xB7 ${t(st.m && present.includes(st.m) ? st.m : "all")}`, value: st.o ? t("collapse") : void 0, action: a("opts") }, "opts"),
-      st.o && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx(Segmented, { name: "sort", value: st.s || "order", choices: [{ value: "order", title: t("order") }, { value: "up", title: t("upSort") }, { value: "down", title: t("downSort") }], action: a("sort") }, "sort"),
-        present.length > 1 && /* @__PURE__ */ jsx(Segmented, { name: "mkt", value: st.m || "all", choices: [{ value: "all", title: t("all") }, ...present.map((value) => ({ value, title: t(value) }))], action: a("mkt") }, "market")
-      ] })
+    v >= 2 && watch.length > 1 && /* @__PURE__ */ jsxs(Section, { title: t("sort"), children: [
+      /* @__PURE__ */ jsx(Segmented, { name: "sort", value: st.s || "order", choices: [{ value: "order", title: t("order") }, { value: "up", title: t("upSort") }, { value: "down", title: t("downSort") }], action: a("sort") }, "sort"),
+      present.length > 1 && /* @__PURE__ */ jsx(Segmented, { name: "mkt", value: st.m || "all", choices: [{ value: "all", title: t("all") }, ...present.map((value) => ({ value, title: t(value) }))], action: a("mkt") }, "market")
     ] }, "section-order"),
     present.filter((id) => !st.m || !present.includes(st.m) || id === st.m).map((id) => {
       const refs = watch.filter((s) => parseRef(s)?.source === id);
-      return /* @__PURE__ */ jsx(Section, { title: `${t(id)} \xB7 ${refs.length}`, footer: t("periodHint"), children: l.errors.has(id) ? /* @__PURE__ */ jsxs(Fragment, { children: [
+      return /* @__PURE__ */ jsx(Section, { title: `${t(id)} \xB7 ${refs.length}`, children: l.errors.has(id) ? /* @__PURE__ */ jsxs(Fragment, { children: [
         /* @__PURE__ */ jsx(Text, { text: textError(l.errors.get(id)), style: "secondary" }, "error-" + id),
         b("refresh", t("retry"), {}, "retry-" + id)
       ] }) : (st.s ? sortByChange(refs, l.quotes, st.s === "down") : refs).map((ref) => row(ref, l.quotes.get(ref))) }, id);
     }),
     !!alerts.length && /* @__PURE__ */ jsx(Section, { title: `${t("alerts")} \xB7 ${alerts.length}`, children: alertRows(alerts, false) }, "section-alerts"),
     v < 3 && addFields,
-    readAt
+    readAt(true)
   ] }, "markets-view");
 }
 
@@ -2580,7 +2578,7 @@ function snapshotPage(service, card = false) {
 }
 
 // persona-extension.json
-var persona_extension_default = { id: "markets", version: "0.6.5", contributes: { connectors: [{ id: "markets", name: "\u884C\u60C5", capabilities: ["status", "tools", "inbox", "fallback"], hosts: ["www.okx.com", "qt.gtimg.cn", "smartbox.gtimg.cn", "web.ifzq.gtimg.cn", "ifzq.gtimg.cn"], kinds: ["price_alert"], kind_descriptions: { price_alert: "\u7528\u6237\u81EA\u5DF1\u5728\u300C\u884C\u60C5\u300D\u91CC\u8BBE\u7684\u4EF7\u683C\u63D0\u9192\u5230\u4E86\uFF08\u6DA8\u5230\u3001\u8DCC\u5230\u67D0\u4E2A\u4EF7\uFF0C\u6216\u6DA8\u8DCC\u5E45\u8D85\u8FC7\u8BBE\u7684\u767E\u5206\u6BD4\uFF09\uFF0C\u9700\u8981\u7528\u6237" } }], ui: [{ id: "watchlist", title: "\u884C\u60C5", placement: "nav_page", icon: "chart" }, { id: "card", title: "\u884C\u60C5", placement: "overview_card", opens: "watchlist" }] } };
+var persona_extension_default = { id: "markets", version: "0.6.6", contributes: { connectors: [{ id: "markets", name: "\u884C\u60C5", capabilities: ["status", "tools", "inbox", "fallback"], hosts: ["www.okx.com", "qt.gtimg.cn", "smartbox.gtimg.cn", "web.ifzq.gtimg.cn", "ifzq.gtimg.cn"], kinds: ["price_alert"], kind_descriptions: { price_alert: "\u7528\u6237\u81EA\u5DF1\u5728\u300C\u884C\u60C5\u300D\u91CC\u8BBE\u7684\u4EF7\u683C\u63D0\u9192\u5230\u4E86\uFF08\u6DA8\u5230\u3001\u8DCC\u5230\u67D0\u4E2A\u4EF7\uFF0C\u6216\u6DA8\u8DCC\u5E45\u8D85\u8FC7\u8BBE\u7684\u767E\u5206\u6BD4\uFF09\uFF0C\u9700\u8981\u7528\u6237" } }], ui: [{ id: "watchlist", title: "\u884C\u60C5", placement: "nav_page", icon: "chart" }, { id: "card", title: "\u884C\u60C5", placement: "overview_card", opens: "watchlist" }] } };
 
 // src/index.ts
 function services(hub, config = {}, options = {}) {

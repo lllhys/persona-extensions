@@ -1,0 +1,60 @@
+{
+  "manifest_version": 1,
+  "id": "commons",
+  "name": "Wikimedia Commons 图片检索",
+  "version": "0.1.0",
+  "description": "搜索 Wikimedia Commons 图片，查看作者、许可、缩略图和原始说明页。内容由 hub 通过公开 API 获取，无需账号。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/commons/README.md",
+  "tags": [
+    "图片",
+    "Wikimedia Commons",
+    "许可"
+  ],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "mode": "deno",
+    "source": {
+      "entry": "src/index.ts",
+      "bundle": "build/commons.mjs",
+      "sha256": "0f970c3b41febfed816c4f60fb5c8bca95496791731a9d11130df764390cd3d0"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "commons",
+        "name": "Wikimedia Commons",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "commons.wikimedia.org",
+          "upload.wikimedia.org",
+          "thumb.wikimedia.org"
+        ],
+        "agent_tools": [
+          "commons_*"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "search",
+        "title": "图片检索",
+        "placement": "nav_page",
+        "icon": "doc"
+      }
+    ]
+  },
+  "permissions": {
+    "network": [
+      "commons.wikimedia.org",
+      "upload.wikimedia.org",
+      "thumb.wikimedia.org"
+    ]
+  }
+}

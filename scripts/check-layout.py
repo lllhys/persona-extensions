@@ -35,7 +35,7 @@ FORBIDDEN = {
 }
 FORBIDDEN_PATTERNS = [re.compile(r"requirements.*\.txt"), re.compile(r".*\.csproj"), re.compile(r".*\.gemspec")]
 
-SKIP_DIRS = {".git", "dist", "node_modules", "testdata"}
+SKIP_DIRS = {".git", "dist", "build", "node_modules", "testdata"}
 
 # The official SDK runs this standard-library oracle explicitly with `go run <file>`.
 # It is authoring tooling, not an extension package; no other orphan Go file is allowed.
@@ -53,7 +53,7 @@ def forbidden(name):
 
 def has_go(d):
     for top, dirs, files in os.walk(d):
-        dirs[:] = [x for x in dirs if x not in SKIP_DIRS]
+        dirs[:] = [x for x in dirs if x not in SKIP_DIRS and not (x == "authoring" and os.path.basename(top) == "package" and os.path.basename(os.path.dirname(top)) == "build")]
         if any(f.endswith(".go") for f in files):
             return True
     return False

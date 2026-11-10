@@ -17,16 +17,19 @@ import (
 )
 
 // The page (ui contribution "home", a nav_page), three tabs:
-//   - 家: the areas, each with what is on in it by name; an area's devices, one row per device (its main entity; its
-//     settings, diagnostics and accessory switches folded into the device), a light or a switch turned on and off by
-//     tapping its row; a search across every entity; an entity opened with its controls, the rest of its device and
-//     recent history, its attributes folded.
-//   - 动态: the logbook of the last two hours, newest first.
-//   - 自动化: the automations, scripts and scenes, run and switched from their rows (each asks first).
+//   - 家: the alarms, then every area, the busiest first, each with what is on and its air. An area opens on its
+//     figures (temperature, humidity, what is on and offline), its devices (one row each; a device's settings,
+//     diagnostics and accessory switches are folded into it), sensors or everything. A light or a switch turns on and off from its row; a
+//     search finds any entity; an entity opens on its header, its progress bars and controls, the rest of its
+//     device, its last 24 hours and its attributes.
+//   - 动态: the logbook of the last two hours, a section per day, devices by default (全部 adds sensors and people),
+//     clock and diagnostic sensors left out.
+//   - 自动化: the automations, scripts and scenes, when each last ran, run and switched from their rows (each asks
+//     first).
 //
 // A tap here is the user's own: it calls the service at once (locks, alarms, automations, scripts and scenes ask
 // first), unlike the assistant's actions, which the hub's gate confirms. Statistics, energy, watches and cameras
-// stay with the assistant.
+// stay with the assistant. The presentation is in views.go; this file holds the page's state, actions and data.
 
 type pageState struct {
 	Tab     string `json:"t,omitempty"` // "" (家) | log | auto
@@ -38,6 +41,7 @@ type pageState struct {
 	Pick    bool   `json:"p,omitempty"`  // a device's row opens it instead of turning it on or off
 	Sub     bool   `json:"s,omitempty"`  // the rest of the open entity's device, unfolded
 	Attrs   bool   `json:"at,omitempty"` // the open entity's attributes, unfolded
+	LogAll  bool   `json:"la,omitempty"` // 动态 shows every change, not only devices'
 }
 
 const (
@@ -47,6 +51,7 @@ const (
 	searchMost    = 100
 	logHours      = 2
 	logRows       = 100
+	logPageNoisy  = 3 // the page folds an entity after this many entries; the tools keep 8
 )
 
 var (
@@ -118,7 +123,17 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 	case "offline":
 		st.Offline = !st.Offline
 	case "pick":
-		st.Pick = !st.Pick
+		if v, ok := r.Values["pick"]; ok {
+			st.Pick = v == "open"
+		} else {
+			st.Pick = !st.Pick
+		}
+	case "log":
+		which := r.Values["log"]
+		if arg != "" {
+			which = arg
+		}
+		st.LogAll = which == "all"
 	case "sub":
 		st.Sub = !st.Sub
 	case "attrs":
@@ -246,7 +261,7 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState, fresh ti
 	}
 	reg := a.pageRegistry(ctx)
 	if st.Entity == "" {
-		tabBar(r, st, v)
+		renderTabs(r, st, v, alarmCount(hm))
 	}
 	if r.UIVersion >= 3 && st.Entity == "" && st.Tab == "" {
 		v.Search = &wire.Search{Placeholder: "搜设备、传感器：客厅灯、空调、温度", Value: st.Q, Action: wire.Action{ID: "search"}}
@@ -266,47 +281,18 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState, fresh ti
 	case st.Entity != "":
 		a.entityPage(ctx, r, hm, reg, &st, v)
 	case st.Tab == "log":
-		a.logPage(ctx, r, hm, v)
+		a.logPage(ctx, r, hm, reg, st, v)
 	case st.Tab == "auto":
 		a.autoPage(r, hm, v)
 	case st.Q != "":
 		a.searchPage(r, hm, st, v)
 	case st.Area == "":
-		overviewPage(hm, reg, v)
+		a.homePage(r, hm, reg, v)
 	default:
-		a.areaPage(r, hm, reg, st, v)
+		a.roomPage(r, hm, reg, st, v)
 	}
 	v.State = ext.EncodeState(st)
 	return v
-}
-
-// tabBar is 家 / 动态 / 自动化: the view's tabs (UI version 4), a segmented or rows on top before.
-func tabBar(r *ext.UIRequest, st pageState, v *wire.View) {
-	cur := st.Tab
-	if cur == "" {
-		cur = "home"
-	}
-	switch {
-	case r.UIVersion >= 4:
-		t := &wire.Tabs{Name: "tab", Value: cur, Action: wire.Action{ID: "tab"}}
-		for _, c := range tabs {
-			t.Items = append(t.Items, wire.Tab{Value: c.Value, Title: c.Title})
-		}
-		v.Tabs = t
-	case r.UIVersion >= 2:
-		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{{Type: "segmented", Name: "tab", Value: cur,
-			Choices: tabs, Action: &wire.Action{ID: "tab"}}}})
-	default:
-		var rows []wire.Component
-		for _, c := range tabs {
-			row := wire.Component{Type: "row", Title: c.Title, Action: &wire.Action{ID: "tab:" + c.Value}}
-			if c.Value == cur {
-				row.Badge = &wire.Badge{Text: "正在看", Tone: "positive"}
-			}
-			rows = append(rows, row)
-		}
-		v.Sections = append(v.Sections, wire.Section{Items: rows})
-	}
 }
 
 // crumbs is the way back: a breadcrumb (UI version 4), a 返回 button on top before.
@@ -392,76 +378,6 @@ func deviceRows(hm *home, reg *Registry, ar *Area) []devRow {
 	return rows
 }
 
-// areaOn names what is on in an area: its devices (not their settings), a climate with its mode.
-func areaOn(hm *home, reg *Registry, ar *Area) []string {
-	var names []string
-	for _, r := range deviceRows(hm, reg, ar) {
-		d := r.s.Domain()
-		if d == "scene" || d == "script" || r.s.Unavailable() || stateTone(r.s) != "positive" {
-			continue
-		}
-		n := shortName(hm, r.s)
-		if d == "climate" {
-			n += "（" + stateText(r.s) + "）"
-		}
-		names = append(names, n)
-	}
-	return names
-}
-
-// onLine is an area's row on the overview: what is on by name, then its temperature and humidity.
-func onLine(on []string, sum areaSummary) string {
-	var parts []string
-	switch {
-	case len(on) == 0:
-		parts = append(parts, "都关着")
-	case len(on) <= 3:
-		parts = append(parts, strings.Join(on, "、")+" 开着")
-	default:
-		parts = append(parts, fmt.Sprintf("%s 等 %d 个开着", strings.Join(on[:3], "、"), len(on)))
-	}
-	if len(sum.temp) > 0 {
-		parts = append(parts, tidy(avg(sum.temp))+"°")
-	}
-	if len(sum.humid) > 0 {
-		parts = append(parts, "湿度 "+tidy(avg(sum.humid))+"%")
-	}
-	return strings.Join(parts, " · ")
-}
-
-func overviewPage(hm *home, reg *Registry, v *wire.View) {
-	var alarms []wire.Component
-	for _, s := range hm.States {
-		if stateTone(s) == "danger" && !hm.Hidden[s.EntityID] {
-			alarms = append(alarms, entityRow(hm, s, true))
-		}
-	}
-	if len(alarms) > 0 {
-		v.Sections = append(v.Sections, wire.Section{Title: "报警", Items: alarms})
-	}
-	if hm.Note != "" {
-		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{{Type: "text", Text: hm.Note, Style: "secondary"}}})
-	}
-	sec := wire.Section{Title: fmt.Sprintf("区域 · %d", len(hm.Areas))}
-	if hm.ByType {
-		sec.Title = fmt.Sprintf("类型 · %d", len(hm.Areas))
-	}
-	for i := range hm.Areas {
-		ar := &hm.Areas[i]
-		on := areaOn(hm, reg, ar)
-		row := wire.Component{Type: "row", Key: "area:" + ar.ID, Title: ar.Name, Subtitle: clip(onLine(on, summarizeArea(hm, *ar)), 120),
-			Action: &wire.Action{ID: "area:" + ar.ID}}
-		if len(on) > 0 {
-			row.Badge = &wire.Badge{Text: fmt.Sprintf("%d 开着", len(on)), Tone: "positive"}
-		}
-		sec.Items = append(sec.Items, row)
-	}
-	if len(hm.Areas) == 0 {
-		sec.Items = append(sec.Items, wire.Component{Type: "text", Text: "Home Assistant 里还没有区域：用上面的搜索找设备", Style: "secondary"})
-	}
-	v.Sections = append(v.Sections, sec, footer())
-}
-
 func footer() wire.Section {
 	return wire.Section{Items: []wire.Component{
 		{Type: "text", Text: "Home Assistant · 读于 " + time.Now().Format("15:04:05"), Style: "caption"},
@@ -497,7 +413,7 @@ func (a *app) areaPage(r *ext.UIRequest, hm *home, reg *Registry, st pageState, 
 		v.Sections = append(v.Sections, wire.Section{Items: rows})
 	}
 	if st.Kind == "devices" {
-		a.devicesList(hm, reg, ar, st, v)
+		a.devicesList(r, hm, reg, ar, st, v)
 		v.Sections = append(v.Sections, footer())
 		return
 	}
@@ -534,7 +450,7 @@ func (a *app) areaPage(r *ext.UIRequest, hm *home, reg *Registry, st pageState, 
 		sec.Items = append(sec.Items, entityRow(hm, s, false))
 	}
 	if len(shown) == 0 {
-		sec.Items = append(sec.Items, wire.Component{Type: "text", Text: "这里没有" + kindTitle(st.Kind), Style: "secondary"})
+		sec.Items = append(sec.Items, emptyItem(r, "这里没有"+kindTitle(st.Kind), "用上面的搜索找别的"))
 	}
 	if diag > 0 && sec.Footer == "" {
 		sec.Footer = fmt.Sprintf("另有 %d 个诊断项（信号、IP 之类）在「全部」里", diag)
@@ -555,15 +471,15 @@ func offlineRow(offline int, showing bool) []wire.Component {
 
 // devicesList is an area's devices, a section per kind (灯, 开关, 空调…): a light's or a switch's row turns it on or
 // off (st.Pick: opens it), the rest open.
-func (a *app) devicesList(hm *home, reg *Registry, ar *Area, st pageState, v *wire.View) {
+func (a *app) devicesList(r *ext.UIRequest, hm *home, reg *Registry, ar *Area, st pageState, v *wire.View) {
 	var shown []devRow
 	offline := 0
-	for _, r := range deviceRows(hm, reg, ar) {
-		if r.s.Unavailable() && !st.Offline {
+	for _, dr := range deviceRows(hm, reg, ar) {
+		if dr.s.Unavailable() && !st.Offline {
 			offline++
 			continue
 		}
-		shown = append(shown, r)
+		shown = append(shown, dr)
 	}
 	sort.SliceStable(shown, func(i, j int) bool {
 		di, dj := domainRank(shown[i].s.Domain()), domainRank(shown[j].s.Domain())
@@ -572,6 +488,22 @@ func (a *app) devicesList(hm *home, reg *Registry, ar *Area, st pageState, v *wi
 		}
 		return shortName(hm, shown[i].s) < shortName(hm, shown[j].s)
 	})
+	if r.UIVersion >= 2 {
+		on := 0
+		for _, dr := range shown {
+			if stateTone(dr.s) == "positive" {
+				on++
+			}
+		}
+		stats := []wire.Stat{
+			{Label: "设备", Value: strconv.Itoa(len(shown) + offline)},
+			{Label: "开着", Value: strconv.Itoa(on), Tone: toneWhen(on > 0, "positive")},
+		}
+		if offline > 0 {
+			stats = append(stats, wire.Stat{Label: "离线", Value: strconv.Itoa(offline), Tone: "caution"})
+		}
+		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{{Type: "stat_grid", Stats: stats}}})
+	}
 	quick, n := false, 0
 	for i := 0; i < len(shown); {
 		d := shown[i].s.Domain()
@@ -596,7 +528,7 @@ func (a *app) devicesList(hm *home, reg *Registry, ar *Area, st pageState, v *wi
 		i = j
 	}
 	if len(shown) == 0 && offline == 0 {
-		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{{Type: "text", Text: "这里没有设备：看看「传感器」「全部」", Style: "secondary"}}})
+		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{emptyItem(r, "这里没有设备", "看看「传感器」「全部」，或者搜索")}})
 	}
 	more := offlineRow(offline, st.Offline)
 	switch {
@@ -684,29 +616,6 @@ func entityRow(hm *home, s State, withArea bool) wire.Component {
 	return row
 }
 
-func (a *app) searchPage(r *ext.UIRequest, hm *home, st pageState, v *wire.View) {
-	found := hm.match(st.Q, hm.areaByID(st.Area), "", st.Offline)
-	sec := wire.Section{Title: fmt.Sprintf("搜索「%s」· %d", st.Q, len(found))}
-	for i, s := range found {
-		if i == searchMost {
-			sec.Footer = fmt.Sprintf("只列前 %d 个，写得具体些", searchMost)
-			break
-		}
-		sec.Items = append(sec.Items, entityRow(hm, s, true))
-	}
-	if len(found) == 0 {
-		sec.Items = append(sec.Items, wire.Component{Type: "text", Text: "没找到对得上的", Style: "secondary"})
-	}
-	if !st.Offline {
-		sec.Items = append(sec.Items, wire.Component{Type: "row", Title: "也搜离线的", Action: &wire.Action{ID: "offline"}})
-	}
-	sec.Items = append(sec.Items, wire.Component{Type: "button", Title: "返回", Action: &wire.Action{ID: "clear"}})
-	if r.UIVersion < 3 {
-		v.Sections = append(v.Sections, searchField(st.Q))
-	}
-	v.Sections = append(v.Sections, sec, footer())
-}
-
 func searchField(q string) wire.Section {
 	return wire.Section{Items: []wire.Component{
 		{Type: "field", Name: "query", Label: "搜索", Kind: "text", Value: q, Placeholder: "客厅灯、空调、温度"},
@@ -733,81 +642,6 @@ func entityPath(hm *home, st *pageState, name string) []wire.Crumb {
 		path = append(path, wire.Crumb{Title: ar.Name, Action: act})
 	}
 	return append(path, wire.Crumb{Title: name})
-}
-
-func (a *app) entityPage(ctx context.Context, r *ext.UIRequest, hm *home, reg *Registry, st *pageState, v *wire.View) {
-	v.RefreshAfter = refreshEntity
-	s, ok := hm.ByID[st.Entity]
-	if !ok || !hm.visible(st.Entity) {
-		v.Sections = []wire.Section{crumbs(r, entityPath(hm, st, st.Entity), "back"),
-			{Items: []wire.Component{{Type: "text", Text: errNoEntity.Error(), Style: "secondary"}}}}
-		return
-	}
-	v.Title = clip(s.Name(), 60)
-	v.Sections = append(v.Sections, crumbs(r, entityPath(hm, st, clip(shortName(hm, s), 40)), "back"))
-
-	// the state
-	head := wire.Section{}
-	facts := []string{domainName(s.Domain())}
-	if n := hm.areaName(s.EntityID); n != "" {
-		facts = append(facts, n)
-	}
-	facts = append(facts, "变于 "+s.LastChanged.Local().Format("01-02 15:04"))
-	head.Items = append(head.Items,
-		wire.Component{Type: "metric", Label: "状态", Value: orDash(stateText(s)), Detail: detail(s), Tone: stateTone(s)},
-		wire.Component{Type: "text", Text: strings.Join(facts, " · ") + "\n" + s.EntityID, Style: "caption"})
-	v.Sections = append(v.Sections, head)
-
-	// the controls
-	if ctl := a.controlSection(r, s); len(ctl.Items) > 0 {
-		v.Sections = append(v.Sections, ctl)
-	}
-
-	// the rest of its device, folded
-	if sec, ok := deviceSection(hm, reg, s, st.Sub); ok {
-		v.Sections = append(v.Sections, sec)
-	}
-
-	// the history
-	if hist := a.historySection(ctx, s); len(hist.Items) > 0 {
-		v.Sections = append(v.Sections, hist)
-	}
-
-	// the attributes, folded
-	var keys []string
-	for k := range s.Attributes {
-		if !slices.Contains(noisyAttrs, k) {
-			keys = append(keys, k)
-		}
-	}
-	sort.Strings(keys)
-	if len(keys) == 0 {
-		return
-	}
-	if !st.Attrs {
-		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{{Type: "row", Title: fmt.Sprintf("属性 · %d", len(keys)),
-			Subtitle: clip(strings.Join(keys, "、"), 60), Action: &wire.Action{ID: "attrs"}}}})
-		return
-	}
-	attrs := wire.Section{Title: fmt.Sprintf("属性 · %d", len(keys))}
-	if r.UIVersion >= 3 {
-		t := wire.Component{Type: "table", Columns: []wire.TableColumn{{Title: "名称"}, {Title: "值"}}}
-		for _, k := range keys {
-			if len(t.Rows) == 100 {
-				break
-			}
-			t.Rows = append(t.Rows, []string{k, clip(attrText(s.Attributes[k]), 300)})
-		}
-		attrs.Items = append(attrs.Items, t)
-	} else {
-		var lines []string
-		for _, k := range keys {
-			lines = append(lines, k+"："+clip(attrText(s.Attributes[k]), 120))
-		}
-		attrs.Items = append(attrs.Items, wire.Component{Type: "text", Text: clip(strings.Join(lines, "\n"), 1900), Style: "secondary"})
-	}
-	attrs.Items = append(attrs.Items, wire.Component{Type: "row", Title: "收起属性", Action: &wire.Action{ID: "attrs"}})
-	v.Sections = append(v.Sections, attrs)
 }
 
 // deviceSection is the rest of s's device (its settings, diagnostics, sensors): one row saying how many, or (open)
@@ -860,125 +694,6 @@ func deviceSection(hm *home, reg *Registry, s State, open bool) (wire.Section, b
 	}
 	sec.Items = append(sec.Items, wire.Component{Type: "row", Title: "收起", Action: &wire.Action{ID: "sub"}})
 	return sec, true
-}
-
-// logPage is 动态: the logbook of the last logHours, newest first; an entity that changed more than noisyMost times
-// is one row.
-func (a *app) logPage(ctx context.Context, r *ext.UIRequest, hm *home, v *wire.View) {
-	v.Title = "动态"
-	h, _, _ := a.client()
-	to := time.Now()
-	entries, err := h.Logbook(ctx, to.Add(-logHours*time.Hour), to, "")
-	if err != nil {
-		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{{Type: "text", Text: "读不到日志：" + err.Error(), Style: "secondary"}}}, footer())
-		return
-	}
-	kept, count := keepLog(hm, entries, nil)
-	loc := a.loc()
-	sec := wire.Section{Title: fmt.Sprintf("最近 %d 小时", logHours)}
-	shown := map[string]bool{}
-	for i := len(kept) - 1; i >= 0; i-- {
-		e := kept[i]
-		if len(sec.Items) == logRows {
-			sec.Footer = fmt.Sprintf("只列最近 %d 条；更早的、某个区域的，问助手", logRows)
-			break
-		}
-		what, where, by := logParts(hm, e)
-		sub := []string{e.When.In(loc).Format("15:04")}
-		if n := count[e.EntityID]; e.EntityID != "" && n > noisyMost {
-			if shown[e.EntityID] {
-				continue
-			}
-			shown[e.EntityID] = true
-			what = fmt.Sprintf("%s 变化了 %d 次", logName(hm, e), n)
-			by = "最后是" + orDash(entryState(hm, e))
-		}
-		for _, p := range []string{where, by} {
-			if p != "" {
-				sub = append(sub, p)
-			}
-		}
-		row := wire.Component{Type: "row", Title: clip(what, 80), Subtitle: clip(strings.Join(sub, " · "), 120)}
-		if _, ok := hm.ByID[e.EntityID]; ok {
-			row.Action = &wire.Action{ID: "open:" + e.EntityID}
-		}
-		sec.Items = append(sec.Items, row)
-	}
-	if len(sec.Items) == 0 {
-		sec.Items = append(sec.Items, emptyItem(r, fmt.Sprintf("最近 %d 小时家里没有变化", logHours), ""))
-	}
-	v.Sections = append(v.Sections, sec, footer())
-}
-
-// autoPage is 自动化: the automations (opened: 启用 / 停用, 触发一次), scripts and scenes (run from the row), each
-// asking first.
-func (a *app) autoPage(r *ext.UIRequest, hm *home, v *wire.View) {
-	v.Title = "自动化"
-	loc := a.loc()
-	n := 0
-	for _, d := range []string{"automation", "script", "scene"} {
-		var items []wire.Component
-		for _, s := range hm.States {
-			if s.Domain() != d || !hm.visible(s.EntityID) {
-				continue
-			}
-			if n == rowsMost {
-				break
-			}
-			items = append(items, a.autoRow(s, loc))
-			n++
-		}
-		if len(items) == 0 {
-			continue
-		}
-		sec := wire.Section{Title: fmt.Sprintf("%s · %d", domainName(d), len(items)), Items: items}
-		switch d {
-		case "automation":
-			sec.Footer = "点开可以停用、启用或手动触发一次"
-		case "script", "scene":
-			sec.Footer = "点一下就运行，会先问一句"
-		}
-		v.Sections = append(v.Sections, sec)
-	}
-	if n == 0 {
-		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{emptyItem(r, "还没有自动化、脚本和场景",
-			"在 Home Assistant 里建，或者让助手帮你写一个自动化")}})
-	}
-	v.Sections = append(v.Sections, footer())
-}
-
-func (a *app) autoRow(s State, loc *time.Location) wire.Component {
-	row := wire.Component{Type: "row", Key: s.EntityID, Title: clip(s.Name(), 80), Action: &wire.Action{ID: "open:" + s.EntityID}}
-	last := s.attr("last_triggered")
-	if s.Domain() == "scene" {
-		last = s.State // a scene's state is when it was last run
-	}
-	if at, err := time.Parse(time.RFC3339Nano, last); err == nil {
-		row.Subtitle = "上次 " + at.In(loc).Format("01-02 15:04")
-	}
-	switch {
-	case s.Unavailable():
-		row.Badge = &wire.Badge{Text: "离线", Tone: "caution"}
-		return row
-	case s.Domain() == "automation" && s.State == "on":
-		row.Badge = &wire.Badge{Text: "开着", Tone: "positive"}
-	case s.Domain() == "automation":
-		row.Badge = &wire.Badge{Text: "停用了", Tone: "neutral"}
-	case s.Domain() == "script" && s.State == "on":
-		row.Badge = &wire.Badge{Text: "运行中", Tone: "positive"}
-	}
-	if s.Domain() == "automation" || a.canWrite(s.Domain(), false) != nil {
-		return row
-	}
-	switch {
-	case s.Domain() == "scene":
-		row.Action = &wire.Action{ID: "do:" + s.EntityID + "|turn_on", Confirm: "执行场景「" + s.Name() + "」？"}
-	case s.State == "on":
-		row.Action = &wire.Action{ID: "do:" + s.EntityID + "|turn_off", Confirm: "停下脚本「" + s.Name() + "」？"}
-	default:
-		row.Action = &wire.Action{ID: "do:" + s.EntityID + "|turn_on", Confirm: "运行脚本「" + s.Name() + "」？"}
-	}
-	return row
 }
 
 // emptyItem is an empty state (UI version 3), a text before.
@@ -1055,7 +770,7 @@ func (a *app) controlSection(r *ext.UIRequest, s State) wire.Section {
 }
 
 // historySection is the last 24 hours: a line for a number, the last changes otherwise.
-func (a *app) historySection(ctx context.Context, s State) wire.Section {
+func (a *app) historySection(ctx context.Context, s State, loc *time.Location) wire.Section {
 	sec := wire.Section{Title: "最近 24 小时"}
 	h, _, _ := a.client()
 	changes, err := h.History(ctx, s.EntityID, time.Now().Add(-24*time.Hour))
@@ -1066,7 +781,7 @@ func (a *app) historySection(ctx context.Context, s State) wire.Section {
 	if len(changes) == 0 {
 		return sec
 	}
-	if pts := series(changes, 96); len(pts) >= 3 {
+	if pts := series(changes, 96, loc); len(pts) >= 3 {
 		unit := s.attr("unit_of_measurement")
 		for i := range pts {
 			pts[i].Display = tidy(pts[i].Value) + unit
@@ -1081,7 +796,7 @@ func (a *app) historySection(ctx context.Context, s State) wire.Section {
 	}
 	for i := len(shown) - 1; i >= 0; i-- {
 		c := shown[i]
-		t.Rows = append(t.Rows, []string{c.At.Local().Format("01-02 15:04"), orDash(stateText(State{EntityID: s.EntityID, State: c.State, Attributes: s.Attributes}))})
+		t.Rows = append(t.Rows, []string{c.At.In(loc).Format("01-02 15:04"), orDash(stateText(State{EntityID: s.EntityID, State: c.State, Attributes: s.Attributes}))})
 	}
 	sec.Items = append(sec.Items, t)
 	return sec
@@ -1089,7 +804,7 @@ func (a *app) historySection(ctx context.Context, s State) wire.Section {
 
 // series turns numeric changes into at most n points: the value each change set, averaged into n even buckets over
 // the span when there are more.
-func series(cs []Change, n int) []wire.ChartPoint {
+func series(cs []Change, n int, loc *time.Location) []wire.ChartPoint {
 	type pt struct {
 		at time.Time
 		v  float64
@@ -1103,7 +818,7 @@ func series(cs []Change, n int) []wire.ChartPoint {
 	if len(ps) < len(cs)/2 || len(ps) == 0 {
 		return nil
 	}
-	label := func(t time.Time) string { return t.Local().Format("15:04") }
+	label := func(t time.Time) string { return t.In(loc).Format("15:04") }
 	if len(ps) <= n {
 		out := make([]wire.ChartPoint, len(ps))
 		for i, p := range ps {

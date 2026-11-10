@@ -128,7 +128,7 @@ func (c *Connector) poll(ctx context.Context) (time.Duration, bool, error) {
 		st.fullAt = time.Now()
 	}
 	st.mu.Unlock()
-	moved := c.applyNotifications(ctx, ns, whole, time.Now())
+	moved := c.applyNotifications(ctx, ns, whole, c.now())
 	if c.followUpCI(ctx) {
 		moved = true
 	}
@@ -218,6 +218,12 @@ func (c *Connector) applyNotifications(ctx context.Context, ns []notification, w
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	for thread, t := range st.things {
+		if unread[thread] && !t.Read && t.Done == "" {
+			// An eligible notification that is still open on GitHub is unfinished
+			// remote work, not stale local history. Keep it even when its timestamp
+			// predates retention. Read/completed history keeps the old expiry path.
+			continue
+		}
 		switch {
 		case now.Sub(t.At) > forgetAfter:
 			delete(st.things, thread)

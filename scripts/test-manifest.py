@@ -119,6 +119,48 @@ class JunkTests(unittest.TestCase):
         d = self.make_ext(['.DS_Store', '._foo', 'src/.DS_Store'])
         self.with_root(d)
         self.assertEqual(manifest.check_junk('junk'), [])
+class LooksFileTests(unittest.TestCase):
+    """Every avatar and status-dot file a look names must be in the extension under looks/, the directory
+    scripts/package.sh copies; otherwise the package would ship without the image and the hub would refuse it."""
+
+    def make_ext(self, sizes, states, files):
+        d = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d)
+        ext = d / 'extensions' / 'looks-demo'
+        ext.mkdir(parents=True)
+        look = {'id': 'demo', 'name': 'Demo', 'avatar': {'sizes': sizes},
+                'dot': {'states': {k: {'file': v} for k, v in states.items()}}}
+        m = {'id': 'looks-demo', 'version': '0.1.0', 'contributes': {'looks': [look]}}
+        (ext / manifest.NEW).write_text(json.dumps(m))
+        for rel in files:
+            (ext / rel).parent.mkdir(parents=True, exist_ok=True)
+            (ext / rel).write_bytes(b'png')
+        old = manifest.ROOT
+        manifest.ROOT = str(d)
+        self.addCleanup(setattr, manifest, 'ROOT', old)
+        return m
+
+    def test_present_files_under_looks_pass(self):
+        m = self.make_ext({'64': 'looks/demo/avatar/64.png'}, {'idle': 'looks/demo/dot/idle.png'},
+                          ['looks/demo/avatar/64.png', 'looks/demo/dot/idle.png'])
+        self.assertEqual(manifest.check_files('looks-demo', m), [])
+
+    def test_a_missing_avatar_or_dot_file_is_named(self):
+        m = self.make_ext({'64': 'looks/demo/avatar/64.png', '128': 'looks/demo/avatar/128.png'},
+                          {'idle': 'looks/demo/dot/idle.png', 'working': 'looks/demo/dot/working.png'},
+                          ['looks/demo/avatar/64.png', 'looks/demo/dot/idle.png'])
+        bad = manifest.check_files('looks-demo', m)
+        self.assertEqual(len(bad), 2, bad)
+        self.assertIn("looks demo: avatar 128 'looks/demo/avatar/128.png' is not a file", bad[0])
+        self.assertIn("looks demo: dot working 'looks/demo/dot/working.png' is not a file", bad[1])
+
+    def test_a_file_outside_looks_would_be_left_out(self):
+        m = self.make_ext({'64': 'images/64.png'}, {}, ['images/64.png'])
+        bad = manifest.check_files('looks-demo', m)
+        self.assertEqual(len(bad), 1, bad)
+        self.assertIn('scripts/package.sh would leave it out', bad[0])
+
+
 class GitFailureTests(unittest.TestCase):
     """Issue #100: git failing for a reason other than a name git does not know must surface and fail, not look
     like nothing changed (empty release) or every extension changed (a release of everything)."""

@@ -23,7 +23,7 @@ NEW, OLD = "persona-extension.json", "persona-plugin.json"
 # What a hub takes as a market entry's tags (nwverse/persona server/internal/extension/market.go).
 TAGS_MOST, TAG_LONGEST = 16, 24
 # The directories scripts/package.sh copies into a package besides the manifest and the program.
-PACKAGED_DIRS = ("skills", "assistant", "l10n")
+PACKAGED_DIRS = ("skills", "assistant", "looks", "l10n")
 # macOS/editor junk by basename: AppleDouble ._* and .DS_Store (a stray ._* at the package root is a second
 # top-level entry, so the hub finds no manifest) and Python's __pycache__/. scripts/package.sh excludes the same
 # names from the tar; failing here names the file to remove before a package is ever built.
@@ -184,6 +184,11 @@ def referenced(m):
         for key in ("instructions", "gate"):
             if a.get(key):
                 out.append(("assistant %s: %s" % (a.get("id"), key), a.get(key), "file"))
+    for look in c.get("looks") or []:
+        for size, p in sorted(((look.get("avatar") or {}).get("sizes") or {}).items()):
+            out.append(("looks %s: avatar %s" % (look.get("id"), size), p, "file"))
+        for state, s in sorted(((look.get("dot") or {}).get("states") or {}).items()):
+            out.append(("looks %s: dot %s" % (look.get("id"), state), (s or {}).get("file"), "file"))
     return out
 
 

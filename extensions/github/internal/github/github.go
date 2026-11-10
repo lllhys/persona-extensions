@@ -100,7 +100,8 @@ type Connector struct {
 	rateLow   bool
 	rateReset time.Time
 
-	inbox inboxState   // inbox.go
+	inbox inboxState // inbox.go
+	now   func() time.Time
 	opts  InboxOptions // rules.go
 	etags etagCache    // thread.go: answers kept for If-None-Match, failed checks' logs, avatars
 
@@ -157,7 +158,7 @@ func New(cfg Config, machine string, fetch TokenSource) *Connector {
 		waiting, source = notSignedIn, SourceDevice
 	}
 	return &Connector{cfg: cfg, machine: machine, machineID: cfg.Auth.FromMachine, fetch: fetch, source: source, api: api,
-		web: "https://" + cfg.host(), client: httpClient(cfg), opts: cfg.Inbox,
+		web: "https://" + cfg.host(), client: httpClient(cfg), opts: cfg.Inbox, now: time.Now,
 		status: connector.Status{State: connector.StateNotSignedIn, Error: waiting}, poke: make(chan struct{}, 1)}
 }
 

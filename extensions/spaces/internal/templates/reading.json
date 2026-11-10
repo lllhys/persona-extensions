@@ -1,0 +1,100 @@
+{
+  "key": "reading",
+  "name": "阅读与知识",
+  "icon": "doc",
+  "about": "书、笔记、剪藏，慢慢长成自己的主题卡片。",
+  "types": [
+    {
+      "key": "book",
+      "name": "书",
+      "flow": [
+        {"name": "想读", "phase": "todo"},
+        {"name": "在读", "phase": "doing"},
+        {"name": "读完", "phase": "done"},
+        {"name": "弃读", "phase": "dropped"}
+      ],
+      "props": [
+        {"key": "author", "name": "作者", "kind": "text"},
+        {"key": "pages", "name": "总页数", "kind": "number", "unit": "页"},
+        {"key": "read", "name": "已读", "kind": "number", "unit": "页"},
+        {"key": "rating", "name": "评分", "kind": "enum", "options": ["★", "★★", "★★★", "★★★★", "★★★★★"]},
+        {"key": "finished", "name": "读完于", "kind": "date"},
+        {"key": "notes", "name": "笔记数", "kind": "rollup", "via": "note.book", "op": "count"}
+      ],
+      "card": {"lead": "author", "pills": ["rating", "notes"], "progress": {"of": "read", "over": "pages"}},
+      "views": [
+        {"name": "进度", "kind": "progress", "where": [{"field": "phase", "op": "eq", "value": "doing"}]},
+        {"name": "书架", "kind": "board"},
+        {"name": "书单", "kind": "table", "agg": [{"op": "count"}, {"op": "sum", "of": "pages"}]}
+      ]
+    },
+    {
+      "key": "note",
+      "name": "笔记",
+      "props": [
+        {"key": "book", "name": "出自", "kind": "relation", "target": "book", "back": "笔记"},
+        {"key": "gist", "name": "要点", "kind": "text"},
+        {"key": "quote", "name": "摘录", "kind": "text"},
+        {"key": "page", "name": "页码", "kind": "number"}
+      ],
+      "card": {"lead": "gist", "pills": ["book", "page"]},
+      "views": [
+        {"name": "动态", "kind": "feed"},
+        {"name": "按书", "kind": "list", "group": "book"}
+      ]
+    },
+    {
+      "key": "clip",
+      "name": "剪藏",
+      "props": [
+        {"key": "url", "name": "链接", "kind": "url"},
+        {"key": "source", "name": "来源", "kind": "text"},
+        {"key": "gist", "name": "要点", "kind": "text"},
+        {"key": "read", "name": "已读", "kind": "boolean"}
+      ],
+      "card": {"lead": "gist", "pills": ["source", "read"]},
+      "views": [
+        {"name": "表格", "kind": "table"},
+        {"name": "未读", "kind": "list", "where": [{"field": "read", "op": "ne", "value": true}]}
+      ]
+    },
+    {
+      "key": "topic",
+      "name": "主题",
+      "flow": [
+        {"name": "萌芽", "phase": "todo"},
+        {"name": "成形", "phase": "doing"},
+        {"name": "常青", "phase": "done"}
+      ],
+      "props": [
+        {"key": "gist", "name": "要点", "kind": "text"},
+        {"key": "notes", "name": "依据", "kind": "relation", "target": "note", "many": true, "back": "归入主题"},
+        {"key": "sources", "name": "依据数", "kind": "rollup", "via": "notes", "op": "count"}
+      ],
+      "card": {"lead": "gist", "pills": ["sources"]},
+      "views": [
+        {"name": "列表", "kind": "list"},
+        {"name": "看板", "kind": "board"}
+      ]
+    }
+  ],
+  "samples": [
+    {"ref": "book_slow", "type": "book", "title": "《慢读的方法》", "status": "在读",
+     "values": {"author": "示例作者", "pages": 320, "read": 96, "rating": "★★★★"}},
+    {"ref": "book_structure", "type": "book", "title": "《给笔记一个结构》", "status": "想读",
+     "values": {"pages": 240}},
+    {"ref": "book_garden", "type": "book", "title": "《阳台种菜手记》", "status": "读完",
+     "values": {"author": "示例作者", "pages": 180, "read": 180, "rating": "★★★★★", "finished": "-20d"}},
+    {"ref": "note_own_words", "type": "note", "title": "先写自己的话，再抄原文",
+     "values": {"book": "@book_slow", "page": 42, "gist": "抄原文之前先写下自己的理解，之后才有可以对照的东西。"}},
+    {"ref": "note_chapter", "type": "note", "title": "每章只留三条",
+     "values": {"book": "@book_slow", "page": 77, "gist": "每章结束时只保留三条，多了就没有人会再读。"}},
+    {"ref": "note_reread", "type": "note", "title": "重读比多读有用",
+     "values": {"book": "@book_garden", "gist": "同一本书读两遍，第二遍会看见第一遍跳过的东西。"}},
+    {"ref": "clip_spaced", "type": "clip", "title": "间隔复习的做法",
+     "values": {"url": "https://example.com/articles/spaced-review", "source": "示例博客", "gist": "把要记住的内容分散到几天里复习，每次的间隔比上次长一点。", "read": false}},
+    {"ref": "note_from_clip", "type": "note", "from": "clip_spaced", "title": "间隔复习的要点"},
+    {"ref": "topic_reading", "type": "topic", "title": "怎样读才留得住", "status": "成形",
+     "values": {"gist": "慢读、写下自己的话、定期重读，让阅读变成能回想起来的东西。", "notes": ["@note_own_words", "@note_chapter", "@note_reread"]}}
+  ]
+}

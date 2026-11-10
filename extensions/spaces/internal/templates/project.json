@@ -1,0 +1,115 @@
+{
+  "key": "project",
+  "name": "项目与目标",
+  "icon": "star",
+  "about": "点子孵化成目标，目标拆成任务，过程留痕。",
+  "types": [
+    {
+      "key": "idea",
+      "name": "点子",
+      "flow": [
+        {"name": "收集", "phase": "todo"},
+        {"name": "探索", "phase": "doing"},
+        {"name": "已孵化", "phase": "done"},
+        {"name": "搁置", "phase": "dropped"}
+      ],
+      "props": [
+        {"key": "summary", "name": "简介", "kind": "text"},
+        {"key": "area", "name": "领域", "kind": "enum", "options": ["工作", "生活", "学习", "健康"]}
+      ],
+      "card": {"lead": "summary", "pills": ["area"]},
+      "views": [
+        {"name": "看板", "kind": "board"},
+        {"name": "动态", "kind": "feed"}
+      ]
+    },
+    {
+      "key": "goal",
+      "name": "目标",
+      "flow": [
+        {"name": "规划中", "phase": "todo"},
+        {"name": "进行中", "phase": "doing"},
+        {"name": "已达成", "phase": "done"},
+        {"name": "已放弃", "phase": "dropped"}
+      ],
+      "props": [
+        {"key": "summary", "name": "简介", "kind": "text"},
+        {"key": "area", "name": "领域", "kind": "enum", "options": ["工作", "生活", "学习", "健康"]},
+        {"key": "due", "name": "截止", "kind": "date"},
+        {"key": "tasks", "name": "任务数", "kind": "rollup", "via": "task.goal", "op": "count"},
+        {"key": "progress", "name": "完成度", "kind": "rollup", "via": "task.goal", "op": "percent_done"},
+        {"key": "effort", "name": "总投入", "kind": "rollup", "via": "task.goal", "op": "sum", "of": "effort", "unit": "小时"}
+      ],
+      "card": {"lead": "summary", "pills": ["area", "due", "tasks"], "progress": {"of": "progress"}},
+      "views": [
+        {"name": "进度", "kind": "progress", "sort": [{"by": "due"}]},
+        {"name": "列表", "kind": "list", "group": "area"}
+      ]
+    },
+    {
+      "key": "task",
+      "name": "任务",
+      "flow": [
+        {"name": "待办", "phase": "todo"},
+        {"name": "进行中", "phase": "doing"},
+        {"name": "完成", "phase": "done"},
+        {"name": "取消", "phase": "dropped"}
+      ],
+      "props": [
+        {"key": "goal", "name": "目标", "kind": "relation", "target": "goal", "back": "任务"},
+        {"key": "priority", "name": "优先级", "kind": "enum", "options": ["高", "中", "低"]},
+        {"key": "due", "name": "截止", "kind": "date"},
+        {"key": "effort", "name": "预估", "kind": "number", "unit": "小时"},
+        {"key": "blocked_by", "name": "被阻塞", "kind": "relation", "target": "task", "many": true, "back": "阻塞了"}
+      ],
+      "card": {"pills": ["priority", "due", "goal"]},
+      "views": [
+        {"name": "看板", "kind": "board"},
+        {"name": "表格", "kind": "table", "sort": [{"by": "due"}], "agg": [{"op": "count"}, {"op": "sum", "of": "effort"}]},
+        {"name": "待处理", "kind": "list", "where": [{"field": "phase", "op": "ne", "value": "done"}], "group": "goal"}
+      ]
+    },
+    {
+      "key": "note",
+      "name": "记录",
+      "props": [
+        {"key": "body", "name": "内容", "kind": "text"},
+        {"key": "kind", "name": "类别", "kind": "enum", "options": ["进展", "决定", "复盘"]},
+        {"key": "about", "name": "关于", "kind": "relation", "target": "goal", "back": "记录"}
+      ],
+      "card": {"lead": "body", "pills": ["kind", "about"]},
+      "views": [
+        {"name": "动态", "kind": "feed"},
+        {"name": "列表", "kind": "list", "group": "kind"}
+      ]
+    }
+  ],
+  "samples": [
+    {"ref": "idea_review", "type": "idea", "title": "每周写一篇复盘", "status": "已孵化",
+     "values": {"area": "学习", "summary": "每周用二十分钟回看上一周：做成了什么，卡在哪里，下周只改一个地方。"}},
+    {"ref": "idea_photos", "type": "idea", "title": "整理家庭照片归档", "status": "探索",
+     "values": {"area": "生活", "summary": "把手机和旧硬盘里的照片按年份合并，去掉重复的，每年配一句话。"}},
+    {"ref": "idea_swim", "type": "idea", "title": "学会自由泳", "status": "收集",
+     "values": {"area": "健康", "summary": "先在浅水区练习换气，再练完整的一个来回。"}},
+    {"ref": "goal_review", "type": "goal", "from": "idea_review", "title": "连续写满 12 篇周复盘", "status": "进行中",
+     "values": {"due": "+60d"}},
+    {"ref": "goal_run", "type": "goal", "title": "完成一次半程跑", "status": "规划中",
+     "values": {"area": "健康", "summary": "在秋天跑完一次二十一公里的半程，不求速度。", "due": "+120d"}},
+    {"ref": "task_template", "type": "task", "title": "定好复盘模板", "status": "完成",
+     "values": {"goal": "@goal_review", "priority": "高", "effort": 1}},
+    {"ref": "task_first", "type": "task", "title": "写第 1 篇", "status": "完成",
+     "values": {"goal": "@goal_review", "effort": 2}},
+    {"ref": "task_second", "type": "task", "title": "写第 2 篇", "status": "进行中",
+     "values": {"goal": "@goal_review", "priority": "中", "effort": 2, "due": "+7d"}},
+    {"ref": "task_friend", "type": "task", "title": "约一位朋友互相督促", "status": "待办",
+     "values": {"goal": "@goal_review", "priority": "低", "effort": 2, "blocked_by": "@task_second"}},
+    {"ref": "task_plan", "type": "task", "title": "制定 12 周训练计划", "status": "待办",
+     "values": {"goal": "@goal_run", "priority": "高", "effort": 2}},
+    {"ref": "task_shoes", "type": "task", "title": "买一双跑鞋", "status": "取消",
+     "values": {"goal": "@goal_run"}},
+    {"ref": "note_start", "type": "note", "title": "开了这个空间",
+     "values": {"kind": "进展", "body": "先把想法放进来，不急着分类。"}},
+    {"ref": "note_three", "type": "note", "title": "模板先求短：三个问题就够",
+     "values": {"kind": "决定", "about": "@goal_review", "body": "复盘只问三个问题：做成了什么，卡在哪，下周改哪里。"}}
+  ]
+}

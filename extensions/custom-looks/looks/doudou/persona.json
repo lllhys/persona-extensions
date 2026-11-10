@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "id": "doudou",
+  "name": "奶娃",
+  "avatar": {
+    "sizes": {
+      "64": "avatar/64.png",
+      "128": "avatar/128.png",
+      "256": "avatar/256.png",
+      "512": "avatar/512.png"
+    },
+    "safe": 1.0
+  },
+  "dot": {
+    "size": 144,
+    "states": {
+      "idle": {
+        "file": "dot/idle.png",
+        "fps": 8,
+        "frames": 24
+      },
+      "thinking": {
+        "file": "dot/thinking.png",
+        "fps": 8,
+        "frames": 16
+      },
+      "working": {
+        "file": "dot/working.png",
+        "fps": 10,
+        "frames": 12
+      },
+      "needs_you": {
+        "file": "dot/needs_you.png",
+        "fps": 6,
+        "frames": 12
+      },
+      "offline": {
+        "file": "dot/offline.png",
+        "fps": 4,
+        "frames": 12
+      }
+    }
+  },
+  "colors": {
+    "light": {
+      "primary": "#EDBE51",
+      "secondary": "#758957",
+      "accent": "#976E10",
+      "bubble": "#946C0F",
+      "bubble_text": "#FFFFFF"
+    },
+    "dark": {
+      "primary": "#EDBE51",
+      "secondary": "#758957",
+      "accent": "#AB7D12",
+      "bubble": "#966E10",
+      "bubble_text": "#FFFFFF"
+    }
+  },
+  "subtitle": "圆滚滚的黄色小家伙"
+}

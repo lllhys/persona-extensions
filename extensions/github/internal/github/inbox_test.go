@@ -135,6 +135,27 @@ func things(t *testing.T, c *Connector) map[string]connector.InboxThing {
 	return out
 }
 
+func TestUnreadOlderThanRetentionIsNotDropped(t *testing.T) {
+	f := &fakeNotifications{prs: map[string]string{api12: openPR(`{"login":"me"}`), "/repos/example-org/example-repo/issues/12": `{"comments":0}`}}
+	f.notifications = "[" + note("old", "review_requested", "PullRequest", "https://api.github.com"+api12, "2026-11-01T00:00:00Z") + "]"
+	c := f.server(t)
+	c.now = func() time.Time { return time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC) }
+	if _, _, err := c.poll(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got := things(t, c)
+	if len(got) != 1 || got["example-org/example-repo#12"].Read {
+		t.Fatalf("unread remote notification was discarded: %+v", got)
+	}
+	f.notifications = "[]"
+	if _, _, err := c.poll(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got = things(t, c); len(got) != 0 {
+		t.Fatalf("read history should retain the original expiry behavior: %+v", got)
+	}
+}
+
 func TestNotificationsBecomeThings(t *testing.T) {
 	f := &fakeNotifications{prs: map[string]string{
 		api12: openPR(`{"login":"me"}`),
@@ -149,6 +170,7 @@ func TestNotificationsBecomeThings(t *testing.T) {
 		note("4", "subscribed", "Issue", "https://api.github.com/repos/example-org/example-repo/issues/8", t1),
 	}, ",") + "]" // CI: ci_test.go
 	c := f.server(t)
+	c.now = func() time.Time { return time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC) }
 
 	wait, moved, err := c.poll(context.Background())
 	if err != nil || !moved || wait != 90*time.Second {
@@ -201,6 +223,7 @@ func TestReviewRequestWithdrawnOrMerged(t *testing.T) {
 		comments: map[string]string{}}
 	f.notifications = "[" + note("1", "review_requested", "PullRequest", "https://api.github.com"+api12, t1) + "]"
 	c := f.server(t)
+	c.now = func() time.Time { return time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC) }
 	c.poll(context.Background())
 	if th := things(t, c)["example-org/example-repo#12"]; th.Done != connector.DoneRead {
 		t.Errorf("withdrawn: %+v", th)
@@ -238,6 +261,7 @@ func TestReviewsPastTheFirstPage(t *testing.T) {
 	}}
 	f.notifications = "[" + note("1", "author", "PullRequest", "https://api.github.com"+api12, t1) + "]"
 	c := f.server(t)
+	c.now = func() time.Time { return time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC) }
 	if _, _, err := c.poll(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -262,6 +286,7 @@ func TestFewRequestsLeftReadsNoThreads(t *testing.T) {
 	f := &fakeNotifications{prs: map[string]string{api12: openPR(`{"login":"me"}`)}, comments: map[string]string{}}
 	f.notifications = "[" + note("1", "review_requested", "PullRequest", "https://api.github.com"+api12, t1) + "]"
 	c := f.server(t)
+	c.now = func() time.Time { return time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC) }
 	h := http.Header{}
 	h.Set("X-RateLimit-Limit", "5000")
 	h.Set("X-RateLimit-Remaining", "100")
@@ -302,6 +327,7 @@ func TestReviewRequestPastFirstPageComesIn(t *testing.T) {
 	f := pagedPR()
 	f.notifications = "[" + strings.Join(append(noise(50), note("1", "review_requested", "PullRequest", "https://api.github.com"+api12, t1)), ",") + "]"
 	c := f.server(t)
+	c.now = func() time.Time { return time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC) }
 	if _, _, err := c.poll(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -323,6 +349,7 @@ func TestUnreadThingPushedToSecondPageStaysUnread(t *testing.T) {
 	f := pagedPR()
 	f.notifications = "[" + note("1", "review_requested", "PullRequest", "https://api.github.com"+api12, t1) + "]"
 	c := f.server(t)
+	c.now = func() time.Time { return time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC) }
 	c.poll(context.Background())
 	if th, ok := things(t, c)["example-org/example-repo#12"]; !ok || th.Read {
 		t.Fatalf("first poll: %+v %v", th, ok)
@@ -345,6 +372,7 @@ func TestNotificationPagesStopEarlyMarkNothingRead(t *testing.T) {
 	f := pagedPR()
 	f.notifications = "[" + note("1", "review_requested", "PullRequest", "https://api.github.com"+api12, t1) + "]"
 	c := f.server(t)
+	c.now = func() time.Time { return time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC) }
 	c.poll(context.Background())
 	f.notifications = "[" + strings.Join(noise(120), ",") + "]" // #12 read on GitHub, but on no page read below
 	defer func(n int) { notificationPages = n }(notificationPages)
@@ -375,6 +403,7 @@ func TestReplyComments(t *testing.T) {
 	f := &fakeNotifications{prs: map[string]string{}, comments: map[string]string{}}
 	f.notifications = "[]"
 	c := f.server(t)
+	c.now = func() time.Time { return time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC) }
 	if err := c.Reply(context.Background(), connector.InboxReply{Thread: "example-org/example-repo#12", Text: "看过了"}); err != nil {
 		t.Fatal(err)
 	}
@@ -397,6 +426,7 @@ func TestDiscussionAndCommitMentionsAreNotCI(t *testing.T) {
 		note("78", "mention", "Commit", "https://api.github.com/repos/example-org/example-repo/commits/abc123", t1),
 	}, ",") + "]"
 	c := f.server(t)
+	c.now = func() time.Time { return time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC) }
 	if _, _, err := c.poll(context.Background()); err != nil {
 		t.Fatal(err)
 	}

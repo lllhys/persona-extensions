@@ -179,7 +179,7 @@ func TestWatchlistPage(t *testing.T) {
 	got := texts(v)
 	for _, want := range []string{"自选 · 3", "row BTC-USDT +2000.00 · 成交 6172.50万 USDT 50000.00", "[+4.17% danger] →open:okx:BTC-USDT",
 		"row ETH-USDT -100.00 · ", "[-3.33% positive] →open:okx:ETH-USDT", "24h 涨跌按 24 小时前的价格算。点一行看 K 线",
-		"NOPE-USDT 现在查不到这个代码的行情", "row 排序 · 自选顺序", "→opts", "→refresh"} {
+		"NOPE-USDT 现在查不到这个代码的行情", "## 排序", "segmented", "→refresh"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the page has no %q:\n%s", want, got)
 		}

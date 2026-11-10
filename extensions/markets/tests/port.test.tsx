@@ -265,3 +265,15 @@ test("all locale resources have identical keys and data fingerprints ignore read
   const expected = Object.keys(locales.en).sort(); for (const dict of Object.values(locales)) { assert.deepEqual(Object.keys(dict).sort(), expected); assert.ok(Object.values(dict).every(value => value.length > 0)); }
   const { service } = await setup(); assert.equal((await loadPage(service, readPageState({}, service), false, false)).kind, "list");
 });
+test("the list controls stay visible and an empty watchlist is an empty state", async () => {
+  const { service } = await setup();
+  const list = await snapshotPage(service).render({ state: "{}", ui_version: 5, locale: "en" } as any);
+  const order = list.sections.find(s => s.key === "section-order")!;
+  assert.ok(order, "the sort controls are visible without a disclosure"); assert.equal(order.title, "Sort");
+  assert.deepEqual(order.items.map(i => i.type), ["segmented", "segmented"]);
+  assert.ok(!list.sections.some(s => s.items.some(i => i.key === "opts")));
+  await service.store.transaction(next => { next.watchlist = []; });
+  const empty = await snapshotPage(service).render({ state: "{}", ui_version: 5, locale: "en" } as any);
+  const state = empty.sections.flatMap(s => s.items).find(i => i.type === "empty") as any;
+  assert.equal(state.icon, "search"); assert.match(state.title, /empty/);
+});

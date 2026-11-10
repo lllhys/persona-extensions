@@ -1,0 +1,298 @@
+{
+  "manifest_version": 1,
+  "id": "custom-looks",
+  "name": "自建形象",
+  "version": "1.0.0",
+  "description": "五个自建形象：Claude、GPT、包包、大肥鱼、奶娃。装好后在设置 › 形象里选。",
+  "publisher": "nwverse",
+  "tags": [
+    "形象"
+  ],
+  "engines": {
+    "persona": ">=202611051608"
+  },
+  "contributes": {
+    "looks": [
+      {
+        "id": "claude",
+        "name": "Claude",
+        "subtitle": "抱着书的橙发少女",
+        "avatar": {
+          "sizes": {
+            "64": "looks/claude/avatar/64.png",
+            "128": "looks/claude/avatar/128.png",
+            "256": "looks/claude/avatar/256.png",
+            "512": "looks/claude/avatar/512.png"
+          },
+          "safe": 1.0
+        },
+        "colors": {
+          "light": {
+            "primary": "#EE7B30",
+            "secondary": "#F2D7B6",
+            "accent": "#C15610",
+            "bubble": "#BC540F",
+            "bubble_text": "#FFFFFF"
+          },
+          "dark": {
+            "primary": "#EE7B30",
+            "secondary": "#F2D7B6",
+            "accent": "#DA6112",
+            "bubble": "#BF5510",
+            "bubble_text": "#FFFFFF"
+          }
+        },
+        "dot": {
+          "size": 144,
+          "states": {
+            "idle": {
+              "file": "looks/claude/dot/idle.png",
+              "fps": 8
+            },
+            "thinking": {
+              "file": "looks/claude/dot/thinking.png",
+              "fps": 8
+            },
+            "working": {
+              "file": "looks/claude/dot/working.png",
+              "fps": 10
+            },
+            "needs_you": {
+              "file": "looks/claude/dot/needs_you.png",
+              "fps": 6
+            },
+            "offline": {
+              "file": "looks/claude/dot/offline.png",
+              "fps": 4
+            }
+          }
+        },
+        "app_icon_fallback": "persona"
+      },
+      {
+        "id": "gpt",
+        "name": "GPT",
+        "subtitle": "白龙少女",
+        "avatar": {
+          "sizes": {
+            "64": "looks/gpt/avatar/64.png",
+            "128": "looks/gpt/avatar/128.png",
+            "256": "looks/gpt/avatar/256.png",
+            "512": "looks/gpt/avatar/512.png"
+          },
+          "safe": 1.0
+        },
+        "colors": {
+          "light": {
+            "primary": "#B7A6E8",
+            "secondary": "#8E76D8",
+            "accent": "#805FDD",
+            "bubble": "#7D5BDC",
+            "bubble_text": "#FFFFFF"
+          },
+          "dark": {
+            "primary": "#B7A6E8",
+            "secondary": "#8E76D8",
+            "accent": "#8F73E1",
+            "bubble": "#7E5DDD",
+            "bubble_text": "#FFFFFF"
+          }
+        },
+        "dot": {
+          "size": 144,
+          "states": {
+            "idle": {
+              "file": "looks/gpt/dot/idle.png",
+              "fps": 8
+            },
+            "thinking": {
+              "file": "looks/gpt/dot/thinking.png",
+              "fps": 8
+            },
+            "working": {
+              "file": "looks/gpt/dot/working.png",
+              "fps": 10
+            },
+            "needs_you": {
+              "file": "looks/gpt/dot/needs_you.png",
+              "fps": 6
+            },
+            "offline": {
+              "file": "looks/gpt/dot/offline.png",
+              "fps": 4
+            }
+          }
+        },
+        "app_icon_fallback": "persona"
+      },
+      {
+        "id": "baobao",
+        "name": "包包",
+        "subtitle": "穿浅蓝连帽衫的短发女孩",
+        "avatar": {
+          "sizes": {
+            "64": "looks/baobao/avatar/64.png",
+            "128": "looks/baobao/avatar/128.png",
+            "256": "looks/baobao/avatar/256.png",
+            "512": "looks/baobao/avatar/512.png"
+          },
+          "safe": 1.0
+        },
+        "colors": {
+          "light": {
+            "primary": "#8EC1EE",
+            "secondary": "#99C0E8",
+            "accent": "#1E78C8",
+            "bubble": "#1D75C3",
+            "bubble_text": "#FFFFFF"
+          },
+          "dark": {
+            "primary": "#8EC1EE",
+            "secondary": "#99C0E8",
+            "accent": "#2889DF",
+            "bubble": "#1E77C5",
+            "bubble_text": "#FFFFFF"
+          }
+        },
+        "dot": {
+          "size": 144,
+          "states": {
+            "idle": {
+              "file": "looks/baobao/dot/idle.png",
+              "fps": 8
+            },
+            "thinking": {
+              "file": "looks/baobao/dot/thinking.png",
+              "fps": 8
+            },
+            "working": {
+              "file": "looks/baobao/dot/working.png",
+              "fps": 10
+            },
+            "needs_you": {
+              "file": "looks/baobao/dot/needs_you.png",
+              "fps": 6
+            },
+            "offline": {
+              "file": "looks/baobao/dot/offline.png",
+              "fps": 4
+            }
+          }
+        },
+        "app_icon_fallback": "persona"
+      },
+      {
+        "id": "dafeiyu",
+        "name": "大肥鱼",
+        "subtitle": "爱打招呼的鲸鱼女仆",
+        "avatar": {
+          "sizes": {
+            "64": "looks/dafeiyu/avatar/64.png",
+            "128": "looks/dafeiyu/avatar/128.png",
+            "256": "looks/dafeiyu/avatar/256.png",
+            "512": "looks/dafeiyu/avatar/512.png"
+          },
+          "safe": 1.0
+        },
+        "colors": {
+          "light": {
+            "primary": "#24418F",
+            "secondary": "#8CC4EE",
+            "accent": "#1F3F94",
+            "bubble": "#1F3F94",
+            "bubble_text": "#FFFFFF"
+          },
+          "dark": {
+            "primary": "#24418F",
+            "secondary": "#8CC4EE",
+            "accent": "#4570D6",
+            "bubble": "#436FD7",
+            "bubble_text": "#FFFFFF"
+          }
+        },
+        "dot": {
+          "size": 144,
+          "states": {
+            "idle": {
+              "file": "looks/dafeiyu/dot/idle.png",
+              "fps": 8
+            },
+            "thinking": {
+              "file": "looks/dafeiyu/dot/thinking.png",
+              "fps": 8
+            },
+            "working": {
+              "file": "looks/dafeiyu/dot/working.png",
+              "fps": 10
+            },
+            "needs_you": {
+              "file": "looks/dafeiyu/dot/needs_you.png",
+              "fps": 6
+            },
+            "offline": {
+              "file": "looks/dafeiyu/dot/offline.png",
+              "fps": 4
+            }
+          }
+        },
+        "app_icon_fallback": "persona"
+      },
+      {
+        "id": "doudou",
+        "name": "奶娃",
+        "subtitle": "圆滚滚的黄色小家伙",
+        "avatar": {
+          "sizes": {
+            "64": "looks/doudou/avatar/64.png",
+            "128": "looks/doudou/avatar/128.png",
+            "256": "looks/doudou/avatar/256.png",
+            "512": "looks/doudou/avatar/512.png"
+          },
+          "safe": 1.0
+        },
+        "colors": {
+          "light": {
+            "primary": "#EDBE51",
+            "secondary": "#758957",
+            "accent": "#976E10",
+            "bubble": "#946C0F",
+            "bubble_text": "#FFFFFF"
+          },
+          "dark": {
+            "primary": "#EDBE51",
+            "secondary": "#758957",
+            "accent": "#AB7D12",
+            "bubble": "#966E10",
+            "bubble_text": "#FFFFFF"
+          }
+        },
+        "dot": {
+          "size": 144,
+          "states": {
+            "idle": {
+              "file": "looks/doudou/dot/idle.png",
+              "fps": 8
+            },
+            "thinking": {
+              "file": "looks/doudou/dot/thinking.png",
+              "fps": 8
+            },
+            "working": {
+              "file": "looks/doudou/dot/working.png",
+              "fps": 10
+            },
+            "needs_you": {
+              "file": "looks/doudou/dot/needs_you.png",
+              "fps": 6
+            },
+            "offline": {
+              "file": "looks/doudou/dot/offline.png",
+              "fps": 4
+            }
+          }
+        },
+        "app_icon_fallback": "persona"
+      }
+    ]
+  }
+}

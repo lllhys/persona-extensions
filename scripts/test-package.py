@@ -86,5 +86,26 @@ class PackageJunkTests(unittest.TestCase):
             self.assertTrue((self.tmp / 'extensions' / EXT_ID / rel).is_file(), rel)
 
 
+class LooksPackageTests(unittest.TestCase):
+    """A looks extension's package holds every avatar and status-dot image its manifest names, under looks/."""
+
+    def test_custom_looks_package_has_every_referenced_image(self):
+        tmp = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        (tmp / 'scripts').mkdir()
+        for name in ('package.sh', 'manifest.py', 'catalog.py'):
+            shutil.copy2(REPO / 'scripts' / name, tmp / 'scripts' / name)
+        shutil.copytree(REPO / 'extensions' / 'custom-looks', tmp / 'extensions' / 'custom-looks')
+        r = subprocess.run(['bash', 'scripts/package.sh', 'custom-looks'], cwd=tmp, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        m = json.loads((tmp / 'extensions' / 'custom-looks' / manifest.NEW).read_text())
+        wanted = {p for _, p, _ in manifest.referenced(m)}
+        self.assertEqual(len(wanted), 45)  # five looks, four avatar sizes and five dot states each
+        with tarfile.open(tmp / 'dist' / ('custom-looks-%s.tar.gz' % m['version']), 'r:gz') as t:
+            files = {n.name.split('/', 1)[1] for n in t.getmembers() if n.isfile()}
+        self.assertLessEqual(wanted, files)
+        self.assertFalse([f for f in files if not f.startswith('looks/') and f not in (manifest.NEW, manifest.OLD)])
+
+
 if __name__ == '__main__':
     unittest.main()

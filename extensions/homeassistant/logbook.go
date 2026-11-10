@@ -278,10 +278,44 @@ func logLine(hm *home, e LogEntry) string {
 	return what
 }
 
+// entryStateText is what an entry says happened, in words: a scene's timestamp is 运行, a tracker's last-seen is
+// 位置更新, and Home Assistant's English log messages for automations and scripts read in Chinese.
+func entryStateText(hm *home, e LogEntry) string {
+	st := entryState(hm, e)
+	if st == "" {
+		return ""
+	}
+	if _, err := time.Parse(time.RFC3339Nano, st); err == nil {
+		switch hm.ByID[e.EntityID].Domain() {
+		case "scene":
+			return "运行"
+		case "person", "device_tracker":
+			return "位置更新"
+		}
+		return "更新"
+	}
+	if s, ok := hm.ByID[e.EntityID]; ok {
+		switch s.Domain() {
+		case "automation":
+			if strings.Contains(strings.ToLower(st), "triggered") {
+				return "被触发"
+			}
+		case "script":
+			switch {
+			case strings.Contains(strings.ToLower(st), "started"):
+				return "开始运行"
+			case strings.Contains(strings.ToLower(st), "finished"):
+				return "运行结束"
+			}
+		}
+	}
+	return st
+}
+
 // logParts is an entry's pieces: who and what ("客厅灯 → 开"), its area, and what made it happen ("由自动化「夜灯」").
 func logParts(hm *home, e LogEntry) (what, where, by string) {
 	what = logName(hm, e)
-	if st := entryState(hm, e); st != "" {
+	if st := entryStateText(hm, e); st != "" {
 		if e.State != "" {
 			what += " → " + st
 		} else {

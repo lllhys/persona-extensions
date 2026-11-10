@@ -75,6 +75,9 @@ jobs:
         with:
           go-version-file: pluginkit/go.mod
           cache-dependency-path: '**/go.sum'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.11.1'
       - run: scripts/ci.sh
         env:
           CATALOG_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}

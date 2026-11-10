@@ -26,6 +26,8 @@ GOOD = {
     'extensions/node-one/src/main.mjs': '',
     'extensions/skills-only/persona-extension.json': '{}',
     'dist/alpha/stray.go': 'package stray\n',
+    'extensions/node-one/build/package/authoring/sdk/ts/scripts/int64-oracle.go': 'package main\n',
+    'extensions/node-one/build/output/stray.go': 'package stray\n',
 }
 
 
@@ -117,6 +119,15 @@ class LayoutTests(unittest.TestCase):
             self.assertEqual(layout.problems(root), [])
             subprocess.run(['git', '-C', root, 'add', 'extensions/alpha/alpha'], check=True)
             self.assertEqual(len(layout.problems(root)), 1)
+    def test_source_authoring_outputs_do_not_become_go_modules(self):
+        files = {**GOOD, 'extensions/source/persona-extension.json': '{"runtime":{"mode":"deno"}}\n',
+                 'extensions/source/src/index.ts': '', 'extensions/source/build/package/authoring/sdk/ts/scripts/int64-oracle.go': 'package main\n'}
+        self.assertEqual(self.problems(files), [])
+
+    def test_source_code_does_not_exempt_real_go_files(self):
+        files = {**GOOD, 'extensions/source/persona-extension.json': '{"runtime":{"mode":"deno"}}\n',
+                 'extensions/source/main.go': 'package main\n'}
+        self.assertTrue(any('extensions/source' in problem for problem in self.problems(files)))
 
 
 if __name__ == '__main__':

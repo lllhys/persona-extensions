@@ -1,0 +1,90 @@
+{
+  "manifest_version": 1,
+  "id": "wikipedia",
+  "name": "Wikipedia 每日阅读",
+  "version": "0.1.0",
+  "description": "在 Persona 中读 Wikipedia 今日精选、热门条目和历史上的今天，搜索并阅读条目摘要。内容由 hub 通过公开 API 获取，无需账号。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/wikipedia/README.md",
+  "tags": [
+    "Wikipedia",
+    "阅读",
+    "知识",
+    "每日精选"
+  ],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "mode": "deno",
+    "source": {
+      "entry": "src/index.ts",
+      "bundle": "build/wikipedia.mjs",
+      "sha256": "2190b597e7b252e13c3ce009a13954fece1f3f1edb2c96df682d809822eb45f2"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "wikipedia",
+        "name": "Wikipedia",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "en.wikipedia.org",
+          "zh.wikipedia.org",
+          "ja.wikipedia.org"
+        ],
+        "agent_tools": [
+          "wikipedia_*"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "today",
+        "title": "每日阅读",
+        "placement": "nav_page",
+        "icon": "doc"
+      }
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "language": {
+        "type": "string",
+        "title": "Wikipedia 语言",
+        "default": "auto",
+        "description": "auto 跟随 Persona 界面语言；英文选 en，中文选 zh，日文选 ja",
+        "oneOf": [
+          {
+            "const": "auto",
+            "title": "跟随界面语言"
+          },
+          {
+            "const": "en",
+            "title": "English"
+          },
+          {
+            "const": "zh",
+            "title": "中文"
+          },
+          {
+            "const": "ja",
+            "title": "日本語"
+          }
+        ]
+      }
+    }
+  },
+  "permissions": {
+    "network": [
+      "en.wikipedia.org",
+      "zh.wikipedia.org",
+      "ja.wikipedia.org"
+    ]
+  }
+}
