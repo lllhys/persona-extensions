@@ -858,7 +858,6 @@ function createRuntime(deps = {
       active = init.active === void 0 || !!init.active.error_reports?.includes("sentry");
       const dsn = init.secrets?.dsn ?? "";
       if (active) service.configure(call ? decodeExactConfig(call.params?.field("config")) : decodeConfig(init.config), dsn, locale);
-      active = active && !!dsn;
       initialized = true;
       return active ? void 0 : { error_reports: [] };
     }),
