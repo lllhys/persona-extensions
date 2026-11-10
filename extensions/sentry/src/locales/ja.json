@@ -1,0 +1,13 @@
+{
+  "invalidDSN": "DSN は https://<公開キー>@<ホスト>/<プロジェクト番号> の形式で指定してください。",
+  "httpDisabled": "HTTP DSN を使う前に allow_http を有効にしてください。レポートと公開キーは暗号化されずに送信されます。",
+  "invalidConfig": "Sentry の設定が無効です。",
+  "invalidReports": "エラーレポートのバッチが無効です。",
+  "notInitialized": "Sentry はまだ初期化されていません。",
+  "description": "個人情報を除去した Persona のエラーとクラッシュレポートを Sentry プロジェクトへ送信します。DSN がない場合、レポートは収集も送信もされません。",
+  "environmentTitle": "環境", "environmentDescription": "production や staging などの Sentry イベント環境。",
+  "sampleTitle": "サンプリング率", "sampleDescription": "0〜1 の値。1 は全件、0.5 は無作為に半分を送信します。",
+  "logsTitle": "エラーログ行を含める", "logsDescription": "無効の場合、例外、クラッシュ、panic のみを送信します。",
+  "httpTitle": "HTTP DSN を許可", "httpDescription": "信頼できるセルフホスト環境専用です。HTTP はレポートと公開キーを暗号化しないため、第三者による閲覧やイベントの偽造が可能です。",
+  "dsnDescription": "プロジェクトの Client Keys (DSN) の値。秘密フィールドに保存してください。HTTP DSN には allow_http も必要です。"
+}

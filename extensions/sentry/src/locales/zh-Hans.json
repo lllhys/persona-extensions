@@ -1,0 +1,13 @@
+{
+  "invalidDSN": "DSN 必须为 https://<公钥>@<主机>/<项目号>。",
+  "httpDisabled": "使用 HTTP DSN 前请开启 allow_http。报告和公钥会明文传输。",
+  "invalidConfig": "Sentry 配置无效。",
+  "invalidReports": "错误报告批次无效。",
+  "notInitialized": "Sentry 尚未初始化。",
+  "description": "将 Persona 经脱敏的错误和崩溃报告发送到你的 Sentry 项目。未填写 DSN 时不会收集或发送报告。",
+  "environmentTitle": "环境", "environmentDescription": "Sentry 事件的环境，例如 production 或 staging。",
+  "sampleTitle": "采样率", "sampleDescription": "范围为 0 到 1：1 发送全部报告；0.5 随机发送一半。",
+  "logsTitle": "包含错误日志行", "logsDescription": "关闭后仅发送异常、崩溃和 panic。",
+  "httpTitle": "允许 HTTP DSN", "httpDescription": "仅用于可信的自建实例。HTTP 会明文传输报告和公钥，旁观者可读取报告并伪造事件。",
+  "dsnDescription": "项目 Client Keys (DSN) 中的值，请存入秘密字段。HTTP DSN 还需要开启 allow_http。"
+}
