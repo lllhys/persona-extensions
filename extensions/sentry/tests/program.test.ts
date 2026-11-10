@@ -87,7 +87,9 @@ test("missing secrets and inactive contribution do not collect; repeated initial
   for (const params of [{ secrets: {} }, { active: {} }, { active: { error_reports: ["other"] } }]) {
     const f = new Fixture(), h = await harness(createRuntime({ fetch: f.fetch }));
     try {
-      assert.deepEqual((await h.initialize(params)).result.contributes, { error_reports: [] });
+      const result = await h.initialize(params);
+      if ("secrets" in params) assert.equal(result.result.contributes, undefined, "missing DSN retains all contributions like Go");
+      else assert.deepEqual(result.result.contributes, { error_reports: [] }, "explicitly disabled contribution is removed");
       await h.call("error_reports.deliver", { contribution: "sentry", reports: [sample()] }); await h.runtime.service.flush(); assert.equal(f.hits.length, 0);
     } finally { await h.close(); }
   }

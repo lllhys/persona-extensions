@@ -24,7 +24,8 @@ export function createRuntime(deps: Dependencies = {
       active = init.active === undefined || !!init.active.error_reports?.includes("sentry");
       const dsn = init.secrets?.dsn ?? "";
       if (active) service.configure(call ? decodeExactConfig(call.params?.field("config")) : decodeConfig(init.config), dsn, locale);
-      active = active && !!dsn;
+      // Go retains the contribution without a DSN: reports are dropped locally,
+      // but configuring the secret later must still start the report receiver.
       initialized = true;
       return active ? undefined : { error_reports: [] };
     }),
