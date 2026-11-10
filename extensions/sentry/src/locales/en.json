@@ -1,0 +1,13 @@
+{
+  "invalidDSN": "The DSN must be https://<public key>@<host>/<project number>.",
+  "httpDisabled": "Enable allow_http before using an HTTP DSN. Reports and the public key travel unencrypted.",
+  "invalidConfig": "The Sentry configuration is invalid.",
+  "invalidReports": "The error report delivery is invalid.",
+  "notInitialized": "Sentry has not been initialized.",
+  "description": "Forward scrubbed Persona error and crash reports to your Sentry project. No DSN means no reports are collected or sent.",
+  "environmentTitle": "Environment", "environmentDescription": "The Sentry event environment, such as production or staging.",
+  "sampleTitle": "Sample rate", "sampleDescription": "Between 0 and 1: 1 sends all reports; 0.5 randomly sends half.",
+  "logsTitle": "Include error log lines", "logsDescription": "When disabled, only exceptions, crashes and panics are sent.",
+  "httpTitle": "Allow an HTTP DSN", "httpDescription": "For a trusted self-hosted instance only. HTTP sends reports and the public key unencrypted, allowing observers to read reports and forge events.",
+  "dsnDescription": "The project's Client Keys (DSN) value. Store it in the secret field. An HTTP DSN also requires allow_http."
+}
