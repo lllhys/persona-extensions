@@ -294,7 +294,7 @@
         "network": {"type": "array", "items": {"$ref": "#/$defs/NetworkEntry"}},
         "hub_api": {"type": "boolean", "description": "The old way: the hub's full token. With hub scopes, the scopes win."},
         "hub": {"type": "array", "description": "The scopes of the hub's API it calls: its token opens their routes only.",
-          "items": {"type": "string", "pattern": "^(kb\\.read|kb\\.write|sent\\.read|inbox\\.read|inbox\\.write|agents\\.read|agents\\.control|agents\\.permission_mode|machines\\.read|notify|assistant\\.ask|assistant\\.read|todos\\.read|todos\\.write|models|extensions\\.call:[a-z0-9][a-z0-9_-]{0,31})$"}},
+          "items": {"type": "string", "pattern": "^(kb\\.read|kb\\.write|sent\\.read|inbox\\.read|inbox\\.write|agents\\.read|agents\\.control|agents\\.permission_mode|machines\\.read|notify|assistant\\.ask|assistant\\.read|todos\\.read|todos\\.write|leaders\\.read|models|extensions\\.call:[a-z0-9][a-z0-9_-]{0,31})$"}},
         "launcher_keys": {"type": "boolean"},
         "gh_login": {"type": "boolean", "description": "It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector), held in its memory only."},
         "usage_gateways": {"type": "boolean", "description": "It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts): accounts, status and quota windows, never a key."},
@@ -531,7 +531,7 @@
       "required": ["id"]
     },
     "TunnelItem": {
-      "description": "A tunnel the apps can reach this hub through when its own addresses do not answer (docs \"In-app tunnels\"): an in-app tunnel core built into the app, going to the configuration's target_host and target_port.",
+      "description": "A tunnel the apps can reach this hub through when its own addresses do not answer (docs \"In-app tunnels\"): an in-app tunnel core built into the app, going to the configuration's target_host and target_port; an optional integer ssh_port is the hub machine's SSH port, for an SSH tunnel the app dials through this tunnel.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -735,7 +735,7 @@
       "additionalProperties": false,
       "properties": {
         "id": {"$ref": "#/$defs/ID"},
-        "subscribe": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["kb.changed", "kb.forgotten", "inbox.changed", "agent.needs_you", "agent.finished", "todo.changed", "todo.decision"]}}
+        "subscribe": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["kb.changed", "kb.forgotten", "inbox.changed", "agent.needs_you", "agent.finished", "todo.changed", "todo.decision", "leader.changed", "leader.report"]}}
       },
       "required": ["id", "subscribe"]
     },

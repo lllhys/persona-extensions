@@ -504,7 +504,8 @@ export interface ErrorReportsItem {
 
 /**
  * A tunnel the apps can reach this hub through when its own addresses do not answer (docs "In-app tunnels"): an
- * in-app tunnel core built into the app, going to the configuration's target_host and target_port.
+ * in-app tunnel core built into the app, going to the configuration's target_host and target_port; an optional
+ * integer ssh_port is the hub machine's SSH port, for an SSH tunnel the app dials through this tunnel.
  */
 export interface TunnelItem {
   id: string;
@@ -4102,6 +4103,10 @@ export interface ConnectorPrompt {
   /** Seconds between asks of a device_code or qr step. */
   interval?: number;
   qr?: ConnectorQRCode;
+  /** An absolute URL where this step's action is completed; empty means no link. */
+  link?: string;
+  /** The label for the optional link. */
+  link_text?: string;
   hint?: string;
   error?: string;
   done?: boolean;
@@ -4801,17 +4806,24 @@ export interface TodoEventThread {
 }
 
 /**
- * event.todo.changed: a to-do was created or deleted, or its title, whether it is done (or failed to start), or the
- * thread it is bound to changed. Changes within about a second of each other are told once, as the to-do is at the
- * end of them. title, thread and done are as after the change (the last ones for a deleted to-do); thread is left out
- * when the to-do has none, done unless the to-do is done (closed, or its task failed to start). Notes, agents and
- * decisions changing do not send it (decisions have event.todo.decision). Read the to-do again if it matters.
+ * event.todo.changed: a to-do was created or deleted, or its title, whether it is done (or failed to start), its
+ * supervisor, or the thread it is bound to changed. Changes within about a second of each other are told once, as the
+ * to-do is at the end of them. title, thread and done are as after the change (the last ones for a deleted to-do);
+ * thread is left out when the to-do has none, done unless the to-do is done (closed, or its task failed to start).
+ * supervisor is the conversation that supervises it (the main conversation or a leader, see leaders.schema.json),
+ * left out when none does; a change of supervisor (the task moved to another leader) sends it too. kind is concern
+ * for something the owner raised in the main conversation and wants an answer to; such a to-do is done only once its
+ * outcome was reported to the owner (an event.todo.decision of source reported comes with it), never on its own; kind
+ * is left out for a to-do or a task and never changes. Notes, agents and decisions changing do not send it (decisions
+ * have event.todo.decision). Read the to-do again if it matters.
  */
 export interface TodoChangedEvent {
   id: string;
   title: string;
   thread?: TodoEventThread;
   done?: boolean;
+  supervisor?: string;
+  kind?: string;
   what: string;
 }
 
@@ -4819,7 +4831,8 @@ export interface TodoChangedEvent {
  * A decision on a to-do: what was asked and chosen (reason and supersedes_id left out when empty), and where it came
  * from: manual (written in the to-do), card (the user answered an Agent's question card), outcome (pulled out of an
  * Agent's finished work, not made by the user), agent (an Agent noted it), thread (the user's reply in the to-do's
- * chat thread).
+ * chat thread), reported (what the main conversation told the owner of a concern's outcome, as choice; it closes the
+ * concern).
  */
 export interface TodoEventDecision {
   id: string;
@@ -4841,6 +4854,50 @@ export interface TodoDecisionEvent {
   title: string;
   thread?: TodoEventThread;
   decision: TodoEventDecision;
+}
+
+/**
+ * event.leader.changed: a leader conversation was made (a side conversation added to assistant.leaders), its title
+ * changed, it was filed under another knowledge-base project, it ended (it left assistant.leaders; nothing is
+ * deleted) or it was made a leader again. id is the leader conversation's session id, the key a work-log record
+ * keeps; title its title as the apps show it; name what the direction is called, to show it by (the name the owner or
+ * the secretary gave it, else its knowledge-base project's name, else the title without its "MMDD | kind | " prefix;
+ * always sent by a hub that has it, #3679); project the knowledge-base project's slug, left out while it has none;
+ * ended true once it is no longer a leader, left out while it is.
+ */
+export interface LeaderChangedEvent {
+  id: string;
+  title: string;
+  name?: string;
+  project?: string;
+  ended?: boolean;
+}
+
+/**
+ * event.leader.report: one of a leader's tasks reached its goal (reached: its review accepted it), needs the owner's
+ * decision (decision: its review says needs_user, or a plan of the leader's waits for the owner's Start), or is stuck
+ * (stuck: in Waiting on you or stopped unfinished for 24 hours, told at most once per 24 hours); those are written by
+ * the hub from the task's ledger, never by a model. progress (#3679) is the leader's own summary of its direction at
+ * the goal level, sent with its leader_progress tool: reached, doing (and where it is stuck), needs_you (what the
+ * owner has to do) and links (evidence; link is the first), text the three put together, todo "". id names the report
+ * (never sent twice; key on it to be safe), leader the leader conversation's id, todo the task's to-do id (GET
+ * /api/v1/todos with todos.read reads it; "" for a plan, which has no to-do until it starts), plan the waiting plan's
+ * id (only on a decision about a plan), text at most 300 characters in the owner's language, link the task's PR or
+ * delivery link when it has one, at when what it reports happened.
+ */
+export interface LeaderReportEvent {
+  id: string;
+  leader: string;
+  kind: string;
+  todo: string;
+  plan?: string;
+  text: string;
+  link?: string;
+  at: string;
+  reached?: string;
+  doing?: string;
+  needs_you?: string;
+  links?: string[];
 }
 
 /**
@@ -5603,6 +5660,8 @@ export const CALLS: Record<string, Call> = {
   "event.kb.forgotten": { from: "hub", params: "KBForgottenEvent", event: true },
   "event.todo.changed": { from: "hub", params: "TodoChangedEvent", event: true },
   "event.todo.decision": { from: "hub", params: "TodoDecisionEvent", event: true },
+  "event.leader.changed": { from: "hub", params: "LeaderChangedEvent", event: true },
+  "event.leader.report": { from: "hub", params: "LeaderReportEvent", event: true },
   "model.complete": { from: "program", params: "ModelCompleteParams", result: "ModelCompleteResult" },
   "assistant.conversations": { from: "program", params: "AssistantConversationsParams", result: "AssistantConversationsResult" },
   "assistant.messages": { from: "program", params: "AssistantMessagesParams", result: "AssistantMessagesResult" },

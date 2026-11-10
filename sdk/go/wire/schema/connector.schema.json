@@ -1160,6 +1160,8 @@
         "user_code": {"type": "string"},
         "interval": {"type": "integer", "description": "Seconds between asks of a device_code or qr step."},
         "qr": {"$ref": "#/$defs/ConnectorQRCode"},
+        "link": {"type": "string", "description": "An absolute URL where this step's action is completed; empty means no link."},
+        "link_text": {"type": "string", "description": "The label for the optional link."},
         "hint": {"type": "string"},
         "error": {"type": "string"},
         "done": {"type": "boolean"},

@@ -528,7 +528,8 @@ type ErrorReportsItem struct {
 }
 
 // TunnelItem: A tunnel the apps can reach this hub through when its own addresses do not answer (docs "In-app
-// tunnels"): an in-app tunnel core built into the app, going to the configuration's target_host and target_port.
+// tunnels"): an in-app tunnel core built into the app, going to the configuration's target_host and target_port; an
+// optional integer ssh_port is the hub machine's SSH port, for an SSH tunnel the app dials through this tunnel.
 type TunnelItem struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -3911,9 +3912,13 @@ type ConnectorPrompt struct {
 	// Seconds between asks of a device_code or qr step.
 	Interval int              `json:"interval,omitempty"`
 	Qr       *ConnectorQRCode `json:"qr,omitempty"`
-	Hint     string           `json:"hint,omitempty"`
-	Error    string           `json:"error,omitempty"`
-	Done     bool             `json:"done,omitempty"`
+	// An absolute URL where this step's action is completed; empty means no link.
+	Link string `json:"link,omitempty"`
+	// The label for the optional link.
+	LinkText string `json:"link_text,omitempty"`
+	Hint     string `json:"hint,omitempty"`
+	Error    string `json:"error,omitempty"`
+	Done     bool   `json:"done,omitempty"`
 	// Who is signed in, once done.
 	Account string `json:"account,omitempty"`
 }
@@ -4533,23 +4538,30 @@ type TodoEventThread struct {
 }
 
 // TodoChangedEvent: event.todo.changed: a to-do was created or deleted, or its title, whether it is done (or failed
-// to start), or the thread it is bound to changed. Changes within about a second of each other are told once, as the
-// to-do is at the end of them. title, thread and done are as after the change (the last ones for a deleted to-do);
-// thread is left out when the to-do has none, done unless the to-do is done (closed, or its task failed to start).
-// Notes, agents and decisions changing do not send it (decisions have event.todo.decision). Read the to-do again if
-// it matters.
+// to start), its supervisor, or the thread it is bound to changed. Changes within about a second of each other are
+// told once, as the to-do is at the end of them. title, thread and done are as after the change (the last ones for a
+// deleted to-do); thread is left out when the to-do has none, done unless the to-do is done (closed, or its task
+// failed to start). supervisor is the conversation that supervises it (the main conversation or a leader, see
+// leaders.schema.json), left out when none does; a change of supervisor (the task moved to another leader) sends it
+// too. kind is concern for something the owner raised in the main conversation and wants an answer to; such a to-do
+// is done only once its outcome was reported to the owner (an event.todo.decision of source reported comes with it),
+// never on its own; kind is left out for a to-do or a task and never changes. Notes, agents and decisions changing do
+// not send it (decisions have event.todo.decision). Read the to-do again if it matters.
 type TodoChangedEvent struct {
-	ID     string           `json:"id"`
-	Title  string           `json:"title"`
-	Thread *TodoEventThread `json:"thread,omitempty"`
-	Done   bool             `json:"done,omitempty"`
-	What   string           `json:"what"`
+	ID         string           `json:"id"`
+	Title      string           `json:"title"`
+	Thread     *TodoEventThread `json:"thread,omitempty"`
+	Done       bool             `json:"done,omitempty"`
+	Supervisor string           `json:"supervisor,omitempty"`
+	Kind       string           `json:"kind,omitempty"`
+	What       string           `json:"what"`
 }
 
 // TodoEventDecision: A decision on a to-do: what was asked and chosen (reason and supersedes_id left out when empty),
 // and where it came from: manual (written in the to-do), card (the user answered an Agent's question card), outcome
 // (pulled out of an Agent's finished work, not made by the user), agent (an Agent noted it), thread (the user's reply
-// in the to-do's chat thread).
+// in the to-do's chat thread), reported (what the main conversation told the owner of a concern's outcome, as choice;
+// it closes the concern).
 type TodoEventDecision struct {
 	ID           string `json:"id"`
 	Question     string `json:"question"`
@@ -4568,6 +4580,46 @@ type TodoDecisionEvent struct {
 	Title    string            `json:"title"`
 	Thread   *TodoEventThread  `json:"thread,omitempty"`
 	Decision TodoEventDecision `json:"decision"`
+}
+
+// LeaderChangedEvent: event.leader.changed: a leader conversation was made (a side conversation added to
+// assistant.leaders), its title changed, it was filed under another knowledge-base project, it ended (it left
+// assistant.leaders; nothing is deleted) or it was made a leader again. id is the leader conversation's session id,
+// the key a work-log record keeps; title its title as the apps show it; name what the direction is called, to show it
+// by (the name the owner or the secretary gave it, else its knowledge-base project's name, else the title without its
+// "MMDD | kind | " prefix; always sent by a hub that has it, #3679); project the knowledge-base project's slug, left
+// out while it has none; ended true once it is no longer a leader, left out while it is.
+type LeaderChangedEvent struct {
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Name    string `json:"name,omitempty"`
+	Project string `json:"project,omitempty"`
+	Ended   bool   `json:"ended,omitempty"`
+}
+
+// LeaderReportEvent: event.leader.report: one of a leader's tasks reached its goal (reached: its review accepted it),
+// needs the owner's decision (decision: its review says needs_user, or a plan of the leader's waits for the owner's
+// Start), or is stuck (stuck: in Waiting on you or stopped unfinished for 24 hours, told at most once per 24 hours);
+// those are written by the hub from the task's ledger, never by a model. progress (#3679) is the leader's own summary
+// of its direction at the goal level, sent with its leader_progress tool: reached, doing (and where it is stuck),
+// needs_you (what the owner has to do) and links (evidence; link is the first), text the three put together, todo "".
+// id names the report (never sent twice; key on it to be safe), leader the leader conversation's id, todo the task's
+// to-do id (GET /api/v1/todos with todos.read reads it; "" for a plan, which has no to-do until it starts), plan the
+// waiting plan's id (only on a decision about a plan), text at most 300 characters in the owner's language, link the
+// task's PR or delivery link when it has one, at when what it reports happened.
+type LeaderReportEvent struct {
+	ID       string    `json:"id"`
+	Leader   string    `json:"leader"`
+	Kind     string    `json:"kind"`
+	Todo     string    `json:"todo"`
+	Plan     string    `json:"plan,omitempty"`
+	Text     string    `json:"text"`
+	Link     string    `json:"link,omitempty"`
+	At       time.Time `json:"at"`
+	Reached  string    `json:"reached,omitempty"`
+	Doing    string    `json:"doing,omitempty"`
+	NeedsYou string    `json:"needs_you,omitempty"`
+	Links    []string  `json:"links,omitempty"`
 }
 
 // ModelErrorCode: error.code of model.complete besides permission_denied (data {scope: "models"}): invalid_params;
@@ -5943,6 +5995,8 @@ var newDef = map[string]func() any{
 	"TodoChangedEvent":              func() any { return new(TodoChangedEvent) },
 	"TodoEventDecision":             func() any { return new(TodoEventDecision) },
 	"TodoDecisionEvent":             func() any { return new(TodoDecisionEvent) },
+	"LeaderChangedEvent":            func() any { return new(LeaderChangedEvent) },
+	"LeaderReportEvent":             func() any { return new(LeaderReportEvent) },
 	"ModelMessage":                  func() any { return new(ModelMessage) },
 	"ModelCompleteParams":           func() any { return new(ModelCompleteParams) },
 	"ModelUsage":                    func() any { return new(ModelUsage) },
@@ -6071,6 +6125,8 @@ var Calls = map[string]Call{
 	"event.kb.forgotten":             {Name: "event.kb.forgotten", From: "hub", Params: "KBForgottenEvent", Result: "", Event: true},
 	"event.todo.changed":             {Name: "event.todo.changed", From: "hub", Params: "TodoChangedEvent", Result: "", Event: true},
 	"event.todo.decision":            {Name: "event.todo.decision", From: "hub", Params: "TodoDecisionEvent", Result: "", Event: true},
+	"event.leader.changed":           {Name: "event.leader.changed", From: "hub", Params: "LeaderChangedEvent", Result: "", Event: true},
+	"event.leader.report":            {Name: "event.leader.report", From: "hub", Params: "LeaderReportEvent", Result: "", Event: true},
 	"model.complete":                 {Name: "model.complete", From: "program", Params: "ModelCompleteParams", Result: "ModelCompleteResult"},
 	"assistant.conversations":        {Name: "assistant.conversations", From: "program", Params: "AssistantConversationsParams", Result: "AssistantConversationsResult"},
 	"assistant.messages":             {Name: "assistant.messages", From: "program", Params: "AssistantMessagesParams", Result: "AssistantMessagesResult"},

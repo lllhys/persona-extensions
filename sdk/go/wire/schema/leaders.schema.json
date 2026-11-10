@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "leaders.schema.json",
+  "title": "Leader events",
+  "description": "What the hub tells an extension's program of the leader conversations, one per direction of the owner's work (docs/design/proposals/owner-at-a-glance.md \"Contract with a work-log extension\"): event.leader.changed and event.leader.report. Only an extension that subscribes to the topic (contributes.events) and was granted leaders.read at install is told; to learn the leaders that were made before it was installed it calls GET /api/v1/assistant/leaders with the same scope. Each change and each report is told once: a hub restart or a replay of the same state tells nothing again. Plugin-side: only the hub and the program speak it.",
+  "x-side": "plugin",
+  "x-events": {
+    "event.leader.changed": {"from": "hub", "params": "LeaderChangedEvent"},
+    "event.leader.report": {"from": "hub", "params": "LeaderReportEvent"}
+  },
+  "$defs": {
+    "LeaderChangedEvent": {
+      "description": "event.leader.changed: a leader conversation was made (a side conversation added to assistant.leaders), its title changed, it was filed under another knowledge-base project, it ended (it left assistant.leaders; nothing is deleted) or it was made a leader again. id is the leader conversation's session id, the key a work-log record keeps; title its title as the apps show it; name what the direction is called, to show it by (the name the owner or the secretary gave it, else its knowledge-base project's name, else the title without its \"MMDD | kind | \" prefix; always sent by a hub that has it, #3679); project the knowledge-base project's slug, left out while it has none; ended true once it is no longer a leader, left out while it is.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "name": {"type": "string"},
+        "project": {"type": "string"},
+        "ended": {"type": "boolean"}
+      },
+      "required": ["id", "title"]
+    },
+    "LeaderReportEvent": {
+      "description": "event.leader.report: one of a leader's tasks reached its goal (reached: its review accepted it), needs the owner's decision (decision: its review says needs_user, or a plan of the leader's waits for the owner's Start), or is stuck (stuck: in Waiting on you or stopped unfinished for 24 hours, told at most once per 24 hours); those are written by the hub from the task's ledger, never by a model. progress (#3679) is the leader's own summary of its direction at the goal level, sent with its leader_progress tool: reached, doing (and where it is stuck), needs_you (what the owner has to do) and links (evidence; link is the first), text the three put together, todo \"\". id names the report (never sent twice; key on it to be safe), leader the leader conversation's id, todo the task's to-do id (GET /api/v1/todos with todos.read reads it; \"\" for a plan, which has no to-do until it starts), plan the waiting plan's id (only on a decision about a plan), text at most 300 characters in the owner's language, link the task's PR or delivery link when it has one, at when what it reports happened.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "leader": {"type": "string"},
+        "kind": {"type": "string", "enum": ["reached", "decision", "stuck", "progress"]},
+        "todo": {"type": "string"},
+        "plan": {"type": "string"},
+        "text": {"type": "string", "maxLength": 300},
+        "link": {"type": "string"},
+        "at": {"type": "string", "format": "date-time"},
+        "reached": {"type": "string"},
+        "doing": {"type": "string"},
+        "needs_you": {"type": "string"},
+        "links": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": ["id", "leader", "kind", "todo", "text", "at"]
+    }
+  }
+}
