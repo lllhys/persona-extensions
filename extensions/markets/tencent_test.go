@@ -363,7 +363,7 @@ func TestLayoutGroups(t *testing.T) {
 	for _, s := range v.Sections {
 		titles = append(titles, s.Title)
 	}
-	if !slices.Equal(titles[:6], []string{"大盘", "自选 · 动得最多的", "", "加密货币 · 2", "A股 · 2", "港股 · 1"}) {
+	if !slices.Equal(titles[:6], []string{"大盘", "自选 · 动得最多的", "排序", "加密货币 · 2", "A股 · 2", "港股 · 1"}) {
 		t.Fatalf("groups %q", titles)
 	}
 	got := texts(v)
@@ -631,21 +631,16 @@ func TestBatchTwoPage(t *testing.T) {
 	if got := texts(v); !strings.Contains(got, "[-3.68% positive] →open:cn:300750.SZ") {
 		t.Errorf("a fall is not toned:\n%s", got)
 	}
+	// the order and the markets the watchlist has, both visible without a tap
 	ctl := v.Sections[2].Items
-	if len(ctl) != 1 || ctl[0].Title != "排序 · 自选顺序 · 全部" || ctl[0].Action.ID != "opts" {
-		t.Fatalf("controls folded: %+v", ctl)
-	}
-	// the row opens the choices: the order, and the markets the watchlist has
-	r := act(t, p, v.State, "opts", nil)
-	ctl = r.View.Sections[2].Items
-	if len(ctl) != 3 || ctl[1].Name != "sort" || ctl[2].Name != "mkt" || len(ctl[2].Choices) != 4 || ctl[2].Choices[3].Title != "美股" {
+	if len(ctl) != 2 || ctl[0].Name != "sort" || ctl[1].Name != "mkt" || len(ctl[1].Choices) != 4 || ctl[1].Choices[3].Title != "美股" {
 		t.Fatalf("controls: %+v", ctl)
 	}
 
 	// the biggest fall first within each group: 宁德时代 -3.68%, 上证指数 -1.10%, 贵州茅台 -0.79%
-	r = act(t, p, r.View.State, "sort", map[string]string{"sort": "down"})
-	if ctl := r.View.Sections[2].Items; len(ctl) != 1 || ctl[0].Title != "排序 · 跌幅 · 全部" {
-		t.Errorf("a choice does not fold the controls: %+v", ctl)
+	r := act(t, p, v.State, "sort", map[string]string{"sort": "down"})
+	if ctl := r.View.Sections[2].Items; len(ctl) != 2 || ctl[0].Value != "down" {
+		t.Errorf("a choice hides or misses the controls: %+v", ctl)
 	}
 	if got := rowTitles(*r.View, "A股"); !slices.Equal(got, []string{"宁德时代", "上证指数", "贵州茅台"}) {
 		t.Errorf("by fall: %v", got)

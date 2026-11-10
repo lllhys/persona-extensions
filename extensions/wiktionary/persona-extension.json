@@ -1,0 +1,89 @@
+{
+  "manifest_version": 1,
+  "id": "wiktionary",
+  "name": "Wiktionary 多语词典",
+  "version": "0.1.0",
+  "description": "查询英文、中文和日文 Wiktionary 的词性、释义与例句，提供原始条目链接。内容由 hub 通过公开 API 获取，无需账号。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/wiktionary/README.md",
+  "tags": [
+    "词典",
+    "语言",
+    "Wiktionary"
+  ],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "mode": "deno",
+    "source": {
+      "entry": "src/index.ts",
+      "bundle": "build/wiktionary.mjs",
+      "sha256": "d1af2cae6174bc2495de79d293e72a30e2d0d48138c393f9a883f79b108ac0f0"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "wiktionary",
+        "name": "Wiktionary",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "en.wiktionary.org",
+          "zh.wiktionary.org",
+          "ja.wiktionary.org"
+        ],
+        "agent_tools": [
+          "wiktionary_*"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "lookup",
+        "title": "查词典",
+        "placement": "nav_page",
+        "icon": "doc"
+      }
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "language": {
+        "type": "string",
+        "title": "Wiktionary 语言",
+        "default": "auto",
+        "description": "auto 跟随 Persona 界面语言；英文选 en，中文选 zh，日文选 ja",
+        "oneOf": [
+          {
+            "const": "auto",
+            "title": "跟随界面语言"
+          },
+          {
+            "const": "en",
+            "title": "English"
+          },
+          {
+            "const": "zh",
+            "title": "中文"
+          },
+          {
+            "const": "ja",
+            "title": "日本語"
+          }
+        ]
+      }
+    }
+  },
+  "permissions": {
+    "network": [
+      "en.wiktionary.org",
+      "zh.wiktionary.org",
+      "ja.wiktionary.org"
+    ]
+  }
+}

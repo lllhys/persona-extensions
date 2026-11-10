@@ -29,7 +29,7 @@ globalThis.fetch = async input => {
 globalThis.setInterval = () => 123; globalThis.clearInterval = () => {};
 try {
   const program = bundle.default;
-  assert.equal(program.manifest, undefined); assert.equal(program.fetch, undefined); assert.equal(program.id, "markets"); assert.equal(program.version, "0.6.5");
+  assert.equal(program.manifest, undefined); assert.equal(program.fetch, undefined); assert.equal(program.id, "markets"); assert.equal(program.version, "0.6.6");
   await program.init({ config: { tz: "UTC" } }, hub);
   const quote = await program.namespaces.connector("tools.call", { name: "markets_quote", args: { symbols: ["BTC-USDT"] }, locale: "en" });
   assert.match(quote.text, /100/);

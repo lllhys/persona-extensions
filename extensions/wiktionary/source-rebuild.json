@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "bundle": "source-reference/bundle.mjs",
+  "build": "build:source",
+  "output": "build/wiktionary.mjs",
+  "archive": "build/wiktionary-source.tar.gz",
+  "extracted_extension": "authoring/extensions/wiktionary",
+  "extracted_sdk": "authoring/sdk/ts"
+}

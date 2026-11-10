@@ -1,0 +1,56 @@
+{
+  "manifest_version": 1,
+  "id": "openlibrary",
+  "name": "Open Library 图书发现",
+  "version": "0.1.0",
+  "description": "按书名、作者或 ISBN 搜索图书，查看出版信息、作品简介和 Open Library 阅读入口。内容由 hub 通过公开 API 获取，无需账号。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/openlibrary/README.md",
+  "tags": [
+    "图书",
+    "阅读",
+    "Open Library"
+  ],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "mode": "deno",
+    "source": {
+      "entry": "src/index.ts",
+      "bundle": "build/openlibrary.mjs",
+      "sha256": "bc62431b41169995bbd9576cd5d1335125438e8e65c75e076218e63f26953b4a"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "openlibrary",
+        "name": "Open Library",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "openlibrary.org"
+        ],
+        "agent_tools": [
+          "openlibrary_*"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "discover",
+        "title": "发现图书",
+        "placement": "nav_page",
+        "icon": "doc"
+      }
+    ]
+  },
+  "permissions": {
+    "network": [
+      "openlibrary.org"
+    ]
+  }
+}
