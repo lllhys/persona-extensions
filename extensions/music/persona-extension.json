@@ -1,0 +1,128 @@
+{
+  "manifest_version": 1,
+  "id": "music",
+  "name": "Music",
+  "version": "0.8.1",
+  "description": "Music in Persona: one page and assistant tools for the endpoints you connect. See what is playing, browse playlists and recently played, search, and control playback where an endpoint allows it. Writes ask on your phone first.",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/music/README.md",
+  "tags": [
+    "music",
+    "playlists",
+    "library",
+    "listening"
+  ],
+  "engines": {
+    "persona": ">=202611101245",
+    "extension_protocol": 1
+  },
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/music-linux-amd64",
+      "linux-arm64": "bin/music-linux-arm64",
+      "darwin-arm64": "bin/music-darwin-arm64",
+      "darwin-amd64": "bin/music-darwin-amd64"
+    }
+  },
+  "node": {
+    "command": {
+      "darwin-arm64": "bin/music-darwin-arm64",
+      "darwin-amd64": "bin/music-darwin-amd64"
+    },
+    "args": [
+      "node"
+    ],
+    "machines": "macs",
+    "permissions": {
+      "files": true,
+      "macos_privacy": true
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "applemusic",
+        "name": "Apple Music",
+        "capabilities": [
+          "status",
+          "tools",
+          "actions"
+        ],
+        "hosts": [
+          "music.apple.com"
+        ],
+        "confirm_always": [
+          "applemusic_*_create_playlist"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "music",
+        "title": "Music",
+        "placement": "nav_page",
+        "icon": "music"
+      },
+      {
+        "id": "page",
+        "title": "Music",
+        "placement": "plugin_page"
+      }
+    ],
+    "skills": [
+      {
+        "id": "music",
+        "dir": "skills/music"
+      },
+      {
+        "id": "applemusic",
+        "dir": "skills/applemusic"
+      }
+    ],
+    "prompts": [
+      {
+        "id": "listening-now",
+        "kind": "quick",
+        "title": "What am I listening to",
+        "text": "What am I listening to right now, and what did I listen to recently?"
+      },
+      {
+        "id": "build-playlist",
+        "kind": "quick",
+        "title": "Build a playlist",
+        "text": "Help me build a playlist for: "
+      },
+      {
+        "id": "play-something",
+        "kind": "quick",
+        "title": "Play something",
+        "text": "Play something for: "
+      }
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "macs": {
+        "type": "array",
+        "title": "Macs",
+        "description": "The Mac whose Music library this extension reads and controls. Turn on a computer here; macOS asks for Automation permission the first time.",
+        "items": {
+          "type": "string",
+          "format": "machine",
+          "x-os": [
+            "darwin"
+          ]
+        },
+        "maxItems": 1,
+        "x-confirm": "Persona reads this Mac's Music library and can control playback there. macOS asks for Automation permission the first time."
+      },
+      "iphone": {
+        "type": "boolean",
+        "title": "iPhone",
+        "description": "Show the Music app on your iPhone on the Music page. The assistant reads a snapshot with the Persona app; playback stays on the phone.",
+        "default": false
+      }
+    }
+  }
+}

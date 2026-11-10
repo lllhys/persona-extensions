@@ -23,7 +23,7 @@ NEW, OLD = "persona-extension.json", "persona-plugin.json"
 # What a hub takes as a market entry's tags (nwverse/persona server/internal/extension/market.go).
 TAGS_MOST, TAG_LONGEST = 16, 24
 # The directories scripts/package.sh copies into a package besides the manifest and the program.
-PACKAGED_DIRS = ("skills", "assistant")
+PACKAGED_DIRS = ("skills", "assistant", "l10n")
 # macOS/editor junk by basename: AppleDouble ._* and .DS_Store (a stray ._* at the package root is a second
 # top-level entry, so the hub finds no manifest) and Python's __pycache__/. scripts/package.sh excludes the same
 # names from the tar; failing here names the file to remove before a package is ever built.

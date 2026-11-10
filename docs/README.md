@@ -16,6 +16,7 @@
 - [Feishu Sidebar](extensions/feishu-sidebar.md): open the user's Persona web from a Feishu sidebar through a built applink (no Feishu app, no requests, no credentials), and an assistant tool for the same link.
 - [RSSHub](extensions/rsshub.md): subscribe to RSSHub routes or any RSS, Atom or JSON feed on the public or your own instance (with its access key); the navigation page with unread entries, tags and route previews, the background refresh with ETag caching, assistant tools with confirmed subscription changes, and the sandbox.
 - [Weather](extensions/weather.md): Open-Meteo's current weather, next-24-hours line, 7-day forecast and air quality on the main navigation, with assistant tools, no key needed.
+- [Music](extensions/music.md): a generic music extension (one connector per service; Apple Music first) with a Mac endpoint (library, player, lyrics and artwork) and an iPhone snapshot endpoint; a source switch (All sources, Apple Music) with per-device labels, a now-playing card and a player page.
 - [Markets](extensions/markets.md): cryptocurrency (OKX) and A-share, Hong Kong and US stock (Tencent) watchlist on the main navigation, price and volume charts, assistant tools and rate limits.
 - [Telegram](extensions/telegram.md): login, inbox, archives, network requirements, tools and the `tg` CLI.
 - [Discord](extensions/discord.md): your own bot as a read-only source: setting it up, what goes into the knowledge base and how nothing is skipped, the assistant tools, status, network and the sandbox.

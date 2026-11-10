@@ -1,0 +1,15 @@
+{
+  "name": "音乐",
+  "description": "Persona 中的音乐：一个页面和助手工具，覆盖你连接的各个端点。查看正在播放、浏览播放列表和最近播放、搜索，并在端点允许时控制播放。写入前会先在手机上确认。",
+  "configuration": {
+    "macs": {
+      "title": "Mac",
+      "description": "读取并控制哪台 Mac 上的音乐资料库。在这里打开一台电脑；首次使用时 macOS 会请求自动化权限。",
+      "confirm": "Persona 会读取这台 Mac 的音乐资料库，并可以控制播放。首次使用时 macOS 会请求自动化权限。"
+    },
+    "iphone": {
+      "title": "iPhone",
+      "description": "在音乐页面显示 iPhone 上的「音乐」App。助手通过 Persona App 读取快照；播放仍在手机上。"
+    }
+  }
+}

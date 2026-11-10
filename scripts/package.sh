@@ -17,8 +17,9 @@ rm -rf "${out:?}" && mkdir -p "$out/bin"
 # stop writing persona-plugin.json once the compatibility period ends (docs/reference.md, "Compatibility").
 scripts/manifest.py packaged "$id" >"$out/persona-extension.json"
 cp "$out/persona-extension.json" "$out/persona-plugin.json"
-# What the manifest points at besides the program: the assistant's skills and instructions.
-for extra in skills assistant; do
+# What the manifest points at besides the program: the assistant's skills and instructions, and the manifest's
+# translations the hub reads from l10n/.
+for extra in skills assistant l10n; do
   [ -d "$src/$extra" ] && cp -R "$src/$extra" "$out/"
 done
 # A declarative extension (no runtime: skills, prompts, themes, a pack…) has no program to build.
