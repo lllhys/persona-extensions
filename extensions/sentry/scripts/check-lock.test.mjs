@@ -22,12 +22,12 @@ test("unapproved origins, links, credentials and metadata fail closed", async ()
     const polluted = structuredClone(lock);
     polluted.packages["node_modules/typescript"].resolved = source;
     await assert.rejects(() => verifyPublicLockObject(polluted));
-    assert.throws(() => verifyPublicLockObject(polluted));
+    await assert.rejects(() => verifyPublicLockObject(polluted));
   }
   for (const source of ["../../other-sdk", "https://registry.npmjs.org/other.tgz"]) {
     const polluted = structuredClone(lock);
     polluted.packages["node_modules/@persona/extension"].resolved = source;
-    assert.throws(() => verifyPublicLockObject(polluted));
+    await assert.rejects(() => verifyPublicLockObject(polluted));
   }
   const polluted = structuredClone(lock);
   polluted.packages[""]._authToken = "fixture-token";
