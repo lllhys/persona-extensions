@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { verifyPublicLock } from "./public-lock.mjs";
 
 const lockURL = new URL("../package-lock.json", import.meta.url);
@@ -16,32 +18,26 @@ test("author and archived locks use public npm and the approved relative SDK", a
 
 test("unapproved origins, links, credentials and metadata fail closed", async () => {
   const lock = JSON.parse(await readFile(lockURL, "utf8"));
+  const verify = async mutated => {
+    const dir = await mkdtemp(join(tmpdir(), "sentry-public-lock-"));
+    try {
+      await writeFile(join(dir, "lock.json"), JSON.stringify(mutated));
+      await verifyPublicLock(join(dir, "lock.json"), "../../sdk/ts");
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  };
   for (const source of ["https://registry.example.com/package.tgz", "http://registry.npmjs.org/package.tgz",
     "https://registry.npmjs.org:444/package.tgz", "https://<user>:<password>@registry.npmjs.org/package.tgz",
     "https://registry.npmjs.org/package.tgz?token=fixture-token"]) {
     const polluted = structuredClone(lock);
     polluted.packages["node_modules/typescript"].resolved = source;
-    await assert.rejects(() => verifyPublicLockObject(polluted));
-    await assert.rejects(() => verifyPublicLockObject(polluted));
+    await assert.rejects(() => verify(polluted));
   }
   for (const source of ["../../other-sdk", "https://registry.npmjs.org/other.tgz"]) {
     const polluted = structuredClone(lock);
     polluted.packages["node_modules/@persona/extension"].resolved = source;
-    await assert.rejects(() => verifyPublicLockObject(polluted));
+    await assert.rejects(() => verify(polluted));
   }
   const polluted = structuredClone(lock);
   polluted.packages[""]._authToken = "fixture-token";
-  assert.throws(() => verifyPublicLockObject(polluted));
+  await assert.rejects(() => verify(polluted));
 });
-
-// Run the same production validator without creating an on-disk mutated lock.
-async function verifyPublicLockObject(lock) {
-  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
-  const { tmpdir } = await import("node:os");
-  const { join } = await import("node:path");
-  const dir = await mkdtemp(join(tmpdir(), "sentry-public-lock-"));
-  try {
-    await writeFile(join(dir, "lock.json"), JSON.stringify(lock));
-    await verifyPublicLock(join(dir, "lock.json"), "../../sdk/ts");
-  } finally { await rm(dir, { recursive: true, force: true }); }
-}
