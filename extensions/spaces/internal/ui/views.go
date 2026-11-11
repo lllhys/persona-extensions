@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/sdk/go/ext"
 	"github.com/nwverse/persona/sdk/go/wire"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
 )
 
 // Limits of the screens. A wire string holds at most maxText runes; a row's title at most maxTitle.

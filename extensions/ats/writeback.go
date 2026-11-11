@@ -117,7 +117,14 @@ func BuildOutcomeDecision(t *Task) (OutcomeDecisionPayload, bool) {
 			}
 			paths := make([]string, 0, maxArt)
 			for i := 0; i < maxArt; i++ {
-				if p := strings.TrimSpace(last.Artifacts[i].Path); p != "" {
+				a := last.Artifacts[i]
+				p := strings.TrimSpace(a.Path)
+				switch {
+				case p == "" || a.Kind == "session":
+					// The session is already attached to the to-do; its id adds nothing here.
+				case a.Kind == "commit" && len(p) > 12:
+					paths = append(paths, p[:12])
+				default:
 					paths = append(paths, p)
 				}
 			}
@@ -346,7 +353,6 @@ func (w *DecisionWriter) WriteTaskOutcome(ctx context.Context, q *Queue, taskID 
 func (q *Queue) markDecisionWritten(taskID, ref string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	_ = q.loadLocked()
 	t, ok := q.tasks[taskID]
 	if !ok {
 		return ErrTaskNotFound
@@ -358,7 +364,6 @@ func (q *Queue) markDecisionWritten(taskID, ref string) error {
 func (q *Queue) markDecisionSkipped(taskID, reason string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	_ = q.loadLocked()
 	t, ok := q.tasks[taskID]
 	if !ok {
 		return ErrTaskNotFound

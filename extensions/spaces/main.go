@@ -18,10 +18,10 @@ import (
 	"github.com/nwverse/persona/sdk/go/ext"
 	"github.com/nwverse/persona/sdk/go/wire"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
 	"github.com/nwverse/persona-extensions/extensions/spaces/internal/mcp"
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/store"
 	"github.com/nwverse/persona-extensions/extensions/spaces/internal/ui"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/store"
 )
 
 //go:embed persona-extension.json

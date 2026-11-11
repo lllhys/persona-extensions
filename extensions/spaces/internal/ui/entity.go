@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/sdk/go/ext"
 	"github.com/nwverse/persona/sdk/go/wire"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
 )
 
 // The entity page's limits and labels. A segmented control holds at most segmentMost choices; past that the stages are

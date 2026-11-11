@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
 )
 
 //go:embed *.json

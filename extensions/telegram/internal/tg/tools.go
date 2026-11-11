@@ -44,6 +44,12 @@ const (
 )
 
 func (c *Conn) Call(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	return c.call(ctx, name, args, false)
+}
+
+// call is one tool: its text for the assistant, or with asJSON telegram_messages' and telegram_search's JSON for
+// subscriptions (catalog.go).
+func (c *Conn) call(ctx context.Context, name string, args json.RawMessage, asJSON bool) (string, error) {
 	if name == spec.CLITool {
 		return cmdLine(args)
 	}
@@ -83,9 +89,17 @@ func (c *Conn) Call(ctx context.Context, name string, args json.RawMessage) (str
 	case "telegram_chats":
 		out, err = c.toolChats(ctx, cl, bound(a.Limit, chatsDef, chatsMost), a.UnreadOnly)
 	case "telegram_messages":
-		out, err = c.toolMessages(ctx, cl, a.Chat, bound(a.Limit, messagesDef, messagesMost), a.Before)
+		if asJSON {
+			out, err = c.messagesJSON(ctx, cl, a.Chat, bound(a.Limit, messagesDef, messagesMost), a.Before)
+		} else {
+			out, err = c.toolMessages(ctx, cl, a.Chat, bound(a.Limit, messagesDef, messagesMost), a.Before)
+		}
 	case "telegram_search":
-		out, err = c.toolSearch(ctx, cl, a.Query, a.Chat, bound(a.Limit, searchDef, searchMost))
+		if asJSON {
+			out, err = c.searchJSON(ctx, cl, a.Query, a.Chat, bound(a.Limit, searchDef, searchMost))
+		} else {
+			out, err = c.toolSearch(ctx, cl, a.Query, a.Chat, bound(a.Limit, searchDef, searchMost))
+		}
 	default:
 		return "", fmt.Errorf("unknown tool %s", name)
 	}

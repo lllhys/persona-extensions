@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
 )
 
 // defaultLocator is the production locator, kept so that one test can check it without touching the real

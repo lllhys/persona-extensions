@@ -1,0 +1,57 @@
+{
+  "manifest_version": 1,
+  "id": "currency",
+  "name": "汇率和单位换算",
+  "version": "0.1.0",
+  "description": "换算常用货币与日常单位。汇率使用注明日期的欧洲央行参考数据；长度、质量、温度、体积、面积、速度、时长和数据单位在 hub 本地换算。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/currency/README.md",
+  "tags": [
+    "货币",
+    "汇率",
+    "单位换算"
+  ],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "mode": "deno",
+    "source": {
+      "entry": "src/index.ts",
+      "bundle": "build/currency.mjs",
+      "sha256": "3dd33ad2e3f72b6750232652fc54ebbcbc19fcdbdd2023e7faafe17b85dc8c8f"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "currency",
+        "name": "Currency and units",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "api.frankfurter.dev"
+        ],
+        "agent_tools": [
+          "currency_*",
+          "unit_convert"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "converter",
+        "title": "汇率和单位换算",
+        "placement": "nav_page",
+        "icon": "money"
+      }
+    ]
+  },
+  "permissions": {
+    "network": [
+      "api.frankfurter.dev"
+    ]
+  }
+}

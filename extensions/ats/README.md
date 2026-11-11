@@ -1,42 +1,71 @@
 # ATS
 
-Self-contained Go native Agent Task Scheduler (ATS) extension for Persona. A single binary runs both the Persona extension runtime (`ats hub`, providing the **ATS 队列** navigation page, generic Quota Provider sync and idempotent `todos.write` outcome decision write-back) and the stdio MCP server (`ats mcp --enqueue`, giving the Claude assistant read-only `list_tasks`, `get_task` and `get_evidence` tools plus the user-confirmed `enqueue_task` tool).
+An agent task queue for Persona. The assistant queues a task for a to-do (asking you first, every time); the queue picks the moment by priority, difficulty and remaining quota, runs the task as a Persona agent session in a git worktree of its own on a computer you chose, runs the task's acceptance command there, and writes the outcome with its evidence back to the to-do.
+
+The extension is self-contained: one binary, no external scheduler, no account. It uses only the hub's public extension interfaces.
 
 - [Manifest](persona-extension.json)
 - [Skill](skills/ats-todo/SKILL.md)
+- [Assistant gate](assistant/gate.json)
 - [Installation](../../docs/installation.md)
 
-## Architecture and built-in safeguards
+## Set up
 
-- **Self-contained persistent queue**: tasks transition through `queued` → `running` → `succeeded` / `failed` / `canceled`, recording verification `evidence` and output summaries in the extension's data directory without requiring an external scheduler daemon.
-- **R1 (Read-only default security boundary)**: every task defaults to `permission_profile: "readonly"`. Write permissions are granted only when `permission_profile: "default"` is explicitly requested.
-- **R2 (Worker lease and fenced write protection)**: each execution attempt receives a unique `attempt_id`, `worker_id` and monotonically increasing `fence_token` (`attempt_no`). Heartbeats and outcome reports validate both `worker_id` and `fence_token`, rejecting stale workers with `403` so an expired attempt never overwrites newer state.
-- **R6 (Deterministic exponential backoff and jitter)**: retryable failures automatically re-enter the queue with a deterministic `not_before` cooldown computed from `sha256(task_id, attempt_no)` and soft worker anti-affinity.
-- **R8 (Queue admission cap)**: the queue enforces `max_queued` (default `100`) and rejects excess submissions with `too_many_queued` (`429`).
+In the extension's settings:
 
-## Tag-driven priority, difficulty and offline-compute scheduler
+1. **Computers** (`machines`): the computers tasks run on. The extension's program is installed on each. With none selected, tasks queue and do not run.
+2. **Allowed repository directories** (`repos`): tasks run only in git repositories under these directories (absolute paths or `~/…`). Empty, no task can be queued.
+3. Optional: the permission mode of tasks that may write (`write_permission_mode`, `acceptEdits` by default), tasks at a time per computer, timeouts, retry count, the quota reserve line and a model per tier.
 
-Tasks carry scheduling metadata through explicit parameters or tags/labels:
+## How a task runs
 
-- **Priority**: `priority=p0|p1|p2|p3` (or `high`/`normal`/`low`, default `p2`).
-- **Difficulty and model tier**: `difficulty=easy|medium|hard|extreme` (or `tier=fast|standard|strong`, default `medium`), mapping to model tiers (`easy` → `fast`, `medium` → `standard`, `hard`/`extreme` → `strong`) and quota cost weights (`1.0x` to `8.0x`).
-- **Machine affinity**: optional `machine=<host>` constraint.
+One binary has two roles. `ats hub` is the hub program: the queue (one JSON file in the extension's data directory, written by this program only), its dispatcher, the queue page and the HTTP API. `ats node` is the program on each selected computer: it makes and removes worktrees and runs acceptance commands.
 
-The multi-factor scheduler combines task priority, difficulty-to-tier mapping, online machine slot capacity (`running_slots / max_slots`), anti-starvation aging (`+0.5` score/min up to `+60`) and generic Quota Provider headroom into three admission modes:
-
-1. **Full admission (`full` / 全量放行)**: when quota headroom is at or above `reserve_headroom_pct` (default `30%`), `p0`–`p3` and `hard`/`extreme` batch tasks are scheduled across the least-loaded online machines.
-2. **Priority reserve (`priority_only` / 仅 P0-P1 保底)**: when quota drops below `reserve_headroom_pct`, `p2`/`p3` and high-consumption offline tasks are held so remaining headroom is reserved for `p0`/`p1` tasks (or routed to lighter tiers with ample quota).
-3. **Quota cooldown (`paused_quota` / 额度冷却暂停)**: when the generic Quota Provider reports `exhausted` or an active `cooldown_until` / `reset_at` window, queue dispatch pauses until quota resets.
-
-## MCP tools and security gate
-
-| Tool | Access |
+| Step | What happens |
 | --- | --- |
-| `list_tasks` | Runs without asking (`allow`). Filters: `todo_id`, `status` / `states`, `priority`, `difficulty`, `machine`, `pool`, `source`, `limit`; also returns current scheduler mode and quota headroom |
-| `get_task` | Runs without asking (`allow`). Returns task summary, priority/difficulty/tier tags, prompt preview, acceptance command and fenced attempts |
-| `get_evidence` | Runs without asking (`allow`). Returns final state, verdict, failure reason, acceptance command, idempotent `decisionRef` and verification reports |
-| `enqueue_task` | Asks the user every time (never listed in `allow`). Requires `todo_id`, `prompt` and `repo` (absolute path); forces `persona_todo=<todo_id>` (caller cannot override it), sets `source="assistant"`, `external_ref={system:"assistant", id:"persona", conversation:<todo_id>}`, and defaults `permission_profile` to `"readonly"` |
+| queued | The scheduler admits tasks by priority (`p0`–`p3`), difficulty (model tier `fast`, `standard`, `strong`), waiting time, free slots on the online computers and quota. Below the reserve line only `p0` and `p1` go; with the quota used up nothing goes until it resets. |
+| preparing | The computer's program resolves the ref to a commit and checks it out into a new worktree in its data directory (a detached checkout for a read-only task, a branch `ats/<task>-<attempt>` for one that may write). |
+| working | The dispatcher starts a Persona agent session in the worktree, attached to the to-do, and watches it. A session that waits for you (a question, an approval) or ends its turn saying it is blocked shows as **needs you** on the queue page; answer in the session and the task goes on. |
+| accepting | The computer's program runs the acceptance command in the worktree. Exit code 0 is a pass. A task with no acceptance command ends as "ran, not verified". |
+| finished | The worktree is removed (kept when it holds uncommitted work); the branch, the commit and the session stay as evidence. The outcome is written to the to-do as a decision, once (`ref: ats:<task>:<state>[:<verdict>]`). |
 
-## Outcome decision write-back (`todos.write`)
+A failed attempt (the acceptance command failed, a timeout, the computer went away, a rate limit) is retried with a growing delay, up to `max_retries` times, as a new attempt with a new worktree. Each attempt carries a fence token, so a late report of an old attempt never overwrites a newer one. The dispatcher keeps all of its state in the queue file, so a restart picks every attempt up where it was.
 
-When a task labelled `persona_todo=<todo_id>` reaches a terminal state, the extension posts an idempotent outcome decision to `POST /api/v1/todos/{todo_id}/decisions` using the `todos.write` scope with `ref: "ats:<task_id>:<state>[:<verdict>]"`. Replays with the same `ref` are deduplicated by the hub (`inserted: false`), and `404`/`403` responses are recorded and skipped without retry loops.
+## Safeguards
+
+- **The user confirms every task.** The assistant reaches the extension through a gated command; `POST /tasks` asks every time, reads pass, everything else is refused. The credential stays out of the assistant's sight.
+- **Read-only by default.** A task runs in the agent's plan mode unless it asks for `permission_profile: "default"`, which the confirmation shows. Writing tasks work on their own branch and never push.
+- **Repository allowlist.** Checked when the task is queued, and again with real paths (symlinks resolved) by the program on the computer, whose answer counts.
+- **Bounded.** At most `max_queued` queued tasks (`too_many_queued`), 5 unfinished tasks per to-do (`too_many_for_todo`), one task at a time per computer unless set otherwise, a timeout for the agent and for the acceptance command (killed with its process group).
+- **A task always belongs to a to-do.** `todo_id` is required and the caller cannot set the `persona_todo` label itself.
+
+## HTTP API
+
+Served by the hub at `/api/v1/extensions/ats/…`.
+
+| Request | Answer |
+| --- | --- |
+| `GET /tasks?todo_id=&state=&priority=&limit=` | Tasks, newest first, and the scheduler's state (admission mode, remaining quota, counts) |
+| `GET /tasks/{id}` | The task with its prompt and attempts |
+| `GET /tasks/{id}/evidence` | State, verdict, `verified`, the acceptance command, the last report (exit code, output tail, artifacts) and the reference of the decision written to the to-do |
+| `POST /tasks` | Queues a task: `todo_id`, `prompt`, `repo` (required); `ref`, `title`, `acceptance`, `permission_profile`, `priority`, `difficulty`, `machine`, `qos`, `pool`, `tags`, `labels`, `idempotency_key` |
+
+## Permissions
+
+| Permission | Used for |
+| --- | --- |
+| `todos.write` | Attaching a task's session to its to-do and writing the outcome decision |
+| `agents.read`, `agents.control` | Starting, watching and interrupting the task's agent session |
+| `machines.read` | Which of the selected computers are online |
+| `extensions.call:ats` | The assistant's gated command calling this extension's API |
+| `usage_gateways` | Reading the usage windows of the hub's gateway accounts for quota-aware admission |
+| `node.permissions.files` | Worktrees and acceptance commands on the selected computers |
+
+## Development
+
+```sh
+go -C extensions/ats test ./...
+scripts/package.sh ats
+```
+
+Version 0.4.0 replaces the stdio MCP server and the external worker interface of 0.3.0, which could queue tasks but had nothing to run them.

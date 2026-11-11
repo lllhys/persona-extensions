@@ -8,7 +8,7 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
 )
 
 var testNow = time.Date(2026, time.November, 10, 9, 30, 0, 0, time.UTC)

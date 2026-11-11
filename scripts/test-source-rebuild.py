@@ -27,10 +27,11 @@ class SourceRebuildTests(unittest.TestCase):
                        "output": "build/example.mjs", "archive": "build/example.tar.gz",
                        "extracted_extension": "extensions/example", "extracted_sdk": "sdk/ts"}
         self.tracked = {"extensions/example/package.json", "extensions/example/source-rebuild.json",
-                        "extensions/example/source-reference/bundle.mjs"}
+                        "extensions/example/source-reference/bundle.mjs", "extensions/example/persona-extension.json"}
         (self.extension / "package.json").write_text(json.dumps({"scripts": {"build:source": "node scripts/build.mjs"}}))
+        (self.extension / "persona-extension.json").write_text(json.dumps({"id": "example", "version": "0.1.0"}))
         (self.extension / "source-reference").mkdir()
-        (self.extension / "source-reference/bundle.mjs").write_bytes(b"export default {};\n")
+        (self.extension / "source-reference/bundle.mjs").write_bytes(b'export default { version: "0.1.0" };\n')
         self.write_config()
 
     def write_config(self):
@@ -38,6 +39,11 @@ class SourceRebuildTests(unittest.TestCase):
 
     def test_committed_source_profile_is_selected(self):
         self.assertEqual(rebuild.profiles(self.root, self.tracked), {"example": self.config})
+
+    def test_reference_must_embed_the_manifest_version(self):
+        (self.extension / "persona-extension.json").write_text(json.dumps({"id": "example", "version": "0.1.1"}))
+        with self.assertRaisesRegex(ValueError, "does not embed the manifest version '0.1.1'"):
+            rebuild.profiles(self.root, self.tracked)
 
     def test_new_source_cannot_omit_registration(self):
         self.tracked.remove("extensions/example/source-rebuild.json")

@@ -407,6 +407,8 @@ func (p *plugin) handlers() map[string]pluginkit.Handler {
 		"connector.status":        p.cStatus,
 		"connector.tools.list":    p.cToolsList,
 		"connector.tools.call":    p.cToolsCall,
+		"connector.catalog.list":  p.cCatalogList,
+		"connector.catalog.call":  p.cCatalogCall,
 		"connector.inbox.collect": p.cInboxCollect,
 		"ui.render":               p.uiRender,
 		"ui.action":               p.uiAction,

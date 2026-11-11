@@ -12,9 +12,9 @@ import (
 
 	"github.com/nwverse/persona/sdk/go/wire"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/store"
 	"github.com/nwverse/persona-extensions/extensions/spaces/internal/templates"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/store"
 )
 
 // storedType is a copy of the type of the space with the key, and whether there is one.

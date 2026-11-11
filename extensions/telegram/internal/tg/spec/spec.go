@@ -30,7 +30,7 @@ var (
 // the tool that plans its command lines, and the inbox's conversations as the app's conversation page (threads).
 func Manifest() connector.Manifest {
 	return connector.Manifest{
-		Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapActions, connector.CapEvents,
+		Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapCatalog, connector.CapActions, connector.CapEvents,
 			connector.CapInbox, connector.CapArchive, connector.CapLogin, connector.CapThreads, connector.CapFallback},
 		Unlisted:         append(append(slices.Clone(CLITools), CLIActions...), CLITool),
 		Kinds:            []string{"dm", "mention"},

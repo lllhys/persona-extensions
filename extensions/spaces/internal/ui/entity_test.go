@@ -10,9 +10,9 @@ import (
 
 	"github.com/nwverse/persona/sdk/go/wire"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/store"
 	"github.com/nwverse/persona-extensions/extensions/spaces/internal/templates"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/store"
 )
 
 // entityID is the id of the entity with the title, in any space of st; the test fails when there is none.

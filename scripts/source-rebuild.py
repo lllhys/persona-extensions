@@ -66,6 +66,13 @@ def profiles(root, tracked):
         data = contained(root, reference).read_bytes()
         if not data or len(data) > MAX_BUNDLE:
             raise ValueError("invalid reference bundle size")
+        # The bundle embeds the manifest: one changed without regenerating the bundle (a version bump) fails here,
+        # locally and before the hosted rebuild's byte comparison.
+        manifest = json.loads(contained(root, f"extensions/{extension}/persona-extension.json").read_text())
+        version = manifest.get("version")
+        if not isinstance(version, str) or f'version: "{version}"'.encode() not in data:
+            raise ValueError(f"reference bundle does not embed the manifest version {version!r}: "
+                             f"regenerate {reference} (npm ci --ignore-scripts, npm run {config['build']}, Node 22 or 24)")
         for field in ("output", "archive", "extracted_extension", "extracted_sdk"):
             contained(root, config[field], required=False)
         result[extension] = config

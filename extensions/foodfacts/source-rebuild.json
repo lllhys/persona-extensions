@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "bundle": "source-reference/bundle.mjs",
+  "build": "build:source",
+  "output": "build/foodfacts.mjs",
+  "archive": "build/foodfacts-source.tar.gz",
+  "extracted_extension": "authoring/extensions/foodfacts",
+  "extracted_sdk": "authoring/sdk/ts"
+}

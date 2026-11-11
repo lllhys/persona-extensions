@@ -14,8 +14,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
 	"github.com/nwverse/persona-extensions/extensions/spaces/internal/templates"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
 )
 
 // The protocol revision this server speaks, and how it identifies itself.

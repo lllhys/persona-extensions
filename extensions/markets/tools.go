@@ -64,6 +64,15 @@ func (p *plugin) cToolsCall(ctx context.Context, _ *pluginkit.Hub, raw json.RawM
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
+	text, err := p.run(ctx, in.Name, in.Args, false)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"text": text}, nil
+}
+
+// run is one tool: its text for the assistant, or with asJSON markets_search's JSON for subscriptions (catalog.go).
+func (p *plugin) run(ctx context.Context, name string, raw json.RawMessage, asJSON bool) (string, error) {
 	var args struct {
 		Symbols []string `json:"symbols"`
 		Symbol  string   `json:"symbol"`
@@ -71,35 +80,31 @@ func (p *plugin) cToolsCall(ctx context.Context, _ *pluginkit.Hub, raw json.RawM
 		Query   string   `json:"query"`
 		Limit   int      `json:"limit"`
 	}
-	if len(in.Args) > 0 && string(in.Args) != "null" {
-		if err := json.Unmarshal(in.Args, &args); err != nil {
-			return nil, fmt.Errorf("参数不对：%w", err)
+	if len(raw) > 0 && string(raw) != "null" {
+		if err := json.Unmarshal(raw, &args); err != nil {
+			return "", fmt.Errorf("参数不对：%w", err)
 		}
 	}
-	var text string
-	var err error
-	switch in.Name {
+	switch name {
 	case "markets_quote":
-		text, err = p.toolQuote(ctx, args.Symbols)
+		return p.toolQuote(ctx, args.Symbols)
 	case "markets_search":
 		limit := args.Limit
 		if limit <= 0 || limit > searchMost {
 			limit = 10
 		}
-		text, err = p.toolSearch(ctx, args.Query, limit)
+		if asJSON {
+			return p.searchJSON(ctx, args.Query, limit)
+		}
+		return p.toolSearch(ctx, args.Query, limit)
 	case "markets_candles":
 		limit := args.Limit
 		if limit <= 0 || limit > 100 {
 			limit = 24
 		}
-		text, err = p.toolCandles(ctx, args.Symbol, args.Bar, limit)
-	default:
-		return nil, fmt.Errorf("没有工具 %s", in.Name)
+		return p.toolCandles(ctx, args.Symbol, args.Bar, limit)
 	}
-	if err != nil {
-		return nil, err
-	}
-	return map[string]any{"text": text}, nil
+	return "", fmt.Errorf("没有工具 %s", name)
 }
 
 // quoteLine is one quote as the tools write it.

@@ -16,8 +16,8 @@ import (
 	"github.com/nwverse/persona/sdk/go/ext"
 	"github.com/nwverse/persona/sdk/go/wire"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
 	"github.com/nwverse/persona-extensions/extensions/spaces/internal/templates"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
 )
 
 // The contributions of the extension: the nav page and the overview card that opens it.

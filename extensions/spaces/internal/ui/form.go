@@ -8,7 +8,7 @@ import (
 
 	"github.com/nwverse/persona/sdk/go/wire"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
 )
 
 // unsetValue is the choice that stands for "no value". A choice is sent as "=" and the value; "=" alone is unset,

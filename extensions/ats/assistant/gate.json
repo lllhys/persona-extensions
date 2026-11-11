@@ -1,0 +1,22 @@
+{
+  "command": "ats",
+  "script": "ats-todo/scripts/api.sh",
+  "title": "ATS",
+  "env": ["ATS_BASE", "ATS_TOKEN"],
+  "base_env": "ATS_BASE",
+  "secret": ["ATS_TOKEN"],
+  "rules": [
+    {"method": "GET", "path": "/tasks", "action": "allow"},
+    {"method": "GET", "path": "/tasks/*", "action": "allow"},
+    {"method": "GET", "path": "/tasks/*/evidence", "action": "allow"},
+    {"method": "POST", "path": "/tasks", "action": "confirm"},
+    {"method": "*", "path": "**", "action": "deny"}
+  ],
+  "actions": [
+    {"pattern": "^POST /tasks", "what": "给待办派一个 ATS 任务"}
+  ],
+  "tool": {
+    "name": "ats_api",
+    "description": "读 ATS 任务队列（GET /tasks、/tasks/{id}、/tasks/{id}/evidence），或给待办派一个任务（POST /tasks，每次都要用户确认）。"
+  }
+}

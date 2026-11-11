@@ -9,8 +9,8 @@ import (
 	"github.com/nwverse/persona/sdk/go/ext"
 	"github.com/nwverse/persona/sdk/go/wire"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
 	"github.com/nwverse/persona-extensions/extensions/spaces/internal/templates"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
 )
 
 // overTab is the value of the overview tab, which no type key can take.

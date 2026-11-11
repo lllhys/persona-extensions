@@ -1,0 +1,67 @@
+{
+  "manifest_version": 1,
+  "id": "chatgpt-apps",
+  "name": "ChatGPT 应用",
+  "version": "0.2.3",
+  "description": "用 ChatGPT 账号登录后，助手能用你在 ChatGPT 里连好的应用（邮箱、日历、代码托管、券商…）和 ChatGPT 插件市场；会改数据的操作每一次都要你在手机上点批准。",
+  "publisher": "nwverse",
+  "tags": [
+    "chatgpt",
+    "connector",
+    "assistant"
+  ],
+  "engines": {
+    "persona": ">=202611041602",
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/chatgpt-apps-linux-amd64",
+      "linux-arm64": "bin/chatgpt-apps-linux-arm64",
+      "darwin-arm64": "bin/chatgpt-apps-darwin-arm64",
+      "darwin-amd64": "bin/chatgpt-apps-darwin-amd64"
+    }
+  },
+  "auth": {
+    "title": "ChatGPT 登录",
+    "description": "用设备码登录你的 ChatGPT 账号（授权页上写的是 Codex）。"
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "chatgpt",
+        "name": "ChatGPT 应用",
+        "capabilities": [
+          "status",
+          "tools",
+          "actions"
+        ],
+        "confirm_always": [
+          "chatgpt_*"
+        ]
+      }
+    ],
+    "assistant": [
+      {
+        "id": "chatgpt-apps",
+        "skills": [
+          "assistant/skills/chatgpt-apps"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "plugins",
+        "title": "插件",
+        "placement": "extension_page"
+      }
+    ]
+  },
+  "permissions": {
+    "network": [
+      "chatgpt.com",
+      "auth.openai.com",
+      "*.oaiusercontent.com"
+    ]
+  }
+}

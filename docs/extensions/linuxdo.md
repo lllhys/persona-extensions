@@ -7,7 +7,7 @@ LINUX DO (`linux.do`) is a Chinese-language technology community running Discour
 | Extension point | Contribution | Behavior |
 | --- | --- | --- |
 | `ui` | `hot`, with the compatibility placement `plugin_page` | An extension settings page for hot, daily, weekly and latest topics, filtered by interests. Open a topic in the same page to read its body and popular replies, or open the original website. |
-| `connectors` | `linuxdo`, capabilities `status` and `tools` | `linuxdo_hot` and `linuxdo_topic`: the assistant can fetch a list, choose topics, read them and summarize. |
+| `connectors` | `linuxdo`, capabilities `status`, `tools` and `catalog` | `linuxdo_hot` and `linuxdo_topic`: the assistant can fetch a list, choose topics, read them and summarize. Persona's source subscriptions read the same two through the catalog (source `linuxdo`, tools `hot` and `topic`), where `hot` answers JSON: `topics`, each with `id`, `title`, `author`, `time`, `link` and the excerpt as `body`, so a subscription can follow new topics one by one. `topic` answers its text there too (a snapshot). |
 
 ## Fetching, network and rate limits
 

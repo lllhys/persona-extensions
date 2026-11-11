@@ -203,6 +203,40 @@ type Task struct {
 	DecisionSkipReason string            `json:"decision_skip_reason,omitempty"`
 	Attempts           []Attempt         `json:"attempts,omitempty"`
 	Reports            []EvidenceReport  `json:"reports,omitempty"`
+	// Exec is where the current attempt runs; nil while the task is queued or finished.
+	Exec *Execution `json:"exec,omitempty"`
+}
+
+// Execution phases of an attempt, in order.
+const (
+	PhasePreparing = "preparing" // the computer is checking out the worktree
+	PhaseWorking   = "working"   // the agent session is on it
+	PhaseAccepting = "accepting" // the acceptance command is running
+)
+
+// Execution is the dispatcher's record of a running attempt: enough to pick the attempt up again after the
+// program restarts.
+type Execution struct {
+	MachineID  string    `json:"machine_id"`
+	Phase      string    `json:"phase"`
+	PhaseSince time.Time `json:"phase_since"`
+	Worktree   string    `json:"worktree,omitempty"`
+	Branch     string    `json:"branch,omitempty"`
+	BaseSHA    string    `json:"base_sha,omitempty"`
+	SessionID  string    `json:"session_id,omitempty"`
+	// SeenUpdate is the session's updated_at at the last poll that found its turn over, and Stable how many
+	// polls in a row found it so: the hub reports a finished turn for a moment between an agent's steps.
+	SeenUpdate string `json:"seen_update,omitempty"`
+	Stable     int    `json:"stable,omitempty"`
+	// JudgedUpdate is the updated_at of the turn already judged as blocked, so it is not judged twice.
+	JudgedUpdate string `json:"judged_update,omitempty"`
+	LastReply    string `json:"last_reply,omitempty"`
+	Waiting      string `json:"waiting,omitempty"` // why the task needs the user, when it does
+}
+
+// isActiveState reports whether a task in this state holds a lease.
+func isActiveState(state string) bool {
+	return state == StateRunning || state == StateLeased || state == StateNeedsInput
 }
 
 // TodoID returns the linked Persona to-do ID, if any.
@@ -235,14 +269,17 @@ type QueueConfig struct {
 	RetryBaseDelay     time.Duration `json:"retry_base_delay"`
 	RetryMaxDelay      time.Duration `json:"retry_max_delay"`
 	ReserveHeadroomPct float64       `json:"reserve_headroom_pct"`
+	// MaxActivePerTodo caps the unfinished tasks of one to-do; 0 is no cap.
+	MaxActivePerTodo int `json:"max_active_per_todo"`
 }
 
 // DefaultQueueConfig returns the standard production defaults.
 func DefaultQueueConfig() QueueConfig {
 	return QueueConfig{
 		MaxQueued:          100,
-		LeaseTTL:           75 * time.Second,
+		LeaseTTL:           5 * time.Minute,
 		MaxRetries:         2,
+		MaxActivePerTodo:   5,
 		MaxLost:            5,
 		RetryBaseDelay:     5 * time.Second,
 		RetryMaxDelay:      30 * time.Minute,
@@ -507,9 +544,13 @@ type TaskFilter struct {
 	Limit      int
 }
 
+// storeVersion is the layout of queue-state.json. Version 1 (0.3.0) had no version field and no exec records;
+// it loads as is.
+const storeVersion = 2
+
 type persistedQueue struct {
+	Version  int               `json:"version,omitempty"`
 	Seq      int64             `json:"seq"`
-	Config   *QueueConfig      `json:"config,omitempty"`
 	Tasks    []*Task           `json:"tasks"`
 	Machines []MachineSlot     `json:"machines,omitempty"`
 	Quota    *QuotaStatus      `json:"quota,omitempty"`
@@ -533,7 +574,7 @@ func NewQueue(dataDir string, cfg QueueConfig) (*Queue, error) {
 		cfg.MaxQueued = 100
 	}
 	if cfg.LeaseTTL <= 0 {
-		cfg.LeaseTTL = 75 * time.Second
+		cfg.LeaseTTL = 5 * time.Minute
 	}
 	if cfg.MaxRetries < 0 {
 		cfg.MaxRetries = 2
@@ -569,11 +610,10 @@ func NewQueue(dataDir string, cfg QueueConfig) (*Queue, error) {
 	return q, nil
 }
 
-// UpdateConfig updates the queue's runtime configuration safely and persists it so MCP processes share it.
+// UpdateConfig updates the queue's runtime configuration.
 func (q *Queue) UpdateConfig(cfg QueueConfig) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	_ = q.loadLocked()
 	if cfg.MaxQueued > 0 {
 		q.cfg.MaxQueued = cfg.MaxQueued
 	}
@@ -586,7 +626,7 @@ func (q *Queue) UpdateConfig(cfg QueueConfig) {
 	if cfg.ReserveHeadroomPct > 0 {
 		q.cfg.ReserveHeadroomPct = cfg.ReserveHeadroomPct
 	}
-	_ = q.saveLocked()
+	q.cfg.MaxActivePerTodo = cfg.MaxActivePerTodo
 }
 
 // Config returns a copy of the current QueueConfig.
@@ -594,13 +634,6 @@ func (q *Queue) Config() QueueConfig {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 	return q.cfg
-}
-
-// Reload reloads disk state so external processes (such as MCP invocations) see fresh updates.
-func (q *Queue) Reload() error {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	return q.loadLocked()
 }
 
 func (q *Queue) loadLocked() error {
@@ -618,21 +651,10 @@ func (q *Queue) loadLocked() error {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return err
 	}
-	q.seq = p.Seq
-	if p.Config != nil {
-		if p.Config.MaxQueued > 0 {
-			q.cfg.MaxQueued = p.Config.MaxQueued
-		}
-		if p.Config.LeaseTTL > 0 {
-			q.cfg.LeaseTTL = p.Config.LeaseTTL
-		}
-		if p.Config.MaxRetries >= 0 {
-			q.cfg.MaxRetries = p.Config.MaxRetries
-		}
-		if p.Config.ReserveHeadroomPct > 0 {
-			q.cfg.ReserveHeadroomPct = p.Config.ReserveHeadroomPct
-		}
+	if p.Version > storeVersion {
+		return fmt.Errorf("queue-state.json is version %d, newer than this program reads (%d)", p.Version, storeVersion)
 	}
+	q.seq = p.Seq
 	q.tasks = make(map[string]*Task, len(p.Tasks))
 	for _, t := range p.Tasks {
 		if t != nil && t.ID != "" {
@@ -673,10 +695,9 @@ func (q *Queue) saveLocked() error {
 		return machines[i].Name < machines[j].Name
 	})
 	quotaCopy := q.quota
-	cfgCopy := q.cfg
 	p := persistedQueue{
+		Version:  storeVersion,
 		Seq:      q.seq,
-		Config:   &cfgCopy,
 		Tasks:    tasks,
 		Machines: machines,
 		Quota:    &quotaCopy,
@@ -718,6 +739,10 @@ func cloneTask(t *Task) *Task {
 	if t.FinishedAt != nil {
 		fa := *t.FinishedAt
 		out.FinishedAt = &fa
+	}
+	if t.Exec != nil {
+		e := *t.Exec
+		out.Exec = &e
 	}
 	if t.Attempts != nil {
 		out.Attempts = make([]Attempt, len(t.Attempts))
@@ -769,7 +794,6 @@ func (q *Queue) activeQueuedCountLocked() int {
 func (q *Queue) Enqueue(in EnqueueInput) (EnqueueResult, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	_ = q.loadLocked()
 
 	now := in.Now
 	if now.IsZero() {
@@ -820,6 +844,24 @@ func (q *Queue) Enqueue(in EnqueueInput) (EnqueueResult, error) {
 			Queued:     queuedCount,
 			MaxQueued:  q.cfg.MaxQueued,
 			Message:    fmt.Sprintf("too_many_queued (429): queue has %d queued tasks, reaching max_queued=%d", queuedCount, q.cfg.MaxQueued),
+		}
+	}
+
+	if todo := labels[PersonaTodoLabel]; todo != "" && q.cfg.MaxActivePerTodo > 0 {
+		active := 0
+		for _, t := range q.tasks {
+			if !t.IsTerminal() && t.TodoID() == todo {
+				active++
+			}
+		}
+		if active >= q.cfg.MaxActivePerTodo {
+			return EnqueueResult{}, &AdmissionError{
+				Code:       "too_many_for_todo",
+				HTTPStatus: 429,
+				Queued:     active,
+				MaxQueued:  q.cfg.MaxActivePerTodo,
+				Message:    fmt.Sprintf("too_many_for_todo (429): the to-do already has %d unfinished tasks, the most it may have", active),
+			}
 		}
 	}
 
@@ -915,7 +957,6 @@ func (q *Queue) Enqueue(in EnqueueInput) (EnqueueResult, error) {
 func (q *Queue) LeaseTask(taskID, workerID, machine string, now time.Time) (*Task, *Attempt, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	_ = q.loadLocked()
 
 	if now.IsZero() {
 		now = time.Now().UTC()
@@ -958,13 +999,6 @@ func (q *Queue) LeaseTask(taskID, workerID, machine string, now time.Time) (*Tas
 	}
 	t.Attempts = append(t.Attempts, att)
 
-	if mName := strings.TrimSpace(machine); mName != "" {
-		if m, exists := q.machines[mName]; exists {
-			m.RunningSlots++
-			q.machines[mName] = m
-		}
-	}
-
 	if err := q.saveLocked(); err != nil {
 		return nil, nil, err
 	}
@@ -972,48 +1006,10 @@ func (q *Queue) LeaseTask(taskID, workerID, machine string, now time.Time) (*Tas
 	return cloneTask(t), &attCopy, nil
 }
 
-// Heartbeat renews an active attempt's lease, verifying worker_id and fence_token.
-func (q *Queue) Heartbeat(taskID, workerID string, fenceToken int, now time.Time) (*Attempt, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	_ = q.loadLocked()
-
-	if now.IsZero() {
-		now = time.Now().UTC()
-	} else {
-		now = now.UTC()
-	}
-	t, ok := q.tasks[taskID]
-	if !ok {
-		return nil, ErrTaskNotFound
-	}
-	if fenceToken <= 0 || (t.State != StateRunning && t.State != StateLeased) || t.FenceToken != fenceToken || len(t.Attempts) == 0 {
-		return nil, ErrStaleAttempt
-	}
-	idx := len(t.Attempts) - 1
-	att := &t.Attempts[idx]
-	if att.AttemptNo != fenceToken || att.FenceToken != fenceToken || att.WorkerID != strings.TrimSpace(workerID) {
-		return nil, ErrStaleAttempt
-	}
-	if att.State != StateRunning && att.State != StateLeased {
-		return nil, ErrStaleAttempt
-	}
-	if now.After(att.LeaseExpiresAt) {
-		return nil, ErrStaleAttempt
-	}
-	att.LeaseExpiresAt = now.Add(q.cfg.LeaseTTL)
-	if err := q.saveLocked(); err != nil {
-		return nil, err
-	}
-	out := *att
-	return &out, nil
-}
-
 // CompleteAttempt records an attempt's outcome and evidence report, guarded by fence token, attempt ID, lease expiry, and worker ID.
 func (q *Queue) CompleteAttempt(in CompleteAttemptInput) (*Task, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	_ = q.loadLocked()
 
 	now := in.Now
 	if now.IsZero() {
@@ -1030,7 +1026,7 @@ func (q *Queue) CompleteAttempt(in CompleteAttemptInput) (*Task, error) {
 	if fence <= 0 {
 		fence = in.AttemptNo
 	}
-	if fence <= 0 || (t.State != StateRunning && t.State != StateLeased) || t.FenceToken != fence || len(t.Attempts) == 0 {
+	if fence <= 0 || !isActiveState(t.State) || t.FenceToken != fence || len(t.Attempts) == 0 {
 		return nil, ErrStaleAttempt
 	}
 	idx := len(t.Attempts) - 1
@@ -1041,7 +1037,7 @@ func (q *Queue) CompleteAttempt(in CompleteAttemptInput) (*Task, error) {
 	if in.AttemptID != "" && att.AttemptID != strings.TrimSpace(in.AttemptID) {
 		return nil, ErrStaleAttempt
 	}
-	if att.State != StateRunning && att.State != StateLeased {
+	if !isActiveState(att.State) {
 		return nil, ErrStaleAttempt
 	}
 	if now.After(att.LeaseExpiresAt) {
@@ -1085,18 +1081,12 @@ func (q *Queue) CompleteAttempt(in CompleteAttemptInput) (*Task, error) {
 	t.Reports = append(t.Reports, rep)
 
 	att.FinishedAt = &now
+	t.Exec = nil
 	att.ExitCode = in.ExitCode
 	att.ErrorClass = in.ErrorClass
 	att.Verdict = verdict
 	att.Summary = firstLinePreview(in.Message, 200)
 	t.Summary = att.Summary
-
-	if att.Machine != "" {
-		if m, exists := q.machines[att.Machine]; exists && m.RunningSlots > 0 {
-			m.RunningSlots--
-			q.machines[att.Machine] = m
-		}
-	}
 
 	outcome := strings.TrimSpace(strings.ToLower(in.Outcome))
 	switch outcome {
@@ -1162,65 +1152,10 @@ func isRetryableErrorClass(errClass string) bool {
 	}
 }
 
-// ReapExpiredLeases scans running tasks for expired worker leases and re-queues them with backoff or fails them if max_lost is reached.
-func (q *Queue) ReapExpiredLeases(now time.Time) ([]*Task, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	_ = q.loadLocked()
-
-	if now.IsZero() {
-		now = time.Now().UTC()
-	} else {
-		now = now.UTC()
-	}
-
-	var reaped []*Task
-	for _, t := range q.tasks {
-		if (t.State != StateRunning && t.State != StateLeased) || len(t.Attempts) == 0 {
-			continue
-		}
-		att := &t.Attempts[len(t.Attempts)-1]
-		if !now.After(att.LeaseExpiresAt) {
-			continue
-		}
-		att.State = "lost"
-		att.ErrorClass = "lease_expired"
-		att.FinishedAt = &now
-		if att.Machine != "" {
-			if m, exists := q.machines[att.Machine]; exists && m.RunningSlots > 0 {
-				m.RunningSlots--
-				q.machines[att.Machine] = m
-			}
-		}
-		t.LostCount++
-		t.LastFailedWorker = att.WorkerID
-		if t.LostCount >= q.cfg.MaxLost {
-			t.State = StateFailed
-			t.FailureReason = "too_many_lost"
-			t.FinishedAt = &now
-			t.NotBefore = nil
-		} else {
-			delay := ComputeRetryDelay(t.ID, t.AttemptNo, q.cfg.RetryBaseDelay, q.cfg.RetryMaxDelay)
-			readyAt := now.Add(delay)
-			t.State = StateQueued
-			t.FailureReason = "lease_expired"
-			t.NotBefore = &readyAt
-		}
-		reaped = append(reaped, cloneTask(t))
-	}
-	if len(reaped) > 0 {
-		if err := q.saveLocked(); err != nil {
-			return nil, err
-		}
-	}
-	return reaped, nil
-}
-
 // CancelTask cancels a queued or running task.
 func (q *Queue) CancelTask(taskID string, now time.Time) (*Task, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	_ = q.loadLocked()
 
 	if now.IsZero() {
 		now = time.Now().UTC()
@@ -1236,18 +1171,13 @@ func (q *Queue) CancelTask(taskID string, now time.Time) (*Task, error) {
 	}
 	if len(t.Attempts) > 0 {
 		att := &t.Attempts[len(t.Attempts)-1]
-		if att.State == StateRunning || att.State == StateLeased {
+		if isActiveState(att.State) {
 			att.State = StateCanceled
 			att.FinishedAt = &now
-			if att.Machine != "" {
-				if m, exists := q.machines[att.Machine]; exists && m.RunningSlots > 0 {
-					m.RunningSlots--
-					q.machines[att.Machine] = m
-				}
-			}
 		}
 	}
 	t.State = StateCanceled
+	t.Exec = nil
 	t.NotBefore = nil
 	t.FinishedAt = &now
 	if err := q.saveLocked(); err != nil {
@@ -1260,7 +1190,6 @@ func (q *Queue) CancelTask(taskID string, now time.Time) (*Task, error) {
 func (q *Queue) RetryTask(taskID string, now time.Time) (*Task, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	_ = q.loadLocked()
 
 	if now.IsZero() {
 		now = time.Now().UTC()

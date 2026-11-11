@@ -5,6 +5,15 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 step() { printf '\n== %s\n' "$*"; }
 
+# The source profiles' bundle checks refuse every Node but 22 and 24 (hosted CI uses 24.11.1): stop here rather than
+# at the build step, where the checks after it would be left unrun.
+step node
+node_version=$(node -p process.versions.node 2>/dev/null || echo none)
+case "${node_version%%.*}" in
+  22|24) echo "node $node_version" ;;
+  *) echo "ci: failed; Node 22 or 24 is required (the source profiles' bundle checks refuse others), found $node_version" >&2; exit 1 ;;
+esac
+
 step workflow
 python3 -I scripts/test-ci-policy.py
 go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/ci.yml
@@ -16,6 +25,12 @@ python3 -I scripts/test-docs.py
 step layout
 python3 -I scripts/check-layout.py
 python3 -I scripts/test-layout.py
+
+# Each source profile's committed reference bundle embeds its current manifest (the hosted rebuild compares it byte
+# for byte; this catches a manifest changed without regenerating it).
+step sources
+python3 -I scripts/test-source-rebuild.py
+python3 -I scripts/source-rebuild.py plan
 
 step manifests
 scripts/manifest.py check

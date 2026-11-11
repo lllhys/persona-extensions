@@ -38,11 +38,15 @@ const (
 	MReply     = "inbox.reply"
 	MTools     = "tools.list"
 	MCall      = "tools.call"
-	MActions   = "actions.list"
-	MDescribe  = "actions.describe"
-	MDo        = "actions.do" // only once the hub's gate let it through
-	MThread    = "thread.page"
-	MMedia     = "thread.media"
+	// The catalog (connector.Catalog): its sources, and a call of one of their tools (wire.ConnectorCatalogCallParams →
+	// CallResult).
+	MCatalog     = "catalog.list"
+	MCatalogCall = "catalog.call"
+	MActions     = "actions.list"
+	MDescribe    = "actions.describe"
+	MDo          = "actions.do" // only once the hub's gate let it through
+	MThread      = "thread.page"
+	MMedia       = "thread.media"
 	// The knowledge base's items (connector.Items) and an archived message's attachment (connector.ArchiveMedia).
 	MItems        = "items.list"
 	MDocTitle     = "items.doc_title"
@@ -323,6 +327,42 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		}
 		text, err := t.Call(ctx, p.Name, p.Args)
 		return CallResult{Text: text}, err
+	case MCatalog:
+		cat, ok := connector.As[connector.Catalog](c)
+		if !ok {
+			return nil, noCapability(c, "catalog")
+		}
+		sources, err := cat.Catalog(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := wire.ConnectorCatalog{Sources: sources}
+		if err := wire.CheckConnectorCatalog(out); err != nil {
+			return nil, err
+		}
+		return out, nil
+	case MCatalogCall:
+		cat, ok := connector.As[connector.Catalog](c)
+		if !ok {
+			return nil, noCapability(c, "catalog")
+		}
+		var p connector.CatalogQuery
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		// The same admission as the hub's: only a tool the current catalog lists as read-only is run.
+		sources, err := cat.Catalog(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !inCatalog(sources, p.Source, p.Tool) {
+			return nil, &ext.Error{Code: wire.ConnectorErrorCodeNotReadOnly, Message: "the source and tool must be in the read-only catalog"}
+		}
+		if len(p.Args) == 0 {
+			p.Args = json.RawMessage(`{}`)
+		}
+		text, err := cat.CatalogCall(ctx, p)
+		return CallResult{Text: text}, err
 	case MActions:
 		a, ok := connector.As[connector.Actions](c)
 		if !ok {
@@ -557,6 +597,18 @@ func (m Manifest) Of() connector.Manifest {
 		out.Capabilities = append(out.Capabilities, connector.Capability(cp))
 	}
 	return out
+}
+
+// inCatalog says whether the catalog lists tool in source as read-only.
+func inCatalog(sources []connector.CatalogSource, source, tool string) bool {
+	for _, s := range sources {
+		for _, t := range s.Tools {
+			if s.ID == source && t.Name == tool && t.ReadOnly {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func noCapability(c connector.Connector, what string) error {

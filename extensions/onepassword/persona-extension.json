@@ -1,0 +1,33 @@
+{
+  "manifest_version": 1,
+  "id": "onepassword",
+  "name": "1Password",
+  "version": "0.1.0",
+  "description": "用 1Password 服务账号连接你授权给它的保险库：助手能列出保险库，按标题、标签或网站查找条目，看条目有哪些字段和每个字段的 op:// 引用。只读，密码等字段的值从不离开扩展、不交给助手；服务账号令牌加密保存在 hub。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/onepassword/README.md",
+  "tags": ["1Password", "密码管理", "保险库", "只读"],
+  "engines": {"persona": ">=202611061502", "plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/onepassword-linux-amd64",
+      "linux-arm64": "bin/onepassword-linux-arm64",
+      "darwin-arm64": "bin/onepassword-darwin-arm64",
+      "darwin-amd64": "bin/onepassword-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "onepassword", "name": "1Password", "capabilities": ["status", "tools"]
+    }],
+    "ui": [{"id": "connection", "title": "连接", "placement": "extension_page"}]
+  },
+  "settings_check": true,
+  "secrets": [{
+    "name": "service_account_token",
+    "title": "服务账号令牌",
+    "description": "在 1Password.com 侧边栏的「开发者」里创建服务账号，只授权 Persona 要查的保险库，给「读取」权限即可。令牌以 ops_ 开头；保存前会先连一次 1Password 检查。",
+    "required": true
+  }],
+  "permissions": {"network": ["*.1password.com", "*.1password.ca", "*.1password.eu"]}
+}

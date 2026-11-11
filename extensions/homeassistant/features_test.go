@@ -1093,7 +1093,11 @@ func TestPageDevices(t *testing.T) {
 	contains(t, texts(res.View), "## 「吸顶灯」的设置和其他项 · 2", "row 吸顶灯 厂商自定义 通电默认状态|设置 · 开关|", "→open:switch.ceiling_power_default", "收起")
 
 	// 动态: the last two hours, newest first, a noisy sensor one row, hidden areas left out
-	now := time.Now().UTC()
+	// Anchor calendar-day fixtures at request-local noon: subtracting minutes from the live clock crosses
+	// midnight and makes today's expected rows belong to yesterday. The fake logbook returns these fixtures.
+	loc := req(nil, "", nil).Location()
+	year, month, day := time.Now().In(loc).Date()
+	now := time.Date(year, month, day, 12, 0, 0, 0, loc)
 	at := func(m int) string { return now.Add(-time.Duration(m) * time.Minute).Format(time.RFC3339) }
 	rows := []string{
 		`{"when":"` + at(30) + `","name":"客厅吸顶灯","state":"on","entity_id":"light.ceiling","context_entity_id":"automation.night","context_name":"夜灯"}`,

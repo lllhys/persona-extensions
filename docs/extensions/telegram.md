@@ -8,7 +8,7 @@ The connector moved from the built-in host implementation without changing behav
 
 | Extension point | Contribution | Behavior |
 | --- | --- | --- |
-| `connectors` | `telegram` | Login, status, tools, actions/events, inbox, archives and conversation threads. The app supports pagination; images and avatars are proxied through the hub and fetched from their data center. Read-only assistant tools are `telegram_chats`, `telegram_messages` and `telegram_search`. |
+| `connectors` | `telegram` | Login, status, tools, actions/events, inbox, archives and conversation threads. The app supports pagination; images and avatars are proxied through the hub and fetched from their data center. Read-only assistant tools are `telegram_chats`, `telegram_messages` and `telegram_search`. The `catalog` capability offers every read tool to Persona's source subscriptions (source `telegram`, the names without `telegram_`); there `messages` and `search` answer JSON, `messages` with one item per message (`id` the chat's key and the message's id, the chat as `thread` and `title`, `sender`, `time`, the text as `body`), so a subscription follows them message by message. The other tools answer as they do for the assistant. |
 | Connector `cli` | `tg` | The assistant's node exposes `tg` on its `PATH` via `personad tool --cli telegram` while the connector is logged in. `telegram_cli` only parses commands; unlisted connector tools perform reads/writes. Writes pass through `connector_gate` and require phone confirmation by default. |
 | `assistant` | `telegram` skill | The shipped [skill](../../extensions/telegram/skills/telegram/SKILL.md) tells the assistant how to use `tg`. If the hub still supplies a built-in skill with the same name, that one takes precedence. |
 

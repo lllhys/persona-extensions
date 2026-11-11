@@ -1,0 +1,57 @@
+{
+  "manifest_version": 1,
+  "id": "household",
+  "name": "家庭管家",
+  "version": "0.1.0",
+  "description": "管家里的库存、采购、家务和餐食：物品少了、快过期或用完时提醒，一键补货，家务到期提醒，按库存推荐今天吃什么。页面和总览卡片在 Persona 里直接用；助手可以查库存、记用量、补货、完成家务和排餐食。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/docs/extensions/household.md",
+  "tags": ["家庭", "库存", "采购", "家务", "餐食"],
+  "engines": {"extension_protocol": 1},
+  "activation_events": ["on_startup"],
+  "runtime": {"command": {
+    "linux-amd64": "bin/household-linux-amd64",
+    "linux-arm64": "bin/household-linux-arm64",
+    "darwin-amd64": "bin/household-darwin-amd64",
+    "darwin-arm64": "bin/household-darwin-arm64"
+  }},
+  "contributes": {
+    "ui": [
+      {"id": "household", "title": "家庭管家", "placement": "nav_page", "icon": "home"},
+      {"id": "household-card", "title": "家庭管家", "placement": "overview_card", "opens": "household"}
+    ],
+    "skills": [{"id": "household", "dir": "skills/household"}],
+    "mcp_servers": [{
+      "id": "household", "command": "household", "env": "PERSONA_HOUSEHOLD_BIN",
+      "args": ["mcp"], "requires": ["mcp"],
+      "allow": ["household_status", "household_list", "household_meal_suggest"]
+    }]
+  },
+  "permissions": {
+    "hub": ["notify", "todos.write"]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "remind": {
+        "type": "string",
+        "title": "提醒方式",
+        "description": "每天一条通知（有需要处理的东西时）、把需要买的和到期的家务记成待办，或两者都要。选「关闭」时只在角标和页面上显示。待办需要 hub 给了「待办」权限。",
+        "default": "notify",
+        "oneOf": [
+          {"const": "notify", "title": "每日通知"},
+          {"const": "todos", "title": "记成待办"},
+          {"const": "both", "title": "通知和待办"},
+          {"const": "off", "title": "关闭"}
+        ]
+      },
+      "remind_time": {
+        "type": "string",
+        "title": "每日提醒时间",
+        "description": "当天这个时间（hub 所在时区）以后发出每日通知，格式 HH:MM。",
+        "default": "08:30",
+        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+      }
+    }
+  }
+}

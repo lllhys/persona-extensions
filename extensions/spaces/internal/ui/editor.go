@@ -10,7 +10,7 @@ import (
 
 	"github.com/nwverse/persona/sdk/go/wire"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
 )
 
 // The schema editor is the page of one type's structure, pushed from 结构. Every change builds a whole kernel.Type from a

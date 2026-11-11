@@ -50,6 +50,15 @@ func (p *plugin) cToolsCall(ctx context.Context, _ *pluginkit.Hub, raw json.RawM
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
+	text, err := p.run(ctx, in.Name, in.Args, false)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"text": text}, nil
+}
+
+// run is one tool: its text for the assistant, or with asJSON linuxdo_hot's JSON for subscriptions (catalog.go).
+func (p *plugin) run(ctx context.Context, name string, raw json.RawMessage, asJSON bool) (string, error) {
 	var args struct {
 		List     string          `json:"list"`
 		Filtered *bool           `json:"filtered"`
@@ -58,14 +67,12 @@ func (p *plugin) cToolsCall(ctx context.Context, _ *pluginkit.Hub, raw json.RawM
 		Topic    json.RawMessage `json:"topic"`
 		Replies  *int            `json:"replies"`
 	}
-	if len(in.Args) > 0 && string(in.Args) != "null" {
-		if err := json.Unmarshal(in.Args, &args); err != nil {
-			return nil, fmt.Errorf("参数不对：%w", err)
+	if len(raw) > 0 && string(raw) != "null" {
+		if err := json.Unmarshal(raw, &args); err != nil {
+			return "", fmt.Errorf("参数不对：%w", err)
 		}
 	}
-	var text string
-	var err error
-	switch in.Name {
+	switch name {
 	case "linuxdo_hot":
 		list := args.List
 		if list == "" {
@@ -75,23 +82,27 @@ func (p *plugin) cToolsCall(ctx context.Context, _ *pluginkit.Hub, raw json.RawM
 		if limit <= 0 || limit > 30 {
 			limit = 15
 		}
-		text, err = p.toolHot(ctx, list, args.Filtered == nil || *args.Filtered, args.Keywords, limit)
-	case "linuxdo_topic":
-		var id int64
-		if id, err = topicID(args.Topic); err == nil {
-			replies := repliesShow
-			if args.Replies != nil {
-				replies = min(max(*args.Replies, 0), 20)
-			}
-			text, err = p.toolTopic(ctx, id, replies)
+		a, err := p.hotAnswer(ctx, list, args.Filtered == nil || *args.Filtered, args.Keywords, limit)
+		if err != nil {
+			return "", err
 		}
-	default:
-		return nil, fmt.Errorf("没有工具 %s", in.Name)
+		if asJSON {
+			b, err := json.Marshal(a.data())
+			return string(b), err
+		}
+		return a.text(), nil
+	case "linuxdo_topic":
+		id, err := topicID(args.Topic)
+		if err != nil {
+			return "", err
+		}
+		replies := repliesShow
+		if args.Replies != nil {
+			replies = min(max(*args.Replies, 0), 20)
+		}
+		return p.toolTopic(ctx, id, replies)
 	}
-	if err != nil {
-		return nil, err
-	}
-	return map[string]any{"text": text}, nil
+	return "", fmt.Errorf("没有工具 %s", name)
 }
 
 var topicIDRE = regexp.MustCompile(`(\d+)`)
@@ -116,10 +127,20 @@ func topicID(raw json.RawMessage) (int64, error) {
 	return 0, fmt.Errorf("「%s」不是 LINUX DO 的帖子", clip(s, 80))
 }
 
-func (p *plugin) toolHot(ctx context.Context, list string, filtered bool, keywords []string, limit int) (string, error) {
+// hot is what linuxdo_hot found: a list's topics after the user's interests and the call's keywords.
+type hot struct {
+	list   string
+	all    int    // the list's topics
+	filter string // the filters that kept the rest, in words ("" none)
+	kept   int    // topics the filters kept
+	topics []hotTopic
+	limit  int
+}
+
+func (p *plugin) hotAnswer(ctx context.Context, list string, filtered bool, keywords []string, limit int) (hot, error) {
 	topics, err := p.hot(ctx, list, false)
 	if err != nil {
-		return "", err
+		return hot{}, err
 	}
 	all := len(topics)
 	f, narrow := filter{Keywords: keywords}, filter{}
@@ -128,29 +149,36 @@ func (p *plugin) toolHot(ctx context.Context, list string, filtered bool, keywor
 		f, narrow = p.cfg.filter(), filter{Keywords: keywords}
 	}
 	topics = narrow.apply(f.apply(topics))
-	title, _, _ := listOf(list)
-	var b strings.Builder
-	fmt.Fprintf(&b, "LINUX DO %s：%d 条", title, all)
 	d := f.describe()
 	if k := nonEmpty(narrow.Keywords); len(k) > 0 {
 		d = strings.TrimPrefix(d+" · 另外只看 "+strings.Join(k, "、"), " · ")
 	}
-	if d != "" {
-		fmt.Fprintf(&b, "，按「%s」过滤后 %d 条", d, len(topics))
-	}
+	a := hot{list: list, all: all, filter: d, kept: len(topics), topics: topics, limit: limit}
 	if len(topics) > limit {
-		fmt.Fprintf(&b, "，这里列前 %d 条", limit)
-		topics = topics[:limit]
+		a.topics = topics[:limit]
+	}
+	return a, nil
+}
+
+func (a hot) text() string {
+	title, _, _ := listOf(a.list)
+	var b strings.Builder
+	fmt.Fprintf(&b, "LINUX DO %s：%d 条", title, a.all)
+	if a.filter != "" {
+		fmt.Fprintf(&b, "，按「%s」过滤后 %d 条", a.filter, a.kept)
+	}
+	if a.kept > a.limit {
+		fmt.Fprintf(&b, "，这里列前 %d 条", a.limit)
 	}
 	b.WriteString("\n")
 	now := time.Now()
-	for i, t := range topics {
+	for i, t := range a.topics {
 		fmt.Fprintf(&b, "\n%d. %s（id %d）\n   %s · %s\n", i+1, t.Title, t.ID, t.meta(now), t.URL)
 		if t.Excerpt != "" {
 			b.WriteString("   " + clip(t.Excerpt, 160) + "\n")
 		}
 	}
-	return strings.TrimSpace(b.String()), nil
+	return strings.TrimSpace(b.String())
 }
 
 func (p *plugin) toolTopic(ctx context.Context, id int64, replies int) (string, error) {

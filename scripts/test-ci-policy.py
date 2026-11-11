@@ -98,9 +98,7 @@ class PublicationPolicyTests(unittest.TestCase):
         self.assertIn("github.run_id", anonymous)
         self.assertIn("github.event_name == 'push' && github.run_id || inputs.package_run_id", anonymous)
         self.assertIn("run-id: ${{ steps.package-run.outputs.run_id }}", anonymous)
-        sign = job(self.text, "sign")
-        self.assertIn("needs: [anonymous]", sign)
-        self.assertIn("secrets.EXTENSION_MARKET_SIGNING_KEY", sign)
+        self.assertIn("secrets.EXTENSION_MARKET_SIGNING_KEY", anonymous)
 
     def test_packages_only_runs_when_the_current_run_publishes_packages(self):
         packages = job(self.text, "packages")
@@ -116,27 +114,33 @@ class PublicationPolicyTests(unittest.TestCase):
         self.assertIn("github.event_name == 'workflow_dispatch' && inputs.phase == 'catalog' && needs.packages.result == 'skipped'", anonymous)
         self.assertIn("github.event_name == 'push' && github.run_id || inputs.package_run_id", anonymous)
         self.assertIn("run-id: ${{ steps.package-run.outputs.run_id }}", anonymous)
-        sign = job(self.text, "sign")
-        self.assertIn("needs: [anonymous]", sign)
-        self.assertIn("if: needs.anonymous.result == 'success'", sign)
-        self.assertIn("needs.anonymous.outputs.unchanged != 'true'", sign)
-        self.assertIn("secrets.EXTENSION_MARKET_SIGNING_KEY", sign)
+        self.assertIn("secrets.EXTENSION_MARKET_SIGNING_KEY", anonymous)
+        self.assertIn("if: steps.payload.outputs.path != ''", anonymous)
+        self.assertIn("Sign raw payload with the approved existing key", anonymous)
+        self.assertIn("name: signed-oci-catalog", anonymous)
         self.assertIn("cmp -s persona-extensions.json", anonymous)
-        self.assertIn("steps.current-catalog.outputs.unchanged != 'true'", anonymous)
-        self.assertIn("outputs:\n      unchanged:", anonymous)
+        self.assertIn("steps.payload.outputs.path != ''", anonymous)
+        self.assertIn("outputs:\n      payload: ${{ steps.payload.outputs.path }}", anonymous)
+        self.assertIn("path=%s\\n", anonymous)
+        self.assertNotIn("artifact-ids:", anonymous)
+        self.assertIn("CATALOG_UNCHANGED: ${{ needs.anonymous.outputs.payload == '' }}", job(self.text, "publication-required"))
+        self.assertIn("SIGN_RESULT: ${{ needs.anonymous.result }}", job(self.text, "publication-required"))
+        self.assertNotIn("needs.anonymous.outputs.catalog_unchanged", self.text)
+        with self.assertRaises(ValueError):
+            job(self.text, "sign")
 
     def test_publication_aggregate_rejects_skipped_stages(self):
         aggregate = job(self.text, "publication-required")
-        self.assertIn("needs: [identity, packages, anonymous, sign]", aggregate)
+        self.assertIn("needs: [identity, packages, anonymous]", aggregate)
         self.assertIn("!cancelled()", aggregate)
         self.assertIn("github.event_name == 'push'", aggregate)
         self.assertIn("github.event_name == 'workflow_dispatch' && inputs.phase == 'catalog'", aggregate)
         self.assertNotIn("inputs.phase == 'packages'", aggregate)
         for result in ("PACKAGES_RESULT", "ANONYMOUS_RESULT", "SIGN_RESULT"):
-            self.assertIn('${{ needs.' + result.split("_")[0].lower() + '.result }}', aggregate)
             self.assertIn(f'"${result}" != success', aggregate)
+        self.assertIn("SIGN_RESULT: ${{ needs.anonymous.result }}", aggregate)
         self.assertIn("exit 1", aggregate)
-        for missing_job in ("anonymous", "sign"):
+        for missing_job in ("anonymous",):
             with self.subTest(missing_job=missing_job):
                 changed = self.text.replace(job(self.text, missing_job), "", 1)
                 with self.assertRaises(ValueError):

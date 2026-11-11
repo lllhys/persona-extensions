@@ -2701,7 +2701,7 @@ var persona_extension_default = {
   manifest_version: 1,
   id: "linuxdo",
   name: "LINUX DO",
-  version: "0.1.14",
+  version: "0.1.15",
   description: "LINUX DO \u793E\u533A\u7684\u70ED\u95E8\u5E16\u5B50\uFF1A\u6269\u5C55\u91CC\u7684\u4E00\u9875\u6309\u4F60\u7684\u5174\u8DA3\u770B\u70ED\u95E8\u3001\u4ECA\u65E5 / \u672C\u5468\u6700\u70ED\u548C\u6700\u65B0\uFF0C\u70B9\u5F00\u5728 App \u91CC\u8BFB\u6B63\u6587\u548C\u70ED\u95E8\u56DE\u590D\uFF08hub \u53BB\u8BFB\uFF0C\u624B\u673A\u4E0D\u7528\u4EE3\u7406\uFF09\uFF1B\u52A9\u624B\u80FD\u7528\u5DE5\u5177\u67E5\u70ED\u95E8\u3001\u8BFB\u5E16\u5B50\u3002\u53EA\u8BFB\u516C\u5F00\u5185\u5BB9\uFF0C\u4E0D\u7528\u8D26\u53F7\u3002",
   publisher: "nwverse",
   tags: ["\u793E\u533A", "\u70ED\u95E8", "\u9605\u8BFB"],
@@ -2723,7 +2723,8 @@ var persona_extension_default = {
         name: "LINUX DO",
         capabilities: [
           "status",
-          "tools"
+          "tools",
+          "catalog"
         ],
         hosts: [
           "linux.do"

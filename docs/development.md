@@ -16,7 +16,7 @@ The official TypeScript SDK also owns one standalone authoring oracle, `sdk/ts/s
 extensions/<id>/           Manifest, source, tests and dependencies for one extension
   persona-extension.json   The only manifest, including the market tags
   go.mod, go.sum           The extension's own Go module (program extensions only)
-pluginkit/                 Quota, UI and inbox helpers for the existing extension APIs (own module)
+pluginkit/                 Quota, UI and inbox helpers, and the spaces kernel and file store (pluginkit/spaces) shared by spaces and household (own module)
 tools/                     Repository-level Go tests, such as every manifest against the SDK schema (own module)
 sdk/go/                    Synced copy of the official Persona Go SDK; do not hand-edit
 sdk/VERSION                Upstream source revision and sync ownership
@@ -25,7 +25,7 @@ docs/                      Human-maintained English guides and references
 persona-extensions.json    Single signed envelope: raw UTF-8 payload plus embedded signatures
 ```
 
-The SDK implements the process protocol; `pluginkit` preserves the helpers used by existing extensions. See [reference](reference.md) for schema and configuration details.
+The SDK implements the process protocol; `pluginkit` holds the helpers used by existing extensions and the spaces kernel that spaces and household share. See [reference](reference.md) for schema and configuration details.
 
 ## Add a program extension
 
@@ -90,6 +90,8 @@ See [installation](installation.md#install-a-local-package) to install the packa
 Each new executable source migration registers `extensions/<id>/source-rebuild.json` and commits its expected import-free bundle under `source-reference/`. The reference is a byte-comparison fixture, not a released default package. The profile names its source build script, generated bundle/archive, and the extension/SDK paths inside the standalone authoring archive. See the [LinuxDo profile](../extensions/linuxdo/source-rebuild.json).
 
 [The source rebuild job](../.github/workflows/ci.yml) runs every registered profile on its own fresh GitHub-hosted runner, with pinned Node, no restored dependency cache and no HOME substitution. [The driver](../scripts/source-rebuild.py) copies only tracked extension and official SDK authoring inputs into a new tree, excluding the reference bundle; installs locked public dependencies; builds; and compares the result **byte-for-byte** with the committed reference. It then extracts the produced authoring archive into another new directory and independently installs and rebuilds it, repeating the same byte comparison. Archive traversal, links, special files, duplicate files and excessive size fail before extraction.
+
+A source bundle embeds the extension's `persona-extension.json`, so a manifest change (a version bump, a capability) needs the reference regenerated in the same PR: `npm ci --ignore-scripts` in `sdk/ts` and the extension, `npm run build:source` with Node 22 or 24, then copy the profile's `output` over its `bundle`. `source-rebuild.py plan` (run by `scripts/ci.sh`) fails when the reference does not embed the manifest's version; only the hosted job compares the whole bundle, so dispatch a checks-only run on the branch (`gh workflow run ci.yml --ref <branch> -f phase=check`) before merging such a change. `scripts/ci.sh` refuses to start on another Node major.
 
 For explicit checks-only dispatches, `CI required` includes profile discovery and every source-rebuild matrix result. It is not a PR merge gate. New source authoring still cannot omit a rebuild profile. The pre-existing Hacker News and Showcase examples are not part of the new migration batch and supply no fresh-HOME proof unless they register a profile; their separate acceptance gates are not waived. [Pure guard regressions](../scripts/test-source-rebuild.py) run locally and in CI without executing a local standalone rebuild.
 

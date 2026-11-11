@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "bundle": "source-reference/bundle.mjs",
+  "build": "build:source",
+  "output": "build/currency.mjs",
+  "archive": "build/currency-source.tar.gz",
+  "extracted_extension": "authoring/extensions/currency",
+  "extracted_sdk": "authoring/sdk/ts"
+}

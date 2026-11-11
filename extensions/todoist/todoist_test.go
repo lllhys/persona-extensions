@@ -30,6 +30,12 @@ type fakeTodoist struct {
 }
 
 func newFakeTodoist(t *testing.T) *fakeTodoist {
+	t.Helper()
+	// Page and tool requests in these tests use Asia/Shanghai, not the runner's local calendar date.
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatal(err)
+	}
 	f := &fakeTodoist{}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+testToken {
@@ -53,7 +59,7 @@ func newFakeTodoist(t *testing.T) *fakeTodoist {
 			}
 			cursor := r.URL.Query().Get("cursor")
 			if cursor == "" {
-				fmt.Fprint(w, `{"results":[{"id":"opaque-long-task-1","content":"Prepare weekly review","description":"Full task context","project_id":"project-work","section_id":"section-planning","labels":["deep-work"],"priority":1,"due":{"date":"`+time.Now().Format("2006-01-02")+`","recurring":true}},{"id":"task-overdue","content":"Finish earlier draft","due":{"date":"2000-01-01","recurring":false}}],"next_cursor":"next-page"}`)
+				fmt.Fprint(w, `{"results":[{"id":"opaque-long-task-1","content":"Prepare weekly review","description":"Full task context","project_id":"project-work","section_id":"section-planning","labels":["deep-work"],"priority":1,"due":{"date":"`+time.Now().In(loc).Format("2006-01-02")+`","recurring":true}},{"id":"task-overdue","content":"Finish earlier draft","due":{"date":"2000-01-01","recurring":false}}],"next_cursor":"next-page"}`)
 			} else {
 				fmt.Fprint(w, `{"results":[],"next_cursor":""}`)
 			}

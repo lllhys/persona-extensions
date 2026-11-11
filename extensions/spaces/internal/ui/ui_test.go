@@ -13,9 +13,9 @@ import (
 	"github.com/nwverse/persona/sdk/go/exttest"
 	"github.com/nwverse/persona/sdk/go/wire"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/store"
 	"github.com/nwverse/persona-extensions/extensions/spaces/internal/templates"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/store"
 )
 
 var testNow = time.Date(2026, time.November, 10, 9, 30, 0, 0, time.UTC)

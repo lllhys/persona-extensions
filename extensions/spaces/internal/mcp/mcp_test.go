@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/kernel"
-	"github.com/nwverse/persona-extensions/extensions/spaces/internal/store"
 	"github.com/nwverse/persona-extensions/extensions/spaces/internal/templates"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/kernel"
+	"github.com/nwverse/persona-extensions/pluginkit/spaces/store"
 )
 
 // t0 is the time the server is given in these tests.

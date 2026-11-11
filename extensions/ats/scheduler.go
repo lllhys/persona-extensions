@@ -18,7 +18,8 @@ const (
 
 // MachineSlot represents an execution node's online state and slot capacity.
 type MachineSlot struct {
-	Name         string   `json:"name"`
+	Name         string   `json:"name"`            // the computer's id on the hub
+	Title        string   `json:"title,omitempty"` // its display name
 	Online       bool     `json:"online"`
 	MaxSlots     int      `json:"max_slots"`
 	RunningSlots int      `json:"running_slots"`
@@ -85,7 +86,6 @@ type SchedulePlan struct {
 func (q *Queue) SetMachines(machines []MachineSlot) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	_ = q.loadLocked()
 	q.machines = make(map[string]MachineSlot, len(machines))
 	for _, m := range machines {
 		name := strings.TrimSpace(m.Name)
@@ -93,10 +93,7 @@ func (q *Queue) SetMachines(machines []MachineSlot) error {
 			continue
 		}
 		if m.MaxSlots <= 0 {
-			m.MaxSlots = 2
-		}
-		if m.RunningSlots < 0 {
-			m.RunningSlots = 0
+			m.MaxSlots = 1
 		}
 		m.Name = name
 		q.machines[name] = m
@@ -104,7 +101,7 @@ func (q *Queue) SetMachines(machines []MachineSlot) error {
 	return q.saveLocked()
 }
 
-// Machines returns a sorted snapshot of registered machines (or a default local node when none are registered).
+// Machines returns a sorted snapshot of the registered machines, with the slots the active attempts occupy.
 func (q *Queue) Machines() []MachineSlot {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
@@ -112,24 +109,15 @@ func (q *Queue) Machines() []MachineSlot {
 }
 
 func (q *Queue) machinesLocked() []MachineSlot {
-	if len(q.machines) == 0 {
-		running := 0
-		for _, t := range q.tasks {
-			if t.State == StateRunning || t.State == StateLeased {
-				running++
-			}
-		}
-		return []MachineSlot{
-			{
-				Name:         "local",
-				Online:       true,
-				MaxSlots:     4,
-				RunningSlots: running,
-			},
+	running := map[string]int{}
+	for _, t := range q.tasks {
+		if isActiveState(t.State) && len(t.Attempts) > 0 {
+			running[t.Attempts[len(t.Attempts)-1].Machine]++
 		}
 	}
 	out := make([]MachineSlot, 0, len(q.machines))
 	for _, m := range q.machines {
+		m.RunningSlots = running[m.Name]
 		out = append(out, m)
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -205,11 +193,12 @@ func (q *Queue) planScheduleLocked(now time.Time) SchedulePlan {
 		DifficultyExtreme: 0,
 	}
 	countsByState := map[string]int{
-		StateQueued:    0,
-		StateRunning:   0,
-		StateSucceeded: 0,
-		StateFailed:    0,
-		StateCanceled:  0,
+		StateQueued:     0,
+		StateRunning:    0,
+		StateNeedsInput: 0,
+		StateSucceeded:  0,
+		StateFailed:     0,
+		StateCanceled:   0,
 	}
 
 	var queuedTasks []*Task
@@ -228,8 +217,10 @@ func (q *Queue) planScheduleLocked(now time.Time) SchedulePlan {
 				continue
 			}
 			queuedTasks = append(queuedTasks, t)
-		case StateRunning, StateLeased, StateNeedsInput:
+		case StateRunning, StateLeased:
 			countsByState[StateRunning]++
+		case StateNeedsInput:
+			countsByState[StateNeedsInput]++
 		case StateSucceeded:
 			countsByState[StateSucceeded]++
 		case StateFailed:
@@ -425,7 +416,7 @@ func pickMachineSlot(machines []MachineSlot, requiredMachine, lastFailedWorker s
 	foundOnline := false
 
 	for i, m := range machines {
-		if reqName != "" && !strings.EqualFold(m.Name, reqName) {
+		if reqName != "" && !strings.EqualFold(m.Name, reqName) && !strings.EqualFold(m.Title, reqName) {
 			continue
 		}
 		foundMachine = true
