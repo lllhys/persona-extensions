@@ -259,6 +259,15 @@ class GitContinuityRegressions(CatalogFixture, unittest.TestCase):
             with open(example, "xb") as output:
                 output.write(self.catalog_path.read_bytes())
 
+    def test_tree_inventory_carries_translations(self):
+        l10n = self.repo / "extensions/demo/l10n/zh-Hans.json"
+        l10n.parent.mkdir()
+        l10n.write_text('{"name": "演示"}')
+        self.pr_base = self.commit("Add a translation")
+        inventory = index.tree_inventory(self.pr_base)
+        self.assertEqual(inventory[0]["l10n"], {"zh-Hans": {"name": "演示"}})
+        self.assertEqual(catalog.entry_inventory(inventory[0])["l10n"], inventory[0]["l10n"])
+
     def test_old_valid_signed_artifact_fails_against_new_real_base(self):
         self.advance_source()
         self.candidate()

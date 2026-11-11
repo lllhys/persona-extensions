@@ -57,6 +57,42 @@ class SelectedTests(unittest.TestCase):
             manifest.ROOT = old_root
 
 
+class L10nTests(unittest.TestCase):
+    def setUp(self):
+        self.root = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.root, True)
+        old_root = manifest.ROOT
+        manifest.ROOT = str(self.root)
+        self.addCleanup(setattr, manifest, 'ROOT', old_root)
+
+    def write(self, name, text):
+        p = self.root / 'extensions' / 'demo' / 'l10n' / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+
+    def test_translations_by_language(self):
+        self.write('zh-Hans.json', '{"name": "演示"}')
+        self.write('ja.json', '{"name": "デモ"}')
+        self.assertEqual(manifest.l10n('demo'), {'ja': {'name': 'デモ'}, 'zh-Hans': {'name': '演示'}})
+
+    def test_no_translations_is_empty(self):
+        self.assertEqual(manifest.l10n('demo'), {})
+
+    def test_a_bad_file_is_an_error_not_a_dropped_translation(self):
+        self.write('zh-Hans.json', '[1, 2]')
+        with self.assertRaises(ValueError):
+            manifest.l10n('demo')
+        self.write('zh-Hans.json', '{"name": "a", "name": "b"}')
+        with self.assertRaises(ValueError):
+            manifest.l10n('demo')
+
+    def test_the_catalog_entry_and_its_inventory_carry_them(self):
+        self.write('zh-Hans.json', '{"name": "演示"}')
+        entry = manifest.catalog.source_entry({'id': 'demo'}, l10n=manifest.l10n('demo'))
+        self.assertEqual(entry['l10n'], {'zh-Hans': {'name': '演示'}})
+        self.assertEqual(manifest.catalog.entry_inventory(entry)['l10n'], entry['l10n'])
+
+
 class JunkTests(unittest.TestCase):
     """macOS/editor junk (AppleDouble ._*, .DS_Store, __pycache__) under skills/assistant must fail the check:
     scripts/package.sh copies those trees verbatim, so the junk would ship (issue #99)."""

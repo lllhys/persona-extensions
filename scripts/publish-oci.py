@@ -282,6 +282,9 @@ def source_inventory():
     inventory = []
     for extension_id in manifests.ids():
         entry = {"manifest": manifests.packaged(extension_id), "tags": manifests.tags(extension_id)}
+        translations = manifests.l10n(extension_id)
+        if translations:
+            entry["l10n"] = translations
         predecessor = manifests.replaces(extension_id)
         if predecessor != "":
             entry["replaces"] = predecessor

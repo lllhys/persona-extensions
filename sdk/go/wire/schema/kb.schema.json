@@ -20,7 +20,7 @@
   "$defs": {
     "KBKind": {
       "type": "string",
-      "enum": ["projects", "chats", "people", "docs", "meetings", "events", "recordings"]
+      "enum": ["projects", "chats", "people", "docs", "meetings", "events", "recordings", "topics"]
     },
     "KBErrorCode": {
       "description": "error.code of a knowledge-base call besides permission_denied (data {scope}, the one missing): invalid_params, not_found, assistant_offline (the manager is away), kb_unavailable (not open yet), conflict (kb.update touches fields the user or another extension holds; data KBConflict, nothing was written). assistant_offline and kb_unavailable are worth trying again; conflict is for the user to decide.",
@@ -158,9 +158,34 @@
         "links": {"type": "array", "items": {"$ref": "#/$defs/KBEntry"}},
         "moments": {"type": "array", "items": {"$ref": "#/$defs/KBMomentRef"}},
         "segments": {"type": "array", "items": {"$ref": "#/$defs/KBRecordingSegment"}},
-        "minutes": {"description": "A recording's meeting minutes, once written (docs/assistant/meeting-minutes.md); kept as the hub sends them."}
+        "minutes": {"description": "A recording's meeting minutes, once written (docs/assistant/meeting-minutes.md); kept as the hub sends them."},
+        "points": {"type": "array", "items": {"$ref": "#/$defs/KBTopicPoint"}, "description": "A topic's knowledge points (docs/assistant/knowledge.md \"Topics\")."}
       },
       "required": ["kind", "id", "path", "meta"]
+    },
+    "KBTopicPoint": {
+      "description": "One knowledge point of a topic, under up to two levels of subtopics (path).",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "path": {"type": "array", "items": {"type": "string"}},
+        "kind": {"type": "string", "enum": ["concept", "decision", "practice", "pitfall", "fact", "question"]},
+        "text": {"type": "string"},
+        "why": {"type": "string", "description": "A decision's reason, a pitfall's cause."},
+        "sources": {"type": "array", "items": {"$ref": "#/$defs/KBTopicSource"}},
+        "when": {"type": "string", "description": "YYYY-MM-DD: when it was last confirmed."}
+      },
+      "required": ["id", "kind", "text"]
+    },
+    "KBTopicSource": {
+      "description": "An entry a knowledge point came from.",
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string", "description": "projects or chats"},
+        "id": {"type": "string"},
+        "day": {"type": "string", "description": "YYYY-MM-DD"}
+      },
+      "required": ["kind", "id"]
     },
     "KBMomentRef": {
       "description": "A feed post linked to a project.",

@@ -50,16 +50,32 @@ def tree_catalog(ref):
 
 
 def tree_inventory(ref):
-    paths = git("ls-tree", "-r", "--name-only", full_sha(ref), "--", "extensions").decode().splitlines()
-    inventory = []
+    sha = full_sha(ref)
+    paths = git("ls-tree", "-r", "--name-only", sha, "--", "extensions").decode().splitlines()
+    manifests, translations = {}, {}
     for path in sorted(paths):
-        match = re.fullmatch(r"extensions/([a-z0-9]+(?:-[a-z0-9]+)*)/persona-extension.json", path)
-        if not match:
+        match = re.fullmatch(r"extensions/([a-z0-9]+(?:-[a-z0-9]+)*)/persona-extension\.json", path)
+        if match:
+            manifests[match[1]] = path
             continue
-        m = catalog.loads(git("show", ref + ":" + path))
-        if m.get("id") != match[1]:
+        match = re.fullmatch(r"extensions/([a-z0-9]+(?:-[a-z0-9]+)*)/l10n/([^/]+)\.json", path)
+        if match:
+            translations.setdefault(match[1], {})[match[2]] = path
+    inventory = []
+    for extension_id in sorted(manifests):
+        manifest = catalog.loads(git("show", sha + ":" + manifests[extension_id]))
+        if manifest.get("id") != extension_id:
             raise ValueError("source inventory directory/id mismatch")
-        inventory.append(catalog.source_entry(m))
+        l10n = {}
+        for language in sorted(translations.get(extension_id, {})):
+            raw = git("show", sha + ":" + translations[extension_id][language])
+            if len(raw) > 64 << 10:
+                raise ValueError("extensions/%s/l10n/%s.json: larger than 64 KiB" % (extension_id, language))
+            value = catalog.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError("extensions/%s/l10n/%s.json: not a JSON object" % (extension_id, language))
+            l10n[language] = value
+        inventory.append(catalog.source_entry(manifest, l10n=l10n))
     catalog.validate_entry_identities(inventory)
     return sorted(inventory, key=lambda e: e["manifest"]["id"])
 

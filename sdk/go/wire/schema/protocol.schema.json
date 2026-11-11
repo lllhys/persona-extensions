@@ -505,6 +505,65 @@
       },
       "required": ["status"]
     },
+    "SecretPurpose": {
+      "description": "What a secret value is resolved for: kind extension (an extension's secret, id its id), launcher (a launcher's or model provider's key, id its name, machine the computer it goes to) or agent_run (handed to one Agent run after the user approved it on the phone, id the variable's name, machine and session the Agent's).",
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string", "enum": ["extension", "launcher", "agent_run"]},
+        "id": {"type": "string", "maxLength": 200},
+        "machine": {"type": "string", "maxLength": 200},
+        "session": {"type": "string", "maxLength": 200}
+      },
+      "required": ["kind", "id"]
+    },
+    "SecretsDescribeParams": {
+      "description": "secrets.describe's parameters: a reference of one of the contribution's schemes.",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "reference": {"type": "string", "maxLength": 1024}
+      },
+      "required": ["contribution", "reference"]
+    },
+    "SecretsDescribeResult": {
+      "description": "What secrets.describe answers: words for people (the item and field), never a value.",
+      "type": "object",
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 200},
+        "detail": {"type": "string", "maxLength": 200}
+      },
+      "required": ["title"]
+    },
+    "SecretsResolveParams": {
+      "description": "secrets.resolve's parameters: the reference and what it is resolved for. Only the manager calls it.",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "reference": {"type": "string", "maxLength": 1024},
+        "purpose": {"$ref": "#/$defs/SecretPurpose"}
+      },
+      "required": ["contribution", "reference", "purpose"]
+    },
+    "SecretsResolveResult": {
+      "description": "What secrets.resolve answers: the value, at most 16 KB. Errors: not_found, not_signed_in, rate_limited (data.retry_after), refused.",
+      "type": "object",
+      "properties": {
+        "value": {"type": "string", "minLength": 1, "maxLength": 16384}
+      },
+      "required": ["value"]
+    },
+    "SecretsUsedEvent": {
+      "description": "secrets.used (an event to the provider, no answer): a reference it resolved was used, for the usage record its own page shows. Never the value.",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "reference": {"type": "string", "maxLength": 1024},
+        "purpose": {"$ref": "#/$defs/SecretPurpose"},
+        "at": {"type": "string", "format": "date-time"},
+        "approved_by": {"type": "string", "description": "settings (a reference saved in Settings), rule (an Always rule) or the approving device's id.", "maxLength": 200}
+      },
+      "required": ["contribution", "reference", "purpose", "at"]
+    },
     "ExtensionNotification": {
       "description": "extension_notification in an extension's alert push: whose it is, the page a tap opens (ui with state) and its buttons (category ext.<extension>.<hash of the action ids>, registered by the app as it meets it).",
       "type": "object",

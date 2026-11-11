@@ -384,6 +384,8 @@
         "via": {"type": "string", "description": "Where the sign-in comes from."},
         "error": {"type": "string", "description": "One sentence for people when state is not ok; never a secret."},
         "guide": {"type": "array", "items": {"type": "string"}, "description": "How to fix it, a step a sentence."},
+        "guide_url": {"type": "string", "format": "uri", "description": "Optional HTTPS page the App may open for the fix; never a secret."},
+        "missing_scopes": {"type": "array", "items": {"type": "string"}, "description": "Permissions the connector can identify as absent."},
         "last_sync": {"type": "string", "format": "date-time"},
         "last_event": {"type": "string", "format": "date-time"}
       },

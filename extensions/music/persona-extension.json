@@ -13,7 +13,7 @@
     "listening"
   ],
   "engines": {
-    "persona": ">=202611101245",
+    "persona": ">=202611101758",
     "extension_protocol": 1
   },
   "runtime": {

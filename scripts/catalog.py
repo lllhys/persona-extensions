@@ -36,13 +36,18 @@ def valid_extension_id(value):
     return isinstance(value, str) and len(value) <= 32 and re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", value) is not None
 
 
-def source_entry(source):
-    """Project author metadata into an inventory entry without changing runtime manifests."""
+def source_entry(source, l10n=None):
+    """Project author metadata into an inventory entry without changing runtime manifests.
+
+    l10n is the package's translations by language (scripts/manifest.py l10n): a hub shows them in the market before
+    downloading anything. Empty means none."""
     manifest = dict(source)
     tags = manifest.pop("tags", [])
     has_predecessor = "replaces" in manifest
     predecessor = manifest.pop("replaces", None)
     entry = {"manifest": manifest, "tags": tags}
+    if l10n:
+        entry["l10n"] = l10n
     if has_predecessor:
         if not valid_extension_id(predecessor) or predecessor == manifest.get("id"):
             raise ValueError("invalid extension replaces declaration")
@@ -53,6 +58,8 @@ def source_entry(source):
 def entry_inventory(entry):
     """The exact source-owned fields covered by generation provenance."""
     result = {"manifest": entry["manifest"], "tags": entry.get("tags", [])}
+    if "l10n" in entry:
+        result["l10n"] = entry["l10n"]
     if "replaces" in entry:
         result["replaces"] = entry["replaces"]
     return result

@@ -325,6 +325,7 @@
         "voice": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/NamedItem"}},
         "computer": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/NamedItem"}},
         "browser": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/NamedItem"}},
+        "iphone": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/NamedItem"}},
         "quota": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/QuotaItem"}},
         "providers": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/ProviderItem"}},
         "api": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/APIItem"}},
@@ -344,6 +345,7 @@
         "tunnels": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/TunnelItem"}},
         "error_reports": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/ErrorReportsItem"}},
         "auth_relay": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/AuthRelayItem"}},
+        "secret_providers": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/SecretProviderItem"}},
         "messaging": {"type": "array", "minItems": 1, "items": {"$ref": "messaging.schema.json#/$defs/MessagingItem"}}
       }
     },
@@ -518,6 +520,18 @@
           "items": {"type": "string", "maxLength": 256, "pattern": "^/[^?#\\s]*$"}}
       },
       "required": ["id", "hosts", "paths"]
+    },
+    "SecretProviderItem": {
+      "description": "Secret values it supplies for references of its schemes (op://vault/item/field): the manager calls secrets.describe and secrets.resolve when a setting holds such a reference or the user approves handing one to an Agent run. Needs the program to speak the protocol. A scheme another installed extension claims fails the install.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 80, "description": "Whose secrets these are, in a few words (1Password): the settings say From <name>."},
+        "schemes": {"type": "array", "description": "The reference schemes it resolves, without :// (op).", "minItems": 1, "maxItems": 4, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9+.-]{0,15}$", "not": {"enum": ["http", "https", "file", "data", "persona", "about", "javascript"]}}}
+      },
+      "required": ["id", "name", "schemes"]
     },
     "ErrorReportsItem": {
       "description": "It is given the error and crash reports of the hub and the user's devices (error_reports.deliver): needs the program to speak the protocol, on_startup and permissions.error_reports.",
