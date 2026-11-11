@@ -19,12 +19,18 @@ const onePixelPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mN
 
 type fakeNode struct {
 	calls []string
-	out   map[string]any
-	err   error
+	// params is the last parameters sent per method, so a test can check what the node would receive.
+	params map[string]any
+	out    map[string]any
+	err    error
 }
 
-func (f *fakeNode) Call(_ context.Context, machine, method string, _ any, out any) error {
+func (f *fakeNode) Call(_ context.Context, machine, method string, in any, out any) error {
 	f.calls = append(f.calls, method)
+	if f.params == nil {
+		f.params = map[string]any{}
+	}
+	f.params[method] = in
 	if f.err != nil {
 		return f.err
 	}
@@ -34,6 +40,16 @@ func (f *fakeNode) Call(_ context.Context, machine, method string, _ any, out an
 	}
 	b, _ := json.Marshal(v)
 	return json.Unmarshal(b, out)
+}
+
+// controlParams is the parameters of the last control call the node received.
+func (f *fakeNode) controlParams(t *testing.T) map[string]any {
+	t.Helper()
+	m, ok := f.params["control"].(map[string]any)
+	if !ok {
+		t.Fatalf("control sent %#v", f.params["control"])
+	}
+	return m
 }
 
 func (f *fakeNode) count(method string) int {
@@ -100,8 +116,21 @@ func TestMacProvider(t *testing.T) {
 	if err := p.Control(ctx, "playpause"); err != nil {
 		t.Fatal(err)
 	}
+	if got := fn.controlParams(t); len(got) != 1 || got["action"] != "playpause" {
+		t.Fatalf("playpause sent %v", got)
+	}
+	// The two item actions travel as a bare action name plus the id: the node's whitelist only knows the bare names.
 	if err := p.Control(ctx, "play_track:m1"); err != nil {
 		t.Fatal(err)
+	}
+	if got := fn.controlParams(t); len(got) != 2 || got["action"] != "play_track" || got["id"] != "m1" {
+		t.Fatalf("play_track sent %v", got)
+	}
+	if err := p.Control(ctx, "play_playlist:p.mac"); err != nil {
+		t.Fatal(err)
+	}
+	if got := fn.controlParams(t); len(got) != 2 || got["action"] != "play_playlist" || got["id"] != "p.mac" {
+		t.Fatalf("play_playlist sent %v", got)
 	}
 	art, err := p.Artwork(ctx, "track", "m1", 600)
 	if err != nil || len(art) == 0 {

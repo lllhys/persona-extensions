@@ -283,6 +283,22 @@ func TestConnectorRouting(t *testing.T) {
 	}
 }
 
+// A create_playlist with play:true is one write followed by one playback request. The request must reach the Mac as
+// the bare action plus the new playlist's id: the node's whitelist rejects a "play_playlist:<id>" action, and the user
+// would see a failure after the playlist was already created.
+func TestCreatePlaylistWithPlay(t *testing.T) {
+	fn := macFixture()
+	a := appWith(t, newMacProvider("m1", fn))
+	res, err := call(t, a, "actions.do",
+		`{"name":"applemusic_mac_create_playlist","args":{"name":"Focus","track_ids":["m1"],"play":true},"request_id":"req-play"}`)
+	if err != nil || !strings.Contains(res["text"].(string), "Playing it now.") {
+		t.Fatalf("create and play: %v %v", res, err)
+	}
+	if got := fn.controlParams(t); len(got) != 2 || got["action"] != "play_playlist" || got["id"] != "p.new" {
+		t.Fatalf("playback sent %v", got)
+	}
+}
+
 func TestConnectorNotConfigured(t *testing.T) {
 	a := appWith(t)
 	st, err := call(t, a, "status", "")

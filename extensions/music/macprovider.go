@@ -285,8 +285,13 @@ func (p *macProvider) Lyrics(ctx context.Context, id string) (string, error) {
 
 func (p *macProvider) Control(ctx context.Context, action string) error {
 	in := map[string]any{"action": action}
-	if id, ok := strings.CutPrefix(action, "play_track:"); ok {
-		in = map[string]any{"action": "play_track", "id": id}
+	// The two playback actions name the item to play; the node takes that id as its own argument, not inside the
+	// action string (its whitelist only knows the bare names).
+	for _, name := range []string{"play_track", "play_playlist"} {
+		if id, ok := strings.CutPrefix(action, name+":"); ok {
+			in = map[string]any{"action": name, "id": id}
+			break
+		}
 	}
 	var state string
 	if err := p.call(ctx, "control", in, &state); err != nil {
