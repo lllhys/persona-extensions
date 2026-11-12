@@ -438,6 +438,7 @@ func TestPage(t *testing.T) {
 			t.Fatalf("connected: want %q in %s", want, raw)
 		}
 	}
+	// The page asks 1Password afresh each time it is drawn (cache.go keeps the rest).
 	f.failAll = errors.New("dial tcp: lookup example.1password.com: no such host " + testToken)
 	_, raw = render(a, "ja")
 	if !strings.Contains(raw, "1Password に接続できません") || !strings.Contains(raw, "refresh") {

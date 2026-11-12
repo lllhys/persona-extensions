@@ -4,7 +4,7 @@
 
 ## Manifests and configuration
 
-Each extension is rooted at `extensions/<id>/` and has one manifest, `persona-extension.json`. [scripts/manifest.py](../scripts/manifest.py) checks directory/id agreement, versions and tags, that every file the manifest references is in the extension under `skills/`, `assistant/` or `looks/` (the directories packaging copies), and that `extension_pack` members without their own `market` are extensions in this repository; it rejects a committed `persona-plugin.json` or `market.json`. [tools/manifests/manifests_test.go](../tools/manifests/manifests_test.go) validates source manifests after removing only author-owned `replaces`, and runtime projections without `tags` or `replaces`, against the unchanged SDK `Manifest` schema.
+Each extension is rooted at `extensions/<id>/` and has one manifest, `persona-extension.json`. [scripts/manifest.py](../scripts/manifest.py) checks directory/id agreement, versions and tags, that every file the manifest references is in the extension under `skills/`, `assistant/`, `looks/` or `assets/` (the directories packaging copies), and that `extension_pack` members without their own `market` are extensions in this repository; it rejects a committed `persona-plugin.json` or `market.json`. [tools/manifests/manifests_test.go](../tools/manifests/manifests_test.go) validates source manifests after removing author-owned `replaces` and `icon`, and runtime projections without `tags`, `replaces` or `icon`, against the unchanged SDK `Manifest` schema. Source icon metadata has a separate repository-owned author schema; the synced SDK is not edited.
 
 | Field or file | Purpose |
 | --- | --- |
@@ -15,6 +15,7 @@ Each extension is rooted at `extensions/<id>/` and has one manifest, `persona-ex
 | `configuration` | JSON Schema for the app's settings form, in the subset supported by Persona. These titles and descriptions are runtime UI text. |
 | `permissions` | Requested access, such as network hosts; the hub presents permissions during installation. |
 | `replaces` | Optional single former extension ID, declared only by the author and projected onto the signed market entry. It is never a runtime manifest field; see [Identity changes](#identity-changes). |
+| `icon` | Source-only relative PNG/SVG path under `assets/`, with a square official icon and documented source/license. The signed entry exposes an immutable `icon_url`; see [Icons and download ranking](releases.md#icons-and-download-ranking). |
 | `tags` | Tags shown and searched in the market: at most 16, each 1–24 characters. They live only in the source manifest; see [Compatibility](#compatibility). |
 
 Examples: [LINUX DO manifest](../extensions/linuxdo/persona-extension.json), [Telegram manifest](../extensions/telegram/persona-extension.json). Settings and defaults for each are explained in their [LINUX DO](extensions/linuxdo.md#configuration) and [Telegram](extensions/telegram.md#inbox-triage) guides. Credentials are not configuration examples: use the hub's encrypted connector-secret flow, not manifests or repository files.
@@ -23,7 +24,7 @@ The [published manifest schema](../sdk/go/wire/schema/manifest.schema.json) desc
 
 ## Identity changes
 
-To rename a market extension, move its source directory, change its `id` and binary paths, bump its version, and declare `replaces: "old-id"` in the source manifest. Only one current extension may claim a former ID; self-replacement, duplicate predecessors, cycles and a predecessor that is still a current catalog ID are rejected. `scripts/manifest.py packaged` strips `replaces` and `tags`; programs embedding the author manifest must apply the same projection before answering `manifest`. Do not add source-only fields to the copied SDK schema.
+To rename a market extension, move its source directory, change its `id` and binary paths, bump its version, and declare `replaces: "old-id"` in the source manifest. Only one current extension may claim a former ID; self-replacement, duplicate predecessors, cycles and a predecessor that is still a current catalog ID are rejected. `scripts/manifest.py packaged` strips `replaces`, `tags` and `icon`; programs embedding the author manifest must apply the same projection before answering `manifest`. Do not add source-only fields to the copied SDK schema.
 
 The publisher signs the declaration in the entry and in complete source-inventory provenance. A hub with identity-transition support upgrades the actual predecessor installation only within its persisted market source and after explicit confirmation. Refreshing a catalog or enabling auto-update cannot silently rename it. Configuration, encrypted secrets, grants, switches, contribution choices and data use the original storage identity; old owner-facing IDs resolve only to that committed installation. Program tokens do not gain authority through those aliases. A fresh install with no installed predecessor does not pre-claim its name.
 
@@ -49,7 +50,7 @@ The repository was created during the Plugin → Extension migration's public-re
 - Current hubs need embedded-signature catalog and OCI support to read `persona-extensions.json`; its raw UTF-8 `payload` contains `extensions` entries. Upgrade the hub before switching the catalog format.
 - Older hubs can still install local packages with the compatible `persona-plugin.json` manifest and `personad plugin …`; there is no legacy market catalog in this repository.
 - Packages include both manifest names. [scripts/package.sh](../scripts/package.sh) writes both from `persona-extension.json`; the legacy file is never committed.
-- Hubs from before `tags` read manifests strictly and refuse unknown fields. Packages and index entries therefore carry the manifest without source-only `tags` or `replaces` (`scripts/manifest.py packaged`); the index entry carries those fields separately, and embedded runtime responses must omit them. `scripts/index.py check` rejects an index manifest that still has them.
+- Hubs from before `tags` read manifests strictly and refuse unknown fields. Packages and index entries therefore carry the manifest without source-only `tags`, `replaces` or `icon` (`scripts/manifest.py packaged`); the index entry carries those fields separately, and embedded runtime responses must omit them. `scripts/index.py check` rejects an index manifest that still has them.
 - The catalog has one embedded Ed25519 signature over the raw UTF-8 payload string. Its public key remains the approved cleaned repository key; no detached signature or standalone key file is served.
 - Protocol names and placements such as `plugin_protocol` and LINUX DO's `plugin_page` remain intentional. The host may expose a newer UI name without making the older manifest identifier invalid.
 

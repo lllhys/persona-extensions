@@ -19,6 +19,8 @@ import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import catalog
+import downloads
+import icons
 import index
 import manifest as manifests
 import oci
@@ -99,7 +101,7 @@ class BoundedTarInfo(tarfile.TarInfo):
         return member
 
 
-def scan_archive(data, extension_id, capture=()):
+def scan_archive(data, extension_id, capture=(), image_capture=()):
     if len(data) > PACKAGE_MOST:
         raise ValueError("archive exceeds compressed byte limit")
     files, saved, names = {}, {}, set()
@@ -134,8 +136,11 @@ def scan_archive(data, extension_id, capture=()):
                         files[rel] = (member.mode, member.size)
                         if rel in ("persona-extension.json", "persona-plugin.json") and member.size > MANIFEST_MOST:
                             raise ValueError("archive manifest exceeds 256 KiB")
-                        # Keep bounded JSON references only, never binaries or arbitrary file contents.
-                        if (rel.endswith(".json") or rel in capture) and member.size <= MANIFEST_MOST:
+                        # Keep bounded JSON/referenced text and explicit icon bytes,
+                        # never runtime binaries or arbitrary archive contents.
+                        if ((rel.endswith(".json") and member.size <= MANIFEST_MOST) or
+                                (rel in capture and member.size <= MANIFEST_MOST) or
+                                (rel in image_capture and member.size <= icons.MAX_BYTES)):
                             saved[rel] = archive.extractfile(member).read()
                     else:
                         raise ValueError("archive member is not an ordinary file or directory")
@@ -226,6 +231,24 @@ def check_archive(data, expected, strict=False, platform="any"):
     return sorted(k for k in actual.keys() | expected.keys() if actual.get(k) != expected.get(k))
 
 
+def check_entry_archive(data, entry, strict=False, platform="any"):
+    m = entry["manifest"]
+    result = check_archive(data, m, strict, platform)
+    icon = entry.get("icon")
+    if icon:
+        if not catalog.valid_icon_path(icon):
+            raise ValueError("archive icon path is unsafe")
+        _, _, saved = scan_archive(data, m["id"], image_capture={icon})
+        if icon not in saved:
+            raise ValueError("archive is missing its icon or icon exceeds size limit")
+        icons.validate_image(saved[icon], icon)
+        # The URL and package must show exactly the reviewed source image.
+        expected = (catalog.ROOT / "extensions" / m["id"] / icon).read_bytes()
+        if saved[icon] != expected:
+            raise ValueError("archive icon differs from trusted source")
+    return result
+
+
 def cleaned_archive(repository, entry, package, destination):
     m = entry["manifest"]
     platform = catalog.package_platform(package)
@@ -288,6 +311,9 @@ def source_inventory():
         predecessor = manifests.replaces(extension_id)
         if predecessor != "":
             entry["replaces"] = predecessor
+        icon = manifests.icon(extension_id)
+        if icon:
+            entry["icon"] = icon
         inventory.append(entry)
     return catalog.validate_entry_identities(inventory)
 
@@ -332,7 +358,7 @@ def reuse_version(registry, entry):
         raise ValueError("existing version tag metadata conflicts")
     registry.read_blob(expected["config"]["digest"], expected["config"]["size"])
     archive = registry.read_blob(layer["digest"], layer["size"])
-    check_archive(archive, m, strict=True)
+    check_entry_archive(archive, entry, strict=True)
     return {"url": oci.package_url(m["id"], ref), "sha256": layer["digest"].removeprefix("sha256:"), "size": layer["size"]}
 
 
@@ -369,7 +395,7 @@ def push(args):
                 subprocess.run([str(catalog.ROOT / "scripts/package.sh"), m["id"]], check=True, timeout=900,
                                env={k: v for k, v in os.environ.items() if k not in ("GHCR_TOKEN", "GH_TOKEN", "EXTENSION_MARKET_SIGNING_KEY")})
                 archive = (catalog.ROOT / "dist" / oci.filename(m["id"], m["version"])).read_bytes()
-                check_archive(archive, m, strict=True)
+                check_entry_archive(archive, entry, strict=True)
                 ref = registry.push_once(m["id"], m["version"], archive)
                 package = {"url": oci.package_url(m["id"], ref), "sha256": oci.digest(archive)[7:], "size": len(archive)}
             entry["packages"] = [package]
@@ -413,7 +439,10 @@ def validate_plan(plan, original, body, head_sha):
                 raise ValueError("tags-only update must retain immutable package descriptors")
         elif len(actual["packages"]) != 1 or set(actual["packages"][0]) != {"url", "sha256", "size"}:
             raise ValueError("new versions must have one any-platform archive")
-    catalog.validate_payload(dict(body, extensions=entries))
+    validation = dict(body, extensions=entries)
+    # A package plan is not yet the complete ranked metadata snapshot.
+    validation.pop("downloads_updated_at", None)
+    catalog.validate_payload(validation)
     return entries
 
 
@@ -431,11 +460,11 @@ def unchanged_catalog(plan, catalog_path, head_sha, registry_factory=oci.Registr
             if not package["url"].startswith("oci:"):
                 raise ValueError("a current catalog must contain OCI references")
             oci.verify_package(registry, m["id"], m["version"], package,
-                               archive_validator=lambda data: check_archive(data, m, platform=catalog.package_platform(package)))
+                               archive_validator=lambda data: check_entry_archive(data, entry, platform=catalog.package_platform(package)))
     return envelope
 
 
-def generate_payload(plan, catalog_path, head_sha, registry_factory=oci.Registry):
+def generate_payload(plan, catalog_path, head_sha, registry_factory=oci.Registry, metadata=None):
     original, body = catalog.verified(catalog_path)
     entries = validate_plan(plan, original, body, head_sha)
     # Construct clients with NO credentials. Do not reuse the publisher's authenticated clients/tokens.
@@ -446,20 +475,35 @@ def generate_payload(plan, catalog_path, head_sha, registry_factory=oci.Registry
             strict = plan["mode"] == "versions" and not next(
                 (old["manifest"]["version"] == m["version"] for old in body["extensions"] if old["manifest"]["id"] == m["id"]), False)
             oci.verify_package(registry, m["id"], m["version"], package,
-                               archive_validator=lambda data: check_archive(data, m, strict, catalog.package_platform(package)))
+                               archive_validator=lambda data: check_entry_archive(data, entry, strict, catalog.package_platform(package)))
             print(m["id"] + ": anonymous manifest/config/archive verified")
     inventory = source_inventory()
     present = {e["manifest"]["id"] for e in inventory}
     merged = {e["manifest"]["id"]: e for e in body["extensions"]
               if plan["mode"] == "bootstrap" or e["manifest"]["id"] in present}
-    merged.update({e["manifest"]["id"]: e for e in entries})
+    updated_ids = {e["manifest"]["id"] for e in entries}
+    merged.update({e["manifest"]["id"]: copy.deepcopy(e) for e in entries})
     body["extensions"] = [merged[k] for k in sorted(merged)]
+    # Icons are tied to the trusted source SHA, never a mutable branch or tag.
+    for entry in body["extensions"]:
+        if "icon" in entry:
+            entry["icon_url"] = catalog.icon_url(entry["manifest"]["id"], entry["icon"], head_sha)
+        else:
+            entry.pop("icon_url", None)
+    if metadata is not None:
+        downloads.apply(body, metadata)
+    elif "downloads_updated_at" in body:
+        # Test/offline callers can retain a complete snapshot, but cannot invent
+        # counts for newly introduced packages. Production always fetches afresh.
+        if any("downloads" not in entry for entry in body["extensions"]):
+            raise ValueError("new package requires a fresh downloads snapshot")
+        body["extensions"].sort(key=lambda e: (-e["downloads"], e["manifest"]["id"]))
     body["generation"] = {"repository": FINAL_REPOSITORY, "repository_id": CLEANED_REPOSITORY_ID,
                           "base_catalog_hash": oci.digest(original), "source_commit": head_sha,
                           "source_inventory_hash": catalog.inventory_hash(inventory), "mode": plan["mode"]}
     # Verify every retained OCI reference too, not just the newly uploaded versions.
     for entry in body["extensions"]:
-        if entry in entries:
+        if entry["manifest"]["id"] in updated_ids:
             continue
         m = entry["manifest"]
         registry = registry_factory(oci.repository(m["id"]))
@@ -467,7 +511,7 @@ def generate_payload(plan, catalog_path, head_sha, registry_factory=oci.Registry
             if not package["url"].startswith("oci:"):
                 raise ValueError("bootstrap must finish before publishing new-version catalogs")
             oci.verify_package(registry, m["id"], m["version"], package,
-                               archive_validator=lambda data: check_archive(data, m, platform=catalog.package_platform(package)))
+                               archive_validator=lambda data: check_entry_archive(data, entry, platform=catalog.package_platform(package)))
     return catalog.encode(catalog.validate_payload(body))
 
 
@@ -476,14 +520,20 @@ def catalog_phase(args, registry_factory=oci.Registry):
     plan = catalog.loads(pathlib.Path(args.plan).read_bytes())
     output = pathlib.Path(args.output)
     output.mkdir(parents=True, exist_ok=False)
-    if plan.get("catalog_update_required") is not True:
+    if plan.get("catalog_update_required") is not True and not getattr(args, "refresh_metadata", False):
         # The signed catalog and its immutable generation already describe this source tree.
         # Revalidate every OCI payload anonymously, then reuse the exact verified envelope.
         (output / "catalog.json").write_bytes(unchanged_catalog(plan, args.catalog, args.head_sha, registry_factory))
         (output / "payload.json").write_bytes(catalog.verified(args.catalog)[0])
         print("anonymous gate: ok; current signed catalog verified, no new signature needed")
         return
-    payload = generate_payload(plan, args.catalog, args.head_sha, registry_factory)
+    # Fetch only public package counters, with no token. Signing fails closed if
+    # even one package is missing or the exact counter cannot be parsed.
+    _, current = catalog.verified(args.catalog)
+    ids = ({e["manifest"]["id"] for e in current["extensions"]} if plan["mode"] == "bootstrap"
+           else set(manifests.ids()))
+    metadata = downloads.snapshot(ids)
+    payload = generate_payload(plan, args.catalog, args.head_sha, registry_factory, metadata=metadata)
     (output / "payload.json").write_bytes(payload)
     print("anonymous gate: ok; payload ready for independent secret signing step")
 
@@ -522,6 +572,7 @@ def main():
     parser.add_argument("--output")
     parser.add_argument("--plan")
     parser.add_argument("--run-id")
+    parser.add_argument("--refresh-metadata", action="store_true", help="Refresh signed downloads without changing immutable packages")
     args = parser.parse_args()
     if args.command in ("audit", "push", "catalog") and not args.output:
         parser.error("--output is required")

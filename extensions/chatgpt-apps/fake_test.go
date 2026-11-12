@@ -34,6 +34,7 @@ type fakeChatGPT struct {
 	refuse401 int             // answer this many backend calls 401 even with the right token
 	sse       bool            // MCP answers as an event stream
 	calls     []fakeCall      // tools/call, in order
+	results   map[string]any  // tools/call results that replace a tool's usual one, by tool name
 	installed map[string]bool
 	connected map[string]bool  // apps connected (else their tools are synthetic links)
 	badBundle bool             // the plugin package holds a path out of it
@@ -341,13 +342,16 @@ func (f *fakeChatGPT) mcp(w http.ResponseWriter, r *http.Request) {
 	case "tools/call":
 		f.mu.Lock()
 		f.calls = append(f.calls, fakeCall{Name: req.Params.Name, Args: req.Params.Arguments})
+		override, overridden := f.results[req.Params.Name]
 		f.mu.Unlock()
-		switch req.Params.Name {
-		case "example_mail.search_messages":
+		switch {
+		case overridden:
+			result = override
+		case req.Params.Name == "example_mail.search_messages":
 			result = map[string]any{"content": []any{map[string]any{"type": "text", "text": `{"messages":[{"subject":"Example subject"}]}`}}}
-		case "example_mail.send_message":
+		case req.Params.Name == "example_mail.send_message":
 			result = map[string]any{"structuredContent": map[string]any{"sent": true, "id": "msg_example"}}
-		case "example_broker.get_positions":
+		case req.Params.Name == "example_broker.get_positions":
 			result = map[string]any{"content": []any{map[string]any{"type": "text", "text": "no positions"}}}
 		default:
 			result = map[string]any{"isError": true, "content": []any{map[string]any{"type": "text", "text": "Unknown tool"}}}

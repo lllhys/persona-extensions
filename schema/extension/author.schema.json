@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nwverse/persona-extensions/schema/extension/author.schema.json",
+  "title": "Extension author metadata",
+  "description": "Source-only fields projected onto signed catalog entries, never sent to the runtime SDK. This schema validates only author metadata; runtime fields use the copied SDK Manifest schema.",
+  "type": "object",
+  "properties": {
+    "icon": { "$ref": "#/$defs/IconPath" },
+    "replaces": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "IconPath": {
+      "type": "string",
+      "maxLength": 240,
+      "pattern": "^assets/(?:[A-Za-z0-9_-][A-Za-z0-9._-]*/)*[A-Za-z0-9_-][A-Za-z0-9._-]*\\.(?:png|svg)$"
+    }
+  }
+}

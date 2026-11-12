@@ -26,6 +26,7 @@ func TestMain(m *testing.M) {
 	}
 	locatorFile = func() string { return filepath.Join(dir, "data-dir") }
 	defaultSessionDirs = func() []string { return nil }
+	defaultColdTextDirs = func() []string { return nil }
 	code := m.Run()
 	_ = os.RemoveAll(dir)
 	os.Exit(code)
@@ -392,8 +393,8 @@ func TestMCPServerOverStdio(t *testing.T) {
 	}
 	listRes := send(2, "tools/list", map[string]any{})
 	toolsArr := listRes["result"].(map[string]any)["tools"].([]any)
-	if len(toolsArr) != 5 {
-		t.Fatalf("expected 5 MCP tools, got %d", len(toolsArr))
+	if len(toolsArr) != 6 {
+		t.Fatalf("expected 6 MCP tools, got %d", len(toolsArr))
 	}
 
 	// 1. sac_recipes_list

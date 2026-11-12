@@ -21,6 +21,9 @@ class CatalogFixture:
         predecessor = mock.patch.object(manifests, "replaces", return_value="")
         predecessor.start()
         self.addCleanup(predecessor.stop)
+        icon = mock.patch.object(manifests, "icon", return_value="")
+        icon.start()
+        self.addCleanup(icon.stop)
         self.key = self.directory / "synthetic.pem"
         catalog.openssl("genpkey", "-algorithm", "ed25519", "-out", self.key)
         der = catalog.openssl("pkey", "-in", self.key, "-pubout", "-outform", "DER")

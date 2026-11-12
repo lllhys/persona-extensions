@@ -1,0 +1,58 @@
+{
+  "manifest_version": 1,
+  "id": "stackexchange",
+  "name": "Stack Exchange",
+  "version": "0.1.1",
+  "icon": "assets/icon.png",
+  "description": "Search developer questions on Stack Overflow and selected Stack Exchange sites. Read accepted or highly voted answers with code, attribution and original links. Anonymous, read-only public API access.",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/stackexchange/README.md",
+  "tags": [
+    "Development",
+    "Questions",
+    "Answers",
+    "Stack Overflow"
+  ],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "mode": "deno",
+    "source": {
+      "entry": "src/index.ts",
+      "bundle": "build/stackexchange.mjs",
+      "sha256": "adefd27bf313264c41e9994c5125f19e5c8d2b6557e555727cfe5e7b5106d6a7"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "stackexchange",
+        "name": "Stack Exchange",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "api.stackexchange.com"
+        ],
+        "agent_tools": [
+          "stackexchange_*"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "answers",
+        "title": "Stack Exchange",
+        "placement": "nav_page",
+        "icon": "search"
+      }
+    ]
+  },
+  "permissions": {
+    "network": [
+      "api.stackexchange.com"
+    ]
+  }
+}

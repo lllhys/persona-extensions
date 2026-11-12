@@ -1,0 +1,16 @@
+{
+  "timezone": "Asia/Shanghai",
+  "current": {"time": "2026-11-12T12:00", "pm2_5": 18.2, "pm10": 31.5, "european_aqi": 49},
+  "hourly": {
+    "time": ["2026-11-12T12:00"],
+    "pm2_5": [18.2],
+    "pm10": [31.5],
+    "european_aqi": [49],
+    "alder_pollen": [null],
+    "birch_pollen": [null],
+    "grass_pollen": [null],
+    "mugwort_pollen": [null],
+    "olive_pollen": [null],
+    "ragweed_pollen": [null]
+  }
+}

@@ -63,22 +63,24 @@ export interface Entry {
   stale?: ReadError;
 }
 export function parseEntry(raw: unknown, language: Language, value: string, at: number): Entry {
-  const source = object(raw), groups: SenseGroup[] = [];
-  for (const key of Object.keys(source).sort()) {
+  const source = object(raw), groups: SenseGroup[] = [], keys = Object.keys(source).sort();
+  // Senses come keyed by language code: the reader's language first, then the rest in order.
+  for (const key of [...keys.filter(key => key === language), ...keys.filter(key => key !== language)]) {
     const group = array(source[key]).slice(0, 20).map(rawGroup => {
       const item = object(rawGroup), partOfSpeech = clip(plain(string(item.partOfSpeech)), 100), label = clip(plain(string(item.language)), 100);
       if (!partOfSpeech) throw new ReadError("bad_answer");
-      const definitions = array(item.definitions).slice(0, 12).map(rawDefinition => {
+      // Wiktionary answers some senses as an empty line or bare markup (water, run, go): those are skipped, not the word.
+      const definitions = array(item.definitions).map(rawDefinition => {
         const definition = object(rawDefinition), text = clip(plain(string(definition.definition)), 2000);
-        if (!text) throw new ReadError("bad_answer");
+        if (!text) return undefined;
         const examples = array(definition.examples ?? []).slice(0, 4).map(example => {
           const text = clip(plain(string(example)), 600);
           return text ? { text } : undefined;
         }).filter(example => example !== undefined) as Example[];
         return { text, examples };
-      });
-      return { partOfSpeech, language: label, definitions };
-    });
+      }).filter(definition => definition !== undefined).slice(0, 12) as Definition[];
+      return definitions.length ? { partOfSpeech, language: label, definitions } : undefined;
+    }).filter(group => group !== undefined) as SenseGroup[];
     groups.push(...group);
   }
   if (!groups.length) throw new ReadError("not_found");

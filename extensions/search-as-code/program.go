@@ -76,6 +76,11 @@ type SearchHit struct {
 	Files      []string          `json:"files,omitempty"`
 	Snippets   []EvidenceSnippet `json:"snippets"`
 	Correlated []CorrelatedRef   `json:"correlated,omitempty"`
+	// Location of a session hit: 本地 (live transcript) or 已上云 (moved to the cloud by disklessly; restorable by
+	// entry id to original_path).
+	Location     string `json:"location,omitempty"`
+	EntryID      string `json:"entry_id,omitempty"`
+	OriginalPath string `json:"original_path,omitempty"`
 }
 
 // GroupSummary holds aggregated counts produced by `group_by`.
@@ -95,9 +100,13 @@ type ExecutionResult struct {
 	Hits            []*SearchHit   `json:"hits"`
 	TotalMatches    int            `json:"total_matches"`
 	ScannedSessions int            `json:"scanned_sessions"`
-	ScannedFiles    int            `json:"scanned_files"`
-	TotalDurationMs int64          `json:"total_duration_ms"`
-	RanAt           time.Time      `json:"ran_at"`
+	ScannedArchived int            `json:"scanned_archived_sessions,omitempty"`
+	// ScannedUnconfirmed of ScannedArchived have no confirmed cloud copy; ArchivedOmitted were beyond the cap.
+	ScannedUnconfirmed int       `json:"scanned_unconfirmed_sessions,omitempty"`
+	ArchivedOmitted    int       `json:"archived_omitted,omitempty"`
+	ScannedFiles       int       `json:"scanned_files"`
+	TotalDurationMs    int64     `json:"total_duration_ms"`
+	RanAt              time.Time `json:"ran_at"`
 }
 
 // CompileInput specifies either a raw Search-as-Code program, a recipe + query override, or a natural language query.
@@ -565,7 +574,9 @@ func ExecuteProgram(st *State, prog SearchProgram, now time.Time) *ExecutionResu
 			working = append(working, hits...)
 			q := step.Args["query"]
 			sc := cmp.Or(step.Args["scope"], "conversation")
-			note = fmt.Sprintf("扫描 %d 个会话，范围 %s", len(sessions), sc)
+			note = fmt.Sprintf("扫描 %d 个会话", len(sessions))
+			note += coldNote(stats.ArchivedSessions, stats.UnconfirmedSessions, stats.ArchivedOmitted)
+			note += "，范围 " + sc
 			if q != "" {
 				note += fmt.Sprintf("，查询 %q", clipRunes(q, 28))
 			}
@@ -640,15 +651,18 @@ func ExecuteProgram(st *State, prog SearchProgram, now time.Time) *ExecutionResu
 
 	totalDur := time.Since(startAll)
 	return &ExecutionResult{
-		Program:         prog,
-		StepTraces:      traces,
-		Groups:          groups,
-		Hits:            working,
-		TotalMatches:    len(working),
-		ScannedSessions: stats.TotalSessions,
-		ScannedFiles:    scannedFiles,
-		TotalDurationMs: max(totalDur.Milliseconds(), 1),
-		RanAt:           now.UTC(),
+		Program:            prog,
+		StepTraces:         traces,
+		Groups:             groups,
+		Hits:               working,
+		TotalMatches:       len(working),
+		ScannedSessions:    stats.TotalSessions,
+		ScannedArchived:    stats.ArchivedSessions,
+		ScannedUnconfirmed: stats.UnconfirmedSessions,
+		ArchivedOmitted:    stats.ArchivedOmitted,
+		ScannedFiles:       scannedFiles,
+		TotalDurationMs:    max(totalDur.Milliseconds(), 1),
+		RanAt:              now.UTC(),
 	}
 }
 
@@ -747,23 +761,26 @@ func evalScanSessions(sessions []*SessionRecord, args map[string]string, now tim
 		}
 
 		hits = append(hits, &SearchHit{
-			ID:         "session:" + s.SessionID,
-			SourceKind: "session",
-			SessionID:  s.SessionID,
-			Title:      s.Title,
-			Project:    s.Project,
-			CWD:        s.CWD,
-			Branch:     s.Branch,
-			Harness:    s.Harness,
-			Model:      s.Model,
-			UpdatedAt:  s.UpdatedAt,
-			Score:      score,
-			TurnCount:  s.TurnCount,
-			ToolCalls:  s.ToolCalls,
-			ErrorCount: s.ErrorCount,
-			ErrorKind:  firstErrKind,
-			Files:      slices.Clone(s.Files),
-			Snippets:   snippets,
+			ID:           "session:" + s.SessionID,
+			SourceKind:   "session",
+			SessionID:    s.SessionID,
+			Title:        s.Title,
+			Project:      s.Project,
+			CWD:          s.CWD,
+			Branch:       s.Branch,
+			Harness:      s.Harness,
+			Model:        s.Model,
+			UpdatedAt:    s.UpdatedAt,
+			Score:        score,
+			TurnCount:    s.TurnCount,
+			ToolCalls:    s.ToolCalls,
+			ErrorCount:   s.ErrorCount,
+			ErrorKind:    firstErrKind,
+			Files:        slices.Clone(s.Files),
+			Snippets:     snippets,
+			Location:     sessionLocation(s),
+			EntryID:      s.EntryID,
+			OriginalPath: archivedPath(s),
 		})
 	}
 	return hits
@@ -1200,4 +1217,12 @@ func parseSince(raw string, now time.Time) time.Time {
 
 func oneLine(s string) string {
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// archivedPath is the original transcript path of an archived (已上云) session, empty for a live one.
+func archivedPath(s *SessionRecord) string {
+	if s.Archived {
+		return s.FilePath
+	}
+	return ""
 }

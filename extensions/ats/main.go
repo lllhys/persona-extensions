@@ -27,6 +27,7 @@ func packagedManifest(raw []byte) []byte {
 	}
 	delete(fields, "tags")
 	delete(fields, "replaces")
+	delete(fields, "icon")
 	out, err := json.Marshal(fields)
 	if err != nil {
 		panic("cannot encode embedded extension manifest")

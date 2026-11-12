@@ -7,11 +7,14 @@ import (
 	"encoding/json"
 	"log"
 
+	"github.com/nwverse/persona-extensions/pluginkit"
 	"github.com/nwverse/persona/sdk/go/ext"
 )
 
 //go:embed persona-extension.json
-var manifest []byte
+var authorManifest []byte
+
+var manifest = pluginkit.PackagedManifest(authorManifest)
 
 var about = func() (m struct{ ID, Version string }) {
 	if err := json.Unmarshal(manifest, &m); err != nil {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +31,7 @@ type fakeRaindrop struct {
 	posts  []map[string]any
 	paths  []string
 	auth   []string
+	count  int // the all-bookmarks count; 100 when unset
 }
 
 func newFakeRaindrop(t *testing.T) *fakeRaindrop {
@@ -52,7 +54,10 @@ func newFakeRaindrop(t *testing.T) *fakeRaindrop {
 			for i := range items {
 				items[i] = raindrop{ID: int64(page*50 + i + 1), Title: fmt.Sprintf("Article %d", i), Link: "https://example.com/article", Domain: "example.com", Tags: []string{"research", "reading"}, Excerpt: "A synthetic excerpt"}
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"result": true, "items": items, "count": 100, "page": page})
+			f.mu.Lock()
+			count := cmp.Or(f.count, 100)
+			f.mu.Unlock()
+			_ = json.NewEncoder(w).Encode(map[string]any{"result": true, "items": items, "count": count, "page": page})
 		case "/rest/v1/raindrops/12":
 			fmt.Fprint(w, `{"result":true,"items":[{"_id":9007199254740993,"title":"Exact ID","link":"https://example.com/exact","tags":["go","go"]}],"count":1,"page":0}`)
 		case "/rest/v1/raindrop/9007199254740993":
@@ -302,6 +307,41 @@ func TestPageViewsAndSave(t *testing.T) {
 	v, err = a.page(t.Context(), &ext.UIRequest{UIParams: wire.UIParams{Locale: "en", UIVersion: 6}}, pageState{Pages: 1})
 	if err != nil || wire.CheckView(v) != nil {
 		t.Fatalf("%v %+v", err, v)
+	}
+}
+
+// Every Load more the page offers shows 50 more bookmarks: it is offered only while search can read another page.
+func TestLoadMoreStopsAtWhatSearchReads(t *testing.T) {
+	f := newFakeRaindrop(t)
+	f.count = 1000
+	a := f.app()
+	r := &ext.UIRequest{UIParams: wire.UIParams{Locale: "en", UIVersion: 6}}
+	v, err := a.render(t.Context(), r)
+	for shown := 50; ; shown += 50 {
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows := 0
+		for _, c := range v.Sections[0].Items {
+			if c.Type == wire.ComponentRow {
+				rows++
+			}
+		}
+		if rows != shown {
+			t.Fatalf("after Load more: %d bookmarks, want %d", rows, shown)
+		}
+		if v.Sections[0].More == nil {
+			if shown != 50*searchPagesMost {
+				t.Fatalf("Load more stopped at %d", shown)
+			}
+			return
+		}
+		r.State, r.Action = v.State, v.Sections[0].More.Action.ID
+		var res *wire.ActionResult
+		res, err = a.action(t.Context(), r)
+		if err == nil {
+			v = res.View
+		}
 	}
 }
 

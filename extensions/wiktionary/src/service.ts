@@ -49,7 +49,9 @@ export class Wiktionary {
   private async response(path: string, signal: AbortSignal): Promise<unknown> {
     let response: Response;
     try {
-      response = await this.fetch(`https://${this.language}.wiktionary.org${path}`, {
+      // Only English Wiktionary serves the REST definition endpoint (zh and ja answer 501); its answer has every language's
+      // senses, keyed by language code, and parseEntry puts the reader's first.
+      response = await this.fetch(`https://en.wiktionary.org${path}`, {
         method: "GET", headers: { Accept: "application/json", "User-Agent": "persona-wiktionary/0.1.0" }, signal, redirect: "error",
       });
     } catch (error) { checkSignal(signal); throw error instanceof ReadError ? error : new ReadError("network"); }

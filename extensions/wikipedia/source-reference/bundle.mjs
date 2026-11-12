@@ -763,7 +763,7 @@ function withExactParams(handler) {
 }
 
 // persona-extension.json
-var persona_extension_default = { manifest_version: 1, id: "wikipedia", name: "Wikipedia \u6BCF\u65E5\u9605\u8BFB", version: "0.1.0", description: "\u5728 Persona \u4E2D\u8BFB Wikipedia \u4ECA\u65E5\u7CBE\u9009\u3001\u70ED\u95E8\u6761\u76EE\u548C\u5386\u53F2\u4E0A\u7684\u4ECA\u5929\uFF0C\u641C\u7D22\u5E76\u9605\u8BFB\u6761\u76EE\u6458\u8981\u3002\u5185\u5BB9\u7531 hub \u901A\u8FC7\u516C\u5F00 API \u83B7\u53D6\uFF0C\u65E0\u9700\u8D26\u53F7\u3002", publisher: "nwverse", homepage: "https://github.com/nwverse/persona-extensions/blob/main/extensions/wikipedia/README.md", tags: ["Wikipedia", "\u9605\u8BFB", "\u77E5\u8BC6", "\u6BCF\u65E5\u7CBE\u9009"], engines: { plugin_protocol: 1 }, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/wikipedia.mjs", sha256: "" } }, contributes: { connectors: [{ id: "wikipedia", name: "Wikipedia", capabilities: ["status", "tools"], hosts: ["en.wikipedia.org", "zh.wikipedia.org", "ja.wikipedia.org"], agent_tools: ["wikipedia_*"] }], ui: [{ id: "today", title: "\u6BCF\u65E5\u9605\u8BFB", placement: "nav_page", icon: "doc" }] }, configuration: { type: "object", properties: { language: { type: "string", title: "Wikipedia \u8BED\u8A00", default: "auto", description: "auto \u8DDF\u968F Persona \u754C\u9762\u8BED\u8A00\uFF1B\u82F1\u6587\u9009 en\uFF0C\u4E2D\u6587\u9009 zh\uFF0C\u65E5\u6587\u9009 ja", oneOf: [{ const: "auto", title: "\u8DDF\u968F\u754C\u9762\u8BED\u8A00" }, { const: "en", title: "English" }, { const: "zh", title: "\u4E2D\u6587" }, { const: "ja", title: "\u65E5\u672C\u8A9E" }] } } }, permissions: { network: ["en.wikipedia.org", "zh.wikipedia.org", "ja.wikipedia.org"] } };
+var persona_extension_default = { manifest_version: 1, id: "wikipedia", name: "Wikipedia \u6BCF\u65E5\u9605\u8BFB", version: "0.1.3", icon: "assets/icon.png", description: "\u5728 Persona \u4E2D\u8BFB Wikipedia \u4ECA\u65E5\u7CBE\u9009\u3001\u70ED\u95E8\u6761\u76EE\u548C\u5386\u53F2\u4E0A\u7684\u4ECA\u5929\uFF0C\u641C\u7D22\u5E76\u9605\u8BFB\u6761\u76EE\u6458\u8981\u3002\u5185\u5BB9\u7531 hub \u901A\u8FC7\u516C\u5F00 API \u83B7\u53D6\uFF0C\u65E0\u9700\u8D26\u53F7\u3002", publisher: "nwverse", homepage: "https://github.com/nwverse/persona-extensions/blob/main/extensions/wikipedia/README.md", tags: ["Wikipedia", "\u9605\u8BFB", "\u77E5\u8BC6", "\u6BCF\u65E5\u7CBE\u9009"], engines: { plugin_protocol: 1 }, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/wikipedia.mjs", sha256: "" } }, contributes: { connectors: [{ id: "wikipedia", name: "Wikipedia", capabilities: ["status", "tools"], hosts: ["en.wikipedia.org", "zh.wikipedia.org", "ja.wikipedia.org"], agent_tools: ["wikipedia_*"] }], ui: [{ id: "today", title: "\u6BCF\u65E5\u9605\u8BFB", placement: "nav_page", icon: "doc" }] }, configuration: { type: "object", properties: { language: { type: "string", title: "Wikipedia \u8BED\u8A00", default: "auto", description: "auto \u8DDF\u968F Persona \u754C\u9762\u8BED\u8A00\uFF1B\u82F1\u6587\u9009 en\uFF0C\u4E2D\u6587\u9009 zh\uFF0C\u65E5\u6587\u9009 ja", oneOf: [{ const: "auto", title: "\u8DDF\u968F\u754C\u9762\u8BED\u8A00" }, { const: "en", title: "English" }, { const: "zh", title: "\u4E2D\u6587" }, { const: "ja", title: "\u65E5\u672C\u8A9E" }] } } }, permissions: { network: ["en.wikipedia.org", "zh.wikipedia.org", "ja.wikipedia.org"] } };
 
 // src/model.ts
 var limits = Object.freeze({ request: 2e4, page: 25e3, tool: 25e3, response: 4 << 20, feedFresh: 15 * 6e4, articleFresh: 60 * 6e4, cache: 60, cacheBytes: 4 << 20, gap: 100 });
@@ -819,8 +819,8 @@ function validCodepoint(n) {
 function titleKey(value) {
   if (typeof value !== "string") throw new ReadError("invalid");
   const title = plain(value).trim();
-  if (/[<>&]/.test(value)) throw new ReadError("invalid");
-  if (!title || title.length > 255 || /[\u0000-\u001f\u007f#?<>[\]{}|]/.test(title) || Array.from(title).length > 255) throw new ReadError("invalid");
+  if (/[<>]|&(#[0-9]+|#x[0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);/.test(value)) throw new ReadError("invalid");
+  if (!title || title.length > 255 || /[\u0000-\u001f\u007f#<>[\]{}|]/.test(title) || Array.from(title).length > 255) throw new ReadError("invalid");
   return title.replaceAll(" ", "_");
 }
 function articleURL(language, title) {
@@ -880,8 +880,10 @@ function searchPath(query, limit = 30) {
   return `/w/rest.php/v1/search/page?${new URLSearchParams({ q: query.trim(), limit: String(limit) })}`;
 }
 function parseFeed(raw, language, date, at) {
-  const value = object(raw), popular = array(object(value.mostread).articles).slice(0, 30).map((article) => parseArticle(article, language));
-  const events = array(value.onthisday).slice(0, 30).map((rawEvent) => {
+  const value = object(raw);
+  if (value.tfa == null && value.mostread === void 0 && value.onthisday === void 0) throw new ReadError("bad_answer");
+  const popular = value.mostread === void 0 ? [] : array(object(value.mostread).articles).slice(0, 30).map((article) => parseArticle(article, language));
+  const events = value.onthisday === void 0 ? [] : array(value.onthisday).slice(0, 30).map((rawEvent) => {
     const event = object(rawEvent);
     const year = integer(event.year);
     if (year > 2200) throw new ReadError("bad_answer");
@@ -1398,6 +1400,8 @@ function snapshotPage(service) {
 
 // src/index.ts
 var sourceManifest = { ...persona_extension_default, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/wikipedia.mjs", sha256: "" } } };
+delete sourceManifest.icon;
+delete sourceManifest.replaces;
 function createProgram(fetch = (input, init) => globalThis.fetch(input, init), options = {}) {
   let service;
   const current = () => {

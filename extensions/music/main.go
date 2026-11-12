@@ -17,11 +17,15 @@ import (
 	"log"
 	"os"
 
+	"github.com/nwverse/persona-extensions/pluginkit"
 	"github.com/nwverse/persona/sdk/go/ext"
 )
 
 //go:embed persona-extension.json
-var manifest []byte
+var authorManifest []byte
+
+// manifest is the runtime projection: tags, replaces and icon are source-only (scripts/manifest.py packaged).
+var manifest = pluginkit.PackagedManifest(authorManifest)
 
 // about is the manifest's id and version.
 var about = func() (m struct{ ID, Version string }) {

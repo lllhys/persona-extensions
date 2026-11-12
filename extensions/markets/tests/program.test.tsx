@@ -43,7 +43,7 @@ test("source artifact is import-free default Program with original IDs, config, 
   assert.equal(createHash("sha256").update(bytes).digest("hex"), manifest.runtime.source.sha256);
   if (original.runtime.mode === "deno") assert.equal(original.runtime.source.sha256, manifest.runtime.source.sha256); // Standalone authoring archive.
   else { assert.ok(original.runtime.command); assert.equal(original.runtime.mode, undefined); }
-  assert.equal(original.version, "0.6.6");
+  assert.equal(manifest.version, original.version);
   assert.equal(manifest.runtime.mode, "deno"); assert.equal(manifest.runtime.command, undefined);
   assert.equal(manifest.runtime.source.entry, "extensions/markets/src/index.ts");
   assert.equal(manifest.runtime.source.bundle, "build/markets.mjs");

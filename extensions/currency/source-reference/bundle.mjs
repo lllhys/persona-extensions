@@ -763,7 +763,7 @@ function withExactParams(handler) {
 }
 
 // persona-extension.json
-var persona_extension_default = { manifest_version: 1, id: "currency", name: "\u6C47\u7387\u548C\u5355\u4F4D\u6362\u7B97", version: "0.1.0", description: "\u6362\u7B97\u5E38\u7528\u8D27\u5E01\u4E0E\u65E5\u5E38\u5355\u4F4D\u3002\u6C47\u7387\u4F7F\u7528\u6CE8\u660E\u65E5\u671F\u7684\u6B27\u6D32\u592E\u884C\u53C2\u8003\u6570\u636E\uFF1B\u957F\u5EA6\u3001\u8D28\u91CF\u3001\u6E29\u5EA6\u3001\u4F53\u79EF\u3001\u9762\u79EF\u3001\u901F\u5EA6\u3001\u65F6\u957F\u548C\u6570\u636E\u5355\u4F4D\u5728 hub \u672C\u5730\u6362\u7B97\u3002", publisher: "nwverse", homepage: "https://github.com/nwverse/persona-extensions/blob/main/extensions/currency/README.md", tags: ["\u8D27\u5E01", "\u6C47\u7387", "\u5355\u4F4D\u6362\u7B97"], engines: { plugin_protocol: 1 }, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/currency.mjs", sha256: "" } }, contributes: { connectors: [{ id: "currency", name: "Currency and units", capabilities: ["status", "tools"], hosts: ["api.frankfurter.dev"], agent_tools: ["currency_*", "unit_convert"] }], ui: [{ id: "converter", title: "\u6C47\u7387\u548C\u5355\u4F4D\u6362\u7B97", placement: "nav_page", icon: "money" }] }, permissions: { network: ["api.frankfurter.dev"] } };
+var persona_extension_default = { manifest_version: 1, id: "currency", name: "\u6C47\u7387\u548C\u5355\u4F4D\u6362\u7B97", version: "0.1.1", icon: "assets/icon.png", description: "\u6362\u7B97\u5E38\u7528\u8D27\u5E01\u4E0E\u65E5\u5E38\u5355\u4F4D\u3002\u6C47\u7387\u4F7F\u7528\u6CE8\u660E\u65E5\u671F\u7684\u6B27\u6D32\u592E\u884C\u53C2\u8003\u6570\u636E\uFF1B\u957F\u5EA6\u3001\u8D28\u91CF\u3001\u6E29\u5EA6\u3001\u4F53\u79EF\u3001\u9762\u79EF\u3001\u901F\u5EA6\u3001\u65F6\u957F\u548C\u6570\u636E\u5355\u4F4D\u5728 hub \u672C\u5730\u6362\u7B97\u3002", publisher: "nwverse", homepage: "https://github.com/nwverse/persona-extensions/blob/main/extensions/currency/README.md", tags: ["\u8D27\u5E01", "\u6C47\u7387", "\u5355\u4F4D\u6362\u7B97"], engines: { plugin_protocol: 1 }, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/currency.mjs", sha256: "" } }, contributes: { connectors: [{ id: "currency", name: "Currency and units", capabilities: ["status", "tools"], hosts: ["api.frankfurter.dev"], agent_tools: ["currency_*", "unit_convert"] }], ui: [{ id: "converter", title: "\u6C47\u7387\u548C\u5355\u4F4D\u6362\u7B97", placement: "nav_page", icon: "money" }] }, permissions: { network: ["api.frankfurter.dev"] } };
 
 // src/model.ts
 var limits = Object.freeze({ request: 12e3, page: 15e3, tool: 15e3, response: 256 << 10, fresh: 6 * 60 * 6e4, cache: 32, cacheBytes: 256 << 10, gap: 200 });
@@ -1544,6 +1544,8 @@ function snapshotPage(service) {
 
 // src/index.ts
 var sourceManifest = { ...persona_extension_default, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/currency.mjs", sha256: "" } } };
+delete sourceManifest.icon;
+delete sourceManifest.replaces;
 function createProgram(fetch = (input, init) => globalThis.fetch(input, init), options = {}) {
   let service;
   const current = () => {

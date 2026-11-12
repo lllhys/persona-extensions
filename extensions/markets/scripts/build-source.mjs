@@ -30,6 +30,8 @@ const program = (await import(pathToFileURL(bundle).href + "?hash=" + hash(bytes
 if (program.id !== "markets" || program.fetch || typeof program.init !== "function" || !program.ui?.watchlist?.componentPage || !program.ui?.card?.render) throw new Error("Default source Program is incomplete");
 const manifest = JSON.parse(releasedBytes);
 delete manifest.tags;
+delete manifest.replaces;
+delete manifest.icon;
 manifest.runtime = { mode: "deno", source: { entry: "src/index.ts", bundle: "build/markets.mjs", sha256: hash(bytes) } };
 const packageRoot = resolve(root, "build/package"), stage = resolve(packageRoot, "extensions/markets");
 await rm(packageRoot, { recursive: true, force: true });
@@ -47,6 +49,10 @@ await writeFile(resolve(packageRoot, "persona-extension.json"), hostText);
 await writeFile(resolve(packageRoot, "persona-plugin.json"), hostText);
 await mkdir(resolve(packageRoot, "build"), { recursive: true });
 await writeFile(resolve(packageRoot, "build/markets.mjs"), bytes);
+if (packageManifest.icon) {
+  await cp(resolve(root, "assets"), resolve(packageRoot, "assets"), { recursive: true });
+  await cp(resolve(root, "assets"), resolve(stage, "assets"), { recursive: true });
+}
 // Rebuilding is extension-local; execution itself resolves no package dependencies.
 for (const path of ["src", "tests", "testdata", "scripts", "package.json", "package-lock.json", "tsconfig.json", "README.md"]) await cp(resolve(root, path), resolve(stage, path), { recursive: true });
 // Include the entire unchanged SDK authoring closure: exports, exact/compat

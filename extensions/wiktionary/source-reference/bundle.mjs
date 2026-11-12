@@ -763,7 +763,7 @@ function withExactParams(handler) {
 }
 
 // persona-extension.json
-var persona_extension_default = { manifest_version: 1, id: "wiktionary", name: "Wiktionary \u591A\u8BED\u8BCD\u5178", version: "0.1.0", description: "\u67E5\u8BE2\u82F1\u6587\u3001\u4E2D\u6587\u548C\u65E5\u6587 Wiktionary \u7684\u8BCD\u6027\u3001\u91CA\u4E49\u4E0E\u4F8B\u53E5\uFF0C\u63D0\u4F9B\u539F\u59CB\u6761\u76EE\u94FE\u63A5\u3002\u5185\u5BB9\u7531 hub \u901A\u8FC7\u516C\u5F00 API \u83B7\u53D6\uFF0C\u65E0\u9700\u8D26\u53F7\u3002", publisher: "nwverse", homepage: "https://github.com/nwverse/persona-extensions/blob/main/extensions/wiktionary/README.md", tags: ["\u8BCD\u5178", "\u8BED\u8A00", "Wiktionary"], engines: { plugin_protocol: 1 }, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/wiktionary.mjs", sha256: "" } }, contributes: { connectors: [{ id: "wiktionary", name: "Wiktionary", capabilities: ["status", "tools"], hosts: ["en.wiktionary.org", "zh.wiktionary.org", "ja.wiktionary.org"], agent_tools: ["wiktionary_*"] }], ui: [{ id: "lookup", title: "\u67E5\u8BCD\u5178", placement: "nav_page", icon: "doc" }] }, configuration: { type: "object", properties: { language: { type: "string", title: "Wiktionary \u8BED\u8A00", default: "auto", description: "auto \u8DDF\u968F Persona \u754C\u9762\u8BED\u8A00\uFF1B\u82F1\u6587\u9009 en\uFF0C\u4E2D\u6587\u9009 zh\uFF0C\u65E5\u6587\u9009 ja", oneOf: [{ const: "auto", title: "\u8DDF\u968F\u754C\u9762\u8BED\u8A00" }, { const: "en", title: "English" }, { const: "zh", title: "\u4E2D\u6587" }, { const: "ja", title: "\u65E5\u672C\u8A9E" }] } } }, permissions: { network: ["en.wiktionary.org", "zh.wiktionary.org", "ja.wiktionary.org"] } };
+var persona_extension_default = { manifest_version: 1, id: "wiktionary", name: "Wiktionary \u591A\u8BED\u8BCD\u5178", version: "0.1.3", icon: "assets/icon.png", description: "\u67E5\u8BE2\u82F1\u6587\u3001\u4E2D\u6587\u548C\u65E5\u6587 Wiktionary \u7684\u8BCD\u6027\u3001\u91CA\u4E49\u4E0E\u4F8B\u53E5\uFF0C\u63D0\u4F9B\u539F\u59CB\u6761\u76EE\u94FE\u63A5\u3002\u5185\u5BB9\u7531 hub \u901A\u8FC7\u516C\u5F00 API \u83B7\u53D6\uFF0C\u65E0\u9700\u8D26\u53F7\u3002", publisher: "nwverse", homepage: "https://github.com/nwverse/persona-extensions/blob/main/extensions/wiktionary/README.md", tags: ["\u8BCD\u5178", "\u8BED\u8A00", "Wiktionary"], engines: { plugin_protocol: 1 }, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/wiktionary.mjs", sha256: "" } }, contributes: { connectors: [{ id: "wiktionary", name: "Wiktionary", capabilities: ["status", "tools"], hosts: ["en.wiktionary.org", "zh.wiktionary.org", "ja.wiktionary.org"], agent_tools: ["wiktionary_*"] }], ui: [{ id: "lookup", title: "\u67E5\u8BCD\u5178", placement: "nav_page", icon: "doc" }] }, configuration: { type: "object", properties: { language: { type: "string", title: "Wiktionary \u8BED\u8A00", default: "auto", description: "auto \u8DDF\u968F Persona \u754C\u9762\u8BED\u8A00\uFF1B\u82F1\u6587\u9009 en\uFF0C\u4E2D\u6587\u9009 zh\uFF0C\u65E5\u6587\u9009 ja", oneOf: [{ const: "auto", title: "\u8DDF\u968F\u754C\u9762\u8BED\u8A00" }, { const: "en", title: "English" }, { const: "zh", title: "\u4E2D\u6587" }, { const: "ja", title: "\u65E5\u672C\u8A9E" }] } } }, permissions: { network: ["en.wiktionary.org", "zh.wiktionary.org", "ja.wiktionary.org"] } };
 
 // src/model.ts
 var limits = Object.freeze({ request: 12e3, page: 15e3, tool: 15e3, response: 2 << 20, fresh: 6 * 60 * 6e4, cache: 40, cacheBytes: 2 << 20, gap: 150 });
@@ -843,22 +843,22 @@ function string(value, fallback = "") {
   })();
 }
 function parseEntry(raw, language, value, at) {
-  const source = object(raw), groups = [];
-  for (const key of Object.keys(source).sort()) {
+  const source = object(raw), groups = [], keys = Object.keys(source).sort();
+  for (const key of [...keys.filter((key2) => key2 === language), ...keys.filter((key2) => key2 !== language)]) {
     const group = array(source[key]).slice(0, 20).map((rawGroup) => {
       const item = object(rawGroup), partOfSpeech = clip(plain(string(item.partOfSpeech)), 100), label = clip(plain(string(item.language)), 100);
       if (!partOfSpeech) throw new ReadError("bad_answer");
-      const definitions = array(item.definitions).slice(0, 12).map((rawDefinition) => {
+      const definitions = array(item.definitions).map((rawDefinition) => {
         const definition = object(rawDefinition), text2 = clip(plain(string(definition.definition)), 2e3);
-        if (!text2) throw new ReadError("bad_answer");
+        if (!text2) return void 0;
         const examples = array(definition.examples ?? []).slice(0, 4).map((example) => {
           const text3 = clip(plain(string(example)), 600);
           return text3 ? { text: text3 } : void 0;
         }).filter((example) => example !== void 0);
         return { text: text2, examples };
-      });
-      return { partOfSpeech, language: label, definitions };
-    });
+      }).filter((definition) => definition !== void 0).slice(0, 12);
+      return definitions.length ? { partOfSpeech, language: label, definitions } : void 0;
+    }).filter((group2) => group2 !== void 0);
     groups.push(...group);
   }
   if (!groups.length) throw new ReadError("not_found");
@@ -1019,7 +1019,7 @@ var Wiktionary = class {
   async response(path, signal) {
     let response;
     try {
-      response = await this.fetch(`https://${this.language}.wiktionary.org${path}`, {
+      response = await this.fetch(`https://en.wiktionary.org${path}`, {
         method: "GET",
         headers: { Accept: "application/json", "User-Agent": "persona-wiktionary/0.1.0" },
         signal,
@@ -1351,6 +1351,8 @@ function snapshotPage(service) {
 
 // src/index.ts
 var sourceManifest = { ...persona_extension_default, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/wiktionary.mjs", sha256: "" } } };
+delete sourceManifest.icon;
+delete sourceManifest.replaces;
 function createProgram(fetch = (input, init) => globalThis.fetch(input, init), options = {}) {
   let service;
   const current = () => {

@@ -91,14 +91,19 @@ func (c *client) do(ctx context.Context, method, path string, query url.Values, 
 	}
 }
 
-func (c *client) search(ctx context.Context, start int) (searchPage, error) {
-	if start < 0 {
-		return searchPage{}, errors.New("invalid pagination start")
+// search reads a page of the user's unresolved assigned issues: the first when token is "", else the page a previous
+// answer's nextPageToken names. /search/jql ignores startAt, so the token is the only way past the first page.
+func (c *client) search(ctx context.Context, token string) (searchPage, error) {
+	if len(token) > maxPageToken {
+		return searchPage{}, errors.New("invalid page token")
 	}
 	q := url.Values{
-		"jql":     {"assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC"},
-		"startAt": {fmt.Sprint(start)}, "maxResults": {"50"},
-		"fields": {"summary,status,assignee,project,priority,issuetype,updated"},
+		"jql":        {"assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC"},
+		"maxResults": {"50"},
+		"fields":     {"summary,status,assignee,project,priority,issuetype,updated"},
+	}
+	if token != "" {
+		q.Set("nextPageToken", token)
 	}
 	var out searchPage
 	err := c.do(ctx, http.MethodGet, "/search/jql", q, nil, &out)

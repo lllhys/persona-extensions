@@ -1,0 +1,16 @@
+{
+  "timezone": "Europe/Paris",
+  "current": {"time": "2026-05-12T08:00", "pm2_5": 12.5, "pm10": 22.1, "european_aqi": 42},
+  "hourly": {
+    "time": ["2026-05-12T07:00", "2026-05-12T08:00", "2026-05-12T09:00", "2026-05-12T10:00"],
+    "pm2_5": [10.0, 12.5, 13.0, null],
+    "pm10": [18.0, 22.1, 23.0, null],
+    "european_aqi": [39, 42, 44, null],
+    "alder_pollen": [null, 0, 1.2, null],
+    "birch_pollen": [null, 18.5, 20.0, null],
+    "grass_pollen": [null, 12.0, 13.5, null],
+    "mugwort_pollen": [null, 0, 0, null],
+    "olive_pollen": [null, 2.5, 3.0, null],
+    "ragweed_pollen": [null, 0, 0, null]
+  }
+}

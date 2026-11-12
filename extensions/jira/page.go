@@ -15,7 +15,7 @@ import (
 
 type pageState struct {
 	Query    string     `json:"q,omitempty"`
-	StartAt  int        `json:"s,omitempty"`
+	Token    string     `json:"t,omitempty"`
 	IssueKey string     `json:"k,omitempty"`
 	Mode     string     `json:"m,omitempty"`
 	DraftID  string     `json:"d,omitempty"`
@@ -24,7 +24,7 @@ type pageState struct {
 
 func readState(r *ext.UIRequest) (pageState, error) {
 	var st pageState
-	if err := r.DecodeState(&st); err != nil || st.StartAt < 0 || len(st.IssueKey) > 64 || len(st.DraftID) > 128 {
+	if err := r.DecodeState(&st); err != nil || len(st.Token) > maxPageToken || len(st.IssueKey) > 64 || len(st.DraftID) > 128 {
 		return pageState{}, errors.New("invalid page state")
 	}
 	return st, nil
@@ -45,9 +45,13 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 	}
 	switch r.Action {
 	case "search":
-		st.Query, st.StartAt, st.Mode = r.Values["q"], 0, "list"
+		st.Query, st.Token, st.Mode = r.Values["q"], "", "list"
 	case "more":
-		st.StartAt += 50
+		token := r.Values["token"]
+		if token == "" || len(token) > maxPageToken {
+			return nil, errors.New("invalid page token")
+		}
+		st.Token = token
 	case "detail":
 		if err := validKey(r.Values["id"]); err != nil {
 			return nil, err
@@ -99,13 +103,13 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState) (*wire.V
 		}
 		return detailView(r, st, item), nil
 	}
-	page, err := a.client.search(ctx, st.StartAt)
+	page, err := a.client.search(ctx, st.Token)
 	a.record(err)
 	if err != nil {
 		return nil, err
 	}
 	v := &wire.View{Title: t.issues, State: ext.EncodeState(st), Search: &wire.Search{Placeholder: t.search, Value: st.Query, Action: wire.Action{ID: "search"}}}
-	section := wire.Section{Title: fmt.Sprintf(t.results, page.Total), Items: []wire.Component{{
+	section := wire.Section{Title: t.recent, Items: []wire.Component{{
 		Type: wire.ComponentButton, Title: t.create, Action: &wire.Action{ID: "create", Push: &wire.Push{State: ext.EncodeState(pageState{Mode: "create", DraftID: randomID()}), Title: t.create}},
 	}}}
 	for _, item := range page.Issues {
@@ -117,8 +121,8 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState) (*wire.V
 	if len(section.Items) == 1 {
 		section.Items = append(section.Items, wire.Component{Type: wire.ComponentEmpty, Title: t.noIssues})
 	}
-	if len(page.Issues) == 50 && st.StartAt+50 < page.Total {
-		section.More = &wire.More{Title: t.more, Action: wire.Action{ID: "more"}}
+	if next := page.next(); next != "" {
+		section.More = &wire.More{Title: t.more, Action: wire.Action{ID: "more", Values: map[string]string{"token": next}}}
 	}
 	v.Sections = []wire.Section{section}
 	return v, nil

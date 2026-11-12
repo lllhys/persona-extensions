@@ -26,7 +26,9 @@ import (
 )
 
 //go:embed persona-extension.json
-var manifest []byte
+var authorManifest []byte
+
+var manifest = pluginkit.PackagedManifest(authorManifest)
 
 // version is the manifest's.
 var version = func() string {

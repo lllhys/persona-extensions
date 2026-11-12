@@ -64,7 +64,8 @@ test("local source profile: released identity/config/grants unchanged, import-fr
   assert.equal(manifest.runtime.mode, "deno"); assert.equal(manifest.runtime.command, undefined);
   if (released.runtime.mode === "deno") assert.equal(released.runtime.command, undefined);
   else { assert.ok(released.runtime.command); assert.equal(released.runtime.mode, undefined); }
-  for (const key of Object.keys(released).filter(key => key !== "runtime")) assert.deepEqual(manifest[key], released[key]);
+  for (const key of Object.keys(released).filter(key => !["runtime", "tags", "replaces", "icon"].includes(key))) assert.deepEqual(manifest[key], released[key]);
+  for (const key of ["tags", "replaces", "icon"]) assert.equal(manifest[key], undefined);
   assert.deepEqual(manifest.contributes.ui.map((ui: { id: string }) => ui.id), ["hot"]);
   const module = await bundle();
   assert.equal(module.default.id, released.id); assert.equal(module.default.version, released.version);
@@ -138,7 +139,7 @@ test("bundled protocol initialization/manifest/contributions and normal direct c
     const manifest = JSON.parse(await readFile("persona-extension.json", "utf8"));
     assert.equal(result.id, manifest.id); assert.equal(result.version, manifest.version); assert.deepEqual(result.contributes, manifest.contributes);
     const packaged = JSON.parse(await readFile("build/package/persona-extension.json", "utf8"));
-    delete packaged.runtime.source.sha256; delete packaged.tags;
+    delete packaged.runtime.source.sha256; delete packaged.tags; delete packaged.replaces; delete packaged.icon;
     assert.deepEqual((await h.call("manifest")).result, packaged);
     assert.deepEqual((await h.call("ping")).result, {});
     assert.deepEqual((await h.call("ui.page.supported")).result, { contributions: ["hot"] });

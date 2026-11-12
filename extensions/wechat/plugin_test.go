@@ -15,7 +15,7 @@ func TestPublishedManifestMatchesRuntime(t *testing.T) {
 	if err := json.Unmarshal(manifest, &m); err != nil {
 		t.Fatal(err)
 	}
-	if m.ID != wechat.ID || m.Version != program().Version || version != "0.1.0" {
+	if m.ID != wechat.ID || m.Version != program().Version || version != m.Version {
 		t.Fatal("manifest/runtime identity mismatch")
 	}
 	if !reflect.DeepEqual(m.Contributes.Connectors, []wire.ConnectorItem{wechat.Item()}) || !reflect.DeepEqual(m.Contributes.Channel, []wire.ChannelItem{wechat.Channel()}) {

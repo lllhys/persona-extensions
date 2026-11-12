@@ -55,7 +55,7 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 		}
 		st.Collection, st.Pages, st.Bookmark, st.Mode = id, 0, 0, "list"
 	case "more":
-		st.Pages = min(st.Pages+1, 5)
+		st.Pages = min(st.Pages+1, searchPagesMost-1)
 	case "detail":
 		id, err := strconv.ParseInt(r.Values["id"], 10, 64)
 		if err != nil || id <= 0 {
@@ -127,7 +127,8 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState) (*wire.V
 	for _, item := range result.Items {
 		section.Items = append(section.Items, bookmarkRow(item))
 	}
-	if len(result.Items) == 50*(st.Pages+1) && len(result.Items) < result.Count && st.Pages < 5 {
+	// The page reads st.Pages+1 pages, so Load more is offered only while search can read one more.
+	if len(result.Items) == 50*(st.Pages+1) && len(result.Items) < result.Count && st.Pages+1 < searchPagesMost {
 		section.More = &wire.More{Title: t.more, Action: wire.Action{ID: "more"}}
 	}
 	if len(result.Items) == 0 {

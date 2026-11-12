@@ -73,9 +73,46 @@ type State struct {
 	DefaultScope string           `json:"default_scope,omitempty"`
 	SessionDirs  []string         `json:"session_dirs,omitempty"`
 	RepoDirs     []string         `json:"repo_dirs,omitempty"`
+	ColdTextDirs []string         `json:"cold_text_dirs,omitempty"`
 	Recipes      []*Recipe        `json:"recipes"`
 	LastRun      *ExecutionResult `json:"last_run,omitempty"`
 	History      []RunSummary     `json:"history,omitempty"`
+	// Restores are the page's recent restores of archived sessions, newest first (at most maxRestoreNotices).
+	Restores []RestoreNotice `json:"restores,omitempty"`
+}
+
+const maxRestoreNotices = 5
+
+// RestoreNotice is one restore started from the page: running, then its outcome.
+type RestoreNotice struct {
+	EntryID   string    `json:"entry_id"`
+	Title     string    `json:"title,omitempty"`
+	Path      string    `json:"path,omitempty"`
+	Running   bool      `json:"running,omitempty"`
+	OK        bool      `json:"ok,omitempty"`
+	Message   string    `json:"message,omitempty"`
+	Resume    string    `json:"resume,omitempty"`
+	StartedAt time.Time `json:"started_at"`
+	At        time.Time `json:"at,omitzero"`
+}
+
+// restoreRunning reports whether the page is restoring entryID.
+func (st *State) restoreRunning(entryID string) bool {
+	for _, n := range st.Restores {
+		if n.EntryID == entryID && n.Running {
+			return true
+		}
+	}
+	return false
+}
+
+// setRestore records n, replacing an earlier notice of the same entry.
+func (st *State) setRestore(n RestoreNotice) {
+	st.Restores = slices.DeleteFunc(st.Restores, func(o RestoreNotice) bool { return o.EntryID == n.EntryID })
+	st.Restores = append([]RestoreNotice{n}, st.Restores...)
+	if len(st.Restores) > maxRestoreNotices {
+		st.Restores = st.Restores[:maxRestoreNotices]
+	}
 }
 
 var builtinRecipes = []Recipe{

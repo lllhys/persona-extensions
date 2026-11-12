@@ -2,8 +2,9 @@
   "manifest_version": 1,
   "id": "search-as-code",
   "name": "代码化搜索",
-  "version": "0.1.0",
-  "description": "受 Perplexity「Rethinking Search as Code Generation」与 CASS 会话检索启发：把复杂的多步检索与排查任务编译为可执行的搜索代码（Search as Code），跨本机 Coding Agent 会话历史（Claude Code、Codex，支持排除工具噪音的纯对话检索、角色过滤与报错排查）和本地代码仓库执行流水线算子（过滤、正则匹配、跨会话文件关联、聚合统计、相关性与新鲜度排序）。界面透明展示生成的搜索程序与每一步算子的耗时和命中轨迹，支持保存为可复用的搜索配方；附带本机 MCP 服务器（search-as-code mcp），只读检索工具直接运行，保存与删除配方按对话权限询问。",
+  "version": "0.2.1",
+  "icon": "assets/icon.png",
+  "description": "受 Perplexity「Rethinking Search as Code Generation」与 CASS 会话检索启发：把复杂的多步检索与排查任务编译为可执行的搜索代码（Search as Code），跨本机 Coding Agent 会话历史（Claude Code、Codex，支持排除工具噪音的纯对话检索、角色过滤与报错排查；含 disklessly 已移到云端的会话，经本机纯文本索引照常检索、标记「已上云」并可一键恢复到原路径）和本地代码仓库执行流水线算子（过滤、正则匹配、跨会话文件关联、聚合统计、相关性与新鲜度排序）。界面透明展示生成的搜索程序与每一步算子的耗时和命中轨迹，支持保存为可复用的搜索配方；附带本机 MCP 服务器（search-as-code mcp），只读检索工具直接运行，保存与删除配方、恢复已上云会话按对话权限询问。",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/blob/main/docs/extensions/search-as-code.md",
   "tags": ["搜索", "Search as Code", "会话检索", "MCP"],
@@ -42,6 +43,12 @@
         "type": "string",
         "title": "额外会话目录",
         "description": "除默认的 ~/.claude/projects 与 ~/.codex/sessions 外，额外扫描的 Agent 会话日志目录（多个路径用逗号或分号分隔）",
+        "default": ""
+      },
+      "cold_text_dirs": {
+        "type": "string",
+        "title": "已上云会话索引目录",
+        "description": "除默认的 disklessly 状态目录（DISKLESSLY_STATE_DIR、~/.local/share/disklessly、~/Library/Application Support/Disklessly）下的 sessions/text 外，额外读取的已上云会话纯文本索引目录（多个路径用逗号或分号分隔）",
         "default": ""
       },
       "repo_dirs": {

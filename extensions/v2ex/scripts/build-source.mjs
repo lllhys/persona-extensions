@@ -30,6 +30,8 @@ const runtimeSource = program.manifest?.runtime?.source;
 if (program.manifest?.runtime?.mode !== "deno" || program.manifest?.runtime?.command || runtimeSource?.entry !== source.entry || runtimeSource?.bundle !== source.bundle) throw new Error("Program manifest does not describe the packaged source profile");
 const manifest = { ...released, runtime: { mode: "deno", source } };
 delete manifest.tags;
+delete manifest.replaces;
+delete manifest.icon;
 await rm(pkg, { recursive: true, force: true });
 await mkdir(resolve(pkg, "build"), { recursive: true });
 const text = JSON.stringify(manifest, null, 2) + "\n";
@@ -43,6 +45,10 @@ for (const path of ["src", "scripts", "tests", "package.json", "package-lock.jso
 // Runtime entry/bundle stay at the host's package root. Complete authoring inputs
 // live in a repository-shaped subtree so file:../../sdk/ts remains inside the archive.
 const authoring = resolve(pkg, "authoring/extensions/v2ex"), sdk = resolve(pkg, "authoring/sdk/ts");
+if (released.icon) {
+  await cp(resolve(root, "assets"), resolve(pkg, "assets"), { recursive: true });
+  await cp(resolve(root, "assets"), resolve(authoring, "assets"), { recursive: true });
+}
 for (const path of ["src", "scripts", "tests", "package.json", "package-lock.json", "tsconfig.json", "README.md", "persona-extension.json"]) {
   await cp(resolve(root, path), resolve(authoring, path), { recursive: true });
 }

@@ -2,7 +2,8 @@
   "manifest_version": 1,
   "id": "custom-looks",
   "name": "自建形象",
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "icon": "assets/icon.png",
   "description": "五个自建形象：Claude、GPT、包包、大肥鱼、奶娃。装好后在设置 › 形象里选。",
   "publisher": "nwverse",
   "tags": [

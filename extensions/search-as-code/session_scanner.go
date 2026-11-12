@@ -17,6 +17,7 @@ import (
 const (
 	maxScannedSessionFiles = 80
 	maxSessionFileBytes    = 4 << 20
+	maxRestoredExtraFiles  = 20 // restored transcripts scanned beyond the live window
 	maxScannedRepoFiles    = 200
 	maxRepoFileBytes       = 512 << 10
 )
@@ -72,6 +73,16 @@ type SessionRecord struct {
 	ErrorCount int           `json:"error_count"`
 	Files      []string      `json:"files,omitempty"`
 	Turns      []SessionTurn `json:"turns"`
+	// Archived sessions come from a disklessly text index: the transcript is in the cloud and FilePath (the
+	// original path) does not exist on this computer.
+	Archived   bool      `json:"archived,omitempty"`
+	EntryID    string    `json:"entry_id,omitempty"`
+	TextPath   string    `json:"text_path,omitempty"`
+	StateDir   string    `json:"state_dir,omitempty"`
+	ArchivedAt time.Time `json:"archived_at,omitzero"`
+	// Unconfirmed: the index has no segment or archive time yet (the upload did not complete), so there is no
+	// confirmed cloud copy to restore.
+	Unconfirmed bool `json:"unconfirmed,omitempty"`
 }
 
 // SourceStats summarizes the discovered session and file sources.
@@ -85,6 +96,13 @@ type SourceStats struct {
 	ByModel         map[string]int `json:"by_model"`
 	ByProject       map[string]int `json:"by_project"`
 	ScannedRepoFile int            `json:"scanned_repo_files"`
+	ColdTextDirs    []string       `json:"cold_text_dirs,omitempty"`
+	// ArchivedSessions counts sessions read from disklessly text indexes (已上云), included in TotalSessions;
+	// UnconfirmedSessions those of them whose upload is not confirmed (未确认上云), and ArchivedOmitted the
+	// archived indexes left out beyond the per-scan cap.
+	ArchivedSessions    int `json:"archived_sessions"`
+	UnconfirmedSessions int `json:"unconfirmed_sessions,omitempty"`
+	ArchivedOmitted     int `json:"archived_omitted,omitempty"`
 }
 
 var (
@@ -188,6 +206,55 @@ func loadSessions(st *State) ([]*SessionRecord, SourceStats) {
 			continue
 		}
 		sessions = append(sessions, rec)
+	}
+
+	// Archived (已上云) sessions from disklessly text indexes, minus any that are also present live.
+	livePaths, liveIDs := map[string]bool{}, map[string]bool{}
+	for _, rec := range sessions {
+		livePaths[filepath.Clean(rec.FilePath)] = true
+		liveIDs[rec.SessionID] = true
+	}
+	cold, restored, coldDirs, omitted := loadColdSessions(st)
+	stats.ColdTextDirs = coldDirs
+	stats.ArchivedOmitted = omitted
+	// A restored transcript may sit outside the session dirs or the most-recent window: scan it as local, newest
+	// first and at most maxRestoredExtraFiles of them; when the live window is full, only those as new as it.
+	var windowFloor time.Time
+	if len(files) >= maxScannedSessionFiles {
+		windowFloor = files[len(files)-1].mod
+	}
+	var extra []fileEntry
+	for _, path := range restored {
+		if livePaths[filepath.Clean(path)] {
+			continue
+		}
+		fi, err := os.Stat(path)
+		if err != nil || !fi.Mode().IsRegular() || fi.Size() == 0 || fi.Size() > maxSessionFileBytes || fi.ModTime().Before(windowFloor) {
+			continue
+		}
+		extra = append(extra, fileEntry{path: path, mod: fi.ModTime()})
+	}
+	slices.SortFunc(extra, func(a, b fileEntry) int { return b.mod.Compare(a.mod) })
+	for _, fe := range extra[:min(len(extra), maxRestoredExtraFiles)] {
+		if rec := parseSessionFile(fe.path, fe.mod); rec != nil && len(rec.Turns) > 0 && !liveIDs[rec.SessionID] {
+			livePaths[filepath.Clean(fe.path)] = true
+			liveIDs[rec.SessionID] = true
+			sessions = append(sessions, rec)
+		}
+	}
+	for _, rec := range cold {
+		if (rec.FilePath != "" && livePaths[filepath.Clean(rec.FilePath)]) || liveIDs[rec.SessionID] {
+			continue
+		}
+		liveIDs[rec.SessionID] = true
+		sessions = append(sessions, rec)
+		stats.ArchivedSessions++
+		if rec.Unconfirmed {
+			stats.UnconfirmedSessions++
+		}
+	}
+
+	for _, rec := range sessions {
 		stats.TotalSessions++
 		stats.TotalTurns += len(rec.Turns)
 		if rec.ErrorCount > 0 {

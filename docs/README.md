@@ -14,6 +14,7 @@
 - [Sentry](extensions/sentry.md): the errors and crashes of the hub, the web and the apps, scrubbed by the hub, sent to your Sentry project; events, settings, limits and network.
 - [V2EX](extensions/v2ex.md): public hot, latest and followed-node topics, filtering, request limits and the app view.
 - [Feishu Sidebar](extensions/feishu-sidebar.md): open the user's Persona web from a Feishu sidebar through a built applink (no Feishu app, no requests, no credentials), and an assistant tool for the same link.
+- [Lark Bridge](extensions/lark-bridge.md): bounded read-only Lark chat, message, people and document lookups through the existing host-managed `lark-cli` sign-in, with no second login or arbitrary command execution.
 - [RSSHub](extensions/rsshub.md): subscribe to RSSHub routes or any RSS, Atom or JSON feed on the public or your own instance (with its access key); the navigation page with unread entries, tags and route previews, the background refresh with ETag caching, assistant tools with confirmed subscription changes, and the sandbox.
 - [Weather](extensions/weather.md): Open-Meteo's current weather, next-24-hours line, 7-day forecast and air quality on the main navigation, with assistant tools, no key needed.
 - [Music](extensions/music.md): a generic music extension (one connector per service; Apple Music first) with a Mac endpoint (library, player, lyrics and artwork) and an iPhone snapshot endpoint; a source switch (All sources, Apple Music) with per-device labels, a now-playing card and a player page.
@@ -29,7 +30,7 @@
 - [Household](extensions/household.md): the home's stock, shopping list, chores and meal plan, with the 家庭管家 page, the overview card, daily reminders as a notification or to-dos, and the assistant's nine tools; the MCP server needs the `household` binary on `PATH` or in `~/bin`, or `PERSONA_HOUSEHOLD_BIN`.
 - [Custom looks](extensions/custom-looks.md): five avatars (looks) with pictures, colors and status dots; images only. A hub pack of the same id wins until it is removed, and the chosen look carries on.
 - [ChatGPT apps](extensions/chatgpt-apps.md): the apps connected to your ChatGPT account and the ChatGPT plugin marketplace for the assistant, through ChatGPT's own (non-public) web backend: device-code sign-in on the phone, read tools run directly, every change a `confirm_always` action approved on the phone, plugin pages, tokens only in the hub's encrypted secrets; terms and risk.
-- [1Password](extensions/onepassword.md): your 1Password vaults through a service account, read-only: list vaults, find items by title, tag or website, see an item's fields and their `op://` references; the token checked before it is saved, values never leave the extension, redaction, status and limits.
+- [1Password](extensions/onepassword.md): your 1Password vaults through a service account or `op` on one of your computers, read-only: list vaults, find items by title, tag or website, see an item's fields and their `op://` references; Persona's source for `op://` references in its settings and Agent hand-offs, with the recent uses on its page; the token checked before it is saved, values never given to the assistant, redaction, status and limits.
 
 ## Developing and maintaining extensions
 

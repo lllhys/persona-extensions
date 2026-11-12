@@ -2,8 +2,9 @@
   "manifest_version": 1,
   "id": "disklessly",
   "name": "Disklessly 机器磁盘",
-  "version": "0.1.0",
-  "description": "接入 Persona 机器管理的多机磁盘水位、可回收缓存与 Coding Agent 冷会话分层管理：自动发现并纳管本机及 SSH 远程机器，单次探测根分区水位（超过 80% 橙色预警、90% 红色告警）、可回收缓存明细（Go、Node/Python、Docker、Rust/Xcode、系统与临时日志）与 Claude Code / Codex 会话冷热分布；支持生成安全清理计划（Dry-Run Plan）、按机器或分类一键安全清理并记录 df 实测释放台账，以及一键归档 7 天外冷会话。附带 stdio MCP 服务器（disklessly mcp），只读查询直接运行，清理与机器变更按对话权限确认。",
+  "version": "0.2.1",
+  "icon": "assets/icon.png",
+  "description": "接入 Persona 机器管理的多机磁盘水位、可回收缓存与 Coding Agent 冷会话分层管理：自动发现并纳管本机及 SSH 远程机器，单次探测根分区水位（超过 80% 橙色预警、90% 红色告警）、可回收缓存明细（Go、Node/Python、Docker、Rust/Xcode、系统与临时日志）与 Claude Code / Codex 会话冷热分布；支持生成安全清理计划（Dry-Run Plan）、按机器或分类一键安全清理并记录 df 实测释放台账，以及把 7 天外冷会话上传到备份后端（自动保留运行中进程、打开中的文件与 herdr / Persona 引用的会话，读回校验后才删本地），并在「Agent 对话」页按标题、首条消息、项目和关键词搜索已上云的会话、查看云端位置并一键恢复。附带 stdio MCP 服务器（disklessly mcp），只读查询直接运行，清理与机器变更按对话权限确认。",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/blob/main/docs/extensions/disklessly.md",
   "tags": ["disklessly", "机器管理", "磁盘清理", "冷会话"],
@@ -19,6 +20,7 @@
   "contributes": {
     "ui": [
       {"id": "disklessly", "title": "机器磁盘", "placement": "nav_page", "icon": "gauge"},
+      {"id": "disklessly-sessions", "title": "Agent 对话", "placement": "nav_page", "icon": "chat"},
       {"id": "disklessly-card", "title": "机器磁盘", "placement": "overview_card", "opens": "disklessly"}
     ],
     "skills": [
@@ -31,7 +33,7 @@
         "env": "PERSONA_DISKLESSLY_BIN",
         "args": ["mcp"],
         "requires": ["mcp"],
-        "allow": ["disklessly_machines_status", "disklessly_scan", "disklessly_history"]
+        "allow": ["disklessly_machines_status", "disklessly_scan", "disklessly_history", "disklessly_sessions_search", "disklessly_sessions_status"]
       }
     ]
   }

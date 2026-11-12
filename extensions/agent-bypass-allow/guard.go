@@ -654,7 +654,7 @@ func isMessageFlag(prog, flag string) bool {
 // scan splits cmd into the words of each simple command, as a shell would group them: quotes keep a word together
 // (and are removed; $'…' escapes are decoded), a backslash escapes the next character, an unquoted {a,b} or {a..c}
 // in a word makes several words, a comment is skipped, and lists, pipes, subshells, groups and command
-// substitutions separate. redirects are the files output is written to with >, >|, N> or &> (not >>, not >&N).
+// substitutions separate. redirects are the files output is written to with >, >>, >|, N>, N>>, &>, &>> (not >&N).
 func scan(cmd string) (segs [][]string, redirects []string) {
 	full, reds, _ := scanFull(cmd)
 	for _, s := range full {
@@ -791,12 +791,10 @@ func scanFull(cmd string) (segs []segment, redirects []redirect, tail string) {
 	return segs, redirects, sep.String()
 }
 
-// redirectTarget reads the redirect whose > is at rs[i]: the file it overwrites ("" for >> and >&N),
+// redirectTarget reads the redirect whose > is at rs[i]: the file it overwrites or appends to ("" for >&N),
 // and the index of its last character.
 func redirectTarget(rs []rune, i int) (int, string) {
-	appendTo := false
 	if i+1 < len(rs) && rs[i+1] == '>' {
-		appendTo = true
 		i++
 	}
 	if i+1 < len(rs) && rs[i+1] == '|' {
@@ -826,7 +824,7 @@ func redirectTarget(rs []rune, i int) (int, string) {
 		}
 	}
 	target := t.String()
-	if appendTo || target == "" {
+	if target == "" {
 		return i, ""
 	}
 	return i, target
@@ -1031,12 +1029,10 @@ func (g *guard) segmentFrom(pre, words []string, depth int) string {
 				why = "overwrite: cp -f"
 			}
 		case "tee":
-			if !has(rest, "--append") && !hasShort(rest, 'a') {
-				for _, f := range rest {
-					if !strings.HasPrefix(f, "-") && !g.quickScratch(f) {
-						why = "overwrite: tee " + f
-						break
-					}
+			for _, f := range rest {
+				if !strings.HasPrefix(f, "-") && !g.quickScratch(f) {
+					why = "overwrite: tee " + f
+					break
 				}
 			}
 		case "docker", "podman":

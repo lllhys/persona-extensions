@@ -16,8 +16,10 @@ import (
 // toolsTTL is how long a tool list is used before ChatGPT is asked again (a tool not in it asks at once).
 const toolsTTL = 10 * time.Minute
 
-// maxText is the most of a result the model gets in one answer.
-const maxText = 200_000
+// maxResult is the most one answer to the hub may take once encoded. The hub reads a program's answer as one line of
+// at most 64 MB and drops its connection to the program on a longer one, so a longer result is refused (whole), not
+// sent and not cut.
+const maxResult = 48 << 20
 
 // mcpTool is one tool of a connected app, as ChatGPT's MCP lists it.
 type mcpTool struct {
@@ -190,7 +192,8 @@ func (a *App) findTool(ctx context.Context, name string) (mcpTool, error) {
 	return mcpTool{}, fmt.Errorf("no tool %q among the connected apps; list them with chatgpt_apps", name)
 }
 
-// callTool runs an app's tool and answers its result as text for the model.
+// callTool runs an app's tool and answers its result as it is, whatever its length: a subscription needs the whole
+// JSON, and the Agent's runtime keeps a long result aside and reads it in parts.
 func (a *App) callTool(ctx context.Context, t mcpTool, args json.RawMessage) (string, error) {
 	if t.synthetic() {
 		return "", fmt.Errorf("%s is installed but not connected: give the user the plugin's connect_url (chatgpt_plugin_info), "+
@@ -228,9 +231,11 @@ func (a *App) callTool(ctx context.Context, t mcpTool, args json.RawMessage) (st
 	if res.IsError {
 		return "", fmt.Errorf("%s answered an error: %s", t.Name, clip(text, 4000))
 	}
-	return clip(text, maxText), nil
+	return text, nil
 }
 
+// clip cuts s to at most n bytes, at a character boundary, saying how much was cut. Only for error messages: a result
+// is never cut.
 func clip(s string, n int) string {
 	if len(s) <= n {
 		return s
@@ -306,12 +311,27 @@ func decodeArgs(raw json.RawMessage) (toolArgs, error) {
 	return a, nil
 }
 
+// whole passes a result on as it is, or refuses it when the hub could not take it in one answer (maxResult).
+func whole[P any](f func(context.Context, P) (wire.ConnectorCallResult, error)) func(context.Context, P) (wire.ConnectorCallResult, error) {
+	return func(ctx context.Context, p P) (wire.ConnectorCallResult, error) {
+		res, err := f(ctx, p)
+		if err != nil || len(res.Text) <= maxResult/6 { // JSON writes one byte as at most 6 (\u003c)
+			return res, err
+		}
+		if b, _ := json.Marshal(res.Text); len(b) > maxResult {
+			return wire.ConnectorCallResult{}, fmt.Errorf("the answer is %s once encoded, more than the hub takes at once (%s), so it is not passed on; "+
+				"ask for less at a time (fewer items, a narrower filter or time range)", sizeOf(int64(len(b))), sizeOf(maxResult))
+		}
+		return res, nil
+	}
+}
+
 func answer(v any) (wire.ConnectorCallResult, error) {
 	raw, err := json.MarshalIndent(v, "", " ")
 	if err != nil {
 		return wire.ConnectorCallResult{}, err
 	}
-	return wire.ConnectorCallResult{Text: clip(string(raw), maxText)}, nil
+	return wire.ConnectorCallResult{Text: string(raw)}, nil
 }
 
 // callRead answers tools.call: the read tools.

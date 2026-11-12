@@ -1,0 +1,60 @@
+{
+  "manifest_version": 1,
+  "id": "npmpackages",
+  "name": "npm Packages",
+  "version": "0.1.3",
+  "icon": "assets/icon.png",
+  "description": "Search public npm packages, compare latest versions, release dates, licenses, download activity and canonical repository links. Get an exact-version install command without executing it. Anonymous, read-only official registry access.",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/npmpackages/README.md",
+  "tags": [
+    "Development",
+    "JavaScript",
+    "npm",
+    "Dependencies"
+  ],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "mode": "deno",
+    "source": {
+      "entry": "src/index.ts",
+      "bundle": "build/npmpackages.mjs",
+      "sha256": "a4696b6e7f1ac26f841b01acfb5914ebd5c71636735e8ab305f2f6a56fe769f8"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "npmpackages",
+        "name": "npm Packages",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "registry.npmjs.org",
+          "api.npmjs.org"
+        ],
+        "agent_tools": [
+          "npmpackages_*"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "packages",
+        "title": "npm Packages",
+        "placement": "nav_page",
+        "icon": "code"
+      }
+    ]
+  },
+  "permissions": {
+    "network": [
+      "registry.npmjs.org",
+      "api.npmjs.org"
+    ]
+  }
+}

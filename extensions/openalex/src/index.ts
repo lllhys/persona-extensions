@@ -11,6 +11,9 @@ export { page, loadPage, readState, transition, encodeState } from "./page.tsx";
 export { snapshotPage } from "./snapshot.ts";
 export type { PageState, PageProps, Loaded } from "./page.tsx";
 export const sourceManifest = { ...released, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/openalex.mjs", sha256: "" } } };
+// Source-owned catalog metadata is not part of the strict runtime manifest.
+delete (sourceManifest as { icon?: string }).icon;
+delete (sourceManifest as { replaces?: string }).replaces;
 export function createProgram(fetch: FetchAdapter = (input, init) => globalThis.fetch(input, init), options: ServiceOptions = {}): Program {
   let service: OpenAlex | undefined;
   const current = () => { if (!service) throw new Error("OpenAlex has not been initialized"); return service; };

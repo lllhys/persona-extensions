@@ -12,6 +12,9 @@ export { snapshotPage } from "./snapshot.ts";
 export type { PageState, PageProps, Loaded } from "./page.tsx";
 // Package metadata carries the final artifact digest; the guest cannot embed it itself.
 export const sourceManifest = { ...released, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/wikipedia.mjs", sha256: "" } } };
+// Source-owned catalog metadata is not part of the strict runtime manifest.
+delete (sourceManifest as { icon?: string }).icon;
+delete (sourceManifest as { replaces?: string }).replaces;
 /** Only the trusted host installs the default grant-checked fetch. Adapters are for synthetic tests. */
 export function createProgram(fetch: FetchAdapter = (input, init) => globalThis.fetch(input, init), options: ServiceOptions = {}): Program {
   let service: Wikipedia | undefined;

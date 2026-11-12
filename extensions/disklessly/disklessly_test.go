@@ -34,7 +34,7 @@ var t0 = time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
 const sampleProbeLocal = `@@SECTION:UNAME
 Linux x86_64
 @@SECTION:HOSTNAME
-gcp-dev
+devvm-dev
 @@SECTION:HOME
 /home/dev
 @@SECTION:BIN_VERSION
@@ -60,29 +60,47 @@ docker-buildx	3.2GB (100%)
 tool	claude	Claude Code	/home/dev/.claude/projects	18	245760	42	1887436
 tool	codex	Codex	/home/dev/.codex/sessions	7	98304	19	629145
 archive	/home/dev/.disklessly/session-archives	6	314572
+@@SECTION:SESSIONS_CLI_PLAN
+{   "applied" : false,   "cold" : [     "/home/dev/.claude/projects/-home-dev-app/aaa.jsonl",     "/home/dev/.claude/projects/-home-dev-app/bbb.jsonl",     "/home/dev/.codex/sessions/2026/10/01/rollout-2026-10-01T10-00-00-0199aaaa-bbbb-cccc-dddd-eeeeffff0000.jsonl"   ],   "ok" : true,   "skipped" : [ ] } 
+@@SECTION:SESSIONS_CLI_STATUS
+{"ok":true,"deviceId":"00000000-0000-4000-8000-000000000001","backend":{"id":"main","type":"rclone","reachable":true,"latencyMs":42,"error":""},"counts":{"archived":12,"remote":3,"restored":1,"keptLocal":0,"pendingDelete":0},"archivedBytes":7340032,"segments":{"total":4,"checked":0,"missing":[]}}
+@@SECTION:SESSIONS_CLI_LIST
+{"ok":true,"deviceId":"00000000-0000-4000-8000-000000000001","entries":[{"id":"0123456789ab","deviceId":"00000000-0000-4000-8000-000000000001","local":true,"tool":"claude","path":"/home/dev/.claude/projects/-home-dev-old/ccc.jsonl","sessionId":"ccc","cwd":"/home/dev/old","project":"home-dev-old","month":"2026-09","mtime":"2026-09-01T10:00:00Z","archivedAt":"2026-10-01T10:00:00Z","bytes":2048,"state":"archived","title":"refactor parser","firstPrompt":"refactor parser","segment":"","encrypted":false}]}
+@@SECTION:SESSIONS_FILES
+1200	/home/dev/.claude/projects/-home-dev-app/aaa.jsonl
+300	/home/dev/.claude/projects/-home-dev-app/bbb.jsonl
+50	/home/dev/.claude/projects/-home-dev-app/hot-but-old-open.jsonl
+600	/home/dev/.codex/sessions/2026/10/01/rollout-2026-10-01T10-00-00-0199aaaa-bbbb-cccc-dddd-eeeeffff0000.jsonl
 @@SECTION:END
 `
 
-const sampleProbeOPC = `@@SECTION:UNAME
+const sampleProbeARMBOX = `@@SECTION:UNAME
 Linux aarch64
 @@SECTION:HOSTNAME
-opc-arm64
+armbox-arm64
 @@SECTION:HOME
-/home/opc
+/home/armbox
 @@SECTION:BIN_VERSION
 @@SECTION:DF
 Filesystem     1024-blocks      Used Available Capacity Mounted on
 /dev/sda1        104857600  96468992   8388608      92% /
 @@SECTION:CACHES
-cache-gobuild	go-cache	Go 编译构建缓存 (go-build)	/home/opc/.cache/go-build	5242880	safe	可随时重建的 Go 编译器构建缓存
-cache-pnpm	node-python-cache	pnpm 内容寻址缓存 (pnpm/store)	/home/opc/.local/share/pnpm/store	4194304	safe	可重新拉取的 pnpm 全局存储
+cache-gobuild	go-cache	Go 编译构建缓存 (go-build)	/home/armbox/.cache/go-build	5242880	safe	可随时重建的 Go 编译器构建缓存
+cache-pnpm	node-python-cache	pnpm 内容寻址缓存 (pnpm/store)	/home/armbox/.local/share/pnpm/store	4194304	safe	可重新拉取的 pnpm 全局存储
 @@SECTION:TMP_LOGS
 Archived and active journals take up 800M in the file system.
 @@SECTION:DOCKER
 docker-buildx	2.5GB
 @@SECTION:SESSIONS
-tool	claude	Claude Code	/home/opc/.claude/projects	9	131072	31	1468006
+tool	claude	Claude Code	/home/armbox/.claude/projects	9	131072	31	1468006
 @@SECTION:END
+`
+
+const sampleSessionApply = `@@SESSIONS_RC 0
+@@SESSIONS_JSON {"ok":true,"applied":true,"cold":[],"skipped":[{"path":"/home/dev/.claude/projects/-home-dev-app/bbb.jsonl","reason":"referenced"}],"keptLocal":[],"segments":[],"uploadedBytes":1228800,"archived":[{"id":"aaaaaaaaaaaa","path":"/home/dev/.claude/projects/-home-dev-app/aaa.jsonl","sessionId":"aaa","bytes":1228800}]}
+@@RC 0
+@@BEFORE_B 8589934592
+@@AFTER_B 8591163392
 `
 
 func fakeRunner(_ context.Context, m *Machine, script string, _ time.Duration) (string, error) {
@@ -90,10 +108,13 @@ func fakeRunner(_ context.Context, m *Machine, script string, _ time.Duration) (
 		if m != nil && m.Host == "offline-box" {
 			return "", fmt.Errorf("SSH 连接 offline-box 失败：Connection timed out")
 		}
-		if m != nil && (m.ID == "opc" || m.Host == "opc") {
-			return sampleProbeOPC, nil
+		if m != nil && (m.ID == "armbox" || m.Host == "armbox") {
+			return sampleProbeARMBOX, nil
 		}
 		return sampleProbeLocal, nil
+	}
+	if strings.Contains(script, "sessions --apply") {
+		return sampleSessionApply, nil
 	}
 	// Clean script simulation: report before/after df bytes
 	return "@@RC 0\n@@BEFORE_B 8589934592\n@@AFTER_B 21797958656\n", nil
@@ -160,12 +181,12 @@ Host *
     User defaultuser
     Port 22
 
-Host opc
+Host armbox
     HostName 198.51.100.10
-    User opc
+    User armbox
     IdentityFile ~/.ssh/id_ed25519
 
-Host mm-2
+Host mini-2
     HostName 198.51.100.20
     Port 2222
 
@@ -178,7 +199,7 @@ Host *.internal !bastion.internal
 
 	personaCfg := `{
   "machines": [
-    {"id": "gcp", "name": "gcp (Cloud Workstation)", "host": "gcp", "user": "dev"},
+    {"id": "devvm", "name": "devvm (Cloud Workstation)", "host": "devvm", "user": "dev"},
     {"id": "local", "name": "local", "host": "localhost"}
   ]
 }`
@@ -189,31 +210,31 @@ Host *.internal !bastion.internal
 	st := &State{}
 	added := st.DiscoverMachines(home, t0)
 	if added != 3 {
-		t.Fatalf("DiscoverMachines added = %d, want 3 (gcp, opc, mm-2); machines=%+v", added, st.Machines)
+		t.Fatalf("DiscoverMachines added = %d, want 3 (devvm, armbox, mini-2); machines=%+v", added, st.Machines)
 	}
 
-	opc := st.machine("opc")
-	if opc == nil || opc.User != "opc" || opc.Port != 22 || !strings.Contains(opc.Name, "198.51.100.10") {
-		t.Fatalf("opc machine = %+v", opc)
+	armbox := st.machine("armbox")
+	if armbox == nil || armbox.User != "armbox" || armbox.Port != 22 || !strings.Contains(armbox.Name, "198.51.100.10") {
+		t.Fatalf("armbox machine = %+v", armbox)
 	}
-	mm2 := st.machine("mm-2")
-	if mm2 == nil || mm2.User != "defaultuser" || mm2.Port != 2222 {
-		t.Fatalf("mm-2 machine (with wildcard User default) = %+v", mm2)
+	mini2 := st.machine("mini-2")
+	if mini2 == nil || mini2.User != "defaultuser" || mini2.Port != 2222 {
+		t.Fatalf("mini-2 machine (with wildcard User default) = %+v", mini2)
 	}
-	gcp := st.machine("gcp")
-	if gcp == nil || gcp.Source != "persona" || gcp.Name != "gcp (Cloud Workstation)" {
-		t.Fatalf("gcp machine = %+v", gcp)
+	devvm := st.machine("devvm")
+	if devvm == nil || devvm.Source != "persona" || devvm.Name != "devvm (Cloud Workstation)" {
+		t.Fatalf("devvm machine = %+v", devvm)
 	}
 
 	// Deleting a discovered machine disables it so re-discovery does not re-enable it.
-	if err := st.deleteMachine("opc"); err != nil {
+	if err := st.deleteMachine("armbox"); err != nil {
 		t.Fatal(err)
 	}
 	if st.DiscoverMachines(home, t0) != 0 {
 		t.Fatal("disabled discovered machine must stay disabled on re-discovery")
 	}
-	if st.machine("opc").Enabled {
-		t.Fatal("opc should remain disabled")
+	if st.machine("armbox").Enabled {
+		t.Fatal("armbox should remain disabled")
 	}
 	if err := st.deleteMachine("local"); err == nil {
 		t.Fatal("local machine must not be deletable")
@@ -236,7 +257,7 @@ func TestHealthEvaluationAndOrdering(t *testing.T) {
 }
 
 func TestParseProbeAndCleanSafetyRedlines(t *testing.T) {
-	m := &Machine{ID: "local", Host: "localhost", Name: "local (gcp-dev)", IsLocal: true, Enabled: true, Reachable: true}
+	m := &Machine{ID: "local", Host: "localhost", Name: "local (devvm-dev)", IsLocal: true, Enabled: true, Reachable: true}
 	scan := ParseProbeOutput(m, sampleProbeLocal, t0)
 	if scan.Platform != "linux-amd64" || scan.ScanMode != "disklessly-cli" || scan.BinaryVersion != "disklessly 0.3.0" {
 		t.Fatalf("unexpected scan metadata: %+v", scan)
@@ -244,7 +265,7 @@ func TestParseProbeAndCleanSafetyRedlines(t *testing.T) {
 	if scan.Mount.TotalBytes != 214748364800 || scan.Mount.AvailableBytes != 32212254720 {
 		t.Fatalf("unexpected mount: %+v", scan.Mount)
 	}
-	if scan.Sessions.HotCount != 25 || scan.Sessions.ColdCount != 61 || scan.Sessions.ArchivedCount != 6 {
+	if scan.Sessions.HotCount != 25 || scan.Sessions.ColdCount != 3 || scan.Sessions.ColdBytes != 2100*1024 || scan.Sessions.ArchivedCount != 6 || !scan.Sessions.CLIReady {
 		t.Fatalf("unexpected sessions summary: %+v", scan.Sessions)
 	}
 	if len(scan.Items) < 10 {
@@ -300,7 +321,7 @@ func TestUIViewsAndActions(t *testing.T) {
 
 	// Seed a second remote machine
 	if err := a.db().update(func(st *State, now time.Time) error {
-		_, err := st.upsertMachine(MachineInput{ID: "opc", Host: "opc", Name: "opc (Oracle Cloud ARM)", Source: "ssh-config"}, now)
+		_, err := st.upsertMachine(MachineInput{ID: "armbox", Host: "armbox", Name: "armbox (ARM VM)", Source: "ssh-config"}, now)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -362,15 +383,15 @@ func TestUIViewsAndActions(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(rArch.View)
-	if !strings.Contains(rArch.Toast, "冷会话已归档") {
+	if !strings.Contains(rArch.Toast, "冷会话已上云") || !strings.Contains(rArch.Toast, "保护 1 个被引用会话") {
 		t.Fatalf("unexpected toast: %s", rArch.Toast)
 	}
 
-	// 6. Execute safe clean on opc
+	// 6. Execute safe clean on armbox
 	rClean, err := a.action(ctx, &ext.UIRequest{UIParams: wire.UIParams{
-		State:  ext.EncodeState(page{Machine: "opc", Tab: tabPlan}),
+		State:  ext.EncodeState(page{Machine: "armbox", Tab: tabPlan}),
 		Action: "clean-safe",
-		Values: map[string]string{"m": "opc"},
+		Values: map[string]string{"m": "armbox"},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -391,8 +412,8 @@ func TestUIViewsAndActions(t *testing.T) {
 		State:  rNew.View.State,
 		Action: "save-machine",
 		Values: map[string]string{
-			"host": "mm-2",
-			"name": "mm-2 (Mac mini M2)",
+			"host": "mini-2",
+			"name": "mini-2 (Mac mini M2)",
 			"user": "admin",
 			"port": "22",
 		},
@@ -466,28 +487,28 @@ func TestMCPOverStdio(t *testing.T) {
 	}
 	listRes := rpc("tools/list", map[string]any{})
 	tList, _ := listRes["tools"].([]any)
-	if len(tList) != 6 {
-		t.Fatalf("tools/list count = %d, want 6", len(tList))
+	if len(tList) != len(tools) || len(tools) != 10 {
+		t.Fatalf("tools/list count = %d, want 10", len(tList))
 	}
 
-	// 1. Upsert remote machine opc
+	// 1. Upsert remote machine armbox
 	upRes := callTool("disklessly_machine_upsert", map[string]any{
-		"host": "opc",
-		"name": "opc (Oracle Cloud ARM)",
-		"user": "opc",
+		"host": "armbox",
+		"name": "armbox (ARM VM)",
+		"user": "armbox",
 	})
 	if upRes["machine"] == nil {
 		t.Fatalf("upsert result: %v", upRes)
 	}
 
-	// 2. Scan local and opc
+	// 2. Scan local and armbox
 	scanLocal := callTool("disklessly_scan", map[string]any{"machine": "local"})
 	if scanLocal["scan"] == nil || scanLocal["dry_run_plan"] == nil {
 		t.Fatalf("scan local: %v", scanLocal)
 	}
-	scanOPC := callTool("disklessly_scan", map[string]any{"machine": "opc"})
-	if scanOPC["scan"] == nil {
-		t.Fatalf("scan opc: %v", scanOPC)
+	scanARMBOX := callTool("disklessly_scan", map[string]any{"machine": "armbox"})
+	if scanARMBOX["scan"] == nil {
+		t.Fatalf("scan armbox: %v", scanARMBOX)
 	}
 
 	// 3. Check fleet status
@@ -496,13 +517,13 @@ func TestMCPOverStdio(t *testing.T) {
 		t.Fatalf("machine_count = %v, want 2", statusRes["machine_count"])
 	}
 
-	// 4. Execute clean on opc (dry-run then real)
-	dryRes := callTool("disklessly_clean", map[string]any{"machine": "opc", "dry_run": true})
+	// 4. Execute clean on armbox (dry-run then real)
+	dryRes := callTool("disklessly_clean", map[string]any{"machine": "armbox", "dry_run": true})
 	if dryRes["dry_run"] != true || dryRes["record"] != nil {
 		t.Fatalf("dry_run clean: %v", dryRes)
 	}
 	cleanRes := callTool("disklessly_clean", map[string]any{
-		"machine":    "opc",
+		"machine":    "armbox",
 		"categories": []string{CatGoCache, CatColdAgentSession},
 	})
 	if cleanRes["record"] == nil {
@@ -510,14 +531,14 @@ func TestMCPOverStdio(t *testing.T) {
 	}
 
 	// 5. History ledger
-	histRes := callTool("disklessly_history", map[string]any{"machine": "opc"})
+	histRes := callTool("disklessly_history", map[string]any{"machine": "armbox"})
 	if histRes["count"] != float64(1) {
 		t.Fatalf("history count = %v, want 1", histRes["count"])
 	}
 
 	// 6. Delete remote machine
-	delRes := callTool("disklessly_machine_delete", map[string]any{"machine": "opc"})
-	if delRes["deleted"] != "opc" {
+	delRes := callTool("disklessly_machine_delete", map[string]any{"machine": "armbox"})
+	if delRes["deleted"] != "armbox" {
 		t.Fatalf("delete result: %v", delRes)
 	}
 	_ = inW.Close()

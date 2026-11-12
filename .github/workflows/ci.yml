@@ -19,6 +19,10 @@ on:
       package_run_id:
         description: Successful same-checkout-SHA package run for a manual catalog dispatch (push uses the current run)
         required: false
+      refresh_metadata:
+        type: boolean
+        description: Refresh signed download counts even when package versions are unchanged
+        default: false
       confirm_cutover:
         type: boolean
         description: The cutover owner has confirmed completion (final repository name and id are also checked)
@@ -199,6 +203,7 @@ jobs:
       actions: read
     outputs:
       payload: ${{ steps.payload.outputs.path }}
+      sign_result: ${{ steps.sign.outcome }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -226,7 +231,11 @@ jobs:
       - name: Anonymous public gate and payload generation
         env:
           GH_TOKEN: ${{ github.token }} # GitHub identity check only; registry clients are explicitly anonymous.
-        run: python3 -I scripts/publish-oci.py catalog --confirm-cutover --plan "$RUNNER_TEMP/package-plan/plan.json" --output "$RUNNER_TEMP/unsigned"
+          REFRESH_METADATA: ${{ inputs.refresh_metadata }}
+        run: |
+          args=()
+          if [ "$REFRESH_METADATA" = true ]; then args+=(--refresh-metadata); fi
+          python3 -I scripts/publish-oci.py catalog --confirm-cutover --plan "$RUNNER_TEMP/package-plan/plan.json" --output "$RUNNER_TEMP/unsigned" "${args[@]}"
       - name: Read the unchanged signed catalog
         id: payload
         env:
@@ -250,6 +259,7 @@ jobs:
       # No build/test/untrusted extension code runs in this job. The secret is
       # introduced only after every anonymous check has passed and a payload exists.
       - name: Sign raw payload with the approved existing key
+        id: sign
         if: steps.payload.outputs.path != ''
         env:
           EXTENSION_MARKET_SIGNING_KEY: ${{ secrets.EXTENSION_MARKET_SIGNING_KEY }}
@@ -280,7 +290,7 @@ jobs:
         env:
           PACKAGES_RESULT: ${{ needs.packages.result }}
           ANONYMOUS_RESULT: ${{ needs.anonymous.result }}
-          SIGN_RESULT: ${{ needs.anonymous.result }}
+          SIGN_RESULT: ${{ needs.anonymous.outputs.sign_result }}
           CATALOG_UNCHANGED: ${{ needs.anonymous.outputs.payload == '' }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = push ] && [ "$PACKAGES_RESULT" != success ]; then

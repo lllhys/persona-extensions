@@ -92,9 +92,12 @@ def check_source(generation, base_ref, body):
     if catalog.payload_hash(tree_catalog(source)[0]) != generation["base_catalog_hash"]:
         raise ValueError("signed source catalog does not match generation base")
     if generation["mode"] == "versions":
-        current = [catalog.entry_inventory(e) for e in body["extensions"]]
+        current = sorted((catalog.entry_inventory(e) for e in body["extensions"]), key=lambda e: e["manifest"]["id"])
         if current != base_inventory:
             raise ValueError("generated catalog does not match complete source inventory")
+        for entry in body["extensions"]:
+            if "icon" in entry and entry.get("icon_url") != catalog.icon_url(entry["manifest"]["id"], entry["icon"], source):
+                raise ValueError("generated icon_url differs from the signed source commit")
 
 
 def check(path=None, *, base_catalog=None, base_signature=None, repository_id=None, base_ref=None):

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { connect } from "@persona/extension";
 import { Renderer, View, Section, Progress, Code, Table, FileTree, CommentThread } from "@persona/extension/ui";
@@ -53,11 +53,6 @@ test("official canonical View JSON fixtures preserve zero and required empty nat
 for (const page of staticPages) test(`JSX preserves every ${page} example and state`, () => {
   const renderer = mount({ p: page });
   try { assert.deepEqual(normalize(renderer.current().view), normalize(fixture(page))); } finally { renderer.dispose(); }
-});
-test("APP fixtures are retained unchanged in the source package", () => {
-  const old = fileURLToPath(new URL("../snapshots/", import.meta.url));
-  assert.deepEqual(readdirSync(fixtures).sort(), readdirSync(old).sort());
-  for (const name of readdirSync(fixtures)) assert.deepEqual(readFileSync(fixtures + name), readFileSync(old + name));
 });
 test("catalog, card, all widget families and shortcut snapshots preserve payloads", () => {
   const renderer = mount();

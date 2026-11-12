@@ -49,98 +49,15 @@ func renderTabs(r *ext.UIRequest, st pageState, v *wire.View, alarms int) {
 	}
 }
 
-// alarmCount is how many alarms the overview draws.
-func alarmCount(hm *home) int {
+// alarmCount is how many alarms the overview's 需要注意 draws (a device's alarms; see gatherHome).
+func alarmCount(hm *home, reg *Registry) int {
 	n := 0
 	for _, s := range hm.States {
-		if stateTone(s) == "danger" && !hm.Hidden[s.EntityID] {
+		if al, ok := alertOf(s); ok && al.tone == "danger" && hm.visible(s.EntityID) && !regHidden(reg, s.EntityID) {
 			n++
 		}
 	}
 	return n
-}
-
-// homePage is 家's overview: the home's figures, its alarms, then every area, the busiest first. An area says what
-// is on in it, its badge how many, and its value the temperature (or humidity) a room is.
-func (a *app) homePage(r *ext.UIRequest, hm *home, reg *Registry, v *wire.View) {
-	var alarms []wire.Component
-	for _, s := range hm.States {
-		if stateTone(s) == "danger" && !hm.Hidden[s.EntityID] {
-			alarms = append(alarms, entityRow(hm, s, true))
-		}
-	}
-
-	type room struct {
-		ar  Area
-		sum areaSummary
-	}
-	rooms := make([]room, 0, len(hm.Areas))
-	for i := range hm.Areas {
-		rooms = append(rooms, room{ar: hm.Areas[i], sum: roomSummary(hm, reg, hm.Areas[i])})
-	}
-	if len(alarms) > 0 {
-		v.Sections = append(v.Sections, wire.Section{Title: fmt.Sprintf("报警 · %d", len(alarms)), Items: alarms})
-	}
-	if hm.Note != "" {
-		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{{Type: "text", Text: hm.Note, Style: "secondary"}}})
-	}
-	sort.SliceStable(rooms, func(i, j int) bool {
-		if rooms[i].sum.on != rooms[j].sum.on {
-			return rooms[i].sum.on > rooms[j].sum.on
-		}
-		return rooms[i].ar.Name < rooms[j].ar.Name
-	})
-	title := fmt.Sprintf("区域 · %d", len(rooms))
-	if hm.ByType {
-		title = fmt.Sprintf("类型 · %d", len(rooms))
-	}
-	sec := wire.Section{Title: title}
-	for _, x := range rooms {
-		row := wire.Component{Type: "row", Key: "area:" + x.ar.ID, Title: x.ar.Name,
-			Subtitle: clip(onNames(hm, x.sum), 120), Value: areaEnv(x.sum), Action: &wire.Action{ID: "area:" + x.ar.ID}}
-		if x.sum.on > 0 {
-			row.Badge = &wire.Badge{Text: fmt.Sprintf("%d 开着", x.sum.on), Tone: "positive"}
-		}
-		sec.Items = append(sec.Items, row)
-	}
-	if len(rooms) == 0 {
-		sec.Items = append(sec.Items, emptyItem(r, "还没有区域", "用上面的搜索找设备"))
-	}
-	v.Sections = append(v.Sections, sec, footer())
-}
-
-// onNames says what is on in an area, by name; a climate with its mode.
-func onNames(hm *home, sum areaSummary) string {
-	var names []string
-	for _, s := range sum.notable {
-		if stateTone(s) != "positive" {
-			continue
-		}
-		n := shortName(hm, s)
-		if s.Domain() == "climate" {
-			n += "（" + stateText(s) + "）"
-		}
-		names = append(names, n)
-	}
-	if len(names) == 0 {
-		return "都关着"
-	}
-	if len(names) > 2 {
-		names = names[:2]
-	}
-	return strings.Join(names, "、")
-}
-
-// areaEnv is an area's right-hand value: its air, when it has sensors for it.
-func areaEnv(sum areaSummary) string {
-	var parts []string
-	if len(sum.temp) > 0 {
-		parts = append(parts, tidy(avg(sum.temp))+"°")
-	}
-	if len(sum.humid) > 0 {
-		parts = append(parts, tidy(avg(sum.humid))+"%")
-	}
-	return strings.Join(parts, " · ")
 }
 
 // roomPage is one area: a header with its figures, then its devices (a section per kind), sensors or everything.
@@ -152,14 +69,17 @@ func (a *app) roomPage(r *ext.UIRequest, hm *home, reg *Registry, st pageState, 
 	}
 	v.Title = ar.Name
 	sum := roomSummary(hm, reg, *ar)
+	// the way back to the overview (re-choosing the tab it is on does nothing): a breadcrumb, a 返回 button before UI
+	// version 4
+	v.Sections = append(v.Sections, crumbs(r, []wire.Crumb{{Title: "家", Action: &wire.Action{ID: "home"}}, {Title: ar.Name}}, "home"))
 	if r.UIVersion >= 2 {
 		// the room's air first: that is what one opens a room for; the devices' state follows it
 		var stats []wire.Stat
 		if len(sum.temp) > 0 {
-			stats = append(stats, wire.Stat{Label: "温度", Value: tidy(avg(sum.temp)) + "°"})
+			stats = append(stats, wire.Stat{Label: "温度", Value: tempText(avg(sum.temp))})
 		}
 		if len(sum.humid) > 0 {
-			stats = append(stats, wire.Stat{Label: "湿度", Value: tidy(avg(sum.humid)) + "%"})
+			stats = append(stats, wire.Stat{Label: "湿度", Value: humidText(avg(sum.humid))})
 		}
 		if len(stats) == 0 {
 			stats = append(stats, wire.Stat{Label: "设备", Value: strconv.Itoa(sum.devices)})
@@ -170,15 +90,17 @@ func (a *app) roomPage(r *ext.UIRequest, hm *home, reg *Registry, st pageState, 
 		}
 		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{{Type: "stat_grid", Stats: stats}}})
 	} else {
-		v.Sections = append(v.Sections, crumbs(r, []wire.Crumb{{Title: "家", Action: &wire.Action{ID: "home"}}, {Title: ar.Name}}, "home"))
 		line := roomLine(sum)
-		if env := areaEnv(sum); env != "" {
-			line += " · " + env
+		if air := airText(sum.temp, sum.humid); air != "" {
+			line += " · " + air
 		}
 		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{{Type: "text", Text: line, Style: "secondary"}}})
 	}
 	kindControl(r, st, v)
-	if st.Kind == "devices" {
+	switch {
+	case st.Kind == "devices" && r.UIVersion >= 6:
+		a.roomTiles(r, hm, reg, ar, st, v)
+	case st.Kind == "devices":
 		if r.UIVersion >= 2 && a.hasQuick(hm, reg, ar) {
 			pick := wire.Component{Type: "segmented", Name: "pick", Value: "toggle", Action: &wire.Action{ID: "pick"},
 				Choices: []wire.Choice{{Value: "toggle", Title: "点按开关"}, {Value: "open", Title: "点按查看"}}}
@@ -188,18 +110,21 @@ func (a *app) roomPage(r *ext.UIRequest, hm *home, reg *Registry, st pageState, 
 			v.Sections = append(v.Sections, wire.Section{Title: "点按设备", Items: []wire.Component{pick}})
 		}
 		a.roomDevices(r, hm, reg, ar, st, v)
-	} else {
+	default:
 		a.roomEntities(r, hm, reg, ar, st, v)
 	}
 	v.Sections = append(v.Sections, footer())
 }
 
 // roomSummary is an area's figures as its page draws them: a device's main entities (its settings folded away),
-// what is on and offline, and the room's temperature and humidity.
+// what is on and offline, and the room's temperature and humidity (airOf, as the overview's tile says them).
 func roomSummary(hm *home, reg *Registry, ar Area) areaSummary {
-	sum := summarizeArea(hm, ar) // its air
-	sum.devices, sum.on, sum.offline, sum.notable = 0, 0, 0, nil
+	var sum areaSummary
+	sum.temp, sum.humid = airOf(hm, reg, &ar)
 	for _, dr := range deviceRows(hm, reg, &ar) {
+		if !counted(dr.s) { // as the overview's tile counts
+			continue
+		}
 		sum.devices++
 		if dr.s.Unavailable() {
 			sum.offline++
@@ -303,6 +228,58 @@ func (a *app) roomDevices(r *ext.UIRequest, hm *home, reg *Registry, ar *Area, s
 		}
 	}
 	if len(more) > 0 {
+		v.Sections = append(v.Sections, wire.Section{Items: more})
+	}
+}
+
+// roomTiles is an area's devices on UI version 6: a tile each, by kind, with its switch (a tap opens it; its settings
+// are folded into it), the dials of what is on, and the offline ones behind a row.
+func (a *app) roomTiles(r *ext.UIRequest, hm *home, reg *Registry, ar *Area, st pageState, v *wire.View) {
+	var shown []devRow
+	offline := 0
+	for _, dr := range deviceRows(hm, reg, ar) {
+		if dr.s.Unavailable() && !st.Offline {
+			offline++
+			continue
+		}
+		shown = append(shown, dr)
+	}
+	sort.SliceStable(shown, func(i, j int) bool {
+		di, dj := domainRank(shown[i].s.Domain()), domainRank(shown[j].s.Domain())
+		if di != dj {
+			return di < dj
+		}
+		return shortName(hm, shown[i].s) < shortName(hm, shown[j].s)
+	})
+	var tiles []wire.Tile
+	var dials []wire.Component
+	for _, dr := range shown {
+		if len(tiles) == tilesMost {
+			break
+		}
+		t := a.deviceTile(hm, dr.s, false)
+		if dr.folded > 0 {
+			t.Subtitle = clip(strings.TrimPrefix(t.Subtitle+" · "+fmt.Sprintf("另有 %d 项", dr.folded), " · "), 80)
+		}
+		tiles = append(tiles, t)
+		if row, ok := a.dialRow(hm, dr.s, false); ok && len(dials) < dialsMost {
+			dials = append(dials, row)
+		}
+	}
+	if len(tiles) > 0 {
+		sec := wire.Section{Title: fmt.Sprintf("设备 · %d", len(shown)), Items: []wire.Component{{Type: "grid", Key: "devices", Tiles: tiles, MaxColumns: deviceColumns}}}
+		if len(shown) > len(tiles) {
+			sec.Footer = fmt.Sprintf("只列前 %d 个，用搜索找别的", len(tiles))
+		}
+		v.Sections = append(v.Sections, sec)
+	}
+	if len(dials) > 0 {
+		v.Sections = append(v.Sections, wire.Section{Title: fmt.Sprintf("调节 · %d", len(dials)), Items: dials})
+	}
+	if len(shown) == 0 && offline == 0 {
+		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{emptyItem(r, "这里没有设备", "看看「传感器」「全部」，或者搜索")}})
+	}
+	if more := offlineRow(offline, st.Offline); len(more) > 0 {
 		v.Sections = append(v.Sections, wire.Section{Items: more})
 	}
 }
@@ -565,7 +542,7 @@ func (a *app) logPage(ctx context.Context, r *ext.UIRequest, hm *home, reg *Regi
 		row := wire.Component{Type: "row", Title: clip(what, 80), Subtitle: clip(strings.Join(sub, " · "), 120),
 			Value: at.Format("15:04")}
 		if _, ok := hm.ByID[e.EntityID]; ok {
-			row.Action = &wire.Action{ID: "open:" + e.EntityID}
+			row.Action = openAction(e.EntityID)
 		}
 		key := at.Format("2006-01-02")
 		var d *day
@@ -734,7 +711,7 @@ func (a *app) autoPage(r *ext.UIRequest, hm *home, v *wire.View) {
 
 // autoRow is an automation, script or scene: its state, when it last ran, and the tap its kind allows.
 func (a *app) autoRow(s State, loc *time.Location) wire.Component {
-	row := wire.Component{Type: "row", Key: s.EntityID, Title: clip(s.Name(), 80), Action: &wire.Action{ID: "open:" + s.EntityID}}
+	row := wire.Component{Type: "row", Key: ref("", s.EntityID), Title: clip(s.Name(), 80), Action: openAction(s.EntityID)}
 	last := s.attr("last_triggered")
 	if s.Domain() == "scene" {
 		last = s.State
@@ -764,11 +741,14 @@ func (a *app) autoRow(s State, loc *time.Location) wire.Component {
 	}
 	switch {
 	case s.Domain() == "scene":
-		row.Action = &wire.Action{ID: "do:" + s.EntityID + "|turn_on", Confirm: "执行场景「" + s.Name() + "」？"}
+		row.Action = rowDo(s.EntityID, "turn_on")
+		row.Action.Confirm = "执行场景「" + s.Name() + "」？"
 	case s.State == "on":
-		row.Action = &wire.Action{ID: "do:" + s.EntityID + "|turn_off", Confirm: "停下脚本「" + s.Name() + "」？"}
+		row.Action = rowDo(s.EntityID, "turn_off")
+		row.Action.Confirm = "停下脚本「" + s.Name() + "」？"
 	default:
-		row.Action = &wire.Action{ID: "do:" + s.EntityID + "|turn_on", Confirm: "运行脚本「" + s.Name() + "」？"}
+		row.Action = rowDo(s.EntityID, "turn_on")
+		row.Action.Confirm = "运行脚本「" + s.Name() + "」？"
 	}
 	return row
 }

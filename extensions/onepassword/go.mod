@@ -4,6 +4,7 @@ go 1.27.1
 
 require (
 	github.com/1password/onepassword-sdk-go v0.4.1
+	github.com/nwverse/persona-extensions/pluginkit v0.0.0
 	github.com/nwverse/persona/sdk/go v0.0.0
 )
 
@@ -20,3 +21,5 @@ require (
 )
 
 replace github.com/nwverse/persona/sdk/go => ../../sdk/go
+
+replace github.com/nwverse/persona-extensions/pluginkit => ../../pluginkit

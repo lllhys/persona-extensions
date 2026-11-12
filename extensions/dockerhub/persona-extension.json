@@ -1,0 +1,58 @@
+{
+  "manifest_version": 1,
+  "id": "dockerhub",
+  "name": "Docker Hub",
+  "version": "0.1.2",
+  "icon": "assets/icon.png",
+  "description": "Search public Docker Hub images. Check official status, publisher namespaces, pull activity, selected tag digests and supported platforms. Get an exact docker pull command as text without pulling or running images.",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/dockerhub/README.md",
+  "tags": [
+    "Development",
+    "Docker",
+    "Containers",
+    "Dependencies"
+  ],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "mode": "deno",
+    "source": {
+      "entry": "src/index.ts",
+      "bundle": "build/dockerhub.mjs",
+      "sha256": "374032735f8dab43ad433a4f23e60260424fc295c0bc497f10462eebeced3a4d"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "dockerhub",
+        "name": "Docker Hub",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "hub.docker.com"
+        ],
+        "agent_tools": [
+          "dockerhub_*"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "dockerhub",
+        "title": "Docker Hub",
+        "placement": "nav_page",
+        "icon": "code"
+      }
+    ]
+  },
+  "permissions": {
+    "network": [
+      "hub.docker.com"
+    ]
+  }
+}

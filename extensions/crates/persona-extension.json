@@ -1,0 +1,58 @@
+{
+  "manifest_version": 1,
+  "id": "crates",
+  "name": "Rust Crates",
+  "version": "0.1.2",
+  "icon": "assets/icon.png",
+  "description": "Search Rust crates on the official crates.io JSON API. Compare default versions, licenses, release dates, download activity, documentation and repository links. Get an exact-version cargo add command without executing it.",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/crates/README.md",
+  "tags": [
+    "Development",
+    "Rust",
+    "Cargo",
+    "Dependencies"
+  ],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "mode": "deno",
+    "source": {
+      "entry": "src/index.ts",
+      "bundle": "build/crates.mjs",
+      "sha256": "4972e288ef19929ce03859678b1235398a3da1d4f338a13b832e73a1a5207271"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "crates",
+        "name": "Rust Crates",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "crates.io"
+        ],
+        "agent_tools": [
+          "crates_*"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "crates",
+        "title": "Rust Crates",
+        "placement": "nav_page",
+        "icon": "code"
+      }
+    ]
+  },
+  "permissions": {
+    "network": [
+      "crates.io"
+    ]
+  }
+}

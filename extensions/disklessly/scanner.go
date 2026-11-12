@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -209,7 +210,8 @@ probe_sessions() {
     hot_kb=$(find "$dir" -type f \( -name '*.jsonl' -o -name '*.json' \) -mtime -7 -exec du -k {} + 2>/dev/null | awk '{s+=$1} END {print s+0}')
     cold_c=$(find "$dir" -type f \( -name '*.jsonl' -o -name '*.json' \) -mtime +6 2>/dev/null | wc -l | tr -d ' ')
     cold_kb=$(find "$dir" -type f \( -name '*.jsonl' -o -name '*.json' \) -mtime +6 -exec du -k {} + 2>/dev/null | awk '{s+=$1} END {print s+0}')
-    printf 'tool\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$tool" "$label" "$dir" "${hot_c:-0}" "${hot_kb:-0}" "${cold_c:-0}" "${cold_kb:-0}"
+    real=$(cd "$dir" 2>/dev/null && pwd -P)
+    printf 'tool\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$tool" "$label" "$dir" "${hot_c:-0}" "${hot_kb:-0}" "${cold_c:-0}" "${cold_kb:-0}" "${real:-$dir}"
   fi
 }
 probe_sessions "claude" "Claude Code" "$HOME/.claude/projects"
@@ -219,6 +221,20 @@ if [ -d "$arch_dir" ]; then
   ac=$(find "$arch_dir" -type f -name '*.tar.gz' 2>/dev/null | wc -l | tr -d ' ')
   akb=$(du -xsk "$arch_dir" 2>/dev/null | awk '{print $1}' | head -n 1)
   printf 'archive\t%s\t%s\t%s\n' "$arch_dir" "${ac:-0}" "${akb:-0}"
+fi
+` + resolveCLIScript + `
+if [ -n "$DKL" ]; then
+  echo "@@SECTION:SESSIONS_CLI_PLAN"
+  "$DKL" --json sessions ` + cliDaysFlag + ` 2>/dev/null | tr '\n' ' '; echo
+  echo "@@SECTION:SESSIONS_CLI_STATUS"
+  "$DKL" --json sessions status 2>/dev/null | tr '\n' ' '; echo
+  echo "@@SECTION:SESSIONS_FILES"
+  for d in "$HOME/.claude/projects" "$HOME/.codex/sessions"; do
+    if [ -d "$d" ]; then
+      r=$(cd "$d" 2>/dev/null && pwd -P) || r="$d"
+      find "$r/" -type f \( -name '*.jsonl' -o -name '*.json' \) -mtime +5 -exec du -k {} + 2>/dev/null
+    fi
+  done
 fi
 echo "@@SECTION:END"
 `
@@ -356,24 +372,14 @@ func ParseProbeOutput(m *Machine, output string, now time.Time) *Scan {
 				ColdCount: coldC,
 				ColdBytes: coldKB * 1024,
 			}
+			if len(parts) >= 9 {
+				ts.RealDirectory = strings.TrimSpace(parts[8])
+			}
 			sess.HotCount += ts.HotCount
 			sess.HotBytes += ts.HotBytes
 			sess.ColdCount += ts.ColdCount
 			sess.ColdBytes += ts.ColdBytes
 			sess.Tools = append(sess.Tools, ts)
-			if ts.ColdBytes > 0 {
-				items = append(items, ScanItem{
-					ID:         "sessions-cold-" + ts.Tool,
-					Category:   CatColdAgentSession,
-					Title:      fmt.Sprintf("%s 冷会话日志 (%d 个 >7天会话)", ts.Label, ts.ColdCount),
-					Path:       ts.Directory,
-					Bytes:      ts.ColdBytes,
-					Safety:     SafetySafe,
-					Action:     "archive",
-					Reason:     "归档压缩超过 7 天的陈旧 Agent 会话到 ~/.disklessly/session-archives，7 天内活跃会话严格保留",
-					SessionCnt: ts.ColdCount,
-				})
-			}
 		} else if len(parts) >= 4 && parts[0] == "archive" {
 			sess.ArchiveDir = parts[1]
 			ac, _ := strconv.Atoi(parts[2])
@@ -382,6 +388,8 @@ func ParseProbeOutput(m *Machine, output string, now time.Time) *Scan {
 			sess.ArchivedBytes = akb * 1024
 		}
 	}
+
+	items = append(items, applySessionCLI(&sess, sections)...)
 
 	// Sort items by size descending, then path ascending.
 	slices.SortFunc(items, func(a, b ScanItem) int {
@@ -400,6 +408,10 @@ func ParseProbeOutput(m *Machine, output string, now time.Time) *Scan {
 			continue
 		}
 		reclaimable += it.Bytes
+		if it.Category == CatColdAgentSession {
+			// Uploaded off the machine, not a rebuildable cache: never part of the safe total.
+			continue
+		}
 		if it.Safety == SafetySafe {
 			safeBytes += it.Bytes
 		} else {
@@ -579,5 +591,91 @@ func ScanMachine(ctx context.Context, runner Runner, st *State, m *Machine, now 
 		st.Scans = map[string]*Scan{}
 	}
 	st.Scans[m.ID] = scan
+	if scan.BinaryVersion != "" || scan.Sessions.CLIReady {
+		// Keep the local cold index current without pulling the index on every scan; a failed
+		// refresh only marks the cloud state unknown.
+		refreshColdIfStale(ctx, runner, st, m, now, coldScanRefreshAge)
+	}
 	return scan, nil
+}
+
+// sizeKB looks up a transcript's size in the SESSIONS_FILES map, which lists files under the
+// resolved tool directory. p may be in either the configured (dir) or the resolved (real) form.
+func sizeKB(kb map[string]uint64, p, dir, real string) uint64 {
+	if v, ok := kb[p]; ok {
+		return v
+	}
+	for _, pair := range [][2]string{{dir, real}, {real, dir}} {
+		from, to := path.Clean(pair[0]), path.Clean(pair[1])
+		if pair[0] == "" || pair[1] == "" || from == to || !underDir(p, from) {
+			continue
+		}
+		if v, ok := kb[to+strings.TrimPrefix(path.Clean(p), from)]; ok {
+			return v
+		}
+	}
+	return 0
+}
+
+// applySessionCLI replaces the find-based cold session estimate with the disklessly CLI's own
+// cold plan (which skips hot, open and per-project longer-threshold sessions), attaches the
+// cloud backup state, and returns the archivable cold session items. Without a CLI that reports
+// both its plan and a reachable backend, no session item is offered: the extension never
+// archives or deletes transcripts itself.
+func applySessionCLI(sess *SessionSummary, sections map[string][]string) []ScanItem {
+	var plan sessionReport
+	planOK := parseCLIJSONLine(sections["SESSIONS_CLI_PLAN"], &plan)
+	var status CloudStatus
+	if parseCLIJSONLine(sections["SESSIONS_CLI_STATUS"], &status) {
+		sess.Cloud = &status
+	}
+	sess.CLIReady = planOK && sess.Cloud != nil
+	switch {
+	case !sess.CLIReady:
+		sess.Note = "目标机器没有支持云端归档的 disklessly CLI（需要 sessions status 与 --exclude-from），冷会话保持原样；安装或升级 disklessly 后重新扫描。"
+		return nil
+	case !sess.Cloud.Backend.Reachable:
+		sess.Note = "备份后端不可达，冷会话暂不归档：" + cmpOr(sess.Cloud.Backend.Error, "backend unreachable")
+	}
+
+	kb := map[string]uint64{}
+	for _, line := range sections["SESSIONS_FILES"] {
+		size, p, ok := strings.Cut(line, "\t")
+		if !ok {
+			continue
+		}
+		if v, err := strconv.ParseUint(strings.TrimSpace(size), 10, 64); err == nil {
+			kb[p] = v
+		}
+	}
+	sess.ColdCount, sess.ColdBytes = 0, 0
+	var items []ScanItem
+	for i := range sess.Tools {
+		ts := &sess.Tools[i]
+		ts.ColdCount, ts.ColdBytes = 0, 0
+		for _, p := range plan.Cold {
+			if underAny(p, ts.Directory, ts.RealDirectory) {
+				ts.ColdCount++
+				ts.ColdBytes += sizeKB(kb, p, ts.Directory, ts.RealDirectory) * 1024
+			}
+		}
+		sess.ColdCount += ts.ColdCount
+		sess.ColdBytes += ts.ColdBytes
+		if ts.ColdCount == 0 || !sess.Cloud.Backend.Reachable {
+			continue
+		}
+		items = append(items, ScanItem{
+			ID:         "sessions-cold-" + ts.Tool,
+			Category:   CatColdAgentSession,
+			Title:      fmt.Sprintf("%s 冷会话日志 (%d 个 >7天会话)", ts.Label, ts.ColdCount),
+			Path:       ts.Directory,
+			Bytes:      ts.ColdBytes,
+			Safety:     SafetySafe,
+			Action:     "archive",
+			Reason:     "由 disklessly 上传到备份后端并写入索引后才移除本地副本；7 天内活跃、正在打开或仍被引用的会话保留",
+			SessionCnt: ts.ColdCount,
+			RealPath:   ts.RealDirectory,
+		})
+	}
+	return items
 }

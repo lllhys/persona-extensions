@@ -81,6 +81,18 @@ function metadata(value: unknown, name: string): string {
   if (item.value == null) return "";
   return clip(plain(string(item.value)), 4000);
 }
+// licenseHosts serve their licenses over https too, so an http link to them is upgraded.
+const licenseHosts = new Set(["creativecommons.org", "www.gnu.org", "gnu.org", "opensource.org"]);
+// licenseLink is a file's license link as https. LicenseUrl comes from the file's page, and older files link their license
+// over http (GFDL: http://www.gnu.org/copyleft/fdl.html); a link that cannot be made https is left out, the license name
+// still shown, rather than failing the whole search.
+function licenseLink(text: string): string | undefined {
+  if (!text) return undefined;
+  let url: URL;
+  try { url = new URL(text); } catch { return undefined; }
+  if (url.protocol === "http:" && licenseHosts.has(url.hostname)) url.protocol = "https:";
+  return url.protocol === "https:" && !url.username && !url.password ? url.href : undefined;
+}
 export function parseImages(raw: unknown, at: number): SearchResult {
   const query = object(object(raw).query), pages = object(query.pages);
   const images = Object.entries(pages).slice(0, 20).map(([id, rawPage]) => {
@@ -93,15 +105,7 @@ export function parseImages(raw: unknown, at: number): SearchResult {
     const description = metadata(meta.ImageDescription, "description");
     const artist = metadata(meta.Artist, "artist");
     const license = metadata(meta.LicenseShortName, "license") || "See file page";
-    const licenseText = metadata(meta.LicenseUrl, "licenseURL");
-    let licenseURL: string | undefined;
-    if (licenseText) {
-      let url: URL;
-      try { url = new URL(licenseText); } catch { throw new ReadError("bad_answer"); }
-      if (url.protocol === "http:" && url.hostname === "creativecommons.org") url.protocol = "https:";
-      if (url.protocol !== "https:" || url.username || url.password) throw new ReadError("bad_answer");
-      licenseURL = url.href;
-    }
+    const licenseURL = licenseLink(metadata(meta.LicenseUrl, "licenseURL"));
     const thumbnailURL = uploadURL(info.thumburl);
     const width = info.thumbwidth == null ? undefined : integer(info.thumbwidth, 640);
     const height = info.thumbheight == null ? undefined : integer(info.thumbheight, 100_000);

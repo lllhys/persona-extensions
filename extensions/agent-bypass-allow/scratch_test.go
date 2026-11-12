@@ -77,6 +77,7 @@ func TestScratchDeletions(t *testing.T) {
 		"S={tmp}/a && rm -rf $S/b", "rm -rf {root}/r/.claude/worktrees/w", "rm -rf ~/.claude/worktrees/w/sub",
 		"rmdir {tmp}/empty", "unlink {tmp}/f", "sudo rm -rf {tmp}/x", "sudo -u bob rm -rf build", "sudo --user=bob rm -rf build", "sudo --us bob rm -rf build", "sudo -u i rm -rf build", "sudo FOO=bar rm -rf {tmp}/x", "timeout 10 rm -rf {tmp}/x", "if true; then rm -rf {tmp}/x; fi",
 		"mv {tmp}/a {tmp}/b", "mv -t {tmp}/d {tmp}/a", "cp -f {tmp}/a build/b", "echo x > build/out.json", "go test > ~/ag-work/v1/log 2>&1",
+		"echo x >> build/out.json", "echo x 2>> build/out.json", "echo x &>> build/out.json", "tee -a build/x.log",
 		"tee build/x.log", "truncate -s 0 {tmp}/log", "find {tmp}/x -name '*.o' -delete", "find . -name '*.o' -delete",
 		"find . -name '*.go' -fprint {tmp}/list", "find {tmp}/x -delete -fls {tmp}/x.log",
 		"rsync -a --delete src/ {tmp}/dst/", "rm -rf {tmp}/link", "bash -c 'rm -rf {tmp}/x'",
@@ -140,6 +141,8 @@ func TestScratchDeletions(t *testing.T) {
 		// find writes its list into a file it names: that file is a target too
 		"find . -maxdepth 0 -fprint ~/.bashrc", "find . -fls {keep}/notes.txt", "find . -fprint0 {keep}/n",
 		"find . -fprintf {keep}/n '%p'", "find {tmp}/x -delete -fprint {keep}/notes.txt",
+		// appending is a write too, including stderr, combined output and tee -a
+		"echo x >> ~/.bashrc", "echo x 2>> ~/.ssh/authorized_keys", "echo x &>> ~/.bashrc", "tee -a ~/.ssh/authorized_keys",
 	}
 	for _, c := range stays {
 		c = b.cmd(c)

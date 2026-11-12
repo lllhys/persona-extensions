@@ -11,15 +11,16 @@ manifest=$(scripts/manifest.py path "$id")
 version=$(scripts/manifest.py version "$id")
 out="dist/$id"
 rm -rf "${out:?}" && mkdir -p "$out/bin"
-# The manifest goes in under both names, without its tags (scripts/manifest.py packaged): hubs from before the rename
-# to extensions (nwverse/persona#1844) read only persona-plugin.json, newer ones prefer persona-extension.json, and
+# The manifest goes in under both names, without source-only tags/replaces/icon (scripts/manifest.py packaged).
+# Hubs from before the rename to extensions (nwverse/persona#1844) read only persona-plugin.json, newer ones
+# prefer persona-extension.json, and
 # hubs from before tags (nwverse/persona#2424) refuse a manifest with them. Only persona-extension.json is committed;
 # stop writing persona-plugin.json once the compatibility period ends (docs/reference.md, "Compatibility").
 scripts/manifest.py packaged "$id" >"$out/persona-extension.json"
 cp "$out/persona-extension.json" "$out/persona-plugin.json"
-# What the manifest points at besides the program: the assistant's skills and instructions, the looks' images, and
-# the manifest's translations the hub reads from l10n/.
-for extra in skills assistant looks l10n; do
+# What the manifest points at besides the program: the assistant's skills and instructions, the looks' images, the
+# manifest's translations the hub reads from l10n/, and source-owned assets (icons and their licenses).
+for extra in skills assistant looks l10n assets; do
   [ -d "$src/$extra" ] && cp -R "$src/$extra" "$out/"
 done
 # Native TypeScript source packages ship the import-free bundle and its verified digest.

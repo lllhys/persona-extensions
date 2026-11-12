@@ -20,6 +20,8 @@ type opAPI interface {
 	listVaults(ctx context.Context) ([]op.VaultOverview, error)
 	listItems(ctx context.Context, vaultID string) ([]op.ItemOverview, error)
 	getItem(ctx context.Context, vaultID, itemID string) (op.Item, error)
+	// resolve is a reference's value (secrets.resolve): the only way a value leaves 1Password through this program.
+	resolve(ctx context.Context, reference string) (string, error)
 }
 
 type connectFunc func(ctx context.Context, token string) (opAPI, error)
@@ -39,9 +41,21 @@ func (s sdkAPI) getItem(ctx context.Context, vaultID, itemID string) (op.Item, e
 	return s.c.Items().Get(ctx, vaultID, itemID)
 }
 
+func (s sdkAPI) resolve(ctx context.Context, reference string) (string, error) {
+	return s.c.Secrets().Resolve(ctx, reference)
+}
+
 // sdkMu makes one SDK client at a time: the SDK keeps its core in a package variable it sets without a lock, and a
 // settings check can sign in while a tool call does.
 var sdkMu sync.Mutex
+
+// validateSDK is 1Password's own parser of a reference (local: no request, no sign-in), so the extension takes
+// exactly the references 1Password resolves. Under sdkMu: its first use makes the SDK's core.
+func validateSDK(ctx context.Context, reference string) error {
+	sdkMu.Lock()
+	defer sdkMu.Unlock()
+	return op.Secrets.ValidateSecretReference(ctx, reference)
+}
 
 // connectSDK signs in to 1Password with a service account token. The SDK's core is WebAssembly compiled on the first
 // client, which takes a second or two and is why the extension connects only when something needs it.
@@ -69,8 +83,13 @@ type itemInfo struct {
 	Updated                      time.Time
 }
 
+// fieldInfo is a field's name, type, section and reference; ID and SectionID (1Password's own, never values) and the
+// keys of its and its section's names as 1Password has them (nameKey) let a reference be matched against what was
+// kept, also by a name that held a value and is kept scrubbed.
 type fieldInfo struct {
 	Title, Type, Section, Reference string
+	ID, SectionID                   string
+	TitleKey, SectionKey            string
 }
 
 type itemDetail struct {
@@ -80,8 +99,13 @@ type itemDetail struct {
 	HasNotes bool
 }
 
+// vaultFromSDK keeps a vault's name and size; Items is -1 when op on a computer did not say (unknownCount).
 func vaultFromSDK(v op.VaultOverview) vaultInfo {
-	return vaultInfo{ID: v.ID, Title: v.Title, Items: int(v.ActiveItemCount), Updated: v.UpdatedAt}
+	items := int(v.ActiveItemCount)
+	if v.ActiveItemCount == unknownCount {
+		items = -1
+	}
+	return vaultInfo{ID: v.ID, Title: v.Title, Items: items, Updated: v.UpdatedAt}
 }
 
 func itemFromOverview(it op.ItemOverview) itemInfo {
@@ -133,7 +157,10 @@ func itemFromSDK(it op.Item) itemDetail {
 	}
 	for _, f := range it.Fields {
 		sid := sectionOf(f, sections)
-		fi := fieldInfo{Title: s.clean(f.Title), Type: string(f.FieldType)}
+		fi := fieldInfo{Title: s.clean(f.Title), Type: string(f.FieldType), ID: f.ID, SectionID: sid, TitleKey: nameKey(f.Title)}
+		if sid != "" {
+			fi.SectionKey = nameKey(sections[sid].Title)
+		}
 		ref := "op://" + it.VaultID + "/" + it.ID + "/"
 		if sid != "" {
 			sec := sections[sid]
@@ -266,15 +293,27 @@ type errKind int
 
 const (
 	errOther errKind = iota
-	errAuth
+	errAuth          // the token refused, or op on the computer missing or without an account: the tools go
 	errRate
+	errLocked // the 1Password app on the computer locked or op not approved: said, but the tools stay
 )
 
 func kindOf(err error) errKind {
 	var rate *op.RateLimitExceededError
-	var coded *ext.Error // a rate limit after clean
-	if errors.As(err, &rate) || errors.As(err, &coded) && coded.Code == "rate_limited" {
+	var coded *ext.Error // a rate limit after clean, or an error of op on a computer (node.go)
+	if errors.As(err, &rate) {
 		return errRate
+	}
+	if errors.As(err, &coded) && coded.Code != "" { // decided by the code alone: its words quote item names
+		switch coded.Code {
+		case codeRateLimited:
+			return errRate
+		case codeMissing, codeNotSignedIn:
+			return errAuth
+		case codeLocked:
+			return errLocked
+		}
+		return errOther
 	}
 	msg := strings.ToLower(err.Error())
 	for _, s := range []string{"service account token", "unauthorized", "authentication", "invalid token", "token is expired", "revoked"} {

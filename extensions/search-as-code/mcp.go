@@ -14,7 +14,8 @@ import (
 
 // `search-as-code mcp` speaks the Model Context Protocol over stdio (JSON-RPC 2.0, one JSON message per line).
 // Read-only tools (`sac_execute`, `sac_session_search`, `sac_recipes_list`) are allowed by the manifest;
-// write tools (`sac_recipe_upsert`, `sac_recipe_delete`) follow the conversation's permission policy.
+// write tools (`sac_recipe_upsert`, `sac_recipe_delete`, `sac_session_restore`) follow the conversation's
+// permission policy.
 
 const mcpProtocol = "2025-06-18"
 
@@ -89,6 +90,14 @@ var tools = []tool{
 			"id": str("要删除的自定义配方 ID"),
 		},
 		description: "删除一个自定义的 Search-as-Code 搜索配方。删除前先向用户确认配方名称。",
+	},
+	{
+		name:     "sac_session_restore",
+		required: []string{"entry_id"},
+		props: map[string]any{
+			"entry_id": str("已上云会话的 entry_id（来自检索结果中 location 为「已上云」的命中）"),
+		},
+		description: "把一个已被 disklessly 移到云端的会话（location 为「已上云」）从云端恢复到本机原路径（调用本机 disklessly 命令行，最长约 5 分钟）。返回恢复后的路径、会话 ID 与继续会话的命令（如 claude --resume <id>）。恢复前先向用户确认原路径；location 为「未确认上云」的会话上传未完成，云端可能没有副本。同一会话已在恢复时返回「正在恢复中」。",
 	},
 }
 
@@ -310,6 +319,13 @@ func (m *mcpServer) call(name string, args map[string]any) (any, error) {
 			return st.deleteRecipe(id)
 		})
 		return map[string]any{"deleted": id}, err
+
+	case "sac_session_restore":
+		var st *State
+		if err := m.store.read(func(s *State) { st = s }); err != nil {
+			return nil, err
+		}
+		return restoreArchived(context.Background(), st, strArg("entry_id"), m.store.dir)
 
 	default:
 		return nil, fmt.Errorf("unknown tool %q", name)

@@ -763,7 +763,7 @@ function withExactParams(handler) {
 }
 
 // persona-extension.json
-var persona_extension_default = { manifest_version: 1, id: "foodfacts", name: "\u98DF\u54C1\u5546\u54C1\u67E5\u8BE2", version: "0.1.0", description: "\u6309\u5546\u54C1\u540D\u79F0\u6216\u6761\u7801\u67E5\u8BE2 Open Food Facts\uFF0C\u67E5\u770B\u54C1\u724C\u3001\u914D\u6599\u3001\u6807\u79F0\u8FC7\u654F\u539F\u3001\u8425\u517B\u7B49\u7EA7\u548C\u539F\u59CB\u5546\u54C1\u94FE\u63A5\u3002\u4F17\u5305\u4FE1\u606F\u53EF\u80FD\u4E0D\u5B8C\u6574\uFF0C\u8FC7\u654F\u548C\u996E\u98DF\u51B3\u7B56\u8BF7\u4EE5\u5B9E\u9645\u5305\u88C5\u4E3A\u51C6\u3002", publisher: "nwverse", homepage: "https://github.com/nwverse/persona-extensions/blob/main/extensions/foodfacts/README.md", tags: ["\u98DF\u54C1", "\u914D\u6599", "Open Food Facts"], engines: { plugin_protocol: 1 }, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/foodfacts.mjs", sha256: "" } }, contributes: { connectors: [{ id: "foodfacts", name: "Open Food Facts", capabilities: ["status", "tools"], hosts: ["world.openfoodfacts.org"], agent_tools: ["foodfacts_*"] }], ui: [{ id: "products", title: "\u98DF\u54C1\u5546\u54C1\u67E5\u8BE2", placement: "nav_page", icon: "search" }] }, permissions: { network: ["world.openfoodfacts.org"] } };
+var persona_extension_default = { manifest_version: 1, id: "foodfacts", name: "\u98DF\u54C1\u5546\u54C1\u67E5\u8BE2", version: "0.1.3", icon: "assets/icon.png", description: "\u6309\u5546\u54C1\u540D\u79F0\u6216\u6761\u7801\u67E5\u8BE2 Open Food Facts\uFF0C\u67E5\u770B\u54C1\u724C\u3001\u914D\u6599\u3001\u6807\u79F0\u8FC7\u654F\u539F\u3001\u8425\u517B\u7B49\u7EA7\u548C\u539F\u59CB\u5546\u54C1\u94FE\u63A5\u3002\u4F17\u5305\u4FE1\u606F\u53EF\u80FD\u4E0D\u5B8C\u6574\uFF0C\u8FC7\u654F\u548C\u996E\u98DF\u51B3\u7B56\u8BF7\u4EE5\u5B9E\u9645\u5305\u88C5\u4E3A\u51C6\u3002", publisher: "nwverse", homepage: "https://github.com/nwverse/persona-extensions/blob/main/extensions/foodfacts/README.md", tags: ["\u98DF\u54C1", "\u914D\u6599", "Open Food Facts"], engines: { plugin_protocol: 1 }, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/foodfacts.mjs", sha256: "" } }, contributes: { connectors: [{ id: "foodfacts", name: "Open Food Facts", capabilities: ["status", "tools"], hosts: ["world.openfoodfacts.org"], agent_tools: ["foodfacts_*"] }], ui: [{ id: "products", title: "\u98DF\u54C1\u5546\u54C1\u67E5\u8BE2", placement: "nav_page", icon: "search" }] }, permissions: { network: ["world.openfoodfacts.org"] } };
 
 // src/model.ts
 var limits = Object.freeze({ request: 12e3, page: 15e3, tool: 15e3, response: 1 << 20, fresh: 24 * 60 * 6e4, cache: 24, cacheBytes: 1 << 20, gap: 1200 });
@@ -838,7 +838,7 @@ function parseProduct(raw, expectedCode, at) {
 }
 function product(raw, expectedCode) {
   const item = object(raw), code = barcode(item.code);
-  if (expectedCode && code !== expectedCode) throw new ReadError("bad_answer");
+  if (expectedCode && code.replace(/^0+/, "") !== expectedCode.replace(/^0+/, "")) throw new ReadError("bad_answer");
   const name = string(item.product_name, 300);
   if (!name) throw new ReadError("bad_answer");
   return {
@@ -858,6 +858,8 @@ function parseSearch(raw, at) {
   if (!Array.isArray(root2.products) || typeof root2.count !== "number" || !Number.isSafeInteger(root2.count) || root2.count < 0 || root2.count > 1e7) throw new ReadError("bad_answer");
   const seen = /* @__PURE__ */ new Set(), products = [];
   for (const rawProduct of root2.products.slice(0, 20)) {
+    const name = object(rawProduct).product_name;
+    if (name == null || typeof name === "string" && !name.trim()) continue;
     const item = product(rawProduct);
     if (seen.has(item.code)) continue;
     seen.add(item.code);
@@ -1387,6 +1389,8 @@ function snapshotPage(service) {
 
 // src/index.ts
 var sourceManifest = { ...persona_extension_default, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/foodfacts.mjs", sha256: "" } } };
+delete sourceManifest.icon;
+delete sourceManifest.replaces;
 function createProgram(fetch = (input, init) => globalThis.fetch(input, init), options = {}) {
   let service;
   const current = () => {

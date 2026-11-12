@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { connect } from "@persona/extension";
@@ -20,7 +20,7 @@ test("locked source bundle is reproducible, offline and portable without package
   assert.deepEqual(readFileSync(root + ".source-dist/showcase-source.tar.gz"), archive);
   const manifest = JSON.parse(readFileSync(root + ".source-dist/showcase/persona-extension.json", "utf8"));
   assert.deepEqual(manifest.runtime, { mode: "deno", source: { entry: "src/main.tsx", bundle: "bundle/main.mjs", sha256: createHash("sha256").update(first).digest("hex") } });
-  assert.equal(manifest.version, "0.1.3"); assert.equal(manifest.permissions, undefined); assert.equal(manifest.tags, undefined);
+  assert.equal(manifest.version, JSON.parse(readFileSync(root + "persona-extension.json", "utf8")).version); assert.equal(manifest.permissions, undefined); assert.equal(manifest.tags, undefined);
   assert.equal(manifest.contributes.ui.length, 3);
   assert.equal(manifest.contributes.ui[0].placement, "nav_page");
   assert.ok(manifest.contributes.ui.slice(1).every((ui: any) => ui.opens === "showcase"));
@@ -38,6 +38,13 @@ test("locked source bundle is reproducible, offline and portable without package
     protocol.line(JSON.stringify({ id: "2", method: "shortcut.run", params: { contribution: "showcase-count", values: { n: "3", unit: "star" }, locale: "en" } }));
     await protocol.drain(); assert.equal(replies[1].result.text, "Counted 3 stars");
   } finally { protocol.close(); }
+});
+
+test("APP fixtures are retained unchanged in the source package", () => {
+  build();
+  const source = root + "src/legacy-snapshots/", packaged = root + ".source-dist/showcase/src/legacy-snapshots/";
+  assert.deepEqual(readdirSync(packaged).sort(), readdirSync(source).sort());
+  for (const name of readdirSync(source)) assert.deepEqual(readFileSync(packaged + name), readFileSync(source + name));
 });
 
 test("actual bundled default Program mounts its own renderer and retains independent hooks through bridge lifecycle", async () => {

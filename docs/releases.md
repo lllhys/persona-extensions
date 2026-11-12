@@ -17,11 +17,23 @@ The repository has one catalog, `persona-extensions.json`, with embedded signatu
 }
 ```
 
-The payload has `market_version: 1`, market metadata, `signing_key` and `extensions`. Newly generated payloads also have signed `generation` provenance (see below). Each entry contains its packaged `manifest` (without source-only `tags` and `replaces`), entry `tags`, optional `replaces` and `packages`. There is no legacy catalog, detached signature or standalone public-key file. [scripts/catalog.py](../scripts/catalog.py) retains the approved **public** key as a code constant; no private key belongs in the repository.
+The payload has `market_version: 1`, market metadata, `signing_key` and `extensions`. Newly generated payloads also have signed `generation` provenance (see below). Each entry contains its packaged `manifest` (without source-only `tags`, `replaces` and `icon`), entry `tags`, optional `replaces` and `packages`. There is no legacy catalog, detached signature or standalone public-key file. [scripts/catalog.py](../scripts/catalog.py) retains the approved **public** key as a code constant; no private key belongs in the repository.
 
 Signatures cover `payload.encode("utf-8")`, **not** the outer JSON, parsed objects or canonicalized JSON. Outer formatting can change; the signed string cannot. Duplicate keys, absent/empty signatures, the wrong key and malformed signatures fail closed.
 
 The initial format conversion deliberately retains the frozen signed payload's `release:<tag>/<filename>` references. It is not an OCI publication. Do not replace these with guessed digests. Only successful package publication and the anonymous gate below generate OCI references.
+
+### Icons and download ranking
+
+Every official source manifest declares `icon`, a square PNG (at least 256 × 256) or SVG under its own `assets/` directory. The package includes the image and `assets/LICENSE`; [icon-sources.json](../icon-sources.json) records its exact source URL, SHA256, copyright/license notice and trademark owner. This is brand identification, not a claim that a trademark is licensed under the repository's code license. Never substitute an invented service logo. Source validation checks the file, dimensions, safety and attribution inventory.
+
+`icon` is source-only metadata, like `tags` and `replaces`: older hubs reject unknown runtime manifest fields. The signed catalog entry retains its source `icon` path for generation provenance and adds `icon_url`, an absolute HTTPS raw URL containing the full trusted source commit SHA. It never uses `main` or a mutable release tag. Anonymous archive verification checks that the packaged icon is byte-identical to that source image. Clients display `icon_url`, not `manifest.icon`; old clients can ignore the new entry fields.
+
+On every changed publication, [scripts/downloads.py](../scripts/downloads.py) reads the **exact cumulative Total downloads** counter on each official package's public GitHub detail page. GitHub's documented Packages REST API does not expose this statistic; release asset downloads and rounded organization-list numbers are not substitutes. Requests are anonymous, bounded, retried for transient transport/rate-limit errors, and limited to four concurrent requests. Missing pages/counters, rounded or ambiguous counters and incomplete snapshots fail publication rather than recording zero. No third-party analytics service or secret is required.
+
+The signed payload adds `downloads_updated_at` (RFC 3339 UTC), every entry adds integer `downloads`, and entries sort by downloads descending with ID ascending as the deterministic tie-breaker. Ranking does not alter source inventory order: continuity validation compares the complete source inventory in ID order. All these metadata fields are inside the signed payload. Real zero counts are allowed; fetch failures are not zero counts. These are registry download counters, including publication/verification traffic, not unique users or installations.
+
+For a metadata-only refresh, run a versions `phase=packages` dispatch to obtain the current same-SHA plan, then a `phase=catalog` dispatch with that `package_run_id` and `refresh_metadata=true`. This reuses immutable packages, anonymously verifies them, fetches a fresh complete snapshot and produces the normal signed artifact for its own reviewed catalog PR. Package versions do not change for statistics alone. There is deliberately no daily workflow that silently pushes signed catalogs past the existing dedicated-issue, local-verification and reviewed-PR gates.
 
 ### Signed continuation and PR validation
 

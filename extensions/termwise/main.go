@@ -21,11 +21,14 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/nwverse/persona-extensions/pluginkit"
 	"github.com/nwverse/persona/sdk/go/ext"
 )
 
 //go:embed persona-extension.json
-var manifest []byte
+var authorManifest []byte
+
+var manifest = pluginkit.PackagedManifest(authorManifest)
 
 var about = func() (m struct{ ID, Version string }) {
 	_ = json.Unmarshal(manifest, &m)

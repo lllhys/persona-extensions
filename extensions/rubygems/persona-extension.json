@@ -1,0 +1,58 @@
+{
+  "manifest_version": 1,
+  "id": "rubygems",
+  "name": "RubyGems",
+  "version": "0.1.1",
+  "icon": "assets/icon.png",
+  "description": "Search Ruby gems on the official RubyGems JSON API. Compare current versions, licenses, runtime dependencies, release dates, download activity, documentation and repository links. Get an exact-version gem install command without executing it.",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/rubygems/README.md",
+  "tags": [
+    "Development",
+    "Ruby",
+    "RubyGems",
+    "Dependencies"
+  ],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "mode": "deno",
+    "source": {
+      "entry": "src/index.ts",
+      "bundle": "build/rubygems.mjs",
+      "sha256": "1d11ac0d58fcf8f947bd7e03d20b66ce1aa27926cbd16cf8bb3cb6c3a27d4f9b"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "rubygems",
+        "name": "RubyGems",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "rubygems.org"
+        ],
+        "agent_tools": [
+          "rubygems_*"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "rubygems",
+        "title": "RubyGems",
+        "placement": "nav_page",
+        "icon": "code"
+      }
+    ]
+  },
+  "permissions": {
+    "network": [
+      "rubygems.org"
+    ]
+  }
+}

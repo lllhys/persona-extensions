@@ -133,12 +133,16 @@ func collectionPaths(all []collection) []collection {
 	return out
 }
 
-// search reads at most pagesToRead pages (50 is the API's documented per-page maximum).
+// searchPagesMost is the most pages one search reads.
+const searchPagesMost = 4
+
+// search reads at most pagesToRead pages, and never more than searchPagesMost (50 is the API's documented per-page
+// maximum).
 func (c *apiClient) search(ctx context.Context, collectionID int64, query, sort string, pageNumber, pagesToRead int) (page, error) {
 	if pageNumber < 0 {
 		pageNumber = 0
 	}
-	pagesToRead = max(1, min(pagesToRead, 4))
+	pagesToRead = max(1, min(pagesToRead, searchPagesMost))
 	var combined page
 	for n := range pagesToRead {
 		q := url.Values{"page": {strconv.Itoa(pageNumber + n)}, "perpage": {"50"}}

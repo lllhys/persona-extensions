@@ -172,7 +172,7 @@ func TestConnector(t *testing.T) {
 			t.Fatalf("tool %v", tool)
 		}
 	}
-	if !slices.Equal(names, []string{"weather_now", "weather_forecast", "weather_air"}) {
+	if !slices.Equal(names, []string{"weather_now", "weather_forecast", "weather_air", "weather_pollen"}) {
 		t.Fatalf("tools %v", names)
 	}
 	res, err := call("tools.call", `{"contribution": "weather", "name": "weather_now", "args": {}}`)

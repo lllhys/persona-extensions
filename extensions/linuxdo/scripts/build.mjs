@@ -23,11 +23,17 @@ await writeFile(new URL("../build/linuxdo.mjs", import.meta.url), bytes);
 await writeFile(new URL("../build/source.json", import.meta.url), JSON.stringify(source, null, 2) + "\n");
 // Explicit local profile only: no version, release manifest, index or signature changes.
 const manifest = JSON.parse(await readFile(new URL("../persona-extension.json", import.meta.url), "utf8"));
+const sourceIcon = manifest.icon;
+delete manifest.tags;
+delete manifest.replaces;
+delete manifest.icon;
 manifest.runtime = { mode: "deno", source };
 const pkg = new URL("../build/package/", import.meta.url);
 await rm(pkg, { recursive: true, force: true });
 const extension = new URL("extensions/linuxdo/", pkg);
 await mkdir(new URL("build/", extension), { recursive: true });
+if (sourceIcon) await cp(new URL("../assets/", import.meta.url), new URL("assets/", pkg), { recursive: true });
+if (sourceIcon) await cp(new URL("../assets/", import.meta.url), new URL("assets/", extension), { recursive: true });
 await writeFile(new URL("persona-extension.json", pkg), JSON.stringify(manifest, null, 2) + "\n");
 await writeFile(new URL(source.bundle, pkg), bytes);
 // Preserve the authoring layout and its canonical relative SDK dependency. The

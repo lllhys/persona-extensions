@@ -125,6 +125,9 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState, refresh 
 	}
 
 	v.Sections = append(v.Sections, a.airSection(ctx, c, freshness(refresh)))
+	v.Sections = append(v.Sections, a.airOutlookSection(ctx, c, freshness(refresh)))
+	v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{
+		text("天气与空气质量：Open-Meteo；CAMS ENSEMBLE 数据提供方。花粉仅在欧洲花粉季提供，空白表示无数据，不代表浓度为零；信息仅供参考，不作医疗或用药建议。", wire.TextStyleCaption)}})
 
 	tail := wire.Section{}
 	if !rd.at.IsZero() {
@@ -213,6 +216,45 @@ func (a *app) airSection(ctx context.Context, c City, fresh time.Duration) wire.
 			text("这个城市没有空气质量数据", wire.TextStyleSecondary)}}
 	}
 	return wire.Section{Title: "空气质量", Items: []wire.Component{{Type: wire.ComponentStatGrid, Stats: stats}}}
+}
+
+// airOutlookSection keeps the optional hourly outlook separate from the existing current-air-quality card.
+func (a *app) airOutlookSection(ctx context.Context, c City, fresh time.Duration) wire.Section {
+	q, _, err := a.readAirOutlook(ctx, c, fresh)
+	if err != nil {
+		return wire.Section{Title: "花粉与空气质量趋势", Items: []wire.Component{
+			text(clip(oneLine(err.Error()), 1900), wire.TextStyleSecondary)}}
+	}
+	hours := q.outlook()
+	sec := wire.Section{Title: "花粉与空气质量趋势"}
+	var pollenStats []wire.Stat
+	if len(hours) > 0 {
+		for _, item := range hours[0].Pollen {
+			pollenStats = append(pollenStats, wire.Stat{Label: pollenLabel(item.Species), Value: trimZero(item.Value) + " grains/m³"})
+		}
+	}
+	if len(pollenStats) > 0 {
+		sec.Items = append(sec.Items, wire.Component{Type: wire.ComponentStatGrid, Stats: pollenStats})
+	} else {
+		sec.Items = append(sec.Items, text("花粉仅在欧洲花粉季提供；当前没有花粉数据。无数据不等于浓度为零。", wire.TextStyleSecondary))
+	}
+	for _, point := range hours[:min(6, len(hours))] {
+		var parts []string
+		if point.AQI != nil {
+			parts = append(parts, fmt.Sprintf("AQI %.0f（%s）", *point.AQI, aqiLevel(*point.AQI)))
+		}
+		if point.PM25 != nil {
+			parts = append(parts, "PM2.5 "+trimZero(*point.PM25)+" µg/m³")
+		}
+		if point.PM10 != nil {
+			parts = append(parts, "PM10 "+trimZero(*point.PM10)+" µg/m³")
+		}
+		if len(parts) == 0 {
+			parts = append(parts, "暂无空气质量数据")
+		}
+		sec.Items = append(sec.Items, wire.Component{Type: wire.ComponentRow, Title: point.At.Format("01-02 15:00"), Subtitle: strings.Join(parts, " · ")})
+	}
+	return sec
 }
 
 // badCityNames lists the unusable cities in words.

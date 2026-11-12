@@ -29,6 +29,8 @@ JUNK = [
     'skills/weekly-review/__pycache__/mod.pyc',
     'assistant/.DS_Store',
     'assistant/._answer-style.md',
+    'assets/.DS_Store',
+    'assets/._icon.png',
 ]
 # Real files that must still ship despite the exclusions.
 KEEP = [
@@ -55,7 +57,7 @@ class PackageJunkTests(unittest.TestCase):
         (self.tmp / 'scripts').mkdir()
         (self.tmp / 'extensions').mkdir()
         # package.sh invokes manifest.py, which shares version validation with catalog.py.
-        for name in ('package.sh', 'manifest.py', 'catalog.py'):
+        for name in ('package.sh', 'manifest.py', 'catalog.py', 'icons.py'):
             shutil.copy2(REPO / 'scripts' / name, self.tmp / 'scripts' / name)
         shutil.copytree(REPO / 'extensions' / EXT_ID, self.tmp / 'extensions' / EXT_ID)
         ext = self.tmp / 'extensions' / EXT_ID
@@ -93,18 +95,18 @@ class LooksPackageTests(unittest.TestCase):
         tmp = pathlib.Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp)
         (tmp / 'scripts').mkdir()
-        for name in ('package.sh', 'manifest.py', 'catalog.py'):
+        for name in ('package.sh', 'manifest.py', 'catalog.py', 'icons.py'):
             shutil.copy2(REPO / 'scripts' / name, tmp / 'scripts' / name)
         shutil.copytree(REPO / 'extensions' / 'custom-looks', tmp / 'extensions' / 'custom-looks')
         r = subprocess.run(['bash', 'scripts/package.sh', 'custom-looks'], cwd=tmp, capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
         m = json.loads((tmp / 'extensions' / 'custom-looks' / manifest.NEW).read_text())
         wanted = {p for _, p, _ in manifest.referenced(m)}
-        self.assertEqual(len(wanted), 45)  # five looks, four avatar sizes and five dot states each
+        self.assertEqual(len(wanted - {m.get('icon')}), 45)  # five looks, four avatar sizes and five dot states each
         with tarfile.open(tmp / 'dist' / ('custom-looks-%s.tar.gz' % m['version']), 'r:gz') as t:
             files = {n.name.split('/', 1)[1] for n in t.getmembers() if n.isfile()}
         self.assertLessEqual(wanted, files)
-        self.assertFalse([f for f in files if not f.startswith('looks/') and f not in (manifest.NEW, manifest.OLD)])
+        self.assertFalse([f for f in files if not f.startswith(('looks/', 'assets/')) and f not in (manifest.NEW, manifest.OLD)])
 
 
 if __name__ == '__main__':

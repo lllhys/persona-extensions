@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -25,7 +26,7 @@ const sampleAtom = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom">
   <title>ArXiv Query</title>
   <entry>
-    <id>https://arxiv.org/abs/2601.01234v1</id>
+    <id>http://arxiv.org/abs/2601.01234v1</id>
     <updated>2026-11-10T10:00:00Z</updated>
     <published>2026-11-10T09:00:00Z</published>
     <title>Preserving Reading Context in Personal Knowledge Tools</title>
@@ -35,6 +36,16 @@ const sampleAtom = `<?xml version="1.0" encoding="UTF-8"?>
     <category term="cs.HC" />
     <link href="https://arxiv.org/abs/2601.01234v1" rel="alternate" type="text/html" />
     <link href="https://arxiv.org/pdf/2601.01234v1" rel="related" type="application/pdf" title="pdf" />
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/hep-th/9901001v3</id>
+    <updated>1999-01-02T10:00:00Z</updated>
+    <published>1999-01-01T09:00:00Z</published>
+    <title>An Old-Style Identifier</title>
+    <summary>A synthetic paper from before April 2007, when arXiv IDs named their archive.</summary>
+    <author><name>Example Physicist</name></author>
+    <category term="hep-th" />
+    <link href="https://arxiv.org/abs/hep-th/9901001v3" rel="alternate" type="text/html" />
   </entry>
 </feed>`
 
@@ -50,6 +61,17 @@ func newFakeArxiv(t *testing.T) *fakeArxiv {
 		}
 		w.Header().Set("Content-Type", "application/atom+xml")
 		if r.URL.Query().Get("start") != "0" && r.URL.Query().Get("id_list") == "" {
+			fmt.Fprint(w, `<feed xmlns="http://www.w3.org/2005/Atom"></feed>`)
+			return
+		}
+		if id := r.URL.Query().Get("id_list"); id != "" {
+			// id_list answers only the paper it names, as arXiv does.
+			for _, entry := range strings.SplitAfter(sampleAtom, "</entry>") {
+				if strings.Contains(entry, "<id>http://arxiv.org/abs/"+id+"</id>") {
+					fmt.Fprint(w, sampleAtom[:strings.Index(sampleAtom, "<entry>")]+entry[strings.Index(entry, "<entry>"):]+"\n</feed>")
+					return
+				}
+			}
 			fmt.Fprint(w, `<feed xmlns="http://www.w3.org/2005/Atom"></feed>`)
 			return
 		}
@@ -122,13 +144,53 @@ func TestLocalizedViewsAndPaperID(t *testing.T) {
 			}
 		}
 	}
-	item := paper{ID: "https://arxiv.org/abs/2601.01234v1"}
-	if got := paperID(item); got != "2601.01234v1" {
-		t.Fatal(got)
+	// The API writes an entry's <id> as http://arxiv.org/abs/<id>; it names the paper and is never opened.
+	for id, want := range map[string]string{
+		"http://arxiv.org/abs/2601.01234v1":      "2601.01234v1",
+		"https://arxiv.org/abs/2601.01234":       "2601.01234",
+		"http://arxiv.org/abs/hep-th/9901001v3":  "hep-th/9901001v3",
+		"http://arxiv.org/abs/math.GT/0309136":   "math.GT/0309136",
+		"http://arxiv.org/abs/../etc/passwd":     "",
+		"http://arxiv.org/abs/2601.01234v1?x=1":  "",
+		"http://example.com/abs/2601.01234v1":    "",
+		"http://arxiv.org.example/abs/2601.0123": "",
+	} {
+		item := paper{ID: id}
+		if got := paperID(item); got != want {
+			t.Errorf("paperID(%q) = %q, want %q", id, got, want)
+		}
+		if link := paperURL(item); want != "" && link != "https://arxiv.org/abs/"+want || want == "" && link != "" {
+			t.Errorf("paperURL(%q) = %q", id, link)
+		}
 	}
-	item.ID = "http://arxiv.org/abs/2601.01234v1"
-	if got := paperID(item); got != "" {
-		t.Fatal("accepted insecure paper ID")
+}
+
+// Every entry the API answers (an http:// <id>, an old-style archive/number ID) is listed with its detail and an https
+// link, and arxiv_paper reads an old-style ID.
+func TestEntriesAsTheAPIWritesThem(t *testing.T) {
+	f := newFakeArxiv(t)
+	a := &app{client: newClient(f.srv.URL)}
+	v, err := a.render(t.Context(), &ext.UIRequest{UIParams: wire.UIParams{Locale: "en", UIVersion: 6, State: ext.EncodeState(pageState{Query: "context"})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, c := range v.Sections[0].Items {
+		if c.Type == wire.ComponentRow && c.Action != nil {
+			ids = append(ids, c.Action.Values["id"])
+		}
+	}
+	if !slices.Equal(ids, []string{"2601.01234v1", "hep-th/9901001v3"}) {
+		t.Fatalf("listed %q", ids)
+	}
+	text, err := a.callTool(t.Context(), "arxiv_paper", json.RawMessage(`{"paper_id":"hep-th/9901001v3"}`))
+	if err != nil || !strings.Contains(text, "An Old-Style Identifier") || !strings.Contains(text, "https://arxiv.org/abs/hep-th/9901001v3") {
+		t.Fatalf("%v %s", err, text)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if last := f.paths[len(f.paths)-1]; !strings.Contains(last, "id_list=hep-th%2F9901001v3") {
+		t.Fatalf("asked %s", last)
 	}
 }
 

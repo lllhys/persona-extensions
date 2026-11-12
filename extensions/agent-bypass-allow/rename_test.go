@@ -109,13 +109,13 @@ func TestEmbeddedManifestStripsAuthorMetadata(t *testing.T) {
 	if string(source["replaces"]) != `"claude-bypass-allow"` {
 		t.Fatal("source manifest lost its predecessor declaration")
 	}
-	for _, key := range []string{"tags", "replaces"} {
+	for _, key := range []string{"tags", "replaces", "icon"} {
 		if _, ok := runtime[key]; ok {
 			t.Fatalf("author metadata %s leaked into runtime manifest", key)
 		}
 	}
 	for key, value := range source {
-		if key != "tags" && key != "replaces" && !jsonEqual(runtime[key], value) {
+		if key != "tags" && key != "replaces" && key != "icon" && !jsonEqual(runtime[key], value) {
 			t.Fatalf("runtime field %s changed", key)
 		}
 	}
@@ -129,5 +129,21 @@ func TestEmbeddedManifestStripsAuthorMetadata(t *testing.T) {
 	// the version follows the source manifest's, so a later bump needs no change here
 	if identity.ID != currentExtensionID || identity.Version == "" || identity != sourceIdentity {
 		t.Fatalf("runtime identity: %+v, source %+v", identity, sourceIdentity)
+	}
+}
+
+func TestPackagedManifestStripsSyntheticIcon(t *testing.T) {
+	raw := []byte(`{"id":"synthetic","version":"0.1.0","icon":"assets/icon.svg","tags":["demo"],"replaces":"predecessor","unknown_field":true}`)
+	var runtime map[string]json.RawMessage
+	if err := json.Unmarshal(packagedManifest(raw), &runtime); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"icon", "tags", "replaces"} {
+		if _, ok := runtime[key]; ok {
+			t.Errorf("source metadata %s leaked", key)
+		}
+	}
+	if string(runtime["unknown_field"]) != "true" {
+		t.Fatal("projection silently removed an unknown runtime field")
 	}
 }

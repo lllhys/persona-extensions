@@ -44,6 +44,12 @@ function httpsURL(value: unknown): string | undefined {
   if (url.protocol !== "https:" || url.username || url.password) throw new ReadError("bad_answer");
   return url.href;
 }
+// openAccessURL is a work's open-access link when it is https. Publishers' links are often plain http (cell.com, for one):
+// such a link is left out, as no insecure link is shown, rather than failing the whole search.
+function openAccessURL(value: unknown): string | undefined {
+  if (typeof value === "string" && /^http:\/\//i.test(value)) return undefined;
+  return httpsURL(value);
+}
 export interface Work {
   id: string;
   title: string;
@@ -71,7 +77,7 @@ export function parseWorks(raw: unknown, at: number): SearchResult {
     const location = work.primary_location == null ? {} : object(work.primary_location);
     const source = location.source == null ? "" : clip(oneLine(string(object(location.source).display_name)), 300);
     const license = location.license == null ? "" : clip(oneLine(string(location.license)), 100);
-    const oaURL = httpsURL(access.oa_url);
+    const oaURL = openAccessURL(access.oa_url);
     return { id, title, ...(year === undefined ? {} : { year }), citations: integer(work.cited_by_count ?? 0), openAccess: isOA,
       oaStatus: clip(oneLine(string(access.oa_status, isOA ? "open" : "closed")), 50), doi: httpsURL(work.doi), ...(oaURL ? { oaURL } : {}), source, license };
   });

@@ -69,6 +69,51 @@ type State struct {
 	Machines []*Machine       `json:"machines"`
 	Scans    map[string]*Scan `json:"scans,omitempty"`
 	History  []*CleanRecord   `json:"history,omitempty"`
+	// Cold is the local lightweight index of each machine's cloud-archived sessions, by machine ID.
+	// It is kept in a file per machine (disklessly_cold/), loaded only when used: use cold,
+	// setCold and dropCold rather than the map.
+	Cold map[string]*ColdCatalog `json:"-"`
+
+	coldLoad   func(id string) *ColdCatalog // nil: Cold holds everything
+	coldLoaded map[string]bool
+	coldGone   map[string]bool
+}
+
+// cold returns machine id's cold index, loading it on first use; nil when there is none.
+func (st *State) cold(id string) *ColdCatalog {
+	if c, ok := st.Cold[id]; ok || st.coldLoad == nil || st.coldLoaded[id] || st.coldGone[id] {
+		return c
+	}
+	if st.coldLoaded == nil {
+		st.coldLoaded = map[string]bool{}
+	}
+	st.coldLoaded[id] = true
+	c := st.coldLoad(id)
+	if c != nil {
+		if st.Cold == nil {
+			st.Cold = map[string]*ColdCatalog{}
+		}
+		st.Cold[id] = c
+	}
+	return c
+}
+
+// setCold stores machine id's cold index.
+func (st *State) setCold(id string, c *ColdCatalog) {
+	if st.Cold == nil {
+		st.Cold = map[string]*ColdCatalog{}
+	}
+	st.Cold[id] = c
+	delete(st.coldGone, id)
+}
+
+// dropCold removes machine id's cold index.
+func (st *State) dropCold(id string) {
+	delete(st.Cold, id)
+	if st.coldGone == nil {
+		st.coldGone = map[string]bool{}
+	}
+	st.coldGone[id] = true
 }
 
 // Machine represents a local or SSH remote machine managed by the extension.
@@ -113,13 +158,18 @@ type ScanItem struct {
 	InUse      bool   `json:"in_use,omitempty"`
 	CleanCmd   string `json:"clean_cmd,omitempty"`
 	SessionCnt int    `json:"session_cnt,omitempty"`
+	// RealPath is Path with symlinks resolved on the target machine (cold-session items), the form
+	// the disklessly CLI reports transcript paths in.
+	RealPath string `json:"real_path,omitempty"`
 }
 
 // AgentToolSessions holds hot/cold session counts and bytes for one coding agent tool.
 type AgentToolSessions struct {
-	Tool          string `json:"tool"`  // "claude" or "codex"
-	Label         string `json:"label"` // "Claude Code" or "Codex"
-	Directory     string `json:"directory"`
+	Tool      string `json:"tool"`  // "claude" or "codex"
+	Label     string `json:"label"` // "Claude Code" or "Codex"
+	Directory string `json:"directory"`
+	// RealDirectory is Directory with symlinks resolved (`pwd -P`) on the target machine.
+	RealDirectory string `json:"real_directory,omitempty"`
 	HotCount      int    `json:"hot_count"`
 	HotBytes      uint64 `json:"hot_bytes"`
 	ColdCount     int    `json:"cold_count"`
@@ -138,6 +188,13 @@ type SessionSummary struct {
 	ArchivedBytes uint64              `json:"archived_bytes"`
 	ArchiveDir    string              `json:"archive_dir,omitempty"`
 	Tools         []AgentToolSessions `json:"tools,omitempty"`
+	// CLIReady is true when the target machine has a disklessly CLI that reported its cold
+	// session plan; cold sessions are only archivable then.
+	CLIReady bool `json:"cli_ready"`
+	// Cloud is the backup backend and index state from `disklessly sessions status`.
+	Cloud *CloudStatus `json:"cloud,omitempty"`
+	// Note explains why cold sessions cannot be archived right now, if so.
+	Note string `json:"note,omitempty"`
 }
 
 // Scan is the cached scan report and dry-run plan for a machine.
@@ -169,6 +226,7 @@ type CleanItemResult struct {
 	FreedBytes   uint64   `json:"freed_bytes"`
 	SkippedInUse []string `json:"skipped_in_use,omitempty"`
 	Note         string   `json:"note,omitempty"`
+	Error        string   `json:"error,omitempty"`
 }
 
 // CleanRecord is an entry in the cleanup history ledger.
@@ -184,7 +242,12 @@ type CleanRecord struct {
 	FreedBytes  uint64            `json:"freed_bytes"`
 	Items       []CleanItemResult `json:"items"`
 	Summary     string            `json:"summary"`
-	CreatedAt   time.Time         `json:"created_at"`
+	// Referenced counts the sessions a cold-session run kept because they are still referenced
+	// (running agents, open transcripts, herdr / Persona panes, exclusion lists).
+	Referenced int `json:"referenced,omitempty"`
+	// RefsFound counts the session ids and transcript paths the reference probe found on the machine.
+	RefsFound int       `json:"refs_found,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // MachineStatus is the computed view of a machine with its latest scan and cleanup stats.
@@ -482,9 +545,11 @@ func (st *State) deleteMachine(idOrHost string) error {
 		// Discovered machines are disabled so automatic discovery does not immediately re-enable them.
 		m.Enabled = false
 		delete(st.Scans, m.ID)
+		st.dropCold(m.ID)
 		return nil
 	}
 	delete(st.Scans, m.ID)
+	st.dropCold(m.ID)
 	st.Machines = slices.DeleteFunc(st.Machines, func(x *Machine) bool { return x.ID == m.ID })
 	return nil
 }

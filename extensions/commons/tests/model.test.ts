@@ -23,6 +23,21 @@ test("image search validates query and keeps only explicit license metadata", ()
   assert.equal(parseImages(noLicense, 0).images[0].license, "See file page");
 });
 
+test("a file's http or unreadable license link is upgraded or left out, not a failed search", () => {
+  const page = response.query.pages[6926930], info = page.imageinfo[0];
+  const withLicense = (value: string, id: number) => ({ ...page, pageid: id, title: `File:Example ${id}.jpg`,
+    imageinfo: [{ ...info, descriptionurl: `https://commons.wikimedia.org/wiki/File:Example_${id}.jpg`, extmetadata: { ...info.extmetadata, LicenseShortName: { value: "GFDL" }, LicenseUrl: { value } } }] });
+  const result = parseImages({ query: { pages: {
+    1: withLicense("http://www.gnu.org/copyleft/fdl.html", 1), // as File:Domestic cat felis catus.jpg links it
+    2: withLicense("http://creativecommons.org/licenses/by-sa/3.0/", 2),
+    3: withLicense("http://example.org/license", 3),
+    4: withLicense("not a link", 4),
+    5: withLicense("https://user:secret@creativecommons.org/licenses/by/4.0/", 5),
+  } } }, 0);
+  assert.deepEqual(result.images.map(image => image.licenseURL), ["https://www.gnu.org/copyleft/fdl.html", "https://creativecommons.org/licenses/by-sa/3.0/", undefined, undefined, undefined]);
+  assert.deepEqual(result.images.map(image => image.license), ["GFDL", "GFDL", "GFDL", "GFDL", "GFDL"]);
+});
+
 test("HTML metadata stays plain data and URLs cannot choose another host", () => {
   assert.equal(plain(" <b>Hello</b>&nbsp; world &unknown; &#x1F600; "), "Hello world &unknown; 😀");
   assert.equal(plain("unterminated <tag"), "unterminated");

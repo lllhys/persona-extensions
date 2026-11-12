@@ -1065,9 +1065,13 @@ func TestPageDevices(t *testing.T) {
 
 	v, _ := a.render(context.Background(), req(nil, "", nil))
 	got := check(t, v)
-	contains(t, got, "row 客厅|客厅灯、吸顶灯|27.5°||| [4 开着 positive]")
-	if strings.Contains(got, "辅光") || strings.Contains(got, "通电默认") {
-		t.Errorf("a device's settings counted as on:\n%s", got)
+	contains(t, got, "stat 开着=4|2 灯 · 1 开关 · 1 空调|positive", "row 吸顶灯|客厅|||| [开 positive] →do:light.ceiling|turn_off",
+		"row 插座|客厅|||| [开 positive] →do:switch.living_plug|turn_off", "row 客厅|2 灯、1 开关、1 空调开着|27.5°||| [1 离线 caution]",
+		"row 卧室|2 个设备|湿度 60%|")
+	for _, no := range []string{"辅光", "通电默认", "藏起来的开关", "地图", "勿扰"} {
+		if strings.Contains(got, no) {
+			t.Errorf("%s on the overview:\n%s", no, got)
+		}
 	}
 
 	res, st := act(t, a, pageState{}, "area:living", nil)

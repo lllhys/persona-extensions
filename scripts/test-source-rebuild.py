@@ -142,6 +142,29 @@ class SourceRebuildTests(unittest.TestCase):
                         rebuild.rebuild(self.root, "example", self.config, self.tracked, self.root)
                     build.assert_not_called()
 
+    def test_source_assets_survive_both_archive_roots(self):
+        source = {"id": "example", "version": "0.1.0", "icon": "assets/icon.svg"}
+        (self.extension / "persona-extension.json").write_text(json.dumps(source))
+        (self.extension / "assets").mkdir()
+        unpacked = self.root / "unpacked"
+        authoring = unpacked / self.config["extracted_extension"]
+        for name, data in (("icon.svg", b"synthetic vector"), ("LICENSE", b"synthetic license"), ("icon-source.svg", b"synthetic original")):
+            (self.extension / "assets" / name).write_bytes(data)
+            for package_root in (unpacked, authoring):
+                (package_root / "assets").mkdir(parents=True, exist_ok=True)
+                (package_root / "assets" / name).write_bytes(data)
+        rebuild.check_source_assets(self.root, "example", unpacked, self.config)
+        for package_root in (unpacked, authoring):
+            icon = package_root / "assets/icon.svg"
+            icon.write_bytes(b"changed bytes")
+            with self.assertRaisesRegex(ValueError, "assets differ"):
+                rebuild.check_source_assets(self.root, "example", unpacked, self.config)
+            icon.write_bytes(b"synthetic vector")
+            icon.unlink()
+            with self.assertRaisesRegex(ValueError, "missing"):
+                rebuild.check_source_assets(self.root, "example", unpacked, self.config)
+            icon.write_bytes(b"synthetic vector")
+
     def test_required_gate_includes_all_source_matrix_results(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         self.assertIn("needs: [check, source-plan, source-rebuild]", workflow)

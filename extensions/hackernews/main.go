@@ -13,11 +13,14 @@ import (
 	_ "embed"
 	"encoding/json"
 
+	"github.com/nwverse/persona-extensions/pluginkit"
 	"github.com/nwverse/persona/sdk/go/ext"
 )
 
 //go:embed persona-extension.json
-var manifest []byte
+var authorManifest []byte
+
+var manifest = pluginkit.PackagedManifest(authorManifest)
 
 // about is the manifest's id and version.
 var about = func() (m struct{ ID, Version string }) {

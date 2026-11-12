@@ -775,7 +775,8 @@ var persona_extension_default = {
   manifest_version: 1,
   id: "v2ex",
   name: "V2EX",
-  version: "0.1.0",
+  version: "0.1.1",
+  icon: "assets/icon.png",
   description: "V2EX \u793E\u533A\u7684\u5E16\u5B50\uFF1A\u6269\u5C55\u91CC\u7684\u4E00\u9875\u770B\u70ED\u95E8\u3001\u6700\u65B0\u548C\u4F60\u5173\u6CE8\u7684\u8282\u70B9\uFF0C\u70B9\u5F00\u5728 App \u91CC\u8BFB\u6B63\u6587\u548C\u6700\u65B0\u56DE\u590D\uFF08hub \u53BB\u8BFB\uFF0C\u624B\u673A\u4E0D\u7528\u4EE3\u7406\uFF09\uFF1B\u52A9\u624B\u80FD\u7528\u5DE5\u5177\u67E5\u5217\u8868\u3001\u8BFB\u5E16\u5B50\u3002\u53EA\u8BFB\u516C\u5F00\u5185\u5BB9\uFF0C\u4E0D\u7528\u8D26\u53F7\u3002",
   publisher: "nwverse",
   tags: ["\u793E\u533A", "\u70ED\u95E8", "\u9605\u8BFB"],
@@ -2157,6 +2158,8 @@ function snapshotPage(service) {
 
 // src/index.ts
 var sourceManifest = { ...persona_extension_default, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/v2ex.mjs" } } };
+delete sourceManifest.icon;
+delete sourceManifest.replaces;
 function createProgram(fetch = (input, init) => globalThis.fetch(input, init), options = {}) {
   let service;
   const current = () => {

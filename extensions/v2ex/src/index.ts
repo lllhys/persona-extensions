@@ -15,6 +15,9 @@ export type { PageState, PageProps, Loaded } from "./page.tsx";
 // The package manifest stamps the final bundle hash; a bundle cannot embed its own
 // digest. Protocol metadata describes this source profile, never the Go executable.
 export const sourceManifest = { ...released, runtime: { mode: "deno", source: { entry: "src/index.ts", bundle: "build/v2ex.mjs" } } };
+// Source-owned catalog metadata is not part of the strict runtime manifest.
+delete (sourceManifest as { icon?: string }).icon;
+delete (sourceManifest as { replaces?: string }).replaces;
 /** This default is the immutable, grant-checked fetch installed by the trusted Deno host.
  * No transport, process launcher, filesystem access or permission escape is implemented here.
  * An alternative adapter and timing options are for synthetic fixtures only. */

@@ -2,8 +2,9 @@
   "manifest_version": 1,
   "id": "onepassword",
   "name": "1Password",
-  "version": "0.1.0",
-  "description": "用 1Password 服务账号连接你授权给它的保险库：助手能列出保险库，按标题、标签或网站查找条目，看条目有哪些字段和每个字段的 op:// 引用。只读，密码等字段的值从不离开扩展、不交给助手；服务账号令牌加密保存在 hub。",
+  "version": "0.3.1",
+  "icon": "assets/icon.png",
+  "description": "用 1Password 服务账号，或你某台电脑上已登录的 1Password CLI（op），连接你的保险库：助手能列出保险库，按标题、标签或网站查找条目，看条目有哪些字段和每个字段的 op:// 引用，只读，密码等字段的值从不交给助手。设置里的扩展密钥或模型服务商 Key 可以填 op:// 引用，用到时由它从 1Password 取值，Persona 不在磁盘上留副本。服务账号令牌加密保存在 hub；用电脑上的 op 时不需要令牌。",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/onepassword/README.md",
   "tags": ["1Password", "密码管理", "保险库", "只读"],
@@ -16,18 +17,42 @@
       "darwin-amd64": "bin/onepassword-darwin-amd64"
     }
   },
+  "node": {
+    "command": {
+      "linux-amd64": "bin/onepassword-linux-amd64",
+      "linux-arm64": "bin/onepassword-linux-arm64",
+      "darwin-arm64": "bin/onepassword-darwin-arm64",
+      "darwin-amd64": "bin/onepassword-darwin-amd64"
+    },
+    "args": ["node"],
+    "machines": "machines",
+    "permissions": {"network": ["*.1password.com", "*.1password.ca", "*.1password.eu"], "files": true}
+  },
   "contributes": {
     "connectors": [{
       "id": "onepassword", "name": "1Password", "capabilities": ["status", "tools"]
     }],
-    "ui": [{"id": "connection", "title": "连接", "placement": "extension_page"}]
+    "ui": [{"id": "connection", "title": "连接", "placement": "extension_page"}],
+    "secret_providers": [{"id": "vault", "name": "1Password", "schemes": ["op"]}]
   },
   "settings_check": true,
   "secrets": [{
     "name": "service_account_token",
     "title": "服务账号令牌",
-    "description": "在 1Password.com 侧边栏的「开发者」里创建服务账号，只授权 Persona 要查的保险库，给「读取」权限即可。令牌以 ops_ 开头；保存前会先连一次 1Password 检查。",
-    "required": true
+    "description": "在 1Password.com 侧边栏的「开发者」里创建服务账号，只授权 Persona 要查的保险库，给「读取」权限即可。令牌以 ops_ 开头；保存前会先连一次 1Password 检查。下面选了电脑、用那台电脑上的 op 时可以不填。"
   }],
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "machines": {
+        "type": "array",
+        "title": "用哪台电脑上的 op",
+        "description": "不想用服务账号时，选一台装了 1Password App 和 1Password CLI（op）、并在 App 的「设置」›「开发者」里打开了「与 1Password CLI 集成」的电脑。选了以后不再用上面的令牌；第一次用时，要在那台电脑的 1Password App 里批准 op。",
+        "items": {"type": "string", "format": "machine", "x-os": ["darwin", "linux"]},
+        "maxItems": 1,
+        "x-confirm": "Persona 会在这台电脑上运行 1Password 扩展的程序，用这里已登录的 op 读保险库；条目的值留在这台电脑上，只有设置里填的或你批准交出的 op:// 引用才会取值。1Password App 会请你在这台电脑上批准 op。"
+      }
+    }
+  },
   "permissions": {"network": ["*.1password.com", "*.1password.ca", "*.1password.eu"]}
 }

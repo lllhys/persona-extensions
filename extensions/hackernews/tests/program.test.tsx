@@ -10,7 +10,7 @@ import { Fixture } from "./fixtures.ts";
 async function setup() {
   const bundle = await import(pathToFileURL(resolve("build/hackernews.mjs")).href);
   assert.equal(bundle.default.id, "hackernews");
-  assert.equal(bundle.default.version, "0.1.2");
+  assert.equal(bundle.default.version, JSON.parse(await readFile("persona-extension.json", "utf8")).version);
   assert.equal(bundle.default.fetch, undefined);
   const fixture = new Fixture();
   const frames: any[] = [];

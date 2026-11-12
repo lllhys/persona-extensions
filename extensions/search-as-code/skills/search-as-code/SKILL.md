@@ -1,6 +1,6 @@
 ---
 name: search-as-code
-description: 用户的代码化搜索（Search as Code）与本机 Coding Agent 会话深度检索（经本机 search-as-code MCP 服务器）：把复杂的多步检索、跨会话溯源、报错排查或模块决策回溯编译为可执行的搜索流水线代码（|> 算子链），跨 Claude Code / Codex 会话历史（支持排除工具调用噪音的纯对话检索）与本地代码库执行过滤、正则匹配、跨文件关联、聚合与排序。只读检索（mcp__search-as-code__sac_execute / sac_session_search / sac_recipes_list）直接运行；保存或删除搜索配方（sac_recipe_upsert / sac_recipe_delete）按对话权限先请用户确认。
+description: 用户的代码化搜索（Search as Code）与本机 Coding Agent 会话深度检索（经本机 search-as-code MCP 服务器）：把复杂的多步检索、跨会话溯源、报错排查或模块决策回溯编译为可执行的搜索流水线代码（|> 算子链），跨 Claude Code / Codex 会话历史（支持排除工具调用噪音的纯对话检索；含 disklessly 已移到云端、标记为「已上云」的会话）与本地代码库执行过滤、正则匹配、跨文件关联、聚合与排序。只读检索（mcp__search-as-code__sac_execute / sac_session_search / sac_recipes_list）直接运行；保存或删除搜索配方（sac_recipe_upsert / sac_recipe_delete）与恢复已上云会话（sac_session_restore）按对话权限先请用户确认。
 ---
 
 # 代码化搜索（mcp__search-as-code__* 工具）
@@ -36,7 +36,8 @@ description: 用户的代码化搜索（Search as Code）与本机 Coding Agent 
    - 或传入自然语言与内联算子：`sac_execute {query: "quota cooldown project:persona without:tools", scope: "conversation"}`
    - 或一键运行配方并附加关键词：`sac_execute {recipe: "error-triage", query: "timeout"}`
 3. **快速 CASS 会话检索**：调用 `sac_session_search {query, scope, project?, harness?, model?, since?, exclude_tools?}`。
-4. **沉淀常用搜索配方**：当某段 Search-as-Code 流水线值得长期复用时，先向用户展示流水线代码与名称，用户同意后调用 `sac_recipe_upsert` 保存；删除自定义配方前先和用户确认，再调用 `sac_recipe_delete`。
+4. **已上云会话**：disklessly 移到云端的会话仍可检索（本机保存了只含用户与助手消息的纯文本索引），命中结果的 `location` 为 `已上云`，并带 `entry_id` 与 `original_path`；本机原文件的命中为 `本地`。`location` 为 `未确认上云` 的命中来自上传未完成的索引，云端未必有副本，不要主动恢复。用户要继续某个已上云会话时，先告诉用户会恢复到哪个原路径，确认后调用 `sac_session_restore {entry_id}`（最长约 5 分钟），成功后把返回的 `resume` 命令（如 `claude --resume <id>`，其他工具可能没有）告诉用户；报「正在恢复中」时说明已有恢复在进行；报「云端不可达」时请用户稍后再试。
+5. **沉淀常用搜索配方**：当某段 Search-as-Code 流水线值得长期复用时，先向用户展示流水线代码与名称，用户同意后调用 `sac_recipe_upsert` 保存；删除自定义配方前先和用户确认，再调用 `sac_recipe_delete`。
 
 ## 汇报结果时的原则
 

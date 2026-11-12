@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -83,7 +84,7 @@ func (a *app) callTool(ctx context.Context, name string, raw json.RawMessage) (s
 
 func formatPaper(item paper, detail bool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "- %s\n  ID: %s | published: %s | updated: %s | category: %s\n", clipText(strings.Join(strings.Fields(item.Title), " "), 1000), item.ID, item.Published, item.Updated, item.Category.Term)
+	fmt.Fprintf(&b, "- %s\n  ID: %s | published: %s | updated: %s | category: %s\n", clipText(strings.Join(strings.Fields(item.Title), " "), 1000), cmp.Or(paperID(item), item.ID), item.Published, item.Updated, item.Category.Term)
 	var authors []string
 	for _, author := range item.Authors {
 		authors = append(authors, author.Name)

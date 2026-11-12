@@ -4,6 +4,9 @@ import released from "../persona-extension.json";
 // The host validates the final bundle hash from the package manifest before
 // evaluation. A Program cannot embed its own final SHA-256; omit only that field.
 const manifest = { ...released, runtime: { mode: "deno", source: { entry: "extensions/linuxdo/src/index.ts", bundle: "extensions/linuxdo/build/linuxdo.mjs" } } };
+// Source-owned catalog metadata is not part of the strict runtime manifest.
+delete (manifest as { icon?: string }).icon;
+delete (manifest as { replaces?: string }).replaces;
 import { LinuxDo, errorText } from "./service.ts";
 import { InputError } from "./errors.ts";
 import type { SiteOptions } from "./site.ts";

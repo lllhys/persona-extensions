@@ -2,7 +2,8 @@
   "manifest_version": 1,
   "id": "chatgpt-apps",
   "name": "ChatGPT 应用",
-  "version": "0.2.3",
+  "version": "0.2.5",
+  "icon": "assets/icon.png",
   "description": "用 ChatGPT 账号登录后，助手能用你在 ChatGPT 里连好的应用（邮箱、日历、代码托管、券商…）和 ChatGPT 插件市场；会改数据的操作每一次都要你在手机上点批准。",
   "publisher": "nwverse",
   "tags": [

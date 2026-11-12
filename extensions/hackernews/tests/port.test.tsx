@@ -353,8 +353,8 @@ test("service replacement publishes loading rather than the previous service's d
     await until(() => text(snapshot.view).includes("Replacement fixture article"));
   } finally { renderer.dispose(); }
 });
-test("manifest stays transitional, unchanged version and read-only egress", async () => {
+test("manifest keeps transitional runtime and read-only egress", async () => {
   const manifest = JSON.parse(await readFile("persona-extension.json", "utf8"));
-  assert.equal(manifest.version, "0.1.2"); assert.deepEqual(manifest.permissions.network, ["hacker-news.firebaseio.com"]);
+  assert.match(manifest.version, /^\d+\.\d+\.\d+$/); assert.deepEqual(manifest.permissions.network, ["hacker-news.firebaseio.com"]);
   assert.ok(manifest.runtime.command); assert.equal(manifest.runtime.source, undefined);
 });

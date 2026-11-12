@@ -58,11 +58,21 @@ test("assistant tools retain content and reject invalid or unknown calls", async
   await assert.rejects(callTool(service, "unknown"), /unknown method/);
 });
 
-test("language config chooses only registered origins", async () => {
+test("every language reads definitions from en.wiktionary, the reader's senses first, linking the reader's wiki", async () => {
+  // Only English Wiktionary serves /api/rest_v1/page/definition; zh.wiktionary and ja.wiktionary answer 501.
+  const answer = { en: definitions.en, ja: [{ partOfSpeech: "感動詞", language: "日本語", definitions: [{ definition: "こんにちは。" }] }],
+    zh: [{ partOfSpeech: "叹词", language: "汉语", definitions: [{ definition: "你好。" }] }] };
   for (const [locale, language] of [["zh-Hans", "zh"], ["ja", "ja"], ["en", "en"]] as const) {
-    const fixture = new Fixture(), service = new Wiktionary(fixture.fetch, {}, { locale, limits: { gap: 0 }, now: () => fixture.clock });
-    await service.lookup("hello"); assert.equal(fixture.requests[0].url.hostname, `${language}.wiktionary.org`);
+    const fixture = new Fixture();
+    fixture.put("/api/rest_v1/page/definition/hello", answer);
+    const service = new Wiktionary(fixture.fetch, {}, { locale, limits: { gap: 0 }, now: () => fixture.clock });
+    const entry = await service.lookup("hello");
+    assert.equal(fixture.requests[0].url.hostname, "en.wiktionary.org");
+    assert.equal(entry.groups[0].language, { en: "English", ja: "日本語", zh: "汉语" }[language]);
+    assert.equal(entry.url, `https://${language}.wiktionary.org/wiki/hello`);
   }
   const fixture = new Fixture(), service = new Wiktionary(fixture.fetch, { language: "ja" }, { locale: "zh", limits: { gap: 0 }, now: () => fixture.clock });
-  await service.lookup("hello"); assert.equal(fixture.requests[0].url.hostname, "ja.wiktionary.org");
+  const entry = await service.lookup("hello");
+  assert.equal(fixture.requests[0].url.hostname, "en.wiktionary.org");
+  assert.equal(entry.url, "https://ja.wiktionary.org/wiki/hello");
 });

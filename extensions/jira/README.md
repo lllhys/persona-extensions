@@ -25,7 +25,7 @@ token to the configured instance. Redirects are not followed.
 
 - The fixed query is `assignee = currentUser() AND resolution = Unresolved ORDER BY updated
   DESC`, so ordinary search text cannot become an unreviewed JQL operation.
-- See project, workflow status, priority, assignee, issue key and API `startAt` pagination.
+- See project, workflow status, priority, assignee, issue key and pagination with the API's `nextPageToken`.
 - Open an issue for its description and comments. Atlassian document paragraphs/text are
   flattened into untrusted text; no embedded instruction is executed.
 - `jira_projects` resolves accessible project and issue-type IDs. Creating with a type that

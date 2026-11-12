@@ -148,7 +148,7 @@ func TestPersonOnly(t *testing.T) {
 		"gh pr create --title t", "gh pr merge 3 --squash", "gh api repos/o/r/pulls", "gh api repos/o/r/collaborators",
 		"gh issue create -t x -b y", "make build", "mkdir -p a/b", "cp a b", "rsync -a src/ dst/",
 		"python3 -c 'print(1)'", "curl -s https://example.com", "docker ps", "kubectl get pods", "npm run format",
-		"grep -rn armed .", "cat firmware.bin | head", "echo hello >> out.txt", "make 2>&1 | tail", "ls > /dev/null",
+		"grep -rn armed .", "cat firmware.bin | head", "echo hello >> /tmp/out.txt", "make 2>&1 | tail", "ls > /dev/null",
 		"git commit -m 'drop rm wrapper'", "git commit -m 'Fix dd parsing'", "gh pr create --title x --body 'We delete the old cache'",
 		"cd /tmp/rm && ls", "kubectl get rolebinding -A", "aws s3 ls", "terraform plan", "docker compose down",
 		"bash -c 'go test ./...'", "find . -name '*.go'",
@@ -192,6 +192,41 @@ func TestPersonOnly(t *testing.T) {
 		"export GIT_SSH_COMMAND='ssh -i k'; git fetch", "GIT_SSH_COMMAND+=' -v' git fetch",
 		// a heredoc fed to sudo without its shell options is data, and a benign command in another shell still goes
 		"sudo -u me cat <<EOF\nrm x\nEOF", "sudo -g staff -E cat <<EOF\nrm x\nEOF", "csh -c 'ls -la'", "tcsh <<EOF\necho hi\nEOF",
+	}
+	for _, c := range goes {
+		if why := personOnly(c); why != "" {
+			t.Errorf("%q: %s, should go through", c, why)
+		}
+	}
+}
+
+func TestAppendDestinations(t *testing.T) {
+	stays := []string{
+		"echo x >> out.txt",
+		"echo x >> ~/.bashrc",
+		"echo x 2>> ~/.bashrc",
+		"echo x &>> ~/.bashrc",
+		"echo x >> ~/.ssh/authorized_keys",
+		"echo x 2>> ~/.ssh/authorized_keys",
+		"echo x &>> ~/.ssh/authorized_keys",
+		"printf x | tee -a ~/.bashrc",
+		"printf x | tee --append ~/.ssh/authorized_keys",
+		"printf x | tee -ia ~/.bashrc",
+	}
+	for _, c := range stays {
+		if personOnly(c) == "" {
+			t.Errorf("%q should stay with a person", c)
+		}
+		if why := newGuard("", true).personOnly(c); why != "" {
+			t.Errorf("%q: %s, allow_destructive should let it through", c, why)
+		}
+	}
+	goes := []string{
+		"echo x >> /tmp/append.log",
+		"echo x 2>> /tmp/append.log",
+		"echo x &>> /tmp/append.log",
+		"printf x | tee -a /tmp/append.log",
+		"printf x | tee --append /tmp/append.log",
 	}
 	for _, c := range goes {
 		if why := personOnly(c); why != "" {

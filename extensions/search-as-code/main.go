@@ -21,11 +21,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nwverse/persona-extensions/pluginkit"
 	"github.com/nwverse/persona/sdk/go/ext"
 )
 
 //go:embed persona-extension.json
-var manifest []byte
+var authorManifest []byte
+
+var manifest = pluginkit.PackagedManifest(authorManifest)
 
 var about = func() (m struct{ ID, Version string }) {
 	if err := json.Unmarshal(manifest, &m); err != nil {
@@ -38,7 +41,8 @@ const usage = `search-as-code: Executable Search-as-Code pipelines over coding-a
 
   search-as-code                   the extension (started by the Persona hub; protocol on stdin / stdout)
   search-as-code mcp [--data DIR]  the MCP server for the assistant on stdin / stdout (tools: sac_execute,
-                                   sac_session_search, sac_recipes_list, sac_recipe_upsert, sac_recipe_delete)
+                                   sac_session_search, sac_recipes_list, sac_recipe_upsert, sac_recipe_delete,
+                                   sac_session_restore)
   search-as-code manifest          print persona-extension.json
 
 The MCP server finds its data in --data, else PERSONA_SEARCH_AS_CODE_DATA, else the directory the hub's
@@ -68,6 +72,7 @@ func main() {
 type configSpec struct {
 	SessionDirs  string `json:"session_dirs"`
 	RepoDirs     string `json:"repo_dirs"`
+	ColdTextDirs string `json:"cold_text_dirs"`
 	DefaultScope string `json:"default_scope"`
 }
 
@@ -76,6 +81,8 @@ type app struct {
 	store *store
 	stop  chan struct{}
 	now   func() time.Time
+	// restores tracks the page's background restores (tests wait on it).
+	restores sync.WaitGroup
 }
 
 func newApp(dir string) *app {
@@ -108,8 +115,18 @@ func (a *app) init(_ context.Context, in *ext.Init, hub *ext.Hub) (map[string]an
 			if s := strings.TrimSpace(cfg.RepoDirs); s != "" {
 				st.RepoDirs = splitDirs(s)
 			}
+			if s := strings.TrimSpace(cfg.ColdTextDirs); s != "" {
+				st.ColdTextDirs = splitDirs(s)
+			}
 			if isValidScope(cfg.DefaultScope) {
 				st.DefaultScope = cfg.DefaultScope
+			}
+			// A restore still marked running was cut off by a restart of this extension.
+			for i := range st.Restores {
+				if st.Restores[i].Running {
+					st.Restores[i].Running, st.Restores[i].At = false, st.Restores[i].StartedAt
+					st.Restores[i].Message = "恢复被中断（扩展已重启），可再次恢复"
+				}
 			}
 			return nil
 		})

@@ -303,3 +303,19 @@ func (r *rig) waitAccepted(taskID string, attempt int) {
 	}
 	r.t.Fatal("the acceptance command did not finish")
 }
+
+func TestPackagedManifestStripsSyntheticIcon(t *testing.T) {
+	raw := []byte(`{"id":"synthetic","version":"0.1.0","icon":"assets/icon.svg","tags":["demo"],"replaces":"predecessor","unknown_field":true}`)
+	var runtime map[string]json.RawMessage
+	if err := json.Unmarshal(packagedManifest(raw), &runtime); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"icon", "tags", "replaces"} {
+		if _, ok := runtime[key]; ok {
+			t.Errorf("source metadata %s leaked", key)
+		}
+	}
+	if string(runtime["unknown_field"]) != "true" {
+		t.Fatal("projection silently removed an unknown runtime field")
+	}
+}

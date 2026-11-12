@@ -69,7 +69,8 @@ export function parseProduct(raw: unknown, expectedCode: string, at: number): Pr
 }
 function product(raw: unknown, expectedCode?: string): Product {
   const item = object(raw), code = barcode(item.code);
-  if (expectedCode && code !== expectedCode) throw new ReadError("bad_answer");
+  // Open Food Facts answers a 12-digit UPC-A as its EAN-13, with a leading zero: the same product.
+  if (expectedCode && code.replace(/^0+/, "") !== expectedCode.replace(/^0+/, "")) throw new ReadError("bad_answer");
   const name = string(item.product_name, 300);
   if (!name) throw new ReadError("bad_answer");
   return { code, name, brands: string(item.brands, 300), quantity: string(item.quantity, 100),
@@ -82,6 +83,10 @@ export function parseSearch(raw: unknown, at: number): SearchResult {
   if (!Array.isArray(root.products) || typeof root.count !== "number" || !Number.isSafeInteger(root.count) || root.count < 0 || root.count > 10_000_000) throw new ReadError("bad_answer");
   const seen = new Set<string>(), products: Product[] = [];
   for (const rawProduct of root.products.slice(0, 20)) {
+    // A crowd-sourced entry may have no name yet (one of the twelve for 可口可乐 has none): it is left out of the search, not
+    // a failure of it. A product looked up by its barcode still needs one.
+    const name = object(rawProduct).product_name;
+    if (name == null || (typeof name === "string" && !name.trim())) continue;
     const item = product(rawProduct);
     if (seen.has(item.code)) continue;
     seen.add(item.code); products.push(item);

@@ -39,11 +39,20 @@ func (s *syncBuffer) String() string { s.mu.Lock(); defer s.mu.Unlock(); return 
 
 func start(t *testing.T, f *fakeChatGPT, locale string) *harness {
 	t.Helper()
+	return startTuned(t, f, locale, nil)
+}
+
+// startTuned is start with tune changing the app before it runs.
+func startTuned(t *testing.T, f *fakeChatGPT, locale string, tune func(*App)) *harness {
+	t.Helper()
 	logs := &syncBuffer{}
 	log.SetOutput(logs)
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
 	app := newApp(f.endpoints())
 	app.loadTimeout = 2 * time.Second
+	if tune != nil {
+		tune(app)
+	}
 	data := t.TempDir()
 	host := exttest.StartWith(t, manifest, exttest.Serve(t, app.program()), func(p *wire.InitializeParams) {
 		p.Extension = &wire.ExtensionInfo{ID: "chatgpt-apps", Version: manifestVersion(), DataDir: data}

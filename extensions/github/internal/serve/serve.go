@@ -597,15 +597,16 @@ func (s *server) watch(e connector.Events) {
 	}
 }
 
-// doneMost is how many writes the program remembers by request id.
+// doneMost is how many completed write results the program remembers by request id.
 const doneMost = 256
 
 // writes runs each write (actions.do) once by its request id: the same id again answers what the first run did,
-// waiting for it if it is still running.
+// waiting for it if it is still running. Running writes stay pinned; only completed results use the bounded LRU.
 type writes struct {
-	mu    sync.Mutex
-	runs  map[string]*write
-	order []string
+	mu      sync.Mutex
+	running map[string]*write
+	done    map[string]*write
+	order   []string // completed request ids, least recently used first
 }
 
 type write struct {
@@ -616,25 +617,45 @@ type write struct {
 
 func (w *writes) do(id string, run func() (CallResult, error)) (CallResult, error) {
 	w.mu.Lock()
-	if prev, ok := w.runs[id]; ok {
+	if prev, ok := w.running[id]; ok {
 		w.mu.Unlock()
 		<-prev.done
 		return prev.res, prev.err
 	}
-	if w.runs == nil {
-		w.runs = map[string]*write{}
+	if prev, ok := w.done[id]; ok {
+		for i, cached := range w.order {
+			if cached == id {
+				copy(w.order[i:], w.order[i+1:])
+				w.order[len(w.order)-1] = id
+				break
+			}
+		}
+		w.mu.Unlock()
+		return prev.res, prev.err
+	}
+	if w.running == nil {
+		w.running = map[string]*write{}
 	}
 	cur := &write{done: make(chan struct{})}
-	w.runs[id] = cur
+	w.running[id] = cur
+	w.mu.Unlock()
+	res, err := run()
+	w.mu.Lock()
+	cur.res, cur.err = res, err
+	delete(w.running, id)
+	if w.done == nil {
+		w.done = map[string]*write{}
+	}
+	w.done[id] = cur
 	w.order = append(w.order, id)
 	if len(w.order) > doneMost {
-		delete(w.runs, w.order[0])
+		delete(w.done, w.order[0])
+		w.order[0] = ""
 		w.order = w.order[1:]
 	}
-	w.mu.Unlock()
-	cur.res, cur.err = run()
 	close(cur.done)
-	return cur.res, cur.err
+	w.mu.Unlock()
+	return res, err
 }
 
 // ManifestOf is c's manifest on the wire.

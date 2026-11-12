@@ -24,6 +24,8 @@ type page struct {
 	Tab     string `json:"t,omitempty"`
 	Mode    string `json:"mode,omitempty"`
 	Query   string `json:"q,omitempty"`
+	// SessQuery is the cold-session search of the 会话与台账 tab.
+	SessQuery string `json:"sq,omitempty"`
 }
 
 const (
@@ -38,9 +40,10 @@ const (
 )
 
 type draw struct {
-	st  *State
-	now time.Time
-	loc *time.Location
+	st   *State
+	now  time.Time
+	loc  *time.Location
+	deep *deepResult // a deep search's hits for this render only
 }
 
 func (a *app) render(_ context.Context, r *ext.UIRequest) (*wire.View, error) {
@@ -48,8 +51,16 @@ func (a *app) render(_ context.Context, r *ext.UIRequest) (*wire.View, error) {
 	if err := r.DecodeState(&p); err != nil {
 		return nil, &ext.Error{Code: "invalid", Message: "invalid page state"}
 	}
+	return a.pageView(r, p, nil)
+}
+
+func (a *app) pageView(r *ext.UIRequest, p page, deep *deepResult) (*wire.View, error) {
 	var v *wire.View
-	err := a.db().read(func(st *State) { v = a.drawer(st, r).view(p) })
+	err := a.db().read(func(st *State) {
+		d := a.drawer(st, r)
+		d.deep = deep
+		v = d.view(p)
+	})
 	return v, err
 }
 
@@ -144,6 +155,7 @@ func (d draw) home(p page) *wire.View {
 	case tabPlan:
 		v.Sections = d.planTab(p, selected, scan)
 	case tabSessions:
+		v.Search = &wire.Search{Placeholder: coldSearchHint, Value: clipQuery(p.SessQuery), Action: wire.Action{ID: "cold-search"}}
 		v.Sections = d.sessionsAndHistoryTab(p, selected, scan)
 	default:
 		v.Sections = d.fleetTab(p, statuses, selected)
@@ -294,7 +306,7 @@ func (d draw) fleetTab(p page, statuses []MachineStatus, selected *Machine) []wi
 				Action: &wire.Action{
 					ID:      "clean-safe",
 					Values:  map[string]string{"m": m.ID},
-					Confirm: fmt.Sprintf("对「%s」执行全部 safe 等级可重建缓存清理与 >7天冷会话归档（预计释放 %s）？运行中容器、活跃仓库与 7 天内会话绝不触碰。", m.Name, FormatBytes(ms.SafeBytes)),
+					Confirm: fmt.Sprintf("对「%s」执行全部 safe 等级可重建缓存清理（预计释放 %s）？运行中容器、活跃仓库与 Agent 会话绝不触碰；冷会话上云需在「会话与台账」单独执行。", m.Name, FormatBytes(ms.SafeBytes)),
 				},
 			})
 		}
@@ -437,7 +449,7 @@ func (d draw) itemsTab(p page, m *Machine, scan *Scan) []wire.Section {
 			Action: &wire.Action{
 				ID:      "clean-category",
 				Values:  map[string]string{"m": m.ID, "cat": cid},
-				Confirm: fmt.Sprintf("在「%s」上清理分类「%s」（共 %d 项，预计释放 %s）？", m.Name, CategoryLabels[cid], catCounts[cid], FormatBytes(catBytes[cid])),
+				Confirm: categoryConfirm(m, cid, catCounts[cid], catBytes[cid]),
 			},
 		})
 	}
@@ -493,7 +505,7 @@ func (d draw) itemsTab(p page, m *Machine, scan *Scan) []wire.Section {
 			Action: &wire.Action{
 				ID:      "clean-item",
 				Values:  map[string]string{"m": m.ID, "item": it.ID},
-				Confirm: fmt.Sprintf("确认在「%s」上%s「%s」（路径 %s，预计释放 %s）？", m.Name, actVerb, it.Title, it.Path, FormatBytes(it.Bytes)),
+				Confirm: itemConfirm(m, it, actVerb),
 			},
 		})
 	}
@@ -532,7 +544,7 @@ func (d draw) planTab(p page, m *Machine, scan *Scan) []wire.Section {
 
 	summarySec := wire.Section{
 		Title:  "安全清理计划预览 (Dry-Run Plan)",
-		Footer: "安全等级说明：safe 为可无损自动重建的编译器/包缓存或 >7 天冷会话归档；review 为较大体积产物（如无头浏览器镜像），重新运行时按需下载。",
+		Footer: "安全等级说明：safe 为可无损自动重建的编译器/包缓存（一键 safe 清理不含冷会话上云）；review 为较大体积产物（如无头浏览器镜像），重新运行时按需下载。",
 		Items: []wire.Component{
 			head,
 			{
@@ -648,23 +660,40 @@ func (d draw) planTab(p page, m *Machine, scan *Scan) []wire.Section {
 
 func (d draw) sessionsAndHistoryTab(p page, m *Machine, scan *Scan) []wire.Section {
 	ms := d.st.machineStatus(m)
-	var secs []wire.Section
+	secs := d.coldSections(m, p.SessQuery, d.deep)
 
 	sess := ms.Sessions
+	cloudStat := wire.Stat{Label: "云端备份", Value: "未连接", Detail: "需要 disklessly CLI", Tone: wire.ToneCaution}
+	if c := sess.Cloud; c != nil {
+		backend := cmp.Or(c.Backend.ID, c.Backend.Type, "backend")
+		if c.Backend.Reachable {
+			cloudStat = wire.Stat{Label: "云端备份", Value: fmt.Sprintf("%d 个", c.Counts["archived"]+c.Counts["remote"]),
+				Detail: fmt.Sprintf("%s · %s · 可达 %d ms", FormatBytes(c.ArchivedBytes), backend, c.Backend.LatencyMs), Tone: wire.TonePositive}
+		} else {
+			cloudStat = wire.Stat{Label: "云端备份", Value: "不可达", Detail: clip(backend+" · "+cmp.Or(c.Backend.Error, "backend unreachable"), 80), Tone: wire.ToneDanger}
+		}
+	}
 	sessSec := wire.Section{
 		Title:  "Coding Agent 会话冷热分层 (Session Tiering · " + m.Name + ")",
-		Footer: "热会话（7 天内活跃修改）受红线保护绝不触碰；冷会话（>7 天未修改）支持一键归档压缩至 ~/.disklessly/session-archives。",
+		Footer: "冷会话由 disklessly 上传到备份后端并写入索引后才移除本地副本；7 天内活跃、正在打开或仍被引用的会话保持原样。后端不可达或未安装 CLI 时不会归档或删除任何会话。",
 		Items: []wire.Component{
 			{
 				Type: wire.ComponentStatGrid,
 				Stats: []wire.Stat{
 					{Label: "热会话 (≤7天)", Value: fmt.Sprintf("%d 个", sess.HotCount), Detail: FormatBytes(sess.HotBytes) + " · 活跃保护中", Tone: wire.TonePositive},
-					{Label: "冷会话 (>7天)", Value: fmt.Sprintf("%d 个", sess.ColdCount), Detail: FormatBytes(sess.ColdBytes) + " · 可归档压缩", Tone: toneIf(sess.ColdBytes > 0, wire.ToneCaution)},
-					{Label: "已归档包", Value: fmt.Sprintf("%d 个", sess.ArchivedCount), Detail: FormatBytes(sess.ArchivedBytes) + " · 压缩归档"},
-					{Label: "归档存储", Value: "tar.gz", Detail: cmp.Or(sess.ArchiveDir, "~/.disklessly/session-archives")},
+					{Label: "冷会话 (>7天)", Value: fmt.Sprintf("%d 个", sess.ColdCount), Detail: FormatBytes(sess.ColdBytes) + " · 可上传归档", Tone: toneIf(sess.ColdBytes > 0, wire.ToneCaution)},
+					cloudStat,
+					{Label: "旧版本地归档包", Value: fmt.Sprintf("%d 个", sess.ArchivedCount), Detail: FormatBytes(sess.ArchivedBytes) + " · " + cmp.Or(sess.ArchiveDir, "~/.disklessly/session-archives")},
 				},
 			},
 		},
+	}
+	if sess.Note != "" {
+		sessSec.Items = append(sessSec.Items, wire.Component{Type: wire.ComponentText, Style: wire.TextStyleSecondary, Text: sess.Note})
+	}
+	if c := sess.Cloud; c != nil && len(c.Segments.Missing) > 0 {
+		sessSec.Items = append(sessSec.Items, wire.Component{Type: wire.ComponentText, Style: wire.TextStyleSecondary,
+			Text: fmt.Sprintf("备份后端缺少 %d 个归档分段，相关会话无法恢复。", len(c.Segments.Missing))})
 	}
 
 	if len(sess.Tools) > 0 {
@@ -685,7 +714,7 @@ func (d draw) sessionsAndHistoryTab(p page, m *Machine, scan *Scan) []wire.Secti
 				{Title: "会话目录"},
 				{Title: "热会话 (≤7d)", Align: "end"},
 				{Title: "冷会话 (>7d)", Align: "end"},
-				{Title: "已归档", Align: "end"},
+				{Title: "本次已上传", Align: "end"},
 			},
 			Rows: rows,
 		})
@@ -697,17 +726,6 @@ func (d draw) sessionsAndHistoryTab(p page, m *Machine, scan *Scan) []wire.Secti
 		})
 	}
 
-	if sess.ColdBytes > 0 {
-		sessSec.Items = append(sessSec.Items, wire.Component{
-			Type:  wire.ComponentButton,
-			Title: fmt.Sprintf("一键归档压缩冷会话 (%d 个 · %s)", sess.ColdCount, FormatBytes(sess.ColdBytes)),
-			Action: &wire.Action{
-				ID:      "archive-sessions",
-				Values:  map[string]string{"m": m.ID},
-				Confirm: fmt.Sprintf("将「%s」上超过 7 天的 %d 个冷会话（共 %s）归档压缩到 ~/.disklessly/session-archives？7 天内热会话保持原样。", m.Name, sess.ColdCount, FormatBytes(sess.ColdBytes)),
-			},
-		})
-	}
 	secs = append(secs, sessSec)
 
 	// Cleanup History Ledger
@@ -789,7 +807,7 @@ func (d draw) machineForm(p page, m *Machine) *wire.View {
 			Label:       "SSH Host 别名或地址 *",
 			Kind:        wire.FieldKindText,
 			Value:       hostVal,
-			Placeholder: "例如 opc、gcp、mm-2 或 dev.example.com",
+			Placeholder: "例如 armbox、devvm、mini-2 或 dev.example.com",
 		})
 	}
 	items = append(items,
@@ -799,7 +817,7 @@ func (d draw) machineForm(p page, m *Machine) *wire.View {
 			Label:       "显示名称",
 			Kind:        wire.FieldKindText,
 			Value:       nameVal,
-			Placeholder: "例如 opc (Oracle Cloud ARM) 或 gcp (主力开发机)",
+			Placeholder: "例如 armbox (ARM VM) 或 devvm (主力开发机)",
 		},
 	)
 	if m == nil || !m.IsLocal {
@@ -810,7 +828,7 @@ func (d draw) machineForm(p page, m *Machine) *wire.View {
 				Label:       "SSH 用户名（可选，默认读 ~/.ssh/config）",
 				Kind:        wire.FieldKindText,
 				Value:       userVal,
-				Placeholder: "例如 ubuntu、opc",
+				Placeholder: "例如 ubuntu、armbox",
 			},
 			wire.Component{
 				Type:        wire.ComponentField,
@@ -921,6 +939,7 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 	}
 	res := &wire.ActionResult{}
 	runner := a.run()
+	var deep *deepResult
 
 	switch r.Action {
 	case "machine":
@@ -935,6 +954,24 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 		p.Mode = modeHome
 	case "search":
 		p.Query = strings.TrimSpace(r.Values["q"])
+	case "cold-search":
+		p.SessQuery = clipQuery(r.Values["q"])
+		p.Tab = tabSessions
+	case "cold-deep":
+		p.SessQuery = clipQuery(cmp.Or(strings.TrimSpace(r.Values["q"]), p.SessQuery))
+		p.Tab = tabSessions
+		var err error
+		if deep, err = a.coldDeep(ctx, cmp.Or(r.Values["m"], p.Machine), p.SessQuery); err != nil {
+			return nil, &ext.Error{Code: "invalid", Message: err.Error()}
+		}
+	case "cold-refresh", "cold-offload", "cold-restore", "archive-sessions":
+		p.Machine = cmp.Or(r.Values["m"], p.Machine)
+		p.Tab = tabSessions
+		toast, err := a.coldAction(ctx, r.Action, p.Machine, r.Values["id"])
+		if err != nil {
+			return nil, &ext.Error{Code: "invalid", Message: err.Error()}
+		}
+		res.Toast = toast
 	case "select-machine":
 		p.Machine = cmp.Or(r.Values["m"], p.Machine)
 		p.Tab = cmp.Or(r.Values["t"], tabItems)
@@ -962,7 +999,7 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 	}
 
 	var err error
-	res.View, err = a.render(ctx, &ext.UIRequest{UIParams: wire.UIParams{State: ext.EncodeState(p), TZ: r.TZ}})
+	res.View, err = a.pageView(r, p, deep)
 	return res, err
 }
 
@@ -1008,7 +1045,7 @@ func (a *app) handleStateAction(
 		if m == nil {
 			return fmt.Errorf("找不到机器 %q", targetID)
 		}
-		_, rec, err := ExecuteClean(ctx, runner, st, m, nil, nil, false, false, now)
+		_, rec, err := ExecuteClean(ctx, runner, st, m, nil, nil, false, false, nil, now)
 		if err != nil {
 			return err
 		}
@@ -1024,7 +1061,7 @@ func (a *app) handleStateAction(
 		if cat == "" {
 			return fmt.Errorf("未指定清理分类")
 		}
-		_, rec, err := ExecuteClean(ctx, runner, st, m, []string{cat}, nil, true, false, now)
+		_, rec, err := ExecuteClean(ctx, runner, st, m, []string{cat}, nil, true, false, nil, now)
 		if err != nil {
 			return err
 		}
@@ -1040,7 +1077,7 @@ func (a *app) handleStateAction(
 		if itemID == "" {
 			return fmt.Errorf("未指定清理项 ID")
 		}
-		_, rec, err := ExecuteClean(ctx, runner, st, m, nil, []string{itemID}, true, false, now)
+		_, rec, err := ExecuteClean(ctx, runner, st, m, nil, []string{itemID}, true, false, nil, now)
 		if err != nil {
 			return err
 		}
@@ -1062,25 +1099,13 @@ func (a *app) handleStateAction(
 			return fmt.Errorf("请至少勾选一个要清理的分类")
 		}
 		includeRev := r.Values["include_review"] == "true"
-		_, rec, err := ExecuteClean(ctx, runner, st, m, cats, nil, includeRev, false, now)
+		_, rec, err := ExecuteClean(ctx, runner, st, m, cats, nil, includeRev, false, nil, now)
 		if err != nil {
 			return err
 		}
 		p.Machine = m.ID
 		p.Tab = tabSessions
 		res.Toast = fmt.Sprintf("清理完成：%s", rec.Summary)
-
-	case "archive-sessions":
-		m := st.machine(targetID)
-		if m == nil {
-			return fmt.Errorf("找不到机器 %q", targetID)
-		}
-		_, rec, err := ExecuteClean(ctx, runner, st, m, []string{CatColdAgentSession}, nil, false, false, now)
-		if err != nil {
-			return err
-		}
-		p.Machine = m.ID
-		res.Toast = fmt.Sprintf("冷会话已归档：%s", rec.Summary)
 
 	case "save-machine":
 		port, _ := strconv.Atoi(strings.TrimSpace(r.Values["port"]))
@@ -1228,4 +1253,24 @@ func (d draw) when(t time.Time) string {
 		return fmt.Sprintf("%d 天前", int(ago.Hours()/24))
 	}
 	return t.In(d.loc).Format(time.DateOnly)
+}
+
+// sessionOffloadConfirm describes what a cold-session run does: it covers every agent at once,
+// uploads off the machine and deletes the local copies only after a verified read-back.
+func sessionOffloadConfirm(m *Machine) string {
+	return fmt.Sprintf("把「%s」上所有 Agent（Claude Code、Codex 等）7 天外、未被运行中进程、herdr 或 Persona 引用的冷会话上传到备份后端？上传后读回校验通过才删除本地副本；后端不可达或无法确认引用时不会删除任何会话。", m.Name)
+}
+
+func categoryConfirm(m *Machine, cid string, n int, bytes uint64) string {
+	if cid == CatColdAgentSession {
+		return sessionOffloadConfirm(m)
+	}
+	return fmt.Sprintf("在「%s」上清理分类「%s」（共 %d 项，预计释放 %s）？", m.Name, CategoryLabels[cid], n, FormatBytes(bytes))
+}
+
+func itemConfirm(m *Machine, it ScanItem, verb string) string {
+	if it.Category == CatColdAgentSession {
+		return sessionOffloadConfirm(m)
+	}
+	return fmt.Sprintf("确认在「%s」上%s「%s」（路径 %s，预计释放 %s）？", m.Name, verb, it.Title, it.Path, FormatBytes(it.Bytes))
 }

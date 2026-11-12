@@ -3,6 +3,7 @@
   "id": "music",
   "name": "Music",
   "version": "0.8.1",
+  "icon": "assets/icon.png",
   "description": "Music in Persona: one page and assistant tools for the endpoints you connect. See what is playing, browse playlists and recently played, search, and control playback where an endpoint allows it. Writes ask on your phone first.",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/music/README.md",

@@ -129,6 +129,28 @@ def build(extension, sdk, script, workspace):
                    cwd=workspace, check=True, timeout=180)
 
 
+def check_source_assets(root, extension, unpacked, config):
+    """Both the install root and extracted authoring closure preserve source assets."""
+    source = contained(root, f"extensions/{extension}/persona-extension.json")
+    manifest = json.loads(source.read_text())
+    if "icon" not in manifest:
+        return
+    assets = root / "extensions" / extension / "assets"
+    if not assets.is_dir() or assets.is_symlink():
+        raise ValueError("source icon assets directory is missing or linked")
+    for file in assets.rglob("*"):
+        if file.is_symlink():
+            raise ValueError("source assets symlinks are forbidden")
+        if not file.is_file():
+            continue
+        name = file.relative_to(assets.parent).as_posix()
+        expected = contained(assets.parent, name).read_bytes()
+        for package_root in (unpacked, unpacked / config["extracted_extension"]):
+            actual = contained(package_root, name).read_bytes()
+            if actual != expected:
+                raise ValueError("source archive assets differ from trusted source: " + name)
+
+
 def rebuild(root, extension, config, tracked, parent):
     if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
         raise ValueError("standalone rebuild is restricted to a fresh GitHub-hosted runner")
@@ -152,6 +174,7 @@ def rebuild(root, extension, config, tracked, parent):
     unpacked = work / "unpacked"
     unpacked.mkdir()
     extract(archive, unpacked)
+    check_source_assets(root, extension, unpacked, config)
     extracted_extension = unpacked / config["extracted_extension"]
     extracted_sdk = unpacked / config["extracted_sdk"]
     contained(extracted_extension, "package.json")

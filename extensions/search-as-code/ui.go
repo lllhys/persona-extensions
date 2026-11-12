@@ -159,6 +159,7 @@ func (d draw) homeView(p page) *wire.View {
 	default:
 		v.Sections = d.resultsSections(p, res, recipes)
 	}
+	v.Sections = append(d.restoreSection(), v.Sections...)
 	return v
 }
 
@@ -168,7 +169,7 @@ func (d draw) resultsSections(p page, res *ExecutionResult, recipes []*Recipe) [
 	// 1. Execution overview + generated Search-as-Code preview
 	stats := []wire.Stat{
 		{Label: "命中结果", Value: strconv.Itoa(res.TotalMatches), Tone: toneIf(res.TotalMatches > 0, wire.TonePositive)},
-		{Label: "扫描会话", Value: strconv.Itoa(res.ScannedSessions)},
+		{Label: "扫描会话", Value: strconv.Itoa(res.ScannedSessions) + coldNote(res.ScannedArchived, res.ScannedUnconfirmed, res.ArchivedOmitted)},
 		{Label: "算子步骤", Value: fmt.Sprintf("%d 步", len(res.StepTraces))},
 		{Label: "执行耗时", Value: fmt.Sprintf("%d ms", res.TotalDurationMs)},
 	}
@@ -272,6 +273,11 @@ func (d draw) resultsSections(p page, res *ExecutionResult, recipes []*Recipe) [
 		if h.TurnCount > 0 {
 			metaParts = append(metaParts, fmt.Sprintf("%d 轮对话", h.TurnCount))
 		}
+		archived := h.Location == locationArchived
+		cold := archived || h.Location == locationUnconfirmed
+		if cold && h.ErrorCount > 0 {
+			metaParts = append(metaParts, fmt.Sprintf("%d 异常", h.ErrorCount))
+		}
 		badge := &wire.Badge{
 			Text: fmt.Sprintf("%.1f 分", h.Score),
 			Tone: wire.ToneNeutral,
@@ -282,10 +288,18 @@ func (d draw) resultsSections(p page, res *ExecutionResult, recipes []*Recipe) [
 				Tone: wire.ToneDanger,
 			}
 		}
+		if cold {
+			icon = "cloud"
+			badge = &wire.Badge{Text: h.Location, Tone: wire.ToneCaution}
+		}
+		restoring := archived && d.st.restoreRunning(h.EntryID)
+		if restoring {
+			badge = &wire.Badge{Text: "恢复中", Tone: wire.ToneCaution}
+		}
 		hitPage := p
 		hitPage.Mode = modeHit
 		hitPage.HitID = h.ID
-		hitSec.Items = append(hitSec.Items, wire.Component{
+		row := wire.Component{
 			Type:     wire.ComponentRow,
 			Key:      fmt.Sprintf("hit-row-%d", i),
 			Icon:     icon,
@@ -294,7 +308,11 @@ func (d draw) resultsSections(p page, res *ExecutionResult, recipes []*Recipe) [
 			Value:    d.formatTime(h.UpdatedAt),
 			Badge:    badge,
 			Action:   pushPage(hitPage, h.Title),
-		})
+		}
+		if archived && h.EntryID != "" && !restoring {
+			row.Actions = []wire.RowAction{{Title: "恢复", Icon: "refresh", Swipe: true, Action: *restoreAction(h.EntryID, h.OriginalPath, h.Harness, h.SessionID)}}
+		}
+		hitSec.Items = append(hitSec.Items, row)
 		for j, sn := range h.Snippets[:min(len(h.Snippets), 2)] {
 			prefix := fmt.Sprintf("[%s", sn.Role)
 			if sn.Line > 0 {
@@ -476,6 +494,13 @@ func (d draw) sourcesSections(p page) []wire.Section {
 		{Label: "对话与事件轮次", Value: strconv.Itoa(stats.TotalTurns)},
 		{Label: "含异常会话", Value: strconv.Itoa(stats.ErrorSessions), Tone: toneIf(stats.ErrorSessions > 0, wire.ToneCaution)},
 		{Label: "会话源目录数", Value: strconv.Itoa(len(stats.SessionDirs))},
+		{Label: locationArchived + "会话", Value: strconv.Itoa(stats.ArchivedSessions)},
+	}
+	if stats.UnconfirmedSessions > 0 {
+		statItems = append(statItems, wire.Stat{Label: locationUnconfirmed, Value: strconv.Itoa(stats.UnconfirmedSessions), Tone: wire.ToneCaution})
+	}
+	if stats.ArchivedOmitted > 0 {
+		statItems = append(statItems, wire.Stat{Label: "超出上限未扫描", Value: strconv.Itoa(stats.ArchivedOmitted), Tone: wire.ToneCaution})
 	}
 
 	overview := wire.Section{
@@ -492,6 +517,16 @@ func (d draw) sourcesSections(p page) []wire.Section {
 			Title:    shortenHome(dir),
 			Subtitle: "Agent 会话日志目录 (*.jsonl)",
 			Badge:    &wire.Badge{Text: "CASS 扫描源"},
+		})
+	}
+	for i, dir := range stats.ColdTextDirs {
+		overview.Items = append(overview.Items, wire.Component{
+			Type:     wire.ComponentRow,
+			Key:      fmt.Sprintf("cdir-%d", i),
+			Icon:     "cloud",
+			Title:    shortenHome(dir),
+			Subtitle: "disklessly 已上云会话的本机纯文本索引 (*.jsonl)",
+			Badge:    &wire.Badge{Text: locationArchived},
 		})
 	}
 	for i, dir := range stats.RepoDirs {
@@ -538,7 +573,7 @@ func (d draw) sourcesSections(p page) []wire.Section {
 
 	cfgSec := wire.Section{
 		Title:  "配置检索目录",
-		Footer: "默认自动扫描 ~/.claude/projects 与 ~/.codex/sessions；你可以在此附加自定义会话目录或本地代码仓库目录。",
+		Footer: "默认自动扫描 ~/.claude/projects、~/.codex/sessions 与 disklessly 的已上云会话索引（<状态目录>/sessions/text）；你可以在此附加自定义会话目录、索引目录或本地代码仓库目录。",
 		Items: []wire.Component{
 			{
 				Type:        wire.ComponentField,
@@ -555,6 +590,14 @@ func (d draw) sourcesSections(p page) []wire.Section {
 				Kind:        wire.FieldKindText,
 				Value:       shortenHomeList(d.st.RepoDirs),
 				Placeholder: "~/workspace/persona-hub",
+			},
+			{
+				Type:        wire.ComponentField,
+				Name:        "cold_text_dirs",
+				Label:       "额外已上云会话索引目录（disklessly 的 sessions/text，用逗号或分号分隔）",
+				Kind:        wire.FieldKindText,
+				Value:       shortenHomeList(d.st.ColdTextDirs),
+				Placeholder: "~/.local/share/disklessly/sessions/text",
 			},
 			{
 				Type:   wire.ComponentButton,
@@ -656,9 +699,43 @@ func (d draw) hitDetailView(p page) *wire.View {
 		if sess.ErrorCount > 0 {
 			head.Badges = []wire.Badge{{Text: fmt.Sprintf("%d 处异常", sess.ErrorCount), Tone: wire.ToneDanger}}
 		}
+		if sess.Archived {
+			head.Badges = append(head.Badges, wire.Badge{Text: sessionLocation(sess), Tone: wire.ToneCaution})
+			head.Facts = append(head.Facts, wire.Fact{Label: "原路径", Value: cmp.Or(sess.FilePath, "未知")})
+			if !sess.ArchivedAt.IsZero() {
+				head.Facts = append(head.Facts, wire.Fact{Label: "上云时间", Value: d.formatTime(sess.ArchivedAt)})
+			}
+		}
 	}
 
 	secs := []wire.Section{{Items: []wire.Component{head}}}
+	switch {
+	case sess != nil && sess.Archived && sess.Unconfirmed:
+		secs = append(secs, wire.Section{
+			Title: "此会话" + locationUnconfirmed,
+			Items: []wire.Component{{
+				Type: wire.ComponentText,
+				Key:  "unconfirmed",
+				Text: "本机有 disklessly 写下的纯文本索引，但上传没有完成（索引里没有云端分段与上云时间），云端可能没有这个会话的副本，因此不提供恢复。可在终端运行 disklessly sessions status 查看。",
+			}},
+		})
+	case sess != nil && sess.Archived:
+		sec := wire.Section{
+			Title:  "此会话已上云",
+			Footer: "本机原文件已由 disklessly 移到云端，这里检索的是本机保存的纯文本索引（仅用户与助手消息）。恢复后原文件回到原路径，可继续会话。",
+		}
+		if d.st.restoreRunning(sess.EntryID) {
+			sec.Items = []wire.Component{{Type: wire.ComponentText, Key: "restoring", Text: "正在恢复，完成后在首页显示结果。"}}
+		} else {
+			sec.Items = []wire.Component{{
+				Type:   wire.ComponentButton,
+				Key:    "restore-session",
+				Title:  "恢复",
+				Action: restoreAction(sess.EntryID, sess.FilePath, sess.Harness, sess.SessionID),
+			}}
+		}
+		secs = append(secs, sec)
+	}
 
 	if len(snippets) > 0 {
 		snipSec := wire.Section{Title: "命中证据片段（带角色与行号归属）"}
@@ -847,6 +924,10 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 	}
 	res := &wire.ActionResult{}
 
+	if r.Action == "restore-session" {
+		return a.runRestore(ctx, r, p)
+	}
+
 	err := a.db().update(func(st *State, now time.Time) error {
 		switch r.Action {
 		case "scope":
@@ -861,6 +942,9 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 				return err
 			}
 			st.recordRun(ExecuteProgram(st, prog, now), now)
+
+		case "clear-restores":
+			st.Restores = slices.DeleteFunc(st.Restores, func(n RestoreNotice) bool { return !n.Running })
 
 		case "tab":
 			p.Tab = strings.TrimSpace(r.Values["tab"])
@@ -980,6 +1064,7 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 		case "save-sources":
 			st.SessionDirs = splitDirs(r.Values["session_dirs"])
 			st.RepoDirs = splitDirs(r.Values["repo_dirs"])
+			st.ColdTextDirs = splitDirs(r.Values["cold_text_dirs"])
 			res.Toast = "已更新检索目录"
 
 		case "open":
@@ -1019,11 +1104,109 @@ func (a *app) card(_ context.Context, r *ext.UIRequest) (*wire.View, error) {
 				Type:  wire.ComponentText,
 				Key:   "card-summary",
 				Style: wire.TextStyleCaption,
-				Text:  fmt.Sprintf("已索引 %d 个本机 Agent 会话 · 最近流水线命中 %d 条（%d ms）", res.ScannedSessions, res.TotalMatches, res.TotalDurationMs),
+				Text:  fmt.Sprintf("已索引 %d 个本机 Agent 会话%s · 最近流水线命中 %d 条（%d ms）", res.ScannedSessions, archivedNote(res.ScannedArchived), res.TotalMatches, res.TotalDurationMs),
 			})
 		}
 	})
 	return &wire.View{Sections: []wire.Section{{Items: items}}}, err
+}
+
+func restoreAction(entryID, path, harness, sessionID string) *wire.Action {
+	return &wire.Action{
+		ID:      "restore-session",
+		Values:  map[string]string{"entry": entryID},
+		Confirm: restoreConfirm(path, harness, sessionID),
+	}
+}
+
+// runRestore starts restoring an archived session through the disklessly CLI in the background and returns at
+// once: a restore can take minutes, longer than the hub waits for a page action. The outcome is stored in the
+// state (which refreshes the page), and a successful restore re-runs the last search so the hit shows as local.
+func (a *app) runRestore(ctx context.Context, r *ext.UIRequest, p page) (*wire.ActionResult, error) {
+	entryID := strings.TrimSpace(r.Values["entry"])
+	res := &wire.ActionResult{}
+	var started bool
+	var dirs []string
+	err := a.db().update(func(st *State, now time.Time) error {
+		if st.restoreRunning(entryID) {
+			res.Toast = errRestoreBusy.Error()
+			return nil
+		}
+		rec := findArchivedSession(st, entryID)
+		if rec == nil {
+			res.Toast = fmt.Sprintf("本机没有已上云会话 %s（可能已恢复，或来自其他设备）", entryID)
+			return nil
+		}
+		st.setRestore(RestoreNotice{EntryID: entryID, Title: rec.Title, Path: rec.FilePath, Running: true, StartedAt: now.UTC()})
+		dirs, started = slices.Clone(st.ColdTextDirs), true
+		res.Toast = "正在从云端恢复到 " + rec.FilePath + "，完成后在本页显示结果"
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if started {
+		db := a.db()
+		a.restores.Add(1)
+		go func() {
+			defer a.restores.Done()
+			out, rerr := restoreArchived(context.Background(), &State{ColdTextDirs: dirs}, entryID, db.dir)
+			_ = db.update(func(st *State, now time.Time) error {
+				n := RestoreNotice{EntryID: entryID, StartedAt: now.UTC(), At: now.UTC()}
+				for _, o := range st.Restores {
+					if o.EntryID == entryID {
+						n.Title, n.Path, n.StartedAt = o.Title, o.Path, o.StartedAt
+					}
+				}
+				if rerr != nil {
+					n.Message = rerr.Error()
+				} else {
+					n.OK, n.Path, n.Resume = true, cmp.Or(out.Path, n.Path), out.Resume
+					if st.LastRun != nil {
+						st.recordRun(ExecuteProgram(st, st.LastRun.Program, now), now)
+					}
+				}
+				st.setRestore(n)
+				return nil
+			})
+		}()
+	}
+	res.View, err = a.render(ctx, &ext.UIRequest{UIParams: wire.UIParams{State: ext.EncodeState(p), TZ: r.TZ}})
+	return res, err
+}
+
+// restoreSection shows the page's recent restores.
+func (d draw) restoreSection() []wire.Section {
+	if len(d.st.Restores) == 0 {
+		return nil
+	}
+	sec := wire.Section{Title: "会话恢复"}
+	for i, n := range d.st.Restores {
+		row := wire.Component{
+			Type:     wire.ComponentRow,
+			Key:      fmt.Sprintf("restore-%d", i),
+			Title:    clipRunes(cmp.Or(n.Title, n.EntryID), 120),
+			Subtitle: n.Path,
+		}
+		switch {
+		case n.Running:
+			row.Icon, row.Badge = "refresh", &wire.Badge{Text: "恢复中", Tone: wire.ToneCaution}
+			row.Value = d.formatTime(n.StartedAt)
+		case n.OK:
+			row.Icon, row.Badge = "check", &wire.Badge{Text: "已恢复", Tone: wire.TonePositive}
+			row.Value = d.formatTime(n.At)
+			if n.Resume != "" {
+				row.Subtitle = n.Path + " · 可运行 " + n.Resume
+			}
+		default:
+			row.Icon, row.Badge = "warning", &wire.Badge{Text: "恢复失败", Tone: wire.ToneDanger}
+			row.Value = d.formatTime(n.At)
+			row.Subtitle = n.Message
+		}
+		sec.Items = append(sec.Items, row)
+	}
+	sec.Items = append(sec.Items, wire.Component{Type: wire.ComponentButton, Key: "clear-restores", Title: "清除记录", Action: &wire.Action{ID: "clear-restores"}})
+	return []wire.Section{sec}
 }
 
 func pushPage(p page, title string) *wire.Action {
@@ -1031,6 +1214,13 @@ func pushPage(p page, title string) *wire.Action {
 		ID:   "open",
 		Push: &wire.Push{State: ext.EncodeState(p), Title: clipRunes(title, 60)},
 	}
+}
+
+func archivedNote(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("（含 %d 个%s）", n, locationArchived)
 }
 
 func countBadge(n int) string {

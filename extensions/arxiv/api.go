@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -77,7 +78,7 @@ func (c *client) query(ctx context.Context, query string, recent bool, start int
 }
 
 func (c *client) paper(ctx context.Context, id string) (paper, error) {
-	if len(id) == 0 || len(id) > 100 || strings.ContainsAny(id, "\x00\r\n/?#") {
+	if !validID(id) {
 		return paper{}, errors.New("invalid arXiv ID")
 	}
 	q := url.Values{"id_list": {id}, "max_results": {"1"}}
@@ -111,12 +112,29 @@ func (c *client) paper(ctx context.Context, id string) (paper, error) {
 	return out.Entries[0], nil
 }
 
-func paperURL(item paper) string {
-	u, err := url.Parse(item.ID)
-	if err != nil || u.Scheme != "https" || u.Hostname() != "arxiv.org" || u.User != nil {
-		return ""
+// arxivID is an arXiv identifier with an optional version: YYMM.NNNNN, or archive[.XX]/YYMMNNN for papers from before
+// April 2007 (hep-th/9901001, math.GT/0309136).
+var arxivID = regexp.MustCompile(`^(\d{4}\.\d{4,5}|[a-z]+(-[a-z]+)*(\.[A-Z]{2})?/\d{7})(v\d+)?$`)
+
+func validID(id string) bool { return len(id) <= 100 && arxivID.MatchString(id) }
+
+// paperID is the arXiv ID in an entry's Atom <id>, which the API writes as http://arxiv.org/abs/<id>. It is an
+// identifier, never opened, so either scheme is read; "" when it names no arXiv paper.
+func paperID(item paper) string {
+	for _, prefix := range []string{"http://arxiv.org/abs/", "https://arxiv.org/abs/"} {
+		if id, ok := strings.CutPrefix(item.ID, prefix); ok && validID(id) {
+			return id
+		}
 	}
-	return item.ID
+	return ""
+}
+
+// paperURL is the paper's abstract page, always over https; "" when the entry names no arXiv paper.
+func paperURL(item paper) string {
+	if id := paperID(item); id != "" {
+		return "https://arxiv.org/abs/" + id
+	}
+	return ""
 }
 
 func clipText(text string, limit int) string {

@@ -97,17 +97,6 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState) (*wire.V
 	return v, nil
 }
 
-func paperID(item paper) string {
-	if paperURL(item) == "" {
-		return ""
-	}
-	id := strings.TrimPrefix(item.ID, "https://arxiv.org/abs/")
-	if id == item.ID || len(id) > 100 || strings.ContainsAny(id, "\x00\r\n/?#") {
-		return ""
-	}
-	return id
-}
-
 func detailView(r *ext.UIRequest, st pageState, item paper) *wire.View {
 	t := textsFor(r.Locale)
 	var authors []string

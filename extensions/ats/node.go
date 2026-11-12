@@ -295,6 +295,8 @@ func runAcceptance(ctx context.Context, dir, command string) acceptResult {
 	select {
 	case err = <-done:
 	case <-ctx.Done():
+		// Stop the group before killing it: otherwise killing sleep lets its parent run the next command before it is killed.
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGSTOP)
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		err = <-done
 		res.TimedOut = errors.Is(ctx.Err(), context.DeadlineExceeded)

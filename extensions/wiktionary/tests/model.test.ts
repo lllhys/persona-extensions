@@ -22,6 +22,17 @@ test("definition parser retains parts of speech and plain-text examples", () => 
   assert.throws(() => parseEntry({}, "en", "missing", 0), ReadError);
 });
 
+test("an empty or markup-only definition line is skipped, not the word", () => {
+  const raw = { en: [
+    { partOfSpeech: "Noun", language: "English", definitions: [{ definition: "" }, { definition: "<span class=\"usage-label-sense\"></span> " }, { definition: "A clear liquid." }] },
+    { partOfSpeech: "Verb", language: "English", definitions: [{ definition: "" }] },
+  ] };
+  const entry = parseEntry(raw, "en", "water", 0);
+  assert.deepEqual(entry.groups.map(group => [group.partOfSpeech, group.definitions.map(definition => definition.text)]), [["Noun", ["A clear liquid."]]]);
+  assert.throws(() => parseEntry({ en: [raw.en[1]] }, "en", "water", 0), (error: unknown) => error instanceof ReadError && error.code === "not_found");
+  assert.throws(() => parseEntry({ en: [{ partOfSpeech: "Noun", definitions: [{ definition: 1 }] }] }, "en", "water", 0), (error: unknown) => error instanceof ReadError && error.code === "bad_answer");
+});
+
 test("HTML snippets stay plain data with bounded entities", () => {
   assert.equal(plain(" <b>Hello</b>&nbsp; world &unknown; &#x1F600; "), "Hello world &unknown; 😀");
   assert.equal(plain("unterminated <tag"), "unterminated");

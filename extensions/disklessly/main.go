@@ -19,11 +19,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nwverse/persona-extensions/pluginkit"
 	"github.com/nwverse/persona/sdk/go/ext"
 )
 
 //go:embed persona-extension.json
-var manifest []byte
+var authorManifest []byte
+
+var manifest = pluginkit.PackagedManifest(authorManifest)
 
 var about = func() (m struct{ ID, Version string }) {
 	if err := json.Unmarshal(manifest, &m); err != nil {
@@ -37,7 +40,9 @@ const usage = `disklessly: Persona Disklessly machine disk watermark, cache clea
   disklessly                   the extension (started by the Persona hub; protocol on stdin / stdout)
   disklessly mcp [--data DIR]  the MCP server for the assistant on stdin / stdout (tools:
                                disklessly_machines_status, disklessly_scan, disklessly_history,
-                               disklessly_clean, disklessly_machine_upsert, disklessly_machine_delete)
+                               disklessly_sessions_search, disklessly_sessions_status,
+                               disklessly_clean, disklessly_machine_upsert, disklessly_machine_delete,
+                               disklessly_sessions_offload, disklessly_sessions_restore)
   disklessly manifest          print persona-extension.json
 
 The MCP server finds the data in --data, else PERSONA_DISKLESSLY_DATA, else the directory the hub's
@@ -80,8 +85,9 @@ func program(a *app) ext.Program {
 	return ext.Program{
 		ID: about.ID, Version: about.Version, Manifest: manifest, Init: a.init,
 		UI: map[string]ext.Page{
-			pageUI: {Render: a.render, Action: a.action},
-			cardUI: {Render: a.card},
+			pageUI:     {Render: a.render, Action: a.action},
+			cardUI:     {Render: a.card},
+			sessionsUI: {Render: a.renderSessions, Action: a.actionSessions},
 		},
 	}
 }

@@ -2,7 +2,8 @@
   "manifest_version": 1,
   "id": "openlibrary",
   "name": "Open Library 图书发现",
-  "version": "0.1.0",
+  "version": "0.1.1",
+  "icon": "assets/icon.png",
   "description": "按书名、作者或 ISBN 搜索图书，查看出版信息、作品简介和 Open Library 阅读入口。内容由 hub 通过公开 API 获取，无需账号。",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/openlibrary/README.md",
@@ -19,7 +20,7 @@
     "source": {
       "entry": "src/index.ts",
       "bundle": "build/openlibrary.mjs",
-      "sha256": "bc62431b41169995bbd9576cd5d1335125438e8e65c75e076218e63f26953b4a"
+      "sha256": "cfcd5c598c9f8634d744aee08611b4f206c2d829a6611663768650242c1f015b"
     }
   },
   "contributes": {

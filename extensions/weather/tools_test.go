@@ -17,7 +17,7 @@ func callTool(t *testing.T, a *app, name, args string) (string, error) {
 }
 
 func TestToolList(t *testing.T) {
-	if len(tools) != 3 {
+	if len(tools) != 4 {
 		t.Fatalf("%d tools", len(tools))
 	}
 	names := []string{}
@@ -27,7 +27,7 @@ func TestToolList(t *testing.T) {
 			t.Fatalf("tool %+v", tool)
 		}
 	}
-	if names[0] != "weather_now" || names[1] != "weather_forecast" || names[2] != "weather_air" {
+	if names[0] != "weather_now" || names[1] != "weather_forecast" || names[2] != "weather_air" || names[3] != "weather_pollen" {
 		t.Fatalf("tools %v", names)
 	}
 }

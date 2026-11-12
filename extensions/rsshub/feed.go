@@ -391,6 +391,8 @@ func parseTime(s string) time.Time {
 // to time.Parse: RFC 822 makes it US Central, but Chinese feeds write it for UTC+8.
 var rfc822Zones = map[string]string{
 	"EST": "-0500", "EDT": "-0400", "CDT": "-0500", "MST": "-0700", "MDT": "-0600", "PST": "-0800", "PDT": "-0700",
+	// UT (universal time) and Z (military Zulu) are RFC 822 names for UTC that time.Parse does not know.
+	"UT": "+0000", "Z": "+0000",
 }
 
 // numericZone is s with its trailing zone written as an offset when it is an RFC 822 zone name (EDT) or GMT or UTC
@@ -403,6 +405,10 @@ func numericZone(s string) string {
 	zone := strings.ToUpper(s[i+1:])
 	if off, ok := rfc822Zones[zone]; ok {
 		return s[:i+1] + off
+	}
+	// Some feeds write the RFC 3339 offset with a colon (+08:00) in an RFC 822 date; drop the colon.
+	if len(zone) == 6 && (zone[0] == '+' || zone[0] == '-') && zone[3] == ':' {
+		return s[:i+1] + zone[:3] + zone[4:]
 	}
 	for _, p := range []string{"GMT", "UTC"} {
 		rest, ok := strings.CutPrefix(zone, p)

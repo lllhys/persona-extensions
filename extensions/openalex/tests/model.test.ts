@@ -17,6 +17,15 @@ test("research metadata retains citation, open access and canonical work links",
   assert.throws(() => parseWorks({ meta: { count: 1 }, results: [{ ...original, id: "https://attacker.invalid/W1" }] }, 0), ReadError);
   assert.throws(() => parseWorks({ meta: { count: 1 }, results: [{ ...original, doi: "http://attacker.invalid" }] }, 0), ReadError);
   assert.throws(() => parseWorks({ meta: { count: 1 }, results: [original, original] }, 0), ReadError);
+  // A publisher's plain-http open-access link (the first CRISPR result's is http://www.cell.com/…) is left out, not a failure.
+  const cell = { ...original, open_access: { ...original.open_access, oa_url: "http://www.cell.com/article/S0092867415017055/pdf" } };
+  const listed = parseWorks({ meta: { count: 2 }, results: [cell, response.results[1]] }, 0);
+  assert.equal(listed.works.length, 2);
+  assert.equal(listed.works[0].oaURL, undefined);
+  assert.equal(listed.works[0].doi, original.doi);
+  for (const oa_url of ["https://user:secret@example.com/paper.pdf", "not a url", "ftp://example.com/paper.pdf"]) {
+    assert.throws(() => parseWorks({ meta: { count: 1 }, results: [{ ...original, open_access: { ...original.open_access, oa_url } }] }, 0), ReadError);
+  }
 });
 
 test("queries and results are bounded and control characters are rejected", () => {

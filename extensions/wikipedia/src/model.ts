@@ -41,8 +41,10 @@ function validCodepoint(n: number) { return n >= 32 && n <= 0x10ffff && !(n >= 0
 export function titleKey(value: unknown): string {
   if (typeof value !== "string") throw new ReadError("invalid");
   const title = plain(value).trim();
-  if (/[<>&]/.test(value)) throw new ReadError("invalid");
-  if (!title || title.length > 255 || /[\u0000-\u001f\u007f#?<>[\]{}|]/.test(title) || Array.from(title).length > 255) throw new ReadError("invalid");
+  // MediaWiki refuses # < > [ ] { } | and controls in a title, and an & only where it forms an HTML entity: ? and a plain &
+  // belong to titles such as "What Is Life?" and "AT&T". Paths and links percent-encode both.
+  if (/[<>]|&(#[0-9]+|#x[0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);/.test(value)) throw new ReadError("invalid");
+  if (!title || title.length > 255 || /[\u0000-\u001f\u007f#<>[\]{}|]/.test(title) || Array.from(title).length > 255) throw new ReadError("invalid");
   return title.replaceAll(" ", "_");
 }
 export function articleURL(language: Language, title: string) {
@@ -111,8 +113,12 @@ export function searchPath(query: string, limit = 30): string {
   return `/w/rest.php/v1/search/page?${new URLSearchParams({ q: query.trim(), limit: String(limit) })}`;
 }
 export function parseFeed(raw: unknown, language: Language, date: string, at: number): Feed {
-  const value = object(raw), popular = array(object(value.mostread).articles).slice(0, 30).map(article => parseArticle(article, language));
-  const events = array(value.onthisday).slice(0, 30).map(rawEvent => {
+  const value = object(raw);
+  // A feed has the sections its wiki has that day: Japanese has no onthisday, and a day's mostread appears only once its
+  // counts do. A missing section is empty; one that is there must be well formed, and some section must be there.
+  if (value.tfa == null && value.mostread === undefined && value.onthisday === undefined) throw new ReadError("bad_answer");
+  const popular = value.mostread === undefined ? [] : array(object(value.mostread).articles).slice(0, 30).map(article => parseArticle(article, language));
+  const events = value.onthisday === undefined ? [] : array(value.onthisday).slice(0, 30).map(rawEvent => {
     const event = object(rawEvent);
     const year = integer(event.year);
     if (year > 2200) throw new ReadError("bad_answer");

@@ -1,0 +1,29 @@
+Copyright (c) 2013 Stack Exchange Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+
+Icon attribution
+----------------
+Source: https://raw.githubusercontent.com/StackExchange/StackExchange.DataExplorer/72748408781c83da507bd41ef5db254c4c637349/App/StackExchange.DataExplorer/Content/images/see_logo.png
+Trademark owner: Stack Exchange Inc.
+Usage: Official Stack Exchange symbol used only to identify the Stack Exchange integration. The genuine Stack Exchange speech-bubble symbol was cropped from its official 318x91 Data Explorer logo PNG at x=279, y=0, width=39, height=50, without redrawing or recoloring. Google Chrome 145.0.7632.75 proportionally upscaled the low-resolution 39x50 crop and centered it on a 512x512 transparent canvas; the original PNG is retained. This low-resolution source is explicitly recorded rather than replacing it with the Stack Overflow logo.
+
+The complete upstream MIT notice is preserved above. It does not grant
+trademark rights. No affiliation or endorsement is implied.

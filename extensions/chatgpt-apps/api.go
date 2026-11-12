@@ -13,9 +13,9 @@ import (
 	"time"
 )
 
-// maxAnswer is the most of an answer read from ChatGPT (an app's result can be long; what the model gets is cut
-// further, see clip).
-const maxAnswer = 8 << 20
+// maxAnswer is the most of one answer read from ChatGPT: it bounds the memory one call takes. It is not a cut: an
+// app's result goes on whole (a cut list is broken JSON a subscription cannot read), and a longer answer is an error.
+const maxAnswer = 32 << 20
 
 // backend calls chatgpt.com's web backend as the signed-in user and decodes the JSON answer into out (nil: not
 // decoded). A refused access token is refreshed once. Logs say the method, the path without its query, the status
@@ -72,7 +72,7 @@ func (a *App) send(ctx context.Context, method, target string, payload []byte) (
 			log.Printf("%s %s: %v", method, pathOnly(target), errors.Unwrap(err))
 			return nil, "", fmt.Errorf("could not reach ChatGPT (%s %s); try again later", method, pathOnly(target))
 		}
-		raw, rerr := io.ReadAll(io.LimitReader(resp.Body, maxAnswer))
+		raw, rerr := io.ReadAll(io.LimitReader(resp.Body, a.answerMost+1))
 		resp.Body.Close()
 		log.Printf("%s %s %d %s", method, pathOnly(target), resp.StatusCode, a.now().Sub(start).Round(time.Millisecond))
 		if resp.StatusCode == http.StatusUnauthorized && attempt == 1 {
@@ -87,8 +87,20 @@ func (a *App) send(ctx context.Context, method, target string, payload []byte) (
 		if rerr != nil {
 			return nil, "", fmt.Errorf("reading ChatGPT's answer: %w", rerr)
 		}
+		if int64(len(raw)) > a.answerMost {
+			return nil, "", fmt.Errorf("ChatGPT's answer to %s %s is over %s; ask for less at a time (fewer items, a narrower filter or time range)",
+				method, pathOnly(target), sizeOf(a.answerMost))
+		}
 		return raw, resp.Header.Get("Content-Type"), nil
 	}
+}
+
+// sizeOf says a byte count for a message: whole MB, or KB below that.
+func sizeOf(n int64) string {
+	if n >= 1<<20 {
+		return fmt.Sprintf("%d MB", n>>20)
+	}
+	return fmt.Sprintf("%d KB", n>>10)
 }
 
 // pathOnly is a URL or path without its query and host, for logs and messages.

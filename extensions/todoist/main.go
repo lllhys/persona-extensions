@@ -2,7 +2,11 @@ package main
 
 import (
 	_ "embed"
+
+	"github.com/nwverse/persona-extensions/pluginkit"
 )
 
 //go:embed persona-extension.json
-var manifest []byte
+var authorManifest []byte
+
+var manifest = pluginkit.PackagedManifest(authorManifest)

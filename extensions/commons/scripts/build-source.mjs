@@ -59,6 +59,8 @@ const runtimeSource = program.manifest?.runtime?.source;
 if (program.manifest?.runtime?.mode !== "deno" || program.manifest?.runtime?.command || runtimeSource?.entry !== source.entry || runtimeSource?.bundle !== source.bundle || runtimeSource?.sha256) throw new Error("Program manifest differs from source package");
 const manifest = { ...released, runtime: { ...released.runtime, mode: "deno", source } };
 delete manifest.tags;
+delete manifest.replaces;
+delete manifest.icon;
 await rm(pkg, { recursive: true, force: true });
 await mkdir(resolve(pkg, "build"), { recursive: true });
 const text = JSON.stringify(manifest, null, 2) + "\n";
@@ -67,6 +69,10 @@ await writeFile(resolve(pkg, "persona-plugin.json"), text);
 await writeFile(resolve(pkg, source.bundle), bytes);
 for (const path of ["src", "scripts", "tests", "package.json", "package-lock.json", "tsconfig.json", "README.md"]) await cp(resolve(root, path), resolve(pkg, path), { recursive: true });
 const authoring = resolve(pkg, "authoring/extensions/commons"), sdk = resolve(pkg, "authoring/sdk/ts");
+if (released.icon) {
+  await cp(resolve(root, "assets"), resolve(pkg, "assets"), { recursive: true });
+  await cp(resolve(root, "assets"), resolve(authoring, "assets"), { recursive: true });
+}
 for (const path of ["src", "scripts", "tests", "package.json", "package-lock.json", "tsconfig.json", "README.md", "persona-extension.json"]) await cp(resolve(root, path), resolve(authoring, path), { recursive: true });
 for (const path of ["src", "scripts", "fixtures", "typechecks", "package.json", "package-lock.json", "README.md", "tsconfig.json", "tsconfig.negative.json", "tsconfig.ui.json"]) await cp(resolve(root, "../../sdk/ts", path), resolve(sdk, path), { recursive: true });
 const checked = await checkSourceBundle({ root: pkg, bundle: source.bundle, manifest: "persona-extension.json", probe: true, timeoutMs: 5000 });

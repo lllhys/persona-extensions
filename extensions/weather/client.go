@@ -202,10 +202,17 @@ func forecastURL(c City) string {
 		"&timezone=auto&forecast_days=7"
 }
 
-// airURL builds the air-quality URL for a city.
+// airURL builds the air-quality URL for a city. Current conditions remain the default; outlook asks only for bounded hourly fields.
 func airURL(c City) string {
 	return "/v1/air-quality?latitude=" + coord(c.Latitude) + "&longitude=" + coord(c.Longitude) +
 		"&current=pm2_5,pm10,european_aqi&timezone=auto"
+}
+
+func airOutlookURL(c City) string {
+	return "/v1/air-quality?latitude=" + coord(c.Latitude) + "&longitude=" + coord(c.Longitude) +
+		"&current=pm2_5,pm10,european_aqi" +
+		"&hourly=pm2_5,pm10,european_aqi,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen" +
+		"&timezone=auto&forecast_days=5"
 }
 
 // coord writes a coordinate with enough digits and no exponent (the API rejects a scientific notation).

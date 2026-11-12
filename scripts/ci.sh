@@ -35,6 +35,7 @@ python3 -I scripts/source-rebuild.py plan
 step manifests
 scripts/manifest.py check
 python3 -I scripts/test-manifest.py
+python3 -I scripts/test-icons.py
 
 step gofmt
 bad=$(gofmt -l . | grep -v '^dist/' || true)
@@ -76,6 +77,7 @@ scripts/sign-index.py verify
 python3 -I scripts/test-sign-index.py
 
 step publisher
+python3 -I scripts/test-downloads.py
 python3 -I scripts/test-oci.py
 python3 -I scripts/test-publish-oci.py
 python3 -I scripts/test-publication-regressions.py

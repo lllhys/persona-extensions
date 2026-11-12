@@ -124,7 +124,8 @@ class PublicationPolicyTests(unittest.TestCase):
         self.assertIn("path=%s\\n", anonymous)
         self.assertNotIn("artifact-ids:", anonymous)
         self.assertIn("CATALOG_UNCHANGED: ${{ needs.anonymous.outputs.payload == '' }}", job(self.text, "publication-required"))
-        self.assertIn("SIGN_RESULT: ${{ needs.anonymous.result }}", job(self.text, "publication-required"))
+        self.assertIn("sign_result: ${{ steps.sign.outcome }}", anonymous)
+        self.assertIn("SIGN_RESULT: ${{ needs.anonymous.outputs.sign_result }}", job(self.text, "publication-required"))
         self.assertNotIn("needs.anonymous.outputs.catalog_unchanged", self.text)
         with self.assertRaises(ValueError):
             job(self.text, "sign")
@@ -138,7 +139,7 @@ class PublicationPolicyTests(unittest.TestCase):
         self.assertNotIn("inputs.phase == 'packages'", aggregate)
         for result in ("PACKAGES_RESULT", "ANONYMOUS_RESULT", "SIGN_RESULT"):
             self.assertIn(f'"${result}" != success', aggregate)
-        self.assertIn("SIGN_RESULT: ${{ needs.anonymous.result }}", aggregate)
+        self.assertIn("SIGN_RESULT: ${{ needs.anonymous.outputs.sign_result }}", aggregate)
         self.assertIn("exit 1", aggregate)
         for missing_job in ("anonymous",):
             with self.subTest(missing_job=missing_job):
@@ -159,6 +160,7 @@ class PublicationPolicyTests(unittest.TestCase):
             ("workflow_dispatch", "skipped", "skipped", "skipped", 1),
             ("workflow_dispatch", "skipped", "success", "skipped", 1),
             ("push", "success", "success", "failure", 1),
+            ("push", "success", "failure", "success", 1),
         ]
         for event, packages, anonymous, sign, expected in cases:
             with self.subTest(event=event, packages=packages, anonymous=anonymous, sign=sign):
@@ -192,6 +194,41 @@ class PublicationPolicyTests(unittest.TestCase):
                                         env={**os.environ, "GITHUB_EVENT_NAME": "push", "PACKAGES_RESULT": "success",
                                              "ANONYMOUS_RESULT": anonymous, "SIGN_RESULT": sign, "CATALOG_UNCHANGED": "true"})
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+
+    def test_publication_gate_receives_the_workflow_signing_outcome(self):
+        anonymous = job(self.text, "anonymous")
+        aggregate = job(self.text, "publication-required")
+        outputs = anonymous.split("    outputs:\n", 1)[1].split("    steps:\n", 1)[0]
+        expressions = r"^\s+([\w-]+): \$\{\{ (.+?) \}\}$"
+
+        for event in ("push", "workflow_dispatch"):
+            for payload, sign, expected in (("", "skipped", 0), ("payload.json", "success", 0),
+                                            ("payload.json", "skipped", 1)):
+                with self.subTest(event=event, payload=payload, sign=sign):
+                    context = {
+                        "steps": {"payload": {"outputs": {"path": payload}}, "sign": {"outcome": sign}},
+                        "needs": {"packages": {"result": "success" if event == "push" else "skipped"},
+                                  "anonymous": {"result": "success", "outputs": {}}},
+                    }
+
+                    def value(expression):
+                        if expression.endswith(" == ''"):
+                            return str(value(expression[:-6]) == "").lower()
+                        result = context
+                        for part in expression.split("."):
+                            result = result[part]
+                        return result
+
+                    for name, expression in re.findall(expressions, outputs, re.MULTILINE):
+                        context["needs"]["anonymous"]["outputs"][name] = value(expression)
+                    env = {name: value(expression) for name, expression in
+                           re.findall(expressions, aggregate.split("        run: |\n", 1)[0], re.MULTILINE)}
+                    result = subprocess.run(
+                        ["bash", "-c", aggregate.split("run: |\n", 1)[1]],
+                        check=False, capture_output=True, text=True,
+                        env={**os.environ, "GITHUB_EVENT_NAME": event, **env},
+                    )
+                    self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

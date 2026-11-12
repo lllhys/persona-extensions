@@ -151,7 +151,7 @@
         "kind": {"type": "string"},
         "id": {"type": "string"},
         "path": {"type": "string", "description": "Where it is on the manager's machine, for its own file tools."},
-        "meta": {"description": "The entity's own fields (meta.json)."},
+        "meta": {"description": "The entity's own fields (meta.json). For people, status is active, ignored or self; absent or empty means active. Status uses the same locked_fields and provenance as other corrected fields."},
         "summary": {"type": "string"},
         "log": {"type": "array", "items": {"type": "string"}},
         "recent": {"type": "string"},
@@ -159,6 +159,7 @@
         "moments": {"type": "array", "items": {"$ref": "#/$defs/KBMomentRef"}},
         "segments": {"type": "array", "items": {"$ref": "#/$defs/KBRecordingSegment"}},
         "minutes": {"description": "A recording's meeting minutes, once written (docs/assistant/meeting-minutes.md); kept as the hub sends them."},
+        "recap": {"description": "An all-day recording's day recap, once written (docs/assistant/day-recap.md); kept as the hub sends them."},
         "points": {"type": "array", "items": {"$ref": "#/$defs/KBTopicPoint"}, "description": "A topic's knowledge points (docs/assistant/knowledge.md \"Topics\")."}
       },
       "required": ["kind", "id", "path", "meta"]
@@ -206,7 +207,8 @@
       "properties": {
         "start": {"type": "number"},
         "end": {"type": "number"},
-        "text": {"type": "string"}
+        "text": {"type": "string"},
+        "n": {"type": "integer", "description": "An all-day recording's line number: the segment's 1-based position in its uploads (docs/assistant/day-recap.md); absent on other recordings."}
       },
       "required": ["start", "end", "text"]
     },
@@ -284,7 +286,7 @@
         "remove_projects": {"type": "array", "items": {"type": "string"}},
         "name": {"type": "string"},
         "project_kind": {"type": "string", "description": "A project's: short or long."},
-        "status": {"type": "string"},
+        "status": {"type": "string", "description": "People: active, ignored or self; other values are rejected by kb.update. Projects: active, paused, done or ignored. Omitted or empty keeps the current status; active restores a person."},
         "goal": {"type": "string"},
         "my_role": {"type": "string"},
         "note": {"type": "string"},

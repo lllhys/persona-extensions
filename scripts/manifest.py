@@ -17,13 +17,14 @@ import json, os, posixpath, re, subprocess, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import catalog
+import icons
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NEW, OLD = "persona-extension.json", "persona-plugin.json"
 # What a hub takes as a market entry's tags (nwverse/persona server/internal/extension/market.go).
 TAGS_MOST, TAG_LONGEST = 16, 24
 # The directories scripts/package.sh copies into a package besides the manifest and the program.
-PACKAGED_DIRS = ("skills", "assistant", "looks", "l10n")
+PACKAGED_DIRS = ("skills", "assistant", "looks", "l10n", "assets")
 # macOS/editor junk by basename: AppleDouble ._* and .DS_Store (a stray ._* at the package root is a second
 # top-level entry, so the hub finds no manifest) and Python's __pycache__/. scripts/package.sh excludes the same
 # names from the tar; failing here names the file to remove before a package is ever built.
@@ -93,8 +94,12 @@ def l10n(id):
     return out
 
 
+def icon(id):
+    return load(id).get("icon", "")
+
+
 def packaged(id):
-    """The runtime manifest: source-only tags/replaces belong in the signed entry instead."""
+    """The runtime manifest: source-only tags/replaces/icon belong in the signed entry instead."""
     return catalog.source_entry(load(id))["manifest"]
 
 
@@ -199,6 +204,8 @@ def referenced(m):
     "file" a file. The hub refuses a package without them at install (nwverse/persona server/internal/extension)."""
     c = m.get("contributes") or {}
     out = []
+    if "icon" in m:
+        out.append(("icon", m["icon"], "icon"))
     for s in c.get("skills") or []:
         out.append(("skills %s: dir" % s.get("id"), s.get("dir"), "skill"))
     for p in c.get("prompts") or []:
@@ -235,6 +242,11 @@ def check_files(id, m):
             bad.append("%s is not a path inside the package" % where)
         elif p.split("/", 1)[0] not in PACKAGED_DIRS:
             bad.append("%s is not under %s/: scripts/package.sh would leave it out" % (where, "/ or ".join(PACKAGED_DIRS)))
+        elif kind == "icon":
+            try:
+                icons.validate_icon(root, p)
+            except (ValueError, OSError) as e:
+                bad.append("%s: %s" % (where, e))
         elif kind == "skill" and not os.path.isfile(os.path.join(root, p, "SKILL.md")):
             bad.append("%s has no SKILL.md" % where)
         elif kind == "file" and not os.path.isfile(os.path.join(root, p)):
@@ -292,13 +304,14 @@ def check_junk(id):
 
 
 def check():
-    bad, inventory = [], []
+    bad, inventory, sources = [], [], []
     for id in ids():
         try:
             m = load(id)
         except ValueError as e:
             bad.append("extensions/%s: %s" % (id, e))
             continue
+        sources.append(m)
         if m.get("id") != id:
             bad.append("extensions/%s: the manifest's id is %r, not the directory's name" % (id, m.get("id")))
         if not catalog.valid_version(m.get("version", "")):
@@ -315,6 +328,10 @@ def check():
             if os.path.exists(os.path.join(ROOT, "extensions", id, gone)):
                 bad.append("extensions/%s: no %s (one manifest: %s; see docs/reference.md)" % (id, gone, NEW))
         bad += check_files(id, m) + check_pack(id, m) + check_junk(id)
+    try:
+        icons.validate_registry(ROOT, sources)
+    except (ValueError, OSError, KeyError, TypeError) as e:
+        bad.append("icon-sources.json: %s" % e)
     try:
         catalog.validate_entry_identities(inventory)
     except ValueError as e:

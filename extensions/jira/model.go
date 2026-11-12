@@ -35,12 +35,24 @@ type comment struct {
 	Created string          `json:"created"`
 }
 
+// searchPage is one answer of /search/jql, which pages with nextPageToken and says no total; it is absent on the last
+// page.
 type searchPage struct {
-	Issues     []issue `json:"issues"`
-	Total      int     `json:"total"`
-	StartAt    int     `json:"startAt"`
-	MaxResults int     `json:"maxResults"`
+	Issues        []issue `json:"issues"`
+	NextPageToken string  `json:"nextPageToken"`
+	IsLast        bool    `json:"isLast"`
 }
+
+// next is the token of the page after this one, "" when this is the last.
+func (p searchPage) next() string {
+	if p.IsLast {
+		return ""
+	}
+	return p.NextPageToken
+}
+
+// maxPageToken bounds a page token read back from page state or a tool call.
+const maxPageToken = 2048
 
 type issueType struct {
 	ID      string `json:"id"`

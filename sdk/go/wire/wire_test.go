@@ -105,6 +105,25 @@ func TestValidateMaxPropertiesAndUniqueItems(t *testing.T) {
 	}
 }
 
+func TestKBUpdateStatus(t *testing.T) {
+	for _, status := range []string{"", "active", "ignored", "self"} {
+		t.Run(status, func(t *testing.T) {
+			params := KBUpdateParams{Kind: "people", ID: "person", Status: status}
+			if err := Validate("KBUpdateParams", params); err != nil {
+				t.Fatalf("status %q: %v", status, err)
+			}
+			raw, err := json.Marshal(params)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var decoded KBUpdateParams
+			if err := json.Unmarshal(raw, &decoded); err != nil || decoded.Status != status {
+				t.Fatalf("status round trip: %+v, %v", decoded, err)
+			}
+		})
+	}
+}
+
 func TestValidateSays(t *testing.T) {
 	err := ValidateJSON("View", []byte(`{"sections":[{"items":[{"type":"metric","label":"a"},{"type":"nope"}]}]}`))
 	ve, ok := err.(*ValidationError)

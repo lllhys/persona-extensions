@@ -1,0 +1,62 @@
+{
+  "manifest_version": 1,
+  "id": "nuget",
+  "name": "NuGet Packages",
+  "version": "0.1.2",
+  "icon": "assets/icon.png",
+  "description": "Search .NET packages on the official NuGet JSON APIs. Compare current stable versions, licenses, release dates, target frameworks, dependencies and project links. Get an exact-version dotnet add command without executing it.",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/nuget/README.md",
+  "tags": [
+    "Development",
+    ".NET",
+    "NuGet",
+    "Dependencies"
+  ],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "mode": "deno",
+    "source": {
+      "entry": "src/index.ts",
+      "bundle": "build/nuget.mjs",
+      "sha256": "c4f96c76b004c082bab3c748c6d52a0b80efa0fa1af7cc87baf6b200dfd7112b"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "nuget",
+        "name": "NuGet Packages",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "azuresearch-usnc.nuget.org",
+          "api.nuget.org",
+          "nuget.azure.cn"
+        ],
+        "agent_tools": [
+          "nuget_*"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "nuget",
+        "title": "NuGet Packages",
+        "placement": "nav_page",
+        "icon": "code"
+      }
+    ]
+  },
+  "permissions": {
+    "network": [
+      "azuresearch-usnc.nuget.org",
+      "api.nuget.org",
+      "nuget.azure.cn"
+    ]
+  }
+}

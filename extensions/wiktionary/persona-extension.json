@@ -2,7 +2,8 @@
   "manifest_version": 1,
   "id": "wiktionary",
   "name": "Wiktionary 多语词典",
-  "version": "0.1.0",
+  "version": "0.1.3",
+  "icon": "assets/icon.png",
   "description": "查询英文、中文和日文 Wiktionary 的词性、释义与例句，提供原始条目链接。内容由 hub 通过公开 API 获取，无需账号。",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/wiktionary/README.md",
@@ -19,7 +20,7 @@
     "source": {
       "entry": "src/index.ts",
       "bundle": "build/wiktionary.mjs",
-      "sha256": "d1af2cae6174bc2495de79d293e72a30e2d0d48138c393f9a883f79b108ac0f0"
+      "sha256": "604ed383436a9992a741989f8110635c25fb7026ef299149e8311844ce31d7ce"
     }
   },
   "contributes": {

@@ -2,7 +2,8 @@
   "manifest_version": 1,
   "id": "openalex",
   "name": "OpenAlex 研究检索",
-  "version": "0.1.0",
+  "version": "0.1.2",
+  "icon": "assets/icon.png",
   "description": "按主题、标题或 DOI 搜索 OpenAlex 论文，查看年份、引用量、开放获取状态和原始链接。内容由 hub 通过公开 API 获取，无需账号。",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/openalex/README.md",
@@ -19,7 +20,7 @@
     "source": {
       "entry": "src/index.ts",
       "bundle": "build/openalex.mjs",
-      "sha256": "5762a8dc542fca5bc47c717a1b8d326a4f575853b08b685ab26bafd03e026472"
+      "sha256": "0e9aaead736a33c1d62522ff81ff04ac05a6ad4ad11087d48281e4cb0f4dd539"
     }
   },
   "contributes": {

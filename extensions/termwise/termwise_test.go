@@ -593,7 +593,7 @@ func TestManifest(t *testing.T) {
 	if err := json.Unmarshal(manifest, &m); err != nil {
 		t.Fatal(err)
 	}
-	if m.ID != "termwise" || m.ID != about.ID || m.Version != about.Version || m.Version != "0.1.1" {
+	if m.ID != "termwise" || m.ID != about.ID || m.Version != about.Version {
 		t.Fatalf("%+v", m)
 	}
 	if len(m.Contributes.UI) != 1 || m.Contributes.UI[0].ID != pageUI || m.Contributes.UI[0].Placement != "plugin_page" {

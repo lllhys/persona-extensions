@@ -20,6 +20,8 @@ export class Fixture {
     const url = new URL(input), path = url.pathname + url.search;
     this.requests.push({ url, init }); this.hits.set(path, (this.hits.get(path) ?? 0) + 1);
     if (!["en.wiktionary.org", "zh.wiktionary.org", "ja.wiktionary.org"].includes(url.hostname)) throw new Error("unexpected origin");
+    // As on the real wikis: only en.wiktionary serves the REST definition endpoint, zh and ja answer 501.
+    if (url.hostname !== "en.wiktionary.org" && url.pathname.startsWith("/api/rest_v1/page/definition/")) return new Response(JSON.stringify({ status: 501, type: "Internal error" }), { status: 501 });
     const answer = this.answers.get(path);
     if (!answer) return new Response("not found", { status: 404 });
     const signal = init.signal;

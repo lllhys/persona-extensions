@@ -33,7 +33,7 @@ test("source artifact has a default Program, verified import-free hash and uncha
   assert.deepEqual(manifest.contributes, released.contributes); assert.deepEqual(manifest.contributes.ui.map((ui: any) => ui.id), ["topics"]);
   assert.equal(manifest.contributes.ui[0].placement, "plugin_page"); assert.ok(bytes.length > 0 && bytes.length < (8 << 20));
   for (const path of ["src/index.ts", "package.json", "package-lock.json", "tsconfig.json", "SOURCE-PROFILE.txt"]) await readFile("build/package/" + path);
-  const bundle = await import(pathToFileURL(resolve("build/v2ex.mjs")).href); assert.equal(bundle.default.id, "v2ex"); assert.equal(bundle.default.version, "0.1.0"); assert.equal(bundle.default.fetch, undefined);
+  const bundle = await import(pathToFileURL(resolve("build/v2ex.mjs")).href); assert.equal(bundle.default.id, "v2ex"); assert.equal(bundle.default.version, released.version); assert.equal(bundle.default.fetch, undefined);
   assert.deepEqual(Object.keys(bundle.default.ui), ["topics"]);
 });
 test("protocol gating, initialization failures, manifest and contribution validation remain SDK-owned", async () => {

@@ -25,6 +25,8 @@ if (!bytes.length || bytes.length > (16 << 20)) throw new Error("source bundle e
 if (/\b(?:require|import)\s*\(/.test(bytes.toString())) throw new Error("runtime dependency resolution is forbidden");
 const manifest = JSON.parse(await readFile(resolve(root, "persona-extension.json"), "utf8"));
 delete manifest.tags;
+delete manifest.replaces;
+delete manifest.icon;
 const { sourceContributions } = await import(pathToFileURL(bundle).href);
 manifest.contributes = sourceContributions;
 manifest.runtime = { mode: "deno", source: { entry: "src/main.tsx", bundle: "bundle/main.mjs", sha256: digest(bytes) } };
