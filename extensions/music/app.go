@@ -22,13 +22,16 @@ const toolBudget = 25 * time.Second
 // cloud account). The extension contributes one connector per service; each is its own status, tool namespace and
 // page tab, so adding Spotify is a manifest entry and a builder here, not a rewrite of the program.
 type source struct {
-	id        string // the connector id: applemusic, spotify…
-	name      string // its display name: Apple Music
-	short     string // at most 12 characters, for the page's in-page switch when it fits
-	badge     string // at most 8 characters, for a row's source badge in All sources
-	guide     []string
-	providers map[string]provider
-	order     []string
+	id    string // the connector id: applemusic, spotify…
+	name  string // its display name: Apple Music
+	short string // at most 12 characters, for the page's in-page switch when it fits
+	badge string // at most 8 characters, for a row's source badge in All sources
+	guide []string
+	// localGuide, when set, is the page's setup sentences in the reader's language. guide stays the connector
+	// status's text: the hub reads that without a locale, so it cannot be translated there.
+	localGuide func(texts) []string
+	providers  map[string]provider
+	order      []string
 }
 
 func newSource(id, name, short, badge string, guide ...string) *source {
@@ -117,13 +120,30 @@ func activeConnectors(in *ext.Init) map[string]bool {
 	return out
 }
 
-// appleMusicGuide is what the page says when the Apple Music connector is on but has no endpoint yet.
+// pageGuide is what the page says when this source is on but has no endpoint yet, in the reader's language when the
+// source provides one.
+func (s *source) pageGuide(t texts) []string {
+	if s.localGuide != nil {
+		return s.localGuide(t)
+	}
+	return s.guide
+}
+
+// appleMusicGuide is what the connector status says when the Apple Music connector is on but has no endpoint yet; the
+// page uses the localized sentences (texts.musicGuide1 and musicGuide2) instead.
 var appleMusicGuide = []string{"Open Settings › Extensions › Music.", "Choose a Mac, turn on the iPhone, or both."}
+
+// newAppleMusicSource builds the Apple Music source with its page guide in the reader's language.
+func newAppleMusicSource() *source {
+	src := newSource(appleMusicID, appleMusicName, appleMusicName, "Apple", appleMusicGuide...)
+	src.localGuide = func(t texts) []string { return []string{t.musicGuide1, t.musicGuide2} }
+	return src
+}
 
 // addAppleMusicSource builds Apple Music's endpoints from the configuration. The source exists even when neither
 // endpoint is configured, so its connect card and its not_configured status have somewhere to live.
 func (a *app) addAppleMusicSource() error {
-	src := newSource(appleMusicID, appleMusicName, appleMusicName, "Apple", appleMusicGuide...)
+	src := newAppleMusicSource()
 	if machine := a.cfg.machine(); machine != "" {
 		var node nodeCaller
 		if a.hub != nil {

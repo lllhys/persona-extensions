@@ -127,7 +127,18 @@ func (a *app) doAction(ctx context.Context, src *source, p provider, requestID, 
 		run = func() (string, error) {
 			pl, err := creator.CreatePlaylist(ctx, req)
 			if err != nil {
-				return "", err
+				var partial *playlistPartialError
+				if !errors.As(err, &partial) {
+					return "", err
+				}
+				// The playlist exists: keep the receipt so a retry cannot create it twice, and say exactly which tracks
+				// are missing instead of reporting the write as fully done.
+				text := fmt.Sprintf("Created the playlist %q (%d tracks) in %s, but these requested tracks were not added: %s.",
+					partial.playlist.Title, partial.playlist.TrackCount, p.Name(), clip(strings.Join(partial.failed, ", "), 200))
+				if play {
+					text += " It was not started playing."
+				}
+				return "", &writtenError{text: text, err: errors.New(text)}
 			}
 			out := fmt.Sprintf("Created a playlist in %s: %q (%d tracks).", p.Name(), pl.Title, pl.TrackCount)
 			if play {
@@ -154,6 +165,12 @@ func (a *app) doAction(ctx context.Context, src *source, p provider, requestID, 
 	}
 	text, err := a.receipts.commit(requestID, key, run)
 	if err != nil {
+		// A writtenError means the playlist was created and only a follow-up step failed: the page must show the new
+		// playlist now, exactly as it does for a fully successful write.
+		var written *writtenError
+		if errors.As(err, &written) {
+			a.invalidate()
+		}
 		return nil, err
 	}
 	a.invalidate()

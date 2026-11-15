@@ -38,6 +38,8 @@ type texts struct {
 	connectDetail        string
 	connectorOff         string
 	connectorOffDetail   string
+	musicGuide1          string
+	musicGuide2          string
 	sourceLabel          string
 	playbackElsewhere    string
 	macTurnOn            string
@@ -103,6 +105,8 @@ var english = texts{
 	connectDetail:        "Open Settings › Connectors to sign in, or set this up under Settings › Extensions › Music.",
 	connectorOff:         "Music is off",
 	connectorOffDetail:   "Turn on a music connector in Settings › Connectors.",
+	musicGuide1:          "Open Settings › Extensions › Music.",
+	musicGuide2:          "Choose a Mac, turn on the iPhone, or both.",
 	sourceLabel:          "Source",
 	playbackElsewhere:    "Playback stays in %s's own app.",
 	macTurnOn:            "Turn on a Mac in Settings › Extensions › Music.",
@@ -168,6 +172,8 @@ var simplifiedChinese = texts{
 	connectDetail:        "在「设置 › 连接器」里登录，或在「设置 › 扩展 › 音乐」里完成配置。",
 	connectorOff:         "音乐已关闭",
 	connectorOffDetail:   "在「设置 › 连接器」里打开一个音乐连接器。",
+	musicGuide1:          "在「设置 › 扩展 › 音乐」里完成配置。",
+	musicGuide2:          "选择一台 Mac，打开 iPhone，或者两者都要。",
 	sourceLabel:          "来源",
 	playbackElsewhere:    "播放仍由 %s 自己的 App 控制。",
 	macTurnOn:            "在「设置 › 扩展 › 音乐」里打开一台 Mac。",
@@ -233,6 +239,8 @@ var japanese = texts{
 	connectDetail:        "「設定 › コネクタ」でサインインするか、「設定 › 拡張機能 › ミュージック」で設定してください。",
 	connectorOff:         "ミュージックはオフです",
 	connectorOffDetail:   "「設定 › コネクタ」で音楽コネクタをオンにしてください。",
+	musicGuide1:          "「設定 › 拡張機能 › ミュージック」で設定してください。",
+	musicGuide2:          "Mac を選ぶか、iPhone をオンにするか、両方を設定してください。",
 	sourceLabel:          "ソース",
 	playbackElsewhere:    "再生は %s のアプリが行います。",
 	macTurnOn:            "「設定 › 拡張機能 › ミュージック」で Mac をオンにしてください。",

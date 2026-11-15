@@ -159,7 +159,7 @@ func appWith(t *testing.T, providers ...provider) *app {
 	t.Helper()
 	a := newApp()
 	a.logf = t.Logf
-	src := newSource(appleMusicID, appleMusicName, appleMusicName, "Apple", appleMusicGuide...)
+	src := newAppleMusicSource()
 	for _, p := range providers {
 		if err := src.add(p); err != nil {
 			t.Fatal(err)
@@ -296,6 +296,26 @@ func TestCreatePlaylistWithPlay(t *testing.T) {
 	}
 	if got := fn.controlParams(t); len(got) != 2 || got["action"] != "play_playlist" || got["id"] != "p.new" {
 		t.Fatalf("playback sent %v", got)
+	}
+}
+
+// A playlist created with some tracks missing is reported as a partial write: the error names what was not added, and
+// the receipt stays done, so the same request_id answers it instead of creating the playlist again.
+func TestCreatePlaylistPartialWriteIsReported(t *testing.T) {
+	fn := macFixture()
+	fn.out["create_playlist"] = macCreate{Playlist: macPlaylist{ID: "p.new", Title: "Focus", TrackCount: 1}, Added: 1, Failed: []string{"m2"}}
+	a := appWith(t, newMacProvider("m1", fn))
+	body := `{"name":"applemusic_mac_create_playlist","args":{"name":"Focus","track_ids":["m1","m2"]},"request_id":"req-partial"}`
+	res, err := call(t, a, "actions.do", body)
+	if err == nil || !strings.Contains(err.Error(), "not added") || !strings.Contains(err.Error(), "m2") {
+		t.Fatalf("partial create: %+v %v", res, err)
+	}
+	again, err := call(t, a, "actions.do", body)
+	if err != nil || !strings.Contains(again["text"].(string), "not added") {
+		t.Fatalf("retry: %+v %v", again, err)
+	}
+	if fn.count("create_playlist") != 1 {
+		t.Fatalf("the playlist was created %d times", fn.count("create_playlist"))
 	}
 }
 

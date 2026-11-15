@@ -59,6 +59,28 @@ func TestScriptVariablesAvoidMusicTerms(t *testing.T) {
 	}
 }
 
+// TestSanitizeRoundTripsSeparators runs the same handler the scripts call on text containing both separators and a
+// backslash, then parses it with records(): the value must come back whole and the record must keep its fields.
+func TestSanitizeRoundTripsSeparators(t *testing.T) {
+	field := "A\x1e title \x1f with \\ backslash"
+	script := sanitizeScript + `
+on run argv
+  return my sanitize(item 1 of argv)
+end run
+`
+	out, err := exec.Command("/usr/bin/osascript", "-e", script, "--", field).Output()
+	if err != nil {
+		t.Fatalf("sanitize: %v", err)
+	}
+	rows := records(string(out) + fieldSep + "second")
+	if len(rows) != 1 || len(rows[0]) != 2 {
+		t.Fatalf("records %#v", rows)
+	}
+	if rows[0][0] != field || rows[0][1] != "second" {
+		t.Fatalf("round trip %q, want %q", rows[0][0], field)
+	}
+}
+
 func musicTerms(t *testing.T) map[string]struct{} {
 	t.Helper()
 	app := ""

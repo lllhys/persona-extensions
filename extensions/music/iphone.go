@@ -171,7 +171,7 @@ func normalizeSnapshot(s *iphoneSnapshot) {
 	}
 	for i := range s.Recent {
 		s.Recent[i].ID = clip(s.Recent[i].ID, 200)
-		s.Recent[i].Title = clip(s.Recent[i].Title, 500)
+		s.Recent[i].Title = clip(strings.TrimSpace(s.Recent[i].Title), 500)
 		s.Recent[i].Artist = clip(s.Recent[i].Artist, 300)
 		s.Recent[i].Album = clip(s.Recent[i].Album, 300)
 		s.Recent[i].Descr = clip(s.Recent[i].Descr, 1000)
@@ -183,14 +183,14 @@ func normalizeSnapshot(s *iphoneSnapshot) {
 	// here rather than break every later render.
 	recent := s.Recent[:0]
 	for _, it := range s.Recent {
-		if strings.TrimSpace(it.Title) != "" {
+		if it.Title != "" {
 			recent = append(recent, it)
 		}
 	}
 	s.Recent = recent
 	for i := range s.Playlists {
 		s.Playlists[i].ID = clip(s.Playlists[i].ID, 200)
-		s.Playlists[i].Title = clip(s.Playlists[i].Title, 500)
+		s.Playlists[i].Title = clip(strings.TrimSpace(s.Playlists[i].Title), 500)
 		s.Playlists[i].Descr = clip(s.Playlists[i].Descr, 1000)
 		s.Playlists[i].ArtworkURL = clip(s.Playlists[i].ArtworkURL, 2000)
 		s.Playlists[i].URL = clip(s.Playlists[i].URL, 2000)
@@ -200,13 +200,13 @@ func normalizeSnapshot(s *iphoneSnapshot) {
 	}
 	playlists := s.Playlists[:0]
 	for _, pl := range s.Playlists {
-		if strings.TrimSpace(pl.Title) != "" {
+		if pl.Title != "" {
 			playlists = append(playlists, pl)
 		}
 	}
 	s.Playlists = playlists
 	if s.NowPlaying != nil {
-		s.NowPlaying.Title = clip(s.NowPlaying.Title, 500)
+		s.NowPlaying.Title = clip(strings.TrimSpace(s.NowPlaying.Title), 500)
 		s.NowPlaying.Artist = clip(s.NowPlaying.Artist, 300)
 		s.NowPlaying.Album = clip(s.NowPlaying.Album, 300)
 		s.NowPlaying.State = clip(s.NowPlaying.State, 20)

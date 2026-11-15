@@ -315,7 +315,13 @@ func (p *macProvider) CreatePlaylist(ctx context.Context, req createPlaylistRequ
 	if n.Title == "" {
 		n.Title = req.Name
 	}
-	return n.playlist(), nil
+	pl := n.playlist()
+	if len(out.Failed) > 0 {
+		// The playlist exists: the caller must keep the write receipt so a retry cannot create it twice, and say
+		// exactly which requested tracks are missing.
+		return pl, &playlistPartialError{playlist: pl, failed: out.Failed}
+	}
+	return pl, nil
 }
 
 // Artwork fetches a track's or playlist's picture from the Mac for the page's ui.image ref.

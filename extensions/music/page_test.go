@@ -237,6 +237,20 @@ func TestFallbackWhenNothingConfigured(t *testing.T) {
 	}
 }
 
+// The first-run card speaks the request's language too, not only the rest of the page.
+func TestConnectGuideFollowsTheLocale(t *testing.T) {
+	a := appWith(t)
+	r := req(6, nil)
+	r.Locale = "zh-Hans"
+	v, err := a.render(context.Background(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked(t, v)
+	says(t, v, "在「设置 › 扩展 › 音乐」里完成配置。", "选择一台 Mac")
+	saysNot(t, v, "Open Settings")
+}
+
 func TestConnectorOffPage(t *testing.T) {
 	a := newApp()
 	a.logf = t.Logf

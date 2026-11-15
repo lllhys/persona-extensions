@@ -122,6 +122,9 @@ type macDetail struct {
 type macCreate struct {
 	Playlist macPlaylist `json:"playlist"`
 	Added    int         `json:"added"`
+	// Failed are the requested track ids Music refused after the playlist existed: the write happened, so the
+	// assistant must report it instead of retrying.
+	Failed []string `json:"failed,omitempty"`
 }
 
 func (n *macNode) handle(ctx context.Context, method string, raw json.RawMessage) (any, error) {
@@ -420,12 +423,28 @@ func (n *macNode) createPlaylist(ctx context.Context, name, description string, 
 		return macCreate{}, macError(ctx, err)
 	}
 	rows := records(out)
-	if len(rows) != 1 || len(rows[0]) < 4 {
+	if len(rows) != 1 || len(rows[0]) < 1 {
 		return macCreate{}, &ext.Error{Code: "macos_music", Message: "Music created the playlist but returned no details."}
 	}
 	f := rows[0]
+	if f[0] == "missing" {
+		// The script checked every track before creating anything: nothing was written, so a retry is safe.
+		var missing []string
+		if len(f) > 1 && f[1] != "" {
+			missing = strings.Split(f[1], ",")
+		}
+		return macCreate{}, &ext.Error{Code: "not_found",
+			Message: clip("These tracks are not in the Music library: "+strings.Join(missing, ", "), 300)}
+	}
+	if f[0] != "ok" || len(f) < 6 {
+		return macCreate{}, &ext.Error{Code: "macos_music", Message: "Music created the playlist but returned no details."}
+	}
+	var failed []string
+	if f[5] != "" {
+		failed = strings.Split(f[5], ",")
+	}
 	n.clearCache()
-	return macCreate{Playlist: macPlaylist{ID: f[0], Title: f[1], TrackCount: atoi(f[2])}, Added: atoi(f[3])}, nil
+	return macCreate{Playlist: macPlaylist{ID: f[1], Title: f[2], TrackCount: atoi(f[3])}, Added: atoi(f[4]), Failed: failed}, nil
 }
 
 type macArtwork struct {

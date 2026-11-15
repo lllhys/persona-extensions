@@ -19,6 +19,7 @@ const (
 	pageBudget        = 17 * time.Second
 	tileTitleMost     = 40
 	tileSubMost       = 80
+	tabTitleMost      = 40
 	playlistPageSize  = 50
 	maxPlaylistOffset = 100000
 	// allSource is the tab that merges every configured service.
@@ -85,12 +86,13 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 			id = allSource
 		}
 		st.Source = id
-		st.Provider, st.Mode, st.Query, st.PlaylistID, st.Offset = "", "", "", "", 0
+		// The endpoint belonged to the source that was open; a stale one must not leak into the next page.
+		st.Provider, st.EndpointSource, st.Mode, st.Query, st.PlaylistID, st.Offset = "", "", "", "", "", 0
 	case "provider":
 		// An older page's endpoint switch: the new page's tabs are sources, and the endpoint is a detail of its
 		// source. Keep answering it until the app has the new page.
 		id := strings.TrimSpace(r.Values["source"])
-		st.Provider, st.Source = "", allSource
+		st.Provider, st.Source, st.EndpointSource = "", allSource, ""
 		if id == appleMusicID {
 			st.Source = appleMusicID
 		}
@@ -116,11 +118,18 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 		if e == nil {
 			return nil, errors.New("no music endpoint can search")
 		}
-		st.Provider = e.p.ID()
+		st.Provider, st.EndpointSource = e.p.ID(), e.src.id
 		st.Mode = "search"
 	case "player":
+		// Entering the player from a service's own tab stays on that service: when the request names no endpoint, a
+		// provider or endpoint source left over from another service must not decide what is playing.
 		if e := a.endpointFromValues(st, r.Values); e != nil {
 			st.Provider, st.EndpointSource = e.p.ID(), e.src.id
+		} else {
+			st.Provider, st.EndpointSource = "", ""
+			if st.Source != "" && st.Source != allSource {
+				st.EndpointSource = st.Source
+			}
 		}
 		st.Mode, st.Query, st.PlaylistID, st.Offset = "player", "", "", 0
 	case "playlist":
@@ -138,7 +147,7 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 		if _, ok := e.p.(playlistProvider); !ok {
 			return nil, errors.New("this endpoint does not show playlists")
 		}
-		st.Source, st.Provider = e.src.id, e.p.ID()
+		st.Source, st.Provider, st.EndpointSource = e.src.id, e.p.ID(), e.src.id
 		st.PlaylistID, st.Mode, st.Offset = id, "playlist", 0
 	case "page_tracks":
 		offset, err := strconv.Atoi(strings.TrimSpace(r.Values["offset"]))
@@ -237,17 +246,20 @@ func (a *app) pageSource(id string, active []*source, t texts) pageSource {
 
 // sourceSelector is the switch between All sources and each on service. The in-page segmented control is used while
 // every label fits (at most 5 choices of 12 characters); with more or longer services it becomes the page's tabs,
-// then a filter, so a new service can never make the whole page fail the view check.
+// then a filter, so a new service can never make the whole page fail the view check. A tab title is clipped to the
+// schema's limit; the filter's choices keep the full name.
 func (a *app) sourceSelector(v *wire.View, st pageState, t texts, active []*source) *wire.Component {
 	value := st.Source
 	if value != allSource && (a.sources[value] == nil || !a.sourceActive(value)) {
 		value = allSource
 	}
 	short := []wire.Choice{{Value: allSource, Title: t.allSources}}
-	full := []wire.Tab{{Value: allSource, Title: t.allSources}}
+	tabs := []wire.Tab{{Value: allSource, Title: clip(t.allSources, tabTitleMost)}}
+	names := []wire.Choice{{Value: allSource, Title: t.allSources}}
 	for _, s := range active {
 		short = append(short, wire.Choice{Value: s.id, Title: s.short})
-		full = append(full, wire.Tab{Value: s.id, Title: s.name})
+		tabs = append(tabs, wire.Tab{Value: s.id, Title: clip(s.name, tabTitleMost)})
+		names = append(names, wire.Choice{Value: s.id, Title: s.name})
 	}
 	fits := len(short) <= 5
 	for _, c := range short {
@@ -259,15 +271,11 @@ func (a *app) sourceSelector(v *wire.View, st pageState, t texts, active []*sour
 		return &wire.Component{Type: wire.ComponentSegmented, Name: "source", Value: value, Choices: short,
 			Action: &wire.Action{ID: "source"}}
 	}
-	if len(full) <= 8 {
-		v.Tabs = &wire.Tabs{Name: "source", Value: value, Items: full, Action: wire.Action{ID: "source"}}
+	if len(tabs) <= 8 {
+		v.Tabs = &wire.Tabs{Name: "source", Value: value, Items: tabs, Action: wire.Action{ID: "source"}}
 		return nil
 	}
-	choices := make([]wire.Choice, 0, len(full))
-	for _, tab := range full {
-		choices = append(choices, wire.Choice{Value: tab.Value, Title: tab.Title})
-	}
-	v.Filter = &wire.Filter{Name: "source", Title: t.sourceLabel, Choices: choices, Value: value,
+	v.Filter = &wire.Filter{Name: "source", Title: t.sourceLabel, Choices: names, Value: value,
 		Action: wire.Action{ID: "source"}}
 	return nil
 }
@@ -378,10 +386,10 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState) *wire.Vi
 	st.Source = src.id
 	if len(src.endpoints) == 0 {
 		if src.src != nil {
-			return emptyView(t.title, fmt.Sprintf(t.connectNamed, src.src.name), strings.Join(src.src.guide, " "))
+			return emptyView(t.title, fmt.Sprintf(t.connectNamed, src.src.name), strings.Join(src.src.pageGuide(t), " "))
 		}
 		if len(active) == 1 { // one service, just not set up yet: name it
-			return emptyView(t.title, fmt.Sprintf(t.connectNamed, active[0].name), strings.Join(active[0].guide, " "))
+			return emptyView(t.title, fmt.Sprintf(t.connectNamed, active[0].name), strings.Join(active[0].pageGuide(t), " "))
 		}
 		return emptyView(t.title, t.connectMusic, t.connectDetail)
 	}

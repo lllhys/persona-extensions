@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -118,6 +119,18 @@ type playlistProvider interface {
 
 type playlistCreator interface {
 	CreatePlaylist(ctx context.Context, req createPlaylistRequest) (playlist, error)
+}
+
+// playlistPartialError is a playlist that exists but is missing some requested tracks. The write happened, so the
+// caller must keep its receipt (a retry must not create the playlist again) and tell the user what is missing; the
+// track ids in failed are the ones the service refused.
+type playlistPartialError struct {
+	playlist playlist
+	failed   []string
+}
+
+func (e *playlistPartialError) Error() string {
+	return fmt.Sprintf("the playlist %q was created, but %d requested tracks could not be added", e.playlist.Title, len(e.failed))
 }
 
 // artworkProvider serves a picture for a page ref (ui.image): bytes of a png, jpeg, webp or gif.

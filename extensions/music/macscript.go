@@ -10,11 +10,38 @@ import (
 
 // The Music.app AppleScript this extension's Mac program runs. Every script prints records separated by ASCII 30 and
 // fields by ASCII 31, so a library scan is one process; arguments after "--" reach the script's run handler and are
-// never pasted into AppleScript source.
+// never pasted into AppleScript source. A title or description can itself contain either separator, so every dynamic
+// text goes through sanitize(), which escapes the separators (and the backslash that introduces the escapes); records()
+// reverses it.
 const (
 	fieldSep  = "\x1f"
 	recordSep = "\x1e"
 )
+
+// sanitizeScript is the handler behind every dynamic text field below. Call it as "my sanitize(...)": inside a tell
+// block an unqualified name would be looked up in Music's own terminology first.
+const sanitizeScript = `
+on sanitize(v)
+  if v is missing value then return ""
+  set v to v as text
+  set US to (ASCII character 31)
+  set RS to (ASCII character 30)
+  set text item delimiters to "\\"
+  set parts to text items of v
+  set text item delimiters to "\\\\"
+  set v to parts as text
+  set text item delimiters to RS
+  set parts to text items of v
+  set text item delimiters to "\\u001e"
+  set v to parts as text
+  set text item delimiters to US
+  set parts to text items of v
+  set text item delimiters to "\\u001f"
+  set v to parts as text
+  set text item delimiters to ""
+  return v
+end sanitize
+`
 
 // scriptRunner runs one AppleScript.
 type scriptRunner interface {
@@ -47,7 +74,7 @@ func (osaRunner) Run(ctx context.Context, script string, args ...string) (string
 	return strings.TrimRight(string(out), "\r\n"), nil
 }
 
-const statusScript = `
+const statusScript = sanitizeScript + `
 set US to (ASCII character 31)
 set isRunning to application "Music" is running
 if not isRunning then return "0" & US & "" & US & "0" & US & "0"
@@ -61,11 +88,11 @@ tell application "Music"
   try
     set playlistCount to count of user playlists
   end try
-  return "1" & US & v & US & (trackCount as text) & US & (playlistCount as text)
+  return "1" & US & (my sanitize(v)) & US & (trackCount as text) & US & (playlistCount as text)
 end tell
 `
 
-const nowScript = `
+const nowScript = sanitizeScript + `
 set US to (ASCII character 31)
 tell application "Music"
   set stateText to player state as text
@@ -83,11 +110,11 @@ tell application "Music"
   try
     set dur to duration of t as integer
   end try
-  return stateText & US & (persistent ID of t) & US & (name of t) & US & (artist of t) & US & (album of t) & US & (pos as text) & US & (dur as text)
+  return stateText & US & (persistent ID of t) & US & (my sanitize(name of t)) & US & (my sanitize(artist of t)) & US & (my sanitize(album of t)) & US & (pos as text) & US & (dur as text)
 end tell
 `
 
-const recentScript = `
+const recentScript = sanitizeScript + `
 on run argv
   set US to (ASCII character 31)
   set RS to (ASCII character 30)
@@ -119,7 +146,7 @@ on run argv
       try
         set rt to rating of t
       end try
-      set out to out & (persistent ID of t) & US & (name of t) & US & (artist of t) & US & (album of t) & US & (duration of t as integer) & US & (pc as text) & US & pd & US & (rt as text) & RS
+      set out to out & (persistent ID of t) & US & (my sanitize(name of t)) & US & (my sanitize(artist of t)) & US & (my sanitize(album of t)) & US & (duration of t as integer) & US & (pc as text) & US & pd & US & (rt as text) & RS
       set n to n + 1
       if n ≥ 2000 then exit repeat
     end repeat
@@ -128,7 +155,7 @@ on run argv
 end run
 `
 
-const playlistsScript = `
+const playlistsScript = sanitizeScript + `
 on run argv
   set US to (ASCII character 31)
   set RS to (ASCII character 30)
@@ -141,7 +168,7 @@ on run argv
           set descr to description of pl
         end try
         set cls to class of pl as text
-        set out to out & (persistent ID of pl) & US & (name of pl) & US & ((count of tracks of pl) as text) & US & ((duration of pl as integer) as text) & US & descr & US & cls & RS
+        set out to out & (persistent ID of pl) & US & (my sanitize(name of pl)) & US & ((count of tracks of pl) as text) & US & ((duration of pl as integer) as text) & US & (my sanitize(descr)) & US & cls & RS
       end try
     end repeat
     return out
@@ -149,7 +176,7 @@ on run argv
 end run
 `
 
-const playlistScript = `
+const playlistScript = sanitizeScript + `
 on run argv
   set US to (ASCII character 31)
   set RS to (ASCII character 30)
@@ -168,13 +195,13 @@ on run argv
     end try
     set trackList to tracks of pl
     set totalTracks to count of trackList
-    set out to "P" & US & (persistent ID of pl) & US & (name of pl) & US & (totalTracks as text) & US & ((duration of pl as integer) as text) & US & descr & RS
+    set out to "P" & US & (persistent ID of pl) & US & (my sanitize(name of pl)) & US & (totalTracks as text) & US & ((duration of pl as integer) as text) & US & (my sanitize(descr)) & RS
     set lastIndex to startAt + lim
     if lastIndex > totalTracks then set lastIndex to totalTracks
     if startAt < totalTracks then
       repeat with i from (startAt + 1) to lastIndex
         set t to item i of trackList
-        set out to out & "T" & US & (persistent ID of t) & US & (name of t) & US & (artist of t) & US & (album of t) & US & (duration of t as integer) & US & (played count of t) & US & (rating of t) & RS
+        set out to out & "T" & US & (persistent ID of t) & US & (my sanitize(name of t)) & US & (my sanitize(artist of t)) & US & (my sanitize(album of t)) & US & (duration of t as integer) & US & (played count of t) & US & (rating of t) & RS
       end repeat
     end if
     return out
@@ -182,7 +209,7 @@ on run argv
 end run
 `
 
-const searchScript = `
+const searchScript = sanitizeScript + `
 on run argv
   set US to (ASCII character 31)
   set RS to (ASCII character 30)
@@ -193,7 +220,7 @@ on run argv
     set n to 0
     set hits to (every track of library playlist 1 whose name contains q or artist contains q or album contains q)
     repeat with t in hits
-      set out to out & (persistent ID of t) & US & (name of t) & US & (artist of t) & US & (album of t) & US & (duration of t as integer) & US & (played count of t) & US & (rating of t) & RS
+      set out to out & (persistent ID of t) & US & (my sanitize(name of t)) & US & (my sanitize(artist of t)) & US & (my sanitize(album of t)) & US & (duration of t as integer) & US & (played count of t) & US & (rating of t) & RS
       set n to n + 1
       if n ≥ lim then exit repeat
     end repeat
@@ -253,23 +280,45 @@ on run argv
 end run
 `
 
-const createPlaylistScript = `
+const createPlaylistScript = sanitizeScript + `
 on run argv
   set US to (ASCII character 31)
   set pname to item 1 of argv
   set pdesc to item 2 of argv
   tell application "Music"
-    set pl to make new user playlist with properties {name:pname, description:pdesc}
-    set added to 0
+    set lib to library playlist 1
+    -- Resolve every track before the playlist exists: a stale or unknown id must leave nothing behind, never an
+    -- empty or partial playlist the user already confirmed.
+    set foundTracks to {}
+    set missingIDs to ""
     repeat with i from 3 to count of argv
       set pid to item i of argv
+      set found to missing value
       try
-        set t to first track of library playlist 1 whose persistent ID is pid
-        duplicate t to pl
+        set found to first track of lib whose persistent ID is pid
+      end try
+      if found is missing value then
+        if missingIDs is not "" then set missingIDs to missingIDs & ","
+        set missingIDs to missingIDs & pid
+      else
+        set end of foundTracks to found
+      end if
+    end repeat
+    if missingIDs is not "" then return "missing" & US & missingIDs
+    set pl to make new user playlist with properties {name:pname, description:pdesc}
+    set added to 0
+    set failedIDs to ""
+    repeat with i from 1 to count of foundTracks
+      set found to item i of foundTracks
+      try
+        duplicate found to pl
         set added to added + 1
+      on error
+        if failedIDs is not "" then set failedIDs to failedIDs & ","
+        set failedIDs to failedIDs & (persistent ID of found)
       end try
     end repeat
-    return (persistent ID of pl) & US & (name of pl) & US & ((count of tracks of pl) as text) & US & (added as text)
+    return "ok" & US & (persistent ID of pl) & US & (my sanitize(name of pl)) & US & ((count of tracks of pl) as text) & US & (added as text) & US & failedIDs
   end tell
 end run
 `
@@ -325,7 +374,9 @@ tell application "Music"
 end tell
 `
 
-// records splits a script's output into records and fields.
+// records splits a script's output into records and fields. sanitize() in the scripts escaped the separators (and the
+// backslash that introduces an escape) inside a value, so a title containing them cannot shift fields; unescapeField
+// reverses that.
 func records(out string) [][]string {
 	out = strings.Trim(out, "\r\n")
 	if out == "" {
@@ -339,7 +390,7 @@ func records(out string) [][]string {
 		}
 		fields := strings.Split(r, fieldSep)
 		for i := range fields {
-			v := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(fields[i], fieldSep, " "), recordSep, " "))
+			v := strings.TrimSpace(unescapeField(fields[i]))
 			if v == "missing value" {
 				v = ""
 			}
@@ -348,4 +399,39 @@ func records(out string) [][]string {
 		rows = append(rows, fields)
 	}
 	return rows
+}
+
+// unescapeField reverses sanitize(): "\\" is a literal backslash, "\u001e" and "\u001f" are the separators. Any other
+// backslash is kept as it is, so text that never went through sanitize() still reads back unchanged.
+func unescapeField(s string) string {
+	if !strings.Contains(s, `\`) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\\' || i+1 >= len(s) {
+			b.WriteByte(s[i])
+			continue
+		}
+		switch s[i+1] {
+		case '\\':
+			b.WriteByte('\\')
+			i++
+		case 'u':
+			switch {
+			case strings.HasPrefix(s[i:], `\u001e`):
+				b.WriteByte(0x1e)
+				i += 5
+			case strings.HasPrefix(s[i:], `\u001f`):
+				b.WriteByte(0x1f)
+				i += 5
+			default:
+				b.WriteByte('\\')
+			}
+		default:
+			b.WriteByte('\\')
+		}
+	}
+	return b.String()
 }

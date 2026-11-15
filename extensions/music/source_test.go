@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // fakeCloud is a plausible second service: catalog search, recent and playlists, no player and no writes.
@@ -38,7 +39,7 @@ func appWithSources(t *testing.T) (*app, *fakeCloud) {
 	a := newApp()
 	a.logf = t.Logf
 
-	apple := newSource(appleMusicID, appleMusicName, appleMusicName, "Apple", appleMusicGuide...)
+	apple := newAppleMusicSource()
 	if err := apple.add(newMacProvider("m1", macFixture())); err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +185,7 @@ func TestLongSourceLabelUsesTabs(t *testing.T) {
 	saysNot(t, v, "[segmented]")
 }
 
-// With more than eight services the switch becomes a filter, which has no short label limit.
+// With more than eight services the switch becomes a filter, which has no short label limit and keeps the full name.
 func TestManySourcesUseFilter(t *testing.T) {
 	a, _ := appWithSources(t)
 	for i := 0; i < 8; i++ {
@@ -195,9 +196,77 @@ func TestManySourcesUseFilter(t *testing.T) {
 		}
 		a.addSource(s)
 	}
+	long := strings.Repeat("Long Service ", 5) // 60 characters, past the tab limit
+	s := newSource("longsvc", long, long, "Long")
+	if err := s.add(&fakeCloud{id: "web", name: "Long"}); err != nil {
+		t.Fatal(err)
+	}
+	a.addSource(s)
 	v := draw(t, a, nil)
-	if v.Filter == nil || v.Filter.Name != "source" || len(v.Filter.Choices) != 11 {
+	if v.Filter == nil || v.Filter.Name != "source" || len(v.Filter.Choices) != 12 {
 		t.Fatalf("filter %+v tabs %+v", v.Filter, v.Tabs)
+	}
+	full := false
+	for _, c := range v.Filter.Choices {
+		if c.Title == long {
+			full = true
+		}
+	}
+	if !full {
+		t.Fatalf("the filter lost the full source name: %+v", v.Filter.Choices)
+	}
+}
+
+// A service name longer than the tab schema allows is clipped, so a new service cannot make the whole page fail the
+// view check; draw() validates the view.
+func TestVeryLongSourceNameFitsTabs(t *testing.T) {
+	a, _ := appWithSources(t)
+	name := strings.Repeat("A very long service name ", 3) // 75 characters
+	s := newSource("longsvc", name, name, "Long")
+	if err := s.add(&fakeCloud{id: "web", name: "Long"}); err != nil {
+		t.Fatal(err)
+	}
+	a.addSource(s)
+	v := draw(t, a, nil)
+	if v.Tabs == nil || len(v.Tabs.Items) != 4 {
+		t.Fatalf("tabs %+v", v.Tabs)
+	}
+	for _, tab := range v.Tabs.Items {
+		if utf8.RuneCountInString(tab.Title) > tabTitleMost {
+			t.Fatalf("tab %q is longer than %d characters", tab.Title, tabTitleMost)
+		}
+	}
+}
+
+// The player opened from a service's own tab stays on that service: an endpoint left over from another page (state
+// an app can restore) must not decide what is playing.
+func TestPlayerFromSourceTabKeepsTheSource(t *testing.T) {
+	a, _ := appWithSources(t)
+	st := pageState{Source: "spotify", Provider: "mac", EndpointSource: appleMusicID}
+	v, err := a.render(context.Background(), req(6, &st))
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked(t, v)
+	v = tap(t, a, v, "player", nil)
+	saysNot(t, v, "Midnight City")
+	says(t, v, "Nothing is playing.")
+	if got := stateOf(t, v.State); got.Source != "spotify" || got.Provider != "" || got.EndpointSource != "spotify" {
+		t.Fatalf("state %+v", got)
+	}
+}
+
+// Switching the source drops the endpoint of the source that was open.
+func TestSourceSwitchClearsTheEndpoint(t *testing.T) {
+	a, _ := appWithSources(t)
+	st := pageState{Source: appleMusicID, Provider: "mac", EndpointSource: appleMusicID}
+	v, err := a.render(context.Background(), req(6, &st))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v = tap(t, a, v, "source", map[string]string{"source": "spotify"})
+	if got := stateOf(t, v.State); got.Source != "spotify" || got.Provider != "" || got.EndpointSource != "" {
+		t.Fatalf("state %+v", got)
 	}
 }
 

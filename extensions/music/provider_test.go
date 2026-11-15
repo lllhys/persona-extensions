@@ -227,7 +227,8 @@ func TestMacNodePlaylistAndControlAndCreate(t *testing.T) {
 			if len(args) != 3 || args[0] != "New list" || args[2] != "t1" {
 				t.Fatalf("create args %v", args)
 			}
-			return "p2" + fieldSep + "New list" + fieldSep + "1" + fieldSep + "1", nil
+			// ok, id, name, track count, added count, and the ids Music refused (none here).
+			return "ok" + fieldSep + "p2" + fieldSep + "New list" + fieldSep + "1" + fieldSep + "1" + fieldSep, nil
 		case strings.Contains(script, "set pid"):
 			if len(args) != 3 || args[0] != "p1" || args[1] != "0" || args[2] != "10" {
 				t.Fatalf("playlist args %v", args)
@@ -253,6 +254,31 @@ func TestMacNodePlaylistAndControlAndCreate(t *testing.T) {
 	created, err := n.createPlaylist(context.Background(), "New list", "", []string{"t1"})
 	if err != nil || created.Playlist.ID != "p2" || created.Added != 1 {
 		t.Fatalf("create %+v %v", created, err)
+	}
+}
+
+// The script resolves every track before it creates anything: an unknown id comes back as not_found and no playlist
+// exists, so a corrected retry is safe.
+func TestMacNodeCreatePlaylistRefusesMissingTracks(t *testing.T) {
+	n := testMacNode(func(string, []string) (string, error) {
+		return "missing" + fieldSep + "t1,t2", nil
+	})
+	_, err := n.createPlaylist(context.Background(), "List", "", []string{"t1", "t2"})
+	var e *ext.Error
+	if !errors.As(err, &e) || e.Code != "not_found" || !strings.Contains(e.Message, "t1, t2") {
+		t.Fatalf("err %v", err)
+	}
+}
+
+// After the playlist exists, a track Music refuses is reported by id: the write happened, so the caller must not treat
+// it as a write that can be retried.
+func TestMacNodeCreatePlaylistReportsRefusedTracks(t *testing.T) {
+	n := testMacNode(func(string, []string) (string, error) {
+		return "ok" + fieldSep + "p2" + fieldSep + "List" + fieldSep + "1" + fieldSep + "1" + fieldSep + "t2", nil
+	})
+	out, err := n.createPlaylist(context.Background(), "List", "", []string{"t1", "t2"})
+	if err != nil || out.Playlist.ID != "p2" || out.Added != 1 || !slices.Equal(out.Failed, []string{"t2"}) {
+		t.Fatalf("create %+v %v", out, err)
 	}
 }
 
@@ -379,13 +405,40 @@ func TestRecordsDropMissingValue(t *testing.T) {
 	}
 }
 
+// sanitize() escapes a backslash and both separators inside a value; records() restores them. A title carrying either
+// separator must come back whole instead of shifting fields or splitting the record.
+func TestRecordsRoundTripEscapedSeparators(t *testing.T) {
+	out := `ok` + fieldSep + `A \u001e title \u001f with \\ backslash` + fieldSep + `x` + recordSep +
+		`second` + fieldSep + `y`
+	rows := records(out)
+	if len(rows) != 2 || len(rows[0]) != 3 {
+		t.Fatalf("records %#v", rows)
+	}
+	if got, want := rows[0][1], "A \x1e title \x1f with \\ backslash"; got != want {
+		t.Fatalf("field %q, want %q", got, want)
+	}
+	if rows[1][0] != "second" || rows[1][1] != "y" {
+		t.Fatalf("second record %#v", rows[1])
+	}
+}
+
+// A title that contains neither escape nor escape-looking text is unchanged: unescaping never rewrites ordinary text.
+func TestUnescapeFieldLeavesOrdinaryText(t *testing.T) {
+	for _, s := range []string{"Midnight City", `C:\Music`, `u001e`, `\u001`, `trailing\`} {
+		if got := unescapeField(s); got != s {
+			t.Fatalf("unescapeField(%q) = %q", s, got)
+		}
+	}
+}
+
 func TestIPhoneSnapshotDropsEmptyTitlesAndStampsTheHub(t *testing.T) {
 	p := newIPhoneProvider(openSnapshotStore(t.TempDir()))
 	at := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
 	p.now = func() time.Time { return at }
 	if _, err := p.Sync(context.Background(), json.RawMessage(`{
 		"synced_at":"2099-01-01T00:00:00Z",
-		"recent":[{"id":"r1","title":""},{"id":"r2","title":"Real"}],
+		"now_playing":{"title":"   ","artist":"Nobody"},
+		"recent":[{"id":"r1","title":""},{"id":"r2","title":"Real"},{"id":"r3","title":"  Padded  "}],
 		"playlists":[{"id":"p1","title":"  "},{"id":"p2","title":"List"}]
 	}`)); err != nil {
 		t.Fatal(err)
@@ -394,7 +447,12 @@ func TestIPhoneSnapshotDropsEmptyTitlesAndStampsTheHub(t *testing.T) {
 	if !snap.SyncedAt.Equal(at) {
 		t.Fatalf("synced_at %v, want the hub's %v", snap.SyncedAt, at)
 	}
-	if len(snap.Recent) != 1 || snap.Recent[0].Title != "Real" {
+	// A whitespace-only title is empty in every section: now playing is dropped, and a title with padding is stored
+	// trimmed so it can never render as a blank row or tile.
+	if snap.NowPlaying != nil {
+		t.Fatalf("now playing %+v", snap.NowPlaying)
+	}
+	if len(snap.Recent) != 2 || snap.Recent[0].Title != "Real" || snap.Recent[1].Title != "Padded" {
 		t.Fatalf("recent %+v", snap.Recent)
 	}
 	if len(snap.Playlists) != 1 || snap.Playlists[0].Title != "List" {
@@ -452,6 +510,19 @@ func TestCreatePlaylistPlayArgument(t *testing.T) {
 	}
 	if _, _, err := parseCreatePlaylist(json.RawMessage(`{"name":"","track_ids":["t1"]}`)); err == nil {
 		t.Fatal("an empty name was accepted")
+	}
+}
+
+// A created playlist that is missing requested tracks is a partial write: the provider returns the playlist plus a
+// typed error, so the action keeps its receipt instead of creating the playlist a second time.
+func TestMacProviderCreatePlaylistPartialWrite(t *testing.T) {
+	fn := macFixture()
+	fn.out["create_playlist"] = macCreate{Playlist: macPlaylist{ID: "p.new", Title: "New list", TrackCount: 1}, Added: 1, Failed: []string{"m2"}}
+	p := newMacProvider("m1", fn)
+	pl, err := p.CreatePlaylist(context.Background(), createPlaylistRequest{Name: "New list", TrackIDs: []string{"m1", "m2"}})
+	var partial *playlistPartialError
+	if !errors.As(err, &partial) || pl.ID != "p.new" || !slices.Equal(partial.failed, []string{"m2"}) {
+		t.Fatalf("create %+v %v", pl, err)
 	}
 }
 
