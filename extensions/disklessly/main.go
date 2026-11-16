@@ -42,7 +42,8 @@ const usage = `disklessly: Persona Disklessly machine disk watermark, cache clea
                                disklessly_machines_status, disklessly_scan, disklessly_history,
                                disklessly_sessions_search, disklessly_sessions_status,
                                disklessly_clean, disklessly_machine_upsert, disklessly_machine_delete,
-                               disklessly_sessions_offload, disklessly_sessions_restore)
+                               disklessly_sessions_offload, disklessly_sessions_restore,
+                               disklessly_cli_install)
   disklessly manifest          print persona-extension.json
 
 The MCP server finds the data in --data, else PERSONA_DISKLESSLY_DATA, else the directory the hub's
@@ -70,15 +71,19 @@ func main() {
 }
 
 type app struct {
-	mu     sync.Mutex
-	store  *store
-	runner Runner
-	stop   chan struct{}
-	now    func() time.Time
+	mu       sync.Mutex
+	store    *store
+	runner   Runner
+	streamer StreamRunner
+	hub      *ext.Hub
+	stop     chan struct{}
+	now      func() time.Time
+	// jobs are the background cold-session jobs (refresh, restore, offload, copy-install).
+	jobs coldJobs
 }
 
 func newApp(dir string) *app {
-	return &app{store: newStore(dir), runner: DefaultRunner, now: time.Now}
+	return &app{store: newStore(dir), runner: DefaultRunner, streamer: DefaultStreamRunner, now: time.Now}
 }
 
 func program(a *app) ext.Program {
@@ -107,6 +112,7 @@ func (a *app) init(_ context.Context, in *ext.Init, hub *ext.Hub) (map[string]an
 		close(a.stop)
 	}
 	a.stop = make(chan struct{})
+	a.hub = hub
 	go watch(a.store, hub, a.stop)
 	return nil, nil
 }
@@ -124,6 +130,21 @@ func (a *app) run() Runner {
 		return DefaultRunner
 	}
 	return a.runner
+}
+
+func (a *app) stream() StreamRunner {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.streamer == nil {
+		return DefaultStreamRunner
+	}
+	return a.streamer
+}
+
+func (a *app) hubRef() *ext.Hub {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.hub
 }
 
 func watch(s *store, hub *ext.Hub, stop chan struct{}) {

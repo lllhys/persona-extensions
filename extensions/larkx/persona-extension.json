@@ -1,0 +1,114 @@
+{
+  "manifest_version": 1,
+  "id": "larkx",
+  "name": "飞书（LarkAgentX）",
+  "version": "0.2.1",
+  "description": "用 LarkAgentX 以你本人的身份接飞书：扫码登录，全部消息进收件箱和知识库，经手机确认后以你的身份发送；在任意会话里发 /agent 交给助手。走逆向的网页版协议，不是官方接口。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/cv-cat/LarkAgentX",
+  "icon": "assets/icon.png",
+  "tags": [
+    "飞书",
+    "消息"
+  ],
+  "engines": {
+    "plugin_protocol": 1
+  },
+  "runtime": {
+    "command": "bin/larkx"
+  },
+  "activation_events": [
+    "on_startup"
+  ],
+  "contributes": {
+    "connectors": [
+      {
+        "id": "larkx",
+        "name": "飞书（LarkAgentX）",
+        "capabilities": [
+          "status",
+          "tools",
+          "actions",
+          "events",
+          "inbox",
+          "archive",
+          "login",
+          "threads",
+          "fallback"
+        ],
+        "confirm_always": [
+          "larkx_*"
+        ],
+        "poll_seconds": 60,
+        "kinds": [
+          "dm",
+          "mention",
+          "group"
+        ],
+        "kind_descriptions": {
+          "dm": "飞书私聊：对方发来消息，用户最后没有回复。",
+          "mention": "飞书群里有人 @ 了用户，用户之后没有回复。",
+          "group": "飞书群里的新消息，没有 @ 用户。"
+        }
+      }
+    ],
+    "assistant": [
+      {
+        "id": "larkx",
+        "instructions": "assistant/instructions.md"
+      }
+    ],
+    "channel": [
+      {
+        "id": "larkx",
+        "name": "飞书 /agent",
+        "kind": "im",
+        "connector": "larkx",
+        "description": "在任意飞书会话里发「/agent 要做的事」，交给助手；助手以你的身份回复在那条消息下面，末尾标明 AI 代答。",
+        "capabilities": {
+          "format": "plain",
+          "max_text": 4000,
+          "asks": "none"
+        }
+      }
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "region": {
+        "type": "string",
+        "title": "站点",
+        "description": "改了要重新扫码：登录凭据只对所属站点有效。",
+        "default": "feishu",
+        "oneOf": [
+          {
+            "const": "feishu",
+            "title": "飞书"
+          },
+          {
+            "const": "lark",
+            "title": "Lark（国际版）"
+          }
+        ]
+      },
+      "triage_rules": {
+        "type": "string",
+        "title": "分拣规则",
+        "description": "用你自己的话写飞书消息怎么分拣，比如「直属领导的私聊都要处理」「某某群只看 @ 我的」。留空用 hub 的全局规则。",
+        "maxLength": 4000,
+        "default": ""
+      }
+    }
+  },
+  "permissions": {
+    "network": [
+      "*.feishu.cn",
+      "*.larksuite.com",
+      "*.larkoffice.com",
+      "codeload.github.com",
+      "pypi.org",
+      "files.pythonhosted.org"
+    ]
+  }
+}

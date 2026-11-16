@@ -562,11 +562,10 @@ export function env() {
   };
 }
 
-/** The manifest as the program answers it to a hub: without `tags`, the market's (nwverse/persona#2424), which hubs
- * from before them refuse as an unknown field. */
+/** Omit source-only tags and icon metadata so strict older hubs accept runtime manifests. */
 function answeredManifest(m: unknown): unknown {
-  if (m === null || typeof m !== "object" || Array.isArray(m) || !("tags" in m)) return m;
-  const { tags: _tags, ...rest } = m as Record<string, unknown>;
+  if (m === null || typeof m !== "object" || Array.isArray(m) || !("tags" in m || "icon" in m)) return m;
+  const { tags: _tags, icon: _icon, ...rest } = m as Record<string, unknown>;
   return rest;
 }
 

@@ -122,12 +122,12 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState) (*wire.V
 			}
 			return reviewCommentView(r, st), nil
 		}
-		item, notes, err := a.readDetail(ctx, st.Project, st.IID)
+		item, notes, next, err := a.readDetail(ctx, st.Project, st.IID)
 		if err != nil {
 			return nil, err
 		}
 		st.DraftID = randomID()
-		return detailView(r, st, item, notes), nil
+		return detailView(r, st, item, notes, next), nil
 	}
 	if st.Scope != "assigned_to_me" && st.Scope != "reviews_for_me" {
 		return nil, errors.New("invalid review scope")
@@ -164,7 +164,7 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState) (*wire.V
 	return v, nil
 }
 
-func detailView(r *ext.UIRequest, st pageState, item mergeRequest, notes []note) *wire.View {
+func detailView(r *ext.UIRequest, st pageState, item mergeRequest, notes []note, next ...string) *wire.View {
 	t := textsFor(r.Locale)
 	items := []wire.Component{
 		{Type: wire.ComponentText, Text: clipText(item.Title, 1800)},
@@ -217,6 +217,10 @@ func detailView(r *ext.UIRequest, st pageState, item mergeRequest, notes []note)
 	}
 	if len(section.Items) == 0 {
 		section.Items = append(section.Items, wire.Component{Type: wire.ComponentText, Text: t.noComments, Style: wire.TextStyleSecondary})
+	}
+	if len(next) > 0 && next[0] != "" {
+		section.Items = append(section.Items, wire.Component{Type: wire.ComponentText,
+			Text: "Discussion is incomplete; next notes page: " + next[0], Style: wire.TextStyleSecondary})
 	}
 	v.Sections = append(v.Sections, section)
 	return v

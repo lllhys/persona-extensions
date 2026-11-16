@@ -57,7 +57,7 @@ class PackageJunkTests(unittest.TestCase):
         (self.tmp / 'scripts').mkdir()
         (self.tmp / 'extensions').mkdir()
         # package.sh invokes manifest.py, which shares version validation with catalog.py.
-        for name in ('package.sh', 'manifest.py', 'catalog.py', 'icons.py'):
+        for name in ('package.sh', 'manifest.py', 'catalog.py', 'config_form.py', 'icons.py'):
             shutil.copy2(REPO / 'scripts' / name, self.tmp / 'scripts' / name)
         shutil.copytree(REPO / 'extensions' / EXT_ID, self.tmp / 'extensions' / EXT_ID)
         ext = self.tmp / 'extensions' / EXT_ID
@@ -95,7 +95,7 @@ class LooksPackageTests(unittest.TestCase):
         tmp = pathlib.Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp)
         (tmp / 'scripts').mkdir()
-        for name in ('package.sh', 'manifest.py', 'catalog.py', 'icons.py'):
+        for name in ('package.sh', 'manifest.py', 'catalog.py', 'config_form.py', 'icons.py'):
             shutil.copy2(REPO / 'scripts' / name, tmp / 'scripts' / name)
         shutil.copytree(REPO / 'extensions' / 'custom-looks', tmp / 'extensions' / 'custom-looks')
         r = subprocess.run(['bash', 'scripts/package.sh', 'custom-looks'], cwd=tmp, capture_output=True, text=True)

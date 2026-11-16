@@ -1,0 +1,35 @@
+{
+  "manifest_version": 1,
+  "id": "token-usage",
+  "name": "Token 用量",
+  "version": "0.1.1",
+  "icon": "assets/icon.png",
+  "description": "汇总每台电脑的 token 用量并保留 400 天：今天、7 天、30 天的总量与环比、按天趋势、按模型、机器和启动器的排行，可筛选的明细和 CSV 导出，以及按模型或全局设的日、周预算。超过预算的八成或全部、或某个模型某小时用量异常时提醒一次。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/docs/extensions/token-usage.md",
+  "tags": ["用量", "token", "预算", "统计"],
+  "engines": {"extension_protocol": 1},
+  "activation_events": ["on_startup"],
+  "runtime": {"command": {
+    "linux-amd64": "bin/token-usage-linux-amd64",
+    "linux-arm64": "bin/token-usage-linux-arm64",
+    "darwin-amd64": "bin/token-usage-darwin-amd64",
+    "darwin-arm64": "bin/token-usage-darwin-arm64"
+  }},
+  "contributes": {
+    "ui": [
+      {"id": "token-usage", "title": "Token 用量", "placement": "nav_page", "icon": "chart"},
+      {"id": "token-usage-card", "title": "Token 用量", "placement": "overview_card", "opens": "token-usage"}
+    ],
+    "skills": [{"id": "token-usage", "dir": "skills/token-usage"}],
+    "mcp_servers": [{
+      "id": "token-usage", "command": "token-usage", "env": "PERSONA_TOKEN_USAGE_BIN",
+      "args": ["mcp"], "requires": ["mcp"],
+      "allow": ["usage_summary", "usage_top", "budget_status"]
+    }]
+  },
+  "permissions": {
+    "usage_gateways": true,
+    "hub": ["machines.read", "notify"]
+  }
+}

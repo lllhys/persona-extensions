@@ -892,7 +892,7 @@ func TestEntityActionsRefuseWithoutAnEntity(t *testing.T) {
 }
 
 func TestEveryEntityPageAtEveryVersion(t *testing.T) {
-	st := storeWith(t, true, "project", "reading", "inventory")
+	st := storeWith(t, true, templateKeys()...)
 	a := newApp(st)
 	for _, pair := range entityIDs(t, st) {
 		for _, f := range []string{"", "edit", "derive"} {

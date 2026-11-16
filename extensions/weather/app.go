@@ -47,8 +47,30 @@ func (a *app) init(_ context.Context, in *ext.Init, _ *ext.Hub) (map[string]any,
 		return nil, fmt.Errorf("config: %w", err)
 	}
 	a.cfg = cfg
-	a.cities, a.badCities = cleanCities(cfg.Cities)
+	a.cities, a.badCities = cleanCities(cfg.cities())
 	return nil, nil
+}
+
+// locate is c with its point: a city written by name only is searched for (the answer is cached like any read), and
+// keeps the name it was written with.
+func (a *app) locate(ctx context.Context, c City) (City, error) {
+	if !c.lookup {
+		return c, nil
+	}
+	rd, err := a.read(ctx, a.client.geo, geoURL(c.Name), cacheFor)
+	if err != nil {
+		return City{}, err
+	}
+	g, err := parseGeo(rd.body)
+	if err != nil {
+		return City{}, err
+	}
+	hit, err := g.best()
+	if err != nil {
+		return City{}, err
+	}
+	hit.Name = c.Name
+	return hit, nil
 }
 
 // freshness is how old an answer may be: a refresh asks for a new one, but not within refreshFloor of the last.

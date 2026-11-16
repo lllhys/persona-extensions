@@ -1,0 +1,71 @@
+{
+  "key": "habit",
+  "name": "习惯打卡",
+  "icon": "check",
+  "about": "想养成的习惯，每次做到就打个卡，看看坚持了多少回。",
+  "types": [
+    {
+      "key": "habit",
+      "name": "习惯",
+      "flow": [
+        {"name": "进行中", "phase": "doing"},
+        {"name": "已养成", "phase": "done"},
+        {"name": "暂停", "phase": "dropped"}
+      ],
+      "props": [
+        {"key": "why", "name": "为什么", "kind": "text"},
+        {"key": "area", "name": "方面", "kind": "enum", "options": ["身体", "学习", "心情", "生活"]},
+        {"key": "weekly", "name": "每周目标", "kind": "number", "unit": "次"},
+        {"key": "goal", "name": "目标次数", "kind": "number", "unit": "次"},
+        {"key": "checkins", "name": "打卡数", "kind": "rollup", "via": "checkin.habit", "op": "count", "unit": "次"},
+        {"key": "minutes", "name": "累计时长", "kind": "rollup", "via": "checkin.habit", "op": "sum", "of": "minutes", "unit": "分钟"}
+      ],
+      "card": {"lead": "why", "pills": ["area", "weekly", "checkins", "minutes"], "progress": {"of": "checkins", "over": "goal"}},
+      "views": [
+        {"name": "进度", "kind": "progress", "where": [{"field": "phase", "op": "eq", "value": "doing"}]},
+        {"name": "看板", "kind": "board"},
+        {"name": "按方面", "kind": "list", "group": "area"}
+      ]
+    },
+    {
+      "key": "checkin",
+      "name": "打卡",
+      "props": [
+        {"key": "habit", "name": "习惯", "kind": "relation", "target": "habit", "back": "打卡"},
+        {"key": "date", "name": "日期", "kind": "date"},
+        {"key": "minutes", "name": "时长", "kind": "number", "unit": "分钟"},
+        {"key": "note", "name": "感受", "kind": "text"}
+      ],
+      "card": {"lead": "note", "pills": ["habit", "date", "minutes"]},
+      "views": [
+        {"name": "动态", "kind": "feed", "sort": [{"by": "date", "desc": true}]},
+        {"name": "按习惯", "kind": "list", "sort": [{"by": "date", "desc": true}], "group": "habit"},
+        {"name": "表格", "kind": "table", "sort": [{"by": "date", "desc": true}], "agg": [{"op": "count"}, {"op": "sum", "of": "minutes"}]}
+      ]
+    }
+  ],
+  "samples": [
+    {"ref": "habit_run", "type": "habit", "title": "晨跑", "status": "进行中",
+     "values": {"area": "身体", "weekly": 3, "goal": 30, "why": "早上跑一会儿，一整天都更有精神。先攒满三十次再说。"}},
+    {"ref": "habit_read", "type": "habit", "title": "睡前读书", "status": "进行中",
+     "values": {"area": "学习", "weekly": 5, "goal": 21, "why": "用读书代替睡前刷手机，读多少都算。"}},
+    {"ref": "habit_calm", "type": "habit", "title": "冥想十分钟", "status": "暂停",
+     "values": {"area": "心情", "weekly": 7, "goal": 21, "why": "想让脑子安静一点。最近太忙，先停一停。"}},
+    {"ref": "habit_water", "type": "habit", "title": "每天喝够八杯水", "status": "已养成",
+     "values": {"area": "生活", "why": "桌上放一个大杯子，已经不用刻意记了。"}},
+    {"ref": "ci_run1", "type": "checkin", "title": "绕小区慢跑三圈",
+     "values": {"habit": "@habit_run", "date": "-6d", "minutes": 25, "note": "第一次，跑到一半就喘了，走了一段。"}},
+    {"ref": "ci_read1", "type": "checkin", "title": "读了一章",
+     "values": {"habit": "@habit_read", "date": "-5d", "minutes": 20}},
+    {"ref": "ci_run2", "type": "checkin", "title": "跑到河边再回来",
+     "values": {"habit": "@habit_run", "date": "-4d", "minutes": 30, "note": "比上次轻松，中间没有停。"}},
+    {"ref": "ci_calm1", "type": "checkin", "title": "跟着呼吸数到一百",
+     "values": {"habit": "@habit_calm", "date": "-3d", "minutes": 10, "note": "数到四十就走神了，拉回来接着数。"}},
+    {"ref": "ci_read2", "type": "checkin", "title": "睡前读完第三章",
+     "values": {"habit": "@habit_read", "date": "-2d", "minutes": 30, "note": "读着读着忘了看时间。"}},
+    {"ref": "ci_run3", "type": "checkin", "title": "下小雨也出门了",
+     "values": {"habit": "@habit_run", "date": "-1d", "minutes": 30}},
+    {"ref": "ci_read3", "type": "checkin", "from": "ci_read2", "title": "又读了一章",
+     "values": {"date": "+0d", "note": "照昨天的时间读，很快就进去了。"}}
+  ]
+}

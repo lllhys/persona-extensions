@@ -420,13 +420,11 @@ func (c *checker) check(s map[string]any, v any, here string) {
 			c.add("above %v", m)
 		}
 	case json.Number:
-		if n, ok := preciseNumber(x); ok {
-			if m, ok := preciseNumber(s["minimum"]); ok && n.Cmp(m) < 0 {
-				c.add("below %s", show(s["minimum"]))
-			}
-			if m, ok := preciseNumber(s["maximum"]); ok && n.Cmp(m) > 0 {
-				c.add("above %s", show(s["maximum"]))
-			}
+		if cmp, ok := compareNumber(x, s["minimum"]); ok && cmp < 0 {
+			c.add("below %s", show(s["minimum"]))
+		}
+		if cmp, ok := compareNumber(x, s["maximum"]); ok && cmp > 0 {
+			c.add("above %s", show(s["maximum"]))
 		}
 	case []any:
 		if m, ok := num(s["minItems"]); ok && float64(len(x)) < m {
@@ -509,6 +507,16 @@ func isType(t string, v any) bool {
 		return ok
 	case "number", "integer":
 		if n, ok := v.(json.Number); ok {
+			if f, ok := fastNumber(n); ok {
+				// fastNumber's float64 being finite means preciseNumber's is too. A literal without a
+				// fraction or exponent is an integer; a value whose rounding keeps a fraction is not one.
+				if t == "number" || !strings.ContainsAny(string(n), ".eE") {
+					return true
+				}
+				if f != math.Trunc(f) {
+					return false
+				}
+			}
 			f, valid := preciseNumber(n)
 			return valid && (t == "number" || f.IsInt())
 		}
@@ -538,9 +546,108 @@ func preciseNumber(v any) (*big.Float, bool) {
 	return nil, false
 }
 
+// compareNumber orders the JSON number n against bound as preciseNumber's big.Float Cmp does; ok is false where
+// preciseNumber rejects either side.
+func compareNumber(n json.Number, bound any) (int, bool) {
+	if bound == nil {
+		return 0, false
+	}
+	if m, isFloat := bound.(float64); isFloat && !math.IsNaN(m) && !math.IsInf(m, 0) {
+		// Correct rounding is monotonic and m is a float64: a parsed value below (above) m means the
+		// exact value, and big.Float's closer rounding of it, are below (above) m too. Equal needs big.Float.
+		if f, ok := fastNumber(n); ok && f != m {
+			if f < m {
+				return -1, true
+			}
+			return 1, true
+		}
+	}
+	x, ok := preciseNumber(n)
+	if !ok {
+		return 0, false
+	}
+	y, ok := preciseNumber(bound)
+	if !ok {
+		return 0, false
+	}
+	return x.Cmp(y), true
+}
+
+// fastNumber parses n as the nearest float64 when n is JSON number text with an exponent of at most four
+// digits and a finite float64 value. Other text is left to preciseNumber: strconv and big.ParseFloat read
+// Inf or 0x10 differently, and big.ParseFloat rejects exponents that strconv rounds to zero.
+func fastNumber(n json.Number) (float64, bool) {
+	if !isShortJSONNumber(string(n)) {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(string(n), 64)
+	return f, err == nil
+}
+
+// isShortJSONNumber reports whether s is a number in JSON's grammar (RFC 8259 section 6) whose exponent, if
+// any, has at most four digits.
+func isShortJSONNumber(s string) bool {
+	i := 0
+	if i < len(s) && s[i] == '-' {
+		i++
+	}
+	digits := func() int {
+		start := i
+		for i < len(s) && '0' <= s[i] && s[i] <= '9' {
+			i++
+		}
+		return i - start
+	}
+	if i < len(s) && s[i] == '0' {
+		i++
+	} else if digits() == 0 {
+		return false
+	}
+	if i < len(s) && s[i] == '.' {
+		i++
+		if digits() == 0 {
+			return false
+		}
+	}
+	if i < len(s) && (s[i] == 'e' || s[i] == 'E') {
+		i++
+		if i < len(s) && (s[i] == '+' || s[i] == '-') {
+			i++
+		}
+		if d := digits(); d == 0 || d > 4 {
+			return false
+		}
+	}
+	return i == len(s)
+}
+
 func equal(a, b any) bool {
+	// json.Marshal is injective on these, so the encodings match exactly when the values do.
+	switch x := a.(type) {
+	case string:
+		if y, ok := b.(string); ok && utf8.ValidString(x) && utf8.ValidString(y) {
+			return x == y
+		}
+	case bool:
+		if y, ok := b.(bool); ok {
+			return x == y
+		}
+	case nil:
+		if b == nil {
+			return true
+		}
+	}
 	_, aNumber := a.(json.Number)
 	_, bNumber := b.(json.Number)
+	if aNumber != bNumber {
+		n, bound := a, b
+		if bNumber {
+			n, bound = b, a
+		}
+		if cmp, ok := compareNumber(n.(json.Number), bound); ok {
+			return cmp == 0
+		}
+	}
 	if aNumber || bNumber {
 		if left, ok := preciseNumber(a); ok {
 			if right, ok := preciseNumber(b); ok {

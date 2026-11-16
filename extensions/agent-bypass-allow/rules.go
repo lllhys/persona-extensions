@@ -91,6 +91,9 @@ func sameTool(ruleName, tool string) bool {
 	if ruleName == "Read" && readers[tool] {
 		return true
 	}
+	if ruleName == "Edit" && tool == "Write" { // Claude Code applies Edit rules to every tool that edits files
+		return true
+	}
 	alias := func(s string) string {
 		if s == "Task" {
 			return "Agent"

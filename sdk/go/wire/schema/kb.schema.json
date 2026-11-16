@@ -160,9 +160,60 @@
         "segments": {"type": "array", "items": {"$ref": "#/$defs/KBRecordingSegment"}},
         "minutes": {"description": "A recording's meeting minutes, once written (docs/assistant/meeting-minutes.md); kept as the hub sends them."},
         "recap": {"description": "An all-day recording's day recap, once written (docs/assistant/day-recap.md); kept as the hub sends them."},
-        "points": {"type": "array", "items": {"$ref": "#/$defs/KBTopicPoint"}, "description": "A topic's knowledge points (docs/assistant/knowledge.md \"Topics\")."}
+        "points": {"type": "array", "items": {"$ref": "#/$defs/KBTopicPoint"}, "description": "A topic's knowledge points (docs/assistant/knowledge.md \"Topics\")."},
+        "profiles": {"type": "object", "additionalProperties": {"$ref": "#/$defs/KBProfileRecord"}, "description": "A person's profiles by writer (\"user\", \"ext:<id>\"), as written; summary shows them too (docs/assistant/knowledge.md \"Person profiles\")."}
       },
       "required": ["kind", "id", "path", "meta"]
+    },
+    "KBProfileRecord": {
+      "type": "object",
+      "properties": {
+        "profile": {"$ref": "#/$defs/KBPersonProfile"},
+        "at": {"type": "string", "format": "date-time"}
+      },
+      "required": ["profile", "at"]
+    },
+    "KBPersonProfile": {
+      "description": "One writer's profile of a person, its four parts kept apart. Every item says where it comes from; at most 30 items a part, and 8000 bytes as summary.md shows it.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "facts": {"type": "array", "maxItems": 30, "items": {"$ref": "#/$defs/KBProfileItem"}, "description": "Their role, what they are in charge of, how they relate to the user."},
+        "views": {"type": "array", "maxItems": 30, "items": {"$ref": "#/$defs/KBProfileItem"}, "description": "The user's own words about them, quoted."},
+        "inferences": {"type": "array", "maxItems": 30, "items": {"$ref": "#/$defs/KBProfileItem"}, "description": "Inferred, never stated: each needs its basis. Shown as only a hint."},
+        "commitments": {"type": "array", "maxItems": 30, "items": {"$ref": "#/$defs/KBProfileCommitment"}, "description": "Promises and to-dos between the user and them, either way."}
+      }
+    },
+    "KBProfileItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {"type": "string", "minLength": 1, "maxLength": 500},
+        "basis": {"type": "string", "maxLength": 300, "description": "Inferences only (required there): what it rests on."},
+        "sources": {"type": "array", "minItems": 1, "maxItems": 5, "items": {"type": "string", "minLength": 1, "maxLength": 300}, "description": "Where it comes from: a knowledge-base path (chats/<id>/messages/<day>.md, recordings/<id>), a URL, or \"user\" for the user's own word."}
+      },
+      "required": ["text", "sources"]
+    },
+    "KBProfileCommitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {"type": "string", "minLength": 1, "maxLength": 500},
+        "owes": {"type": "string", "enum": ["user", "them"], "description": "user: the user owes it to them; them: they owe it to the user."},
+        "due": {"type": "string", "description": "YYYY-MM-DD, when there is one."},
+        "done": {"type": "boolean"},
+        "sources": {"type": "array", "minItems": 1, "maxItems": 5, "items": {"type": "string", "minLength": 1, "maxLength": 300}}
+      },
+      "required": ["text", "owes", "sources"]
+    },
+    "KBIgnoredField": {
+      "description": "A field an update carried that its kind does not use: not applied, and why.",
+      "type": "object",
+      "properties": {
+        "field": {"type": "string"},
+        "reason": {"type": "string"}
+      },
+      "required": ["field", "reason"]
     },
     "KBTopicPoint": {
       "description": "One knowledge point of a topic, under up to two levels of subtopics (path).",
@@ -208,7 +259,8 @@
         "start": {"type": "number"},
         "end": {"type": "number"},
         "text": {"type": "string"},
-        "n": {"type": "integer", "description": "An all-day recording's line number: the segment's 1-based position in its uploads (docs/assistant/day-recap.md); absent on other recordings."}
+        "n": {"type": "integer", "description": "An all-day recording's line number: the segment's 1-based position in its uploads (docs/assistant/day-recap.md); absent on other recordings."},
+        "echo": {"type": "boolean", "description": "The line is Persona's own answer as the meeting's microphone heard it (docs/assistant/meeting-minutes.md \"Persona's echo\"): kept in the transcript but not what the meeting said, so leave it out of anything read as the meeting's words; absent (false) on every other line."}
       },
       "required": ["start", "end", "text"]
     },
@@ -302,6 +354,7 @@
         "dirs": {"type": "array", "items": {"type": "string"}, "description": "A project's code directories, <machine>:<path>."},
         "projects": {"type": "array", "items": {"type": "string"}},
         "merge_into": {"type": "string", "description": "Refused (conflict) when the user or another extension holds anything on the project folded away; no before."},
+        "profile": {"$ref": "#/$defs/KBPersonProfile", "x-go-pointer": true, "description": "People only: this extension's own profile of the person, replacing the one it wrote before (one with no items removes it). Nobody else's profile, nor pinned or note, is touched; before.profile is the one replaced. A profile breaking a rule is invalid_params and nothing is written."},
         "evidence": {"type": "array", "maxItems": 20, "items": {"$ref": "#/$defs/KBEvidence"}, "description": "Kept as the provenance of the fields this write holds."},
         "unlock": {"type": "array", "items": {"type": "string"}, "description": "Fields this extension holds, handed back to the built-in pipeline; unlocking pinned clears it."}
       },
@@ -311,7 +364,8 @@
       "type": "object",
       "properties": {
         "id": {"type": "string"},
-        "before": {"type": "object", "additionalProperties": {}, "description": "The previous value of each field written (null when unset; summary is the old text), for the extension's own undo."}
+        "before": {"type": "object", "additionalProperties": {}, "description": "The previous value of each field written (null when unset; summary is the old text, profile this extension's own profile before), for the extension's own undo."},
+        "ignored": {"type": "array", "items": {"$ref": "#/$defs/KBIgnoredField"}, "description": "Fields the update carried that its kind does not use (a person's summary and log, for one): not applied, each with why."}
       },
       "required": ["id"]
     },

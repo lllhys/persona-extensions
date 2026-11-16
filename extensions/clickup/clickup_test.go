@@ -61,6 +61,11 @@ func newFakeClickUp(t *testing.T) *fakeClickUp {
 				return
 			}
 			items := []task{sampleTask()}
+			if r.URL.Query().Get("subtasks") == "true" {
+				subtask := sampleTask()
+				subtask.ID, subtask.Name = "subtask-1", "Subtask one"
+				items = append(items, subtask)
+			}
 			if r.URL.Query().Get("page") != "0" {
 				items = nil
 			}
@@ -174,6 +179,31 @@ func TestUserTeamSpacesListsAndAssignedTasks(t *testing.T) {
 		if !strings.Contains(paths, want) {
 			t.Fatalf("missing %q in %s", want, paths)
 		}
+	}
+}
+
+func TestAssignedSubtasksIncluded(t *testing.T) {
+	f := newFakeClickUp(t)
+	a := f.app()
+	text, err := a.callTool(t.Context(), "clickup_tasks", json.RawMessage(`{"team_id":"team-1","page":0}`))
+	if err != nil || !strings.Contains(text, "Task subtask-1") {
+		t.Fatalf("%v %s", err, text)
+	}
+	v, err := a.page(t.Context(), &ext.UIRequest{UIParams: wire.UIParams{Locale: "en", UIVersion: 3}}, pageState{Mode: "tasks", TeamID: "team-1", TeamName: "Personal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, item := range v.Sections[0].Items {
+		if item.Key == "task-subtask-1" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("tasks UI omitted the subtask")
+	}
+	if paths := strings.Join(f.paths, "\n"); !strings.Contains(paths, "subtasks=true") {
+		t.Fatalf("subtasks=true was not requested: %s", paths)
 	}
 }
 

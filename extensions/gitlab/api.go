@@ -128,10 +128,32 @@ func (c *client) mergeRequest(ctx context.Context, project string, iid int64) (m
 	return out, err
 }
 
-func (c *client) notes(ctx context.Context, project string, iid int64) ([]note, error) {
+// notes returns every note up to maxNotePages pages, and the next page number when that bound leaves more.
+func (c *client) notes(ctx context.Context, project string, iid int64) ([]note, string, error) {
+	const maxNotePages = 5
+	q := url.Values{"per_page": {"100"}, "sort": {"asc"}, "order_by": {"created_at"}}
 	var out []note
-	_, err := c.do(ctx, http.MethodGet, mrResource(project, iid)+"/notes", url.Values{"per_page": {"100"}, "sort": {"asc"}, "order_by": {"created_at"}}, nil, &out)
-	return out, err
+	for page := 1; page <= maxNotePages; page++ {
+		var batch []note
+		header, err := c.do(ctx, http.MethodGet, mrResource(project, iid)+"/notes", q, nil, &batch)
+		if err != nil {
+			return nil, "", err
+		}
+		out = append(out, batch...)
+		next := strings.TrimSpace(header.Get("X-Next-Page"))
+		if next == "" {
+			return out, "", nil
+		}
+		n, err := strconv.Atoi(next)
+		if err != nil || n <= page {
+			return nil, "", fmt.Errorf("GitLab returned an invalid next notes page %q", next)
+		}
+		if page == maxNotePages {
+			return out, next, nil
+		}
+		q.Set("page", next)
+	}
+	return out, "", nil
 }
 
 func (c *client) approve(ctx context.Context, project string, iid int64) error {

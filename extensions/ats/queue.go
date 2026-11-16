@@ -151,18 +151,20 @@ type Attempt struct {
 
 // EvidenceReport stores a verification report from an attempt.
 type EvidenceReport struct {
-	TaskID     string     `json:"task_id"`
-	AttemptNo  int        `json:"attempt_no"`
-	FenceToken int        `json:"fence_token"`
-	WorkerID   string     `json:"worker_id"`
-	ReportID   string     `json:"report_id"`
-	ReceivedAt time.Time  `json:"received_at"`
-	Outcome    string     `json:"outcome"`
-	Verdict    string     `json:"verdict,omitempty"`
-	ErrorClass string     `json:"error_class,omitempty"`
-	ExitCode   *int       `json:"exit_code,omitempty"`
-	Message    string     `json:"message,omitempty"`
-	Artifacts  []Artifact `json:"artifacts,omitempty"`
+	TaskID     string    `json:"task_id"`
+	AttemptNo  int       `json:"attempt_no"`
+	FenceToken int       `json:"fence_token"`
+	WorkerID   string    `json:"worker_id"`
+	ReportID   string    `json:"report_id"`
+	ReceivedAt time.Time `json:"received_at"`
+	Outcome    string    `json:"outcome"`
+	Verdict    string    `json:"verdict,omitempty"`
+	ErrorClass string    `json:"error_class,omitempty"`
+	ExitCode   *int      `json:"exit_code,omitempty"`
+	Message    string    `json:"message,omitempty"`
+	// Summary is the end of the agent's last reply in this attempt: what it says it did and found.
+	Summary   string     `json:"summary,omitempty"`
+	Artifacts []Artifact `json:"artifacts,omitempty"`
 }
 
 // Task is a persistent unit of work in the ATS queue.
@@ -524,9 +526,10 @@ type CompleteAttemptInput struct {
 	ReportID   string
 	Outcome    string // succeeded | failed | canceled | rate_limited
 	Verdict    string // pass | fail | unverified
-	ErrorClass string // infra_error | timeout | task_failed | rate_limited | auth_expired
+	ErrorClass string // infra_error | timeout | task_failed | rate_limited | lost | auth_expired | config_error | rejected
 	ExitCode   *int
 	Message    string
+	Summary    string // the end of the agent's last reply
 	Artifacts  []Artifact
 	Retryable  *bool
 	Now        time.Time
@@ -982,6 +985,7 @@ func (q *Queue) LeaseTask(taskID, workerID, machine string, now time.Time) (*Tas
 	t.AttemptNo++
 	t.FenceToken = t.AttemptNo
 	t.State = StateRunning
+	t.NotBefore = nil // the wait before this attempt is over
 	started := now
 	att := Attempt{
 		AttemptID:      fmt.Sprintf("%s-att-%d", t.ID, t.AttemptNo),
@@ -1076,6 +1080,7 @@ func (q *Queue) CompleteAttempt(in CompleteAttemptInput) (*Task, error) {
 		ErrorClass: in.ErrorClass,
 		ExitCode:   in.ExitCode,
 		Message:    in.Message,
+		Summary:    in.Summary,
 		Artifacts:  slices.Clone(in.Artifacts),
 	}
 	t.Reports = append(t.Reports, rep)
@@ -1143,6 +1148,9 @@ func (q *Queue) CompleteAttempt(in CompleteAttemptInput) (*Task, error) {
 	return cloneTask(t), nil
 }
 
+// isRetryableErrorClass: the classes another attempt can get past. Not among them: rejected (the task asks for
+// something that is not there), config_error (the configured model is unavailable) and auth_expired (the agent
+// is signed out): they fail the same way until the user changes something.
 func isRetryableErrorClass(errClass string) bool {
 	switch errClass {
 	case "infra_error", "timeout", "task_failed", "rate_limited", "lost":

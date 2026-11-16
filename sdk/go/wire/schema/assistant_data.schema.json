@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "assistant_data.schema.json",
+  "title": "Assistant content from the data directory",
+  "description": "What the hub uses of the assistant content an extension writes in its own data directory (docs/extensions/extensions.md \"Assistant content from the data directory\"): assistant.data_status answers, for the calling extension's own data contributions only (no permission needed), what the assistant reads now, what waits to be adopted and why a file is not used. Plugin-side: only the hub and the program speak it.",
+  "x-side": "plugin",
+  "x-methods": {
+    "assistant.data_status": {"from": "program", "params": "AssistantDataStatusParams", "result": "AssistantDataStatusResult"}
+  },
+  "$defs": {
+    "AssistantDataStatusParams": {
+      "description": "assistant.data_status takes no parameters.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    },
+    "AssistantDataState": {
+      "description": "What the assistant reads of the contribution: adopted (the content as it is now; skills: sent; project and Inbox context: used whenever their prompt is built), pending (instructions: an older version, the new one waits for next_adopt_at), kept (instructions: an older version, the new one cannot be used, see reason), none (nothing: none written yet, none usable, or the extension or contribution is switched off).",
+      "type": "string",
+      "enum": ["adopted", "pending", "kept", "none"]
+    },
+    "AssistantDataReason": {
+      "description": "Why what the assistant reads is not the content as it is now: too_large (over its limit), invalid (not UTF-8 text), not_regular (not a plain file inside the data directory: a directory, or a link out of it), unreadable, rate_limited (a new version of instructions waits for its turn), disabled (the extension is switched off or cannot run), switched_off (this contribution is switched off).",
+      "type": "string",
+      "enum": ["too_large", "invalid", "not_regular", "unreadable", "rate_limited", "disabled", "switched_off"]
+    },
+    "AssistantDataItem": {
+      "description": "One data contribution of the extension.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contribution": {"type": "string", "description": "Its id, as the manifest has it."},
+        "kind": {"type": "string", "description": "instructions, skills, project_context or inbox_context."},
+        "path": {"type": "string", "description": "Its file or directory, relative to the data directory."},
+        "limit": {"type": "integer", "description": "The most it may weigh, in bytes."},
+        "bytes": {"type": "integer", "description": "What it weighs now (all files, for skills)."},
+        "state": {"$ref": "#/$defs/AssistantDataState"},
+        "reason": {"$ref": "#/$defs/AssistantDataReason"},
+        "detail": {"type": "string", "description": "The rest of a file's problem, for logs."},
+        "hash": {"type": "string", "description": "The digest of the content as it is now (instructions: the cleaned text, the first 16 hex digits of its sha256; skills: of every skill's name and digest)."},
+        "adopted_hash": {"type": "string", "description": "instructions: the digest of the text the assistant reads (for a contribution or extension switched off: read last); empty when that is no text."},
+        "adopted_at": {"type": "string", "description": "instructions: when that text was adopted (RFC 3339)."},
+        "next_adopt_at": {"type": "string", "description": "instructions, state pending: the new version is adopted by then at the latest (RFC 3339); sooner when the hub's own instructions change or the user applies it."},
+        "skills": {"type": "array", "items": {"type": "string"}, "description": "skills: the skills sent."},
+        "files": {"type": "array", "items": {"type": "string"}, "description": "project_context: the projects (slugs) with a file in use."},
+        "truncated": {"type": "boolean", "description": "project_context, inbox_context: some content is used cut at its limit (detail says which)."},
+        "never_quote": {"type": "integer", "description": "inbox_context: how many sentences drafts are checked against."}
+      },
+      "required": ["contribution", "kind", "path", "limit", "bytes", "state"]
+    },
+    "AssistantDataStatusResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {"type": "array", "items": {"$ref": "#/$defs/AssistantDataItem"}}
+      },
+      "required": ["items"]
+    }
+  }
+}

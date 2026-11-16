@@ -5,6 +5,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/nwverse/persona/sdk/go/ext"
 	"github.com/nwverse/persona/sdk/go/wire"
@@ -19,27 +20,123 @@ const overTab = "/"
 // cardRows is the most entities in progress the overview card lists.
 const cardRows = 5
 
-// welcome is the screen with no space: a header and a row per template. Samples come with every template; the blank
-// one has none.
+// pickSlot is the new space's state while its template is not chosen yet.
+const pickSlot = "?"
+
+// welcome is the screen with no space: a header and a row per template, which opens that template's form.
 func (c *ctx) welcome() *wire.View {
 	items := []wire.Component{{
 		Type: wire.ComponentHeader, Title: "空间", Subtitle: "用类型、属性和关联，管理任何一类事情",
 	}}
-	for _, t := range templates.All() {
-		value := fmt.Sprintf("%d 类", len(t.Types))
-		if len(t.Samples) > 0 {
-			value += " · 含示例"
+	return &wire.View{Sections: []wire.Section{{Items: append(items, templateRows()...)}}}
+}
+
+// newSpacePage is the screen of a new space the state names: the template list, or the form of its template. With no
+// space the list is the welcome. It is nil when the state names no new space, or a template that does not exist.
+func (c *ctx) newSpacePage() *wire.View {
+	switch c.st.C {
+	case "":
+		return nil
+	case pickSlot:
+		if c.sp == nil {
+			c.st.C = ""
+			return c.welcome()
 		}
-		items = append(items, wire.Component{
+		return picker()
+	}
+	t, ok := templates.Get(c.st.C)
+	if !ok {
+		c.st.C = ""
+		return nil
+	}
+	return c.createForm(t)
+}
+
+// picker is the template list of a new space, and the button that leaves it.
+func picker() *wire.View {
+	items := []wire.Component{{Type: wire.ComponentHeader, Title: "新建空间", Subtitle: "从一个模板开始"}}
+	return &wire.View{Sections: []wire.Section{
+		{Items: append(items, templateRows()...)},
+		{Items: []wire.Component{button("取消", &wire.Action{ID: "cancel"}, wire.ButtonRoleNormal)}},
+	}}
+}
+
+// templateRows is a row per template: its icon, name and about, and the number of its types. A row opens the
+// template's form.
+func templateRows() []wire.Component {
+	out := []wire.Component{}
+	for _, t := range templates.All() {
+		value := ""
+		if len(t.Types) > 0 {
+			value = fmt.Sprintf("%d 类", len(t.Types))
+		}
+		out = append(out, wire.Component{
 			Type: wire.ComponentRow, Icon: iconName(t.Icon), Title: t.Name, Subtitle: cut(t.About, maxText),
-			Value: value, Action: &wire.Action{ID: "create:" + t.Key},
+			Value: value, Action: &wire.Action{ID: "new:" + t.Key},
 		})
 	}
-	return &wire.View{Sections: []wire.Section{{Items: items}}}
+	return out
+}
+
+// createForm is the form of a new space from a template: what the template brings, the name (a free default), the
+// samples choice when it has samples, the primary create, and the button back to the template list.
+func (c *ctx) createForm(t templates.Template) *wire.View {
+	items := []wire.Component{{Type: wire.ComponentHeader, Title: t.Name, Subtitle: cut(t.About, maxText)}}
+	if len(t.Types) > 0 {
+		var names []string
+		for _, ty := range t.Types {
+			names = append(names, ty.Name)
+		}
+		items = append(items, wire.Component{
+			Type: wire.ComponentText, Text: cut("包含："+strings.Join(names, "、"), maxText), Style: wire.TextStyleCaption,
+		})
+	}
+	items = append(items, wire.Component{
+		Type: wire.ComponentField, Name: "name", Label: "名称", Kind: wire.FieldKindText, Value: c.defaultName(t),
+	})
+	if len(t.Samples) > 0 {
+		items = append(items, toggleField("samples", "带示例记录", true))
+	}
+	items = append(items, button("创建", &wire.Action{ID: "create:" + t.Key, Submit: true}, wire.ButtonRoleNormal))
+	return &wire.View{Sections: []wire.Section{
+		{Items: items},
+		{Items: []wire.Component{button("返回", &wire.Action{ID: "new"}, wire.ButtonRoleNormal)}},
+	}}
+}
+
+// defaultName is the name a new space from the template gets: the template's name, followed by " 2", " 3", ... when
+// a space already has it.
+func (c *ctx) defaultName(t templates.Template) string {
+	taken := map[string]bool{}
+	for _, sp := range c.b.Spaces {
+		if sp != nil {
+			taken[sp.Name] = true
+		}
+	}
+	return freeName(t.Name, taken)
+}
+
+// freeName is base, or base followed by " 2", " 3", ... when taken has it. The answer is never longer than a name
+// may be: base is cut to the limit, and cut further to leave room for the suffix, so the name can be saved as it is.
+func freeName(base string, taken map[string]bool) string {
+	r := []rune(strings.TrimSpace(base))
+	if len(r) > kernel.MaxName {
+		r = r[:kernel.MaxName]
+	}
+	name := strings.TrimSpace(string(r))
+	for i := 2; taken[name]; i++ {
+		suffix := fmt.Sprintf(" %d", i)
+		head := r
+		if room := kernel.MaxName - len(suffix); len(head) > room {
+			head = head[:room]
+		}
+		name = strings.TrimSpace(string(head)) + suffix
+	}
+	return name
 }
 
 // overview is the space page with no type tab: the space's header and its totals, a row per type, the latest changes,
-// the settings fold when it is open, and the buttons that add a type or open the settings.
+// the settings fold when it is open, and the buttons that add a type, open the settings or start a new space.
 func (c *ctx) overview() (*wire.View, error) {
 	sp := c.sp
 	filter, tabs := c.chrome()
@@ -67,6 +164,7 @@ func (c *ctx) overview() (*wire.View, error) {
 	v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{
 		button("新建类型", ext.Open("schema:+", "", state{S: sp.ID, D: "+"}, "新建类型"), wire.ButtonRoleNormal),
 		button("空间设置", &wire.Action{ID: "fold:space"}, wire.ButtonRoleNormal),
+		button("新建空间", &wire.Action{ID: "new"}, wire.ButtonRoleNormal),
 	}})
 	return v, nil
 }

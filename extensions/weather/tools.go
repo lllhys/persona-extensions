@@ -78,7 +78,7 @@ func (a *app) callTool(ctx context.Context, name string, raw json.RawMessage) (s
 // resolveCity finds the city to read: a configured one by name, the default when the name is empty, or a search.
 func (a *app) resolveCity(ctx context.Context, name string) (City, error) {
 	if c, ok := cityByName(a.cities, name); ok {
-		return c, nil
+		return a.locate(ctx, c)
 	}
 	rd, err := a.read(ctx, a.client.geo, geoURL(name), cacheFor)
 	if err != nil {
@@ -139,12 +139,16 @@ func (a *app) toolNow(ctx context.Context, name string) (string, error) {
 	u, w := a.cfg.tempUnit(), a.cfg.windUnit()
 	cur := f.Current
 	var b strings.Builder
+	desc, icon := wmoOptional(cur.WeatherCode)
 	fmt.Fprintf(&b, "%s 当前（%s）：%s，体感 %s，%s%s\n", c.Name, curTime(cur.Time),
-		fmtTemp(cur.Temperature, u), fmtTemp(cur.Apparent, u), wmoText(cur.WeatherCode), iconOf(cur.WeatherCode))
-	fmt.Fprintf(&b, "湿度 %.0f%%", cur.Humidity)
-	if cur.WindSpeed > 0 {
-		fmt.Fprintf(&b, "，%s %s", windDir(cur.WindDirection), fmtWind(cur.WindSpeed, w))
-	} else {
+		tempText(cur.Temperature, u), tempText(cur.Apparent, u), desc, icon)
+	fmt.Fprintf(&b, "湿度 %s", percentText(cur.Humidity))
+	switch {
+	case !cur.WindSpeed.OK:
+		b.WriteString("，风未知")
+	case cur.WindSpeed.Value > 0:
+		fmt.Fprintf(&b, "，%s %s", windDir(cur.WindDirection.Value), fmtWind(cur.WindSpeed.Value, w))
+	default:
 		b.WriteString("，无风")
 	}
 	if hi, lo, ok := f.todayHighLow(); ok {
@@ -174,8 +178,9 @@ func (a *app) toolForecast(ctx context.Context, name string, days int) (string, 
 		if !d.date.IsZero() {
 			date = d.date.Format("01-02")
 		}
-		fmt.Fprintf(&b, "\n- %s %s：%s，%s ~ %s，降水概率 %.0f%%", d.weekday(), date,
-			wmoText(d.code), fmtTemp(d.min, u), fmtTemp(d.max, u), d.precip)
+		desc, _ := wmoOptional(d.code)
+		fmt.Fprintf(&b, "\n- %s %s：%s，%s ~ %s，降水概率 %s", d.weekday(), date,
+			desc, tempText(d.min, u), tempText(d.max, u), percentText(d.precip))
 	}
 	return b.String(), nil
 }

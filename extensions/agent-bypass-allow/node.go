@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -23,6 +24,8 @@ type config struct {
 	Machines         []string `json:"machines"`
 	ConfigDirs       []string `json:"config_dirs"`
 	AllowDestructive bool     `json:"allow_destructive"`
+	AssistantWrites  bool     `json:"assistant_writes"`
+	AssistantDirs    []string `json:"assistant_write_dirs"`
 }
 
 func (c config) dirs() []string {
@@ -33,8 +36,9 @@ func (c config) dirs() []string {
 }
 
 type node struct {
-	bin  string // this program, as the entries run it
-	data string // its data directory: heartbeat and audit log
+	bin     string // this program, as the entries run it
+	data    string // its data directory: heartbeat and audit log
+	matcher string // the entries' matcher (matcherFor)
 
 	mu   sync.Mutex
 	dirs []dirState
@@ -102,7 +106,8 @@ func (n *node) init(ctx context.Context, in *ext.Init, _ *ext.Hub) (map[string]a
 		}
 		n.bin = bin
 	}
-	opts, err := json.Marshal(options{AllowDestructive: c.AllowDestructive})
+	n.matcher = matcherFor(c.AssistantWrites)
+	opts, err := json.Marshal(options{AllowDestructive: c.AllowDestructive, AssistantWrites: c.AssistantWrites, AssistantWriteDirs: c.AssistantDirs})
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +157,7 @@ func (n *node) install(dirs []string) {
 			s.Error = "no such directory"
 		default:
 			s.Settings = settingsPath(abs)
-			if _, err := installHook(s.Settings, hookCommand(n.bin, abs, n.data)); err != nil {
+			if _, err := installHookWith(s.Settings, cmp.Or(n.matcher, hookMatcher), hookCommand(n.bin, abs, n.data)); err != nil {
 				s.Error = err.Error()
 			} else {
 				s.Installed = true

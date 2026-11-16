@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -545,6 +546,133 @@ func TestActions(t *testing.T) {
 	if _, err := connector(t, a, "actions.do", map[string]any{"contribution": id, "name": secureAction, "args": args}); err == nil {
 		t.Fatal("do without a request id")
 	}
+}
+
+func TestActionsConcurrentDuplicateRequest(t *testing.T) {
+	f := newFakeHA(t)
+	a := newTestApp(t, f, Config{})
+	var posts atomic.Int32
+	started, release := make(chan struct{}), make(chan struct{})
+	f.more = func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/services/light/toggle" {
+			return false
+		}
+		if posts.Add(1) == 1 {
+			close(started)
+			<-release
+		}
+		fmt.Fprint(w, `[]`)
+		return true
+	}
+
+	raw, _ := json.Marshal(map[string]any{"contribution": id, "name": callAction,
+		"args": map[string]any{"entity_id": "light.living", "service": "toggle"}, "request_id": "concurrent"})
+	type result struct {
+		text string
+		err  error
+	}
+	call := func(ctx context.Context) result {
+		out, err := a.connector(ctx, "actions.do", raw)
+		if err != nil {
+			return result{err: err}
+		}
+		m, ok := out.(map[string]any)
+		if !ok {
+			return result{err: fmt.Errorf("unexpected actions.do result %T", out)}
+		}
+		text, _ := m["text"].(string)
+		return result{text: text}
+	}
+	first := make(chan result, 1)
+	go func() { first <- call(context.Background()) }()
+	<-started
+
+	// Filling the completed-result cache must neither evict the in-flight request nor block on its service call.
+	for i := range actionDoneMost {
+		id := fmt.Sprintf("other-%d", i)
+		_, err := a.do(context.Background(), id, actionWriteFunc(func(context.Context, *app) (string, error) {
+			return id, nil
+		}))
+		if err != nil {
+			t.Fatalf("write %s: %v", id, err)
+		}
+	}
+
+	// The context reports when the retry starts waiting for the first run. On the old implementation, the HTTP
+	// transport observes it instead, after the retry has already passed the completed-result check.
+	waiting := &observedContext{Context: context.Background(), observed: make(chan struct{})}
+	retry := make(chan result, 1)
+	go func() { retry <- call(waiting) }()
+	<-waiting.observed
+	close(release)
+
+	gotFirst, gotRetry := <-first, <-retry
+	if gotFirst.err != nil || gotRetry.err != nil {
+		t.Fatalf("concurrent calls: first %v, retry %v", gotFirst.err, gotRetry.err)
+	}
+	if gotFirst.text == "" || gotFirst.text != gotRetry.text {
+		t.Fatalf("different results: first %q, retry %q", gotFirst.text, gotRetry.text)
+	}
+	if n := posts.Load(); n != 1 {
+		t.Fatalf("the same request made %d service POSTs, want 1", n)
+	}
+	if got := call(context.Background()); got.err != nil || got.text != gotFirst.text || posts.Load() != 1 {
+		t.Fatalf("completed retry: %+v, %d POSTs", got, posts.Load())
+	}
+}
+
+func TestActionsResultLRU(t *testing.T) {
+	a := newApp(t.Logf)
+	calls := 0
+	w := actionWriteFunc(func(context.Context, *app) (string, error) {
+		calls++
+		return fmt.Sprintf("call-%d", calls), nil
+	})
+	run := func(id string) string {
+		t.Helper()
+		out, err := a.do(context.Background(), id, w)
+		if err != nil {
+			t.Fatalf("do %s: %v", id, err)
+		}
+		return out.(map[string]any)["text"].(string)
+	}
+	for i := range actionDoneMost {
+		run(fmt.Sprintf("r-%d", i))
+	}
+	if got := run("r-0"); got != "call-1" || calls != actionDoneMost {
+		t.Fatalf("completed hit: %q, %d calls", got, calls)
+	}
+	run(fmt.Sprintf("r-%d", actionDoneMost)) // r-0 was just used, so r-1 is now the oldest.
+	if got := run("r-1"); got != fmt.Sprintf("call-%d", actionDoneMost+2) {
+		t.Fatalf("least recently used result was not rerun: %q", got)
+	}
+	if got := run("r-0"); got != "call-1" {
+		t.Fatalf("recently used result was evicted: %q", got)
+	}
+	a.doneMu.Lock()
+	results, order := len(a.done), len(a.doneOrder)
+	a.doneMu.Unlock()
+	if results != actionDoneMost || order != actionDoneMost {
+		t.Fatalf("completed cache has %d results and %d order entries, want %d", results, order, actionDoneMost)
+	}
+}
+
+type actionWriteFunc func(context.Context, *app) (string, error)
+
+func (f actionWriteFunc) run(ctx context.Context, a *app) (string, error) { return f(ctx, a) }
+func (actionWriteFunc) summary(*app) string                               { return "" }
+func (actionWriteFunc) visible() string                                   { return "" }
+func (actionWriteFunc) pin() string                                       { return "" }
+
+type observedContext struct {
+	context.Context
+	once     sync.Once
+	observed chan struct{}
+}
+
+func (c *observedContext) Done() <-chan struct{} {
+	c.once.Do(func() { close(c.observed) })
+	return c.Context.Done()
 }
 
 func TestTools(t *testing.T) {

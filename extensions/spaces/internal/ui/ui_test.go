@@ -183,14 +183,18 @@ func firstSpace(t *testing.T, st kernel.Storage) string {
 	return id
 }
 
-// allScreens are the states that show every screen of a base: the welcome, each space's overview and settings fold,
-// each type's tab with each view, searched, extra pages loaded, with the quick-add fold open, and the schema editor.
+// allScreens are the states that show every screen of a base: the welcome, the template list and each template's
+// form, each space's overview and settings fold, each type's tab with each view, searched, extra pages loaded, with the
+// quick-add fold open, and the schema editor.
 func allScreens(t *testing.T, st kernel.Storage) []state {
 	t.Helper()
-	out := []state{{}}
+	out := []state{{}, {C: pickSlot}}
+	for _, tp := range templates.All() {
+		out = append(out, state{C: tp.Key})
+	}
 	err := st.View(func(b *kernel.Base) error {
 		for _, sp := range b.Spaces {
-			out = append(out, state{S: sp.ID}, state{S: sp.ID, F: "space"})
+			out = append(out, state{S: sp.ID}, state{S: sp.ID, F: "space"}, state{S: sp.ID, C: pickSlot})
 			for _, ty := range sp.Types {
 				for v := range ty.ViewsOrDefault() {
 					for _, q := range []string{"", "a"} {
@@ -223,7 +227,7 @@ func TestEveryScreenAtEveryVersion(t *testing.T) {
 		{"reading", storeWith(t, true, "reading")},
 		{"inventory", storeWith(t, true, "inventory")},
 		{"project without samples", storeWith(t, false, "project")},
-		{"all templates", storeWith(t, true, "project", "reading", "inventory", "blank")},
+		{"all templates", storeWith(t, true, templateKeys()...)},
 		{"crowded", crowded(t, 25, true)},
 	}
 	for _, tc := range cases {
@@ -258,7 +262,7 @@ func TestEmptyStoreShowsWelcomeAndCard(t *testing.T) {
 	for _, it := range v.Sections[0].Items {
 		if it.Type == wire.ComponentRow {
 			rows++
-			if it.Action == nil || !strings.HasPrefix(it.Action.ID, "create:") {
+			if it.Action == nil || !strings.HasPrefix(it.Action.ID, "new:") {
 				t.Fatalf("template row action = %+v", it.Action)
 			}
 		}
@@ -470,14 +474,34 @@ func TestActions(t *testing.T) {
 				t.Fatalf("refused save = %q / %+v", res.Toast, got)
 			}
 		}},
-		{"create from a template", state{}, "create:inventory", nil, func(t *testing.T, res *wire.ActionResult, got state) {
-			if got.S == "" || !strings.HasPrefix(res.Toast, "已创建") {
+		{"create from a template", state{C: "inventory"}, "create:inventory", nil, func(t *testing.T, res *wire.ActionResult, got state) {
+			if got.S == "" || got.C != "" || res.Toast != "已创建「清单与物品」" {
 				t.Fatalf("created = %q / %+v", res.Toast, got)
 			}
 		}},
+		{"new opens the template list", project, "new", nil, func(t *testing.T, _ *wire.ActionResult, got state) {
+			if got.C != pickSlot || got.S != projectSpace {
+				t.Fatalf("new = %+v", got)
+			}
+		}},
+		{"new with a template opens its form", state{S: projectSpace, C: pickSlot}, "new:reading", nil, func(t *testing.T, _ *wire.ActionResult, got state) {
+			if got.C != "reading" {
+				t.Fatalf("new form = %+v", got)
+			}
+		}},
+		{"new with an unknown template is refused", state{S: projectSpace, C: pickSlot}, "new:nope", nil, func(t *testing.T, res *wire.ActionResult, got state) {
+			if res.Toast != "没有模板「nope」" || got.C != pickSlot {
+				t.Fatalf("refused new = %q / %+v", res.Toast, got)
+			}
+		}},
+		{"cancel leaves the space as it was", state{S: projectSpace, C: "reading"}, "cancel", nil, func(t *testing.T, _ *wire.ActionResult, got state) {
+			if got != project {
+				t.Fatalf("cancel = %+v", got)
+			}
+		}},
 		{"create with an unknown template is refused", state{}, "create:nope", nil, func(t *testing.T, res *wire.ActionResult, _ state) {
-			if res.Toast == "" {
-				t.Fatal("no refusal")
+			if res.Toast != "没有模板「nope」" {
+				t.Fatalf("refused create = %q", res.Toast)
 			}
 		}},
 		{"back", project, "back", nil, func(t *testing.T, res *wire.ActionResult, _ state) {
@@ -636,7 +660,7 @@ func TestSpaceOverviewShowsEveryPart(t *testing.T) {
 		t.Fatalf("idea subtitle = %q", types.Items[0].Subtitle)
 	}
 	last := v.Sections[len(v.Sections)-1]
-	if len(last.Items) != 2 || last.Items[1].Action.ID != "fold:space" {
+	if len(last.Items) != 3 || last.Items[1].Action.ID != "fold:space" || last.Items[2].Title != "新建空间" || last.Items[2].Action.ID != "new" {
 		t.Fatalf("button row = %+v", last.Items)
 	}
 }
@@ -717,14 +741,32 @@ func TestTypeTabShowsBoardFeedProgressTableAndQuickAdd(t *testing.T) {
 		t.Fatal("no progress bars for goals")
 	}
 
-	// The task table: the columns and cells, the aggregates as caption, then the same entities as rows.
+	// The task table: the columns and cells with no caption, since the aggregates are the stats above it; then the
+	// same entities as compact rows, title and status only.
 	v = drawPage(t, a, state{S: id, T: "task", V: 1}, 5)
+	grid := v.Sections[0].Items[len(v.Sections[0].Items)-1]
 	table := v.Sections[1].Items[0]
-	if table.Type != wire.ComponentTable || len(table.Rows) == 0 || table.Caption == "" {
+	if table.Type != wire.ComponentTable || len(table.Rows) == 0 || table.Caption != "" {
 		t.Fatalf("table = %+v", table)
 	}
-	if v.Sections[2].Title != "打开" {
-		t.Fatalf("index section = %q", v.Sections[2].Title)
+	if grid.Type != wire.ComponentStatGrid || len(grid.Stats) == 0 {
+		t.Fatalf("table stats = %+v", grid)
+	}
+	index := v.Sections[2]
+	if index.Title != "打开" || len(index.Items) != len(table.Rows) {
+		t.Fatalf("index section = %q with %d rows, want %d", index.Title, len(index.Items), len(table.Rows))
+	}
+	badges := 0
+	for _, r := range index.Items {
+		if r.Title == "" || r.Subtitle != "" || r.Value != "" || r.Action == nil || r.Action.Push == nil {
+			t.Fatalf("index row is not compact: %+v", r)
+		}
+		if r.Badge != nil {
+			badges++
+		}
+	}
+	if badges == 0 {
+		t.Fatal("index rows lack the status badge")
 	}
 
 	// Quick add: opened, it shows one title and a primary create, just above the buttons.
@@ -1253,6 +1295,15 @@ func TestToneAndCut(t *testing.T) {
 	if got := iconName("star"); got != "star" {
 		t.Fatalf("icon = %q", got)
 	}
+}
+
+// templateKeys are the keys of every template, in order.
+func templateKeys() []string {
+	keys := []string{}
+	for _, tpl := range templates.All() {
+		keys = append(keys, tpl.Key)
+	}
+	return keys
 }
 
 func TestStateStaysSmall(t *testing.T) {

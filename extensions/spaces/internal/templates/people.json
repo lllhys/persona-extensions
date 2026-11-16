@@ -1,0 +1,64 @@
+{
+  "key": "people",
+  "name": "人脉与往来",
+  "icon": "person",
+  "about": "身边的人、怎么认识的、上次聊了什么、该什么时候再联系。",
+  "types": [
+    {
+      "key": "person",
+      "name": "人",
+      "props": [
+        {"key": "rel", "name": "关系", "kind": "enum", "options": ["家人", "朋友", "同事", "客户", "其他"]},
+        {"key": "city", "name": "城市", "kind": "text"},
+        {"key": "birthday", "name": "生日", "kind": "date"},
+        {"key": "met", "name": "怎么认识", "kind": "text"},
+        {"key": "follow", "name": "下次联系", "kind": "date"},
+        {"key": "talks", "name": "往来数", "kind": "rollup", "via": "contact.people", "op": "count", "unit": "次"}
+      ],
+      "card": {"lead": "met", "pills": ["rel", "city", "follow", "talks"]},
+      "views": [
+        {"name": "按关系", "kind": "list", "group": "rel"},
+        {"name": "待联系", "kind": "list", "where": [{"field": "follow", "op": "empty", "value": false}], "sort": [{"by": "follow"}]},
+        {"name": "表格", "kind": "table", "sort": [{"by": "rel"}], "agg": [{"op": "count"}, {"op": "sum", "of": "talks"}]}
+      ]
+    },
+    {
+      "key": "contact",
+      "name": "往来",
+      "props": [
+        {"key": "people", "name": "和谁", "kind": "relation", "target": "person", "many": true, "back": "往来"},
+        {"key": "way", "name": "方式", "kind": "enum", "options": ["见面", "电话", "消息", "邮件"]},
+        {"key": "date", "name": "日期", "kind": "date"},
+        {"key": "gist", "name": "聊了什么", "kind": "text"}
+      ],
+      "card": {"lead": "gist", "pills": ["people", "way", "date"]},
+      "views": [
+        {"name": "动态", "kind": "feed", "sort": [{"by": "date", "desc": true}]},
+        {"name": "按人", "kind": "list", "sort": [{"by": "date", "desc": true}], "group": "people"},
+        {"name": "表格", "kind": "table", "sort": [{"by": "date", "desc": true}], "agg": [{"op": "count"}]}
+      ]
+    }
+  ],
+  "samples": [
+    {"ref": "p_cousin", "type": "person", "title": "表姐",
+     "values": {"rel": "家人", "city": "老家", "birthday": "1988-04-12", "met": "从小一起长大，寒暑假总在外婆家碰面。"}},
+    {"ref": "p_qing", "type": "person", "title": "阿青",
+     "values": {"rel": "朋友", "city": "杭州", "birthday": "1993-09-02", "met": "大学同一个社团，毕业后还常约着爬山。", "follow": "+3d"}},
+    {"ref": "p_zhou", "type": "person", "title": "老周",
+     "values": {"rel": "同事", "city": "上海", "met": "进公司时的带教，后来调去了别的组。", "follow": "+14d"}},
+    {"ref": "p_he", "type": "person", "title": "小何",
+     "values": {"rel": "客户", "met": "去年一个项目的对接人，做事很利落。", "follow": "+7d"}},
+    {"ref": "c_lunch", "type": "contact", "title": "一起吃午饭",
+     "values": {"people": "@p_zhou", "way": "见面", "date": "-30d", "gist": "聊了他换组之后的新工作，答应帮他看一份方案。"}},
+    {"ref": "c_quote", "type": "contact", "title": "确认下个月的安排",
+     "values": {"people": "@p_he", "way": "邮件", "date": "-12d", "gist": "对了一遍时间表，下个月初再碰一次。"}},
+    {"ref": "c_call", "type": "contact", "title": "表姐打来电话",
+     "values": {"people": "@p_cousin", "way": "电话", "date": "-5d", "gist": "说外婆身体还好，问过年回不回去。"}},
+    {"ref": "c_hotpot", "type": "contact", "title": "三个人吃火锅",
+     "values": {"people": ["@p_qing", "@p_zhou"], "way": "见面", "date": "-2d", "gist": "很久没聚，一直聊到店里打烊。"}},
+    {"ref": "c_hike", "type": "contact", "title": "约好去爬山",
+     "values": {"people": "@p_qing", "way": "消息", "date": "-1d", "gist": "定在下周末，早上七点山脚见。"}},
+    {"ref": "c_callback", "type": "contact", "from": "c_call", "title": "给表姐回电话",
+     "values": {"date": "+0d", "gist": "说好过年回去，顺便给外婆带点吃的。"}}
+  ]
+}

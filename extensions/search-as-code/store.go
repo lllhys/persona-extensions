@@ -81,11 +81,22 @@ type State struct {
 	Restores []RestoreNotice `json:"restores,omitempty"`
 }
 
+// scanState is what a search reads of the state (the directories), apart from the rest, so a search can run
+// without holding the store.
+func (st *State) scanState() *State {
+	return &State{
+		SessionDirs:  slices.Clone(st.SessionDirs),
+		RepoDirs:     slices.Clone(st.RepoDirs),
+		ColdTextDirs: slices.Clone(st.ColdTextDirs),
+	}
+}
+
 const maxRestoreNotices = 5
 
 // RestoreNotice is one restore started from the page: running, then its outcome.
 type RestoreNotice struct {
 	EntryID   string    `json:"entry_id"`
+	Machine   string    `json:"machine,omitempty"` // the computer restoring it; "" for the hub's
 	Title     string    `json:"title,omitempty"`
 	Path      string    `json:"path,omitempty"`
 	Running   bool      `json:"running,omitempty"`

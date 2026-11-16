@@ -65,7 +65,13 @@ func BuildDecisionRef(taskID string, attemptNo int, state, verdict string) strin
 	return ref
 }
 
-// BuildOutcomeDecision maps a terminal task with a persona_todo label into an OutcomeDecisionPayload.
+// decisionReasonMost bounds a decision's reason, in characters: the to-do shows it whole.
+const decisionReasonMost = 1000
+
+// BuildOutcomeDecision maps a terminal task with a persona_todo label into an OutcomeDecisionPayload. The to-do's
+// reader has not seen the queue: the question names the task by its title, the choice says the outcome in plain
+// words, and the reason carries what the agent said it did, what the acceptance command answered (only when it
+// ran), what was left behind and the task's id.
 func BuildOutcomeDecision(t *Task) (OutcomeDecisionPayload, bool) {
 	if t == nil || !t.IsTerminal() || t.SupersededBy != "" {
 		return OutcomeDecisionPayload{}, false
@@ -75,72 +81,70 @@ func BuildOutcomeDecision(t *Task) (OutcomeDecisionPayload, bool) {
 		return OutcomeDecisionPayload{}, false
 	}
 
-	question := fmt.Sprintf("ATS 任务 %s 的验收结果", t.ID)
+	question := fmt.Sprintf("ATS 任务「%s」的结果", cmpOr(firstLinePreview(t.Title, 40), t.ID))
 	var choice string
 	switch t.State {
-	case StateSucceeded:
-		if t.Verdict == VerdictPass || t.Verdict == "passed" {
-			choice = "通过验收"
-		} else {
-			choice = "跑完但没有验收"
-		}
+	case StateSucceeded, StateCanceled, StateCancelled, StateExpired:
+		choice = outcomeWords(t.State, t.Verdict, "")
 	case StateFailed:
-		reason := strings.TrimSpace(t.FailureReason)
-		if reason == "" {
-			reason = "task_failed"
-		}
-		choice = "失败：" + reason
-	case StateCanceled, StateCancelled:
-		choice = "已取消"
-	case StateExpired:
-		choice = "已过期"
+		choice = fmt.Sprintf("失败：%s（试了 %d 次）", failureWords(lastErrorClass(t), t.Verdict), max(t.AttemptNo, 1))
 	default:
 		return OutcomeDecisionPayload{}, false
 	}
 
 	var reasonParts []string
-	if t.Acceptance != nil && strings.TrimSpace(t.Acceptance.Command) != "" {
-		reasonParts = append(reasonParts, fmt.Sprintf("验收命令: %s", strings.TrimSpace(t.Acceptance.Command)))
+	if last := lastReport(t); last != nil {
+		if s := oneLine(last.Summary, 400); s != "" {
+			reasonParts = append(reasonParts, "Agent 的总结: "+s)
+		}
+		command := ""
+		if t.Acceptance != nil {
+			command = oneLine(t.Acceptance.Command, 200)
+		}
+		switch {
+		case last.ExitCode != nil && command != "":
+			reasonParts = append(reasonParts, fmt.Sprintf("验收: `%s` 退出码 %d", command, *last.ExitCode))
+		case last.ExitCode != nil:
+			reasonParts = append(reasonParts, fmt.Sprintf("验收: 退出码 %d", *last.ExitCode))
+		case t.State == StateFailed:
+			// The acceptance command never ran: say what stopped the task instead.
+			if msg := firstLinePreview(last.Message, 300); msg != "" {
+				reasonParts = append(reasonParts, "原因: "+msg)
+			}
+		}
+		// The branch before its commit, whatever order the report lists them in.
+		arts := slices.Clone(last.Artifacts)
+		slices.SortStableFunc(arts, func(a, b Artifact) int { return artifactRank(a.Kind) - artifactRank(b.Kind) })
+		var left []string
+		for _, a := range arts {
+			p := strings.TrimSpace(a.Path)
+			switch {
+			case p == "" || len(left) >= 6:
+			case a.Kind == "branch":
+				left = append(left, "分支 "+p)
+			case a.Kind == "commit":
+				left = append(left, "提交 "+shortSHA(p))
+			case a.Kind == "worktree":
+				left = append(left, "保留的工作目录 "+p)
+			case a.Kind == "session":
+				// The session is already attached to the to-do; its id adds nothing here.
+			default:
+				left = append(left, p)
+			}
+		}
+		if len(left) > 0 {
+			reasonParts = append(reasonParts, "产物: "+strings.Join(left, " · "))
+		}
+	} else if s := oneLine(t.Summary, 400); s != "" && t.State == StateFailed {
+		reasonParts = append(reasonParts, "原因: "+s)
 	}
-	if len(t.Reports) > 0 {
-		last := t.Reports[len(t.Reports)-1]
-		if last.ExitCode != nil {
-			reasonParts = append(reasonParts, fmt.Sprintf("退出码: %d", *last.ExitCode))
-		}
-		if msg := strings.TrimSpace(last.Message); msg != "" {
-			reasonParts = append(reasonParts, fmt.Sprintf("摘要: %s", truncateRunes(msg, 400)))
-		}
-		if len(last.Artifacts) > 0 {
-			maxArt := len(last.Artifacts)
-			if maxArt > 10 {
-				maxArt = 10
-			}
-			paths := make([]string, 0, maxArt)
-			for i := 0; i < maxArt; i++ {
-				a := last.Artifacts[i]
-				p := strings.TrimSpace(a.Path)
-				switch {
-				case p == "" || a.Kind == "session":
-					// The session is already attached to the to-do; its id adds nothing here.
-				case a.Kind == "commit" && len(p) > 12:
-					paths = append(paths, p[:12])
-				default:
-					paths = append(paths, p)
-				}
-			}
-			if len(paths) > 0 {
-				reasonParts = append(reasonParts, fmt.Sprintf("产物: %s", strings.Join(paths, ", ")))
-			}
-		}
-	} else if s := strings.TrimSpace(t.Summary); s != "" {
-		reasonParts = append(reasonParts, fmt.Sprintf("摘要: %s", truncateRunes(s, 400)))
-	}
+	reasonParts = append(reasonParts, "任务 "+t.ID)
 
 	ref := BuildDecisionRef(t.ID, t.AttemptNo, t.State, t.Verdict)
 	return OutcomeDecisionPayload{
 		Question: question,
 		Choice:   choice,
-		Reason:   strings.Join(reasonParts, "；"),
+		Reason:   truncateRunes(strings.Join(reasonParts, "；"), decisionReasonMost),
 		Ref:      ref,
 	}, true
 }
@@ -370,4 +374,15 @@ func (q *Queue) markDecisionSkipped(taskID, reason string) error {
 	}
 	t.DecisionSkipReason = reason
 	return q.saveLocked()
+}
+
+// artifactRank orders what an attempt left behind for the to-do's line: branch, commit, then the rest.
+func artifactRank(kind string) int {
+	switch kind {
+	case "branch":
+		return 0
+	case "commit":
+		return 1
+	}
+	return 2
 }

@@ -1,0 +1,74 @@
+{
+  "key": "subscription",
+  "name": "订阅与账单",
+  "icon": "wallet",
+  "about": "每月在为什么付钱、什么时候续费、哪些该停了。",
+  "types": [
+    {
+      "key": "sub",
+      "name": "订阅",
+      "flow": [
+        {"name": "试用", "phase": "todo"},
+        {"name": "使用中", "phase": "doing"},
+        {"name": "待取消", "phase": "doing"},
+        {"name": "已取消", "phase": "done"}
+      ],
+      "props": [
+        {"key": "price", "name": "价格", "kind": "number", "unit": "元"},
+        {"key": "cycle", "name": "周期", "kind": "enum", "options": ["月付", "年付"]},
+        {"key": "renew", "name": "下次续费", "kind": "date"},
+        {"key": "category", "name": "类别", "kind": "enum", "options": ["影音", "工具", "学习", "健康", "生活"]},
+        {"key": "url", "name": "管理页", "kind": "url"},
+        {"key": "note", "name": "备注", "kind": "text"},
+        {"key": "paid", "name": "已付", "kind": "rollup", "via": "payment.sub", "op": "sum", "of": "amount", "unit": "元"},
+        {"key": "payments", "name": "扣款次数", "kind": "rollup", "via": "payment.sub", "op": "count", "unit": "次"}
+      ],
+      "card": {"lead": "note", "pills": ["price", "cycle", "renew", "paid"]},
+      "views": [
+        {"name": "看板", "kind": "board"},
+        {"name": "快续费了", "kind": "list", "where": [{"field": "phase", "op": "ne", "value": "done"}], "sort": [{"by": "renew"}]},
+        {"name": "月付", "kind": "table", "where": [{"field": "cycle", "op": "eq", "value": "月付"}, {"field": "phase", "op": "ne", "value": "done"}], "sort": [{"by": "renew"}], "agg": [{"op": "count"}, {"op": "sum", "of": "price"}]},
+        {"name": "年付", "kind": "table", "where": [{"field": "cycle", "op": "eq", "value": "年付"}, {"field": "phase", "op": "ne", "value": "done"}], "sort": [{"by": "renew"}], "agg": [{"op": "count"}, {"op": "sum", "of": "price"}]},
+        {"name": "按类别", "kind": "list", "group": "category"}
+      ]
+    },
+    {
+      "key": "payment",
+      "name": "扣款",
+      "props": [
+        {"key": "sub", "name": "订阅", "kind": "relation", "target": "sub", "back": "扣款"},
+        {"key": "date", "name": "日期", "kind": "date"},
+        {"key": "amount", "name": "金额", "kind": "number", "unit": "元"},
+        {"key": "note", "name": "备注", "kind": "text"}
+      ],
+      "card": {"lead": "note", "pills": ["sub", "date", "amount"]},
+      "views": [
+        {"name": "动态", "kind": "feed", "sort": [{"by": "date", "desc": true}]},
+        {"name": "表格", "kind": "table", "sort": [{"by": "date", "desc": true}], "agg": [{"op": "count"}, {"op": "sum", "of": "amount"}]},
+        {"name": "按订阅", "kind": "list", "sort": [{"by": "date", "desc": true}], "group": "sub"}
+      ]
+    }
+  ],
+  "samples": [
+    {"ref": "sub_video", "type": "sub", "title": "视频会员", "status": "使用中",
+     "values": {"price": 25, "cycle": "月付", "renew": "+6d", "category": "影音", "url": "https://example.com/account/video", "note": "周末看剧用，自动续费。"}},
+    {"ref": "sub_cloud", "type": "sub", "title": "云盘 200G", "status": "使用中",
+     "values": {"price": 89, "cycle": "年付", "renew": "+345d", "category": "工具", "note": "手机照片自动备份到这里。"}},
+    {"ref": "sub_gym", "type": "sub", "title": "健身房月卡", "status": "待取消",
+     "values": {"price": 199, "cycle": "月付", "renew": "+3d", "category": "健康", "note": "上个月只去了两次，续费前记得停掉。"}},
+    {"ref": "sub_words", "type": "sub", "title": "背单词课", "status": "试用",
+     "values": {"price": 30, "cycle": "月付", "renew": "+5d", "category": "学习", "url": "https://example.com/account/words", "note": "免费试用七天，到期前决定要不要留。"}},
+    {"ref": "sub_music", "type": "sub", "title": "音乐会员", "status": "已取消",
+     "values": {"price": 15, "cycle": "月付", "category": "影音", "note": "和视频会员重复了，已经停掉。"}},
+    {"ref": "pay_gym1", "type": "payment", "title": "健身房月卡 首月",
+     "values": {"sub": "@sub_gym", "date": "-57d", "amount": 199, "note": "办卡当天付的。"}},
+    {"ref": "pay_video1", "type": "payment", "title": "视频会员 自动续费",
+     "values": {"sub": "@sub_video", "date": "-54d", "amount": 25}},
+    {"ref": "pay_gym2", "type": "payment", "title": "健身房月卡 续费",
+     "values": {"sub": "@sub_gym", "date": "-27d", "amount": 199}},
+    {"ref": "pay_video2", "type": "payment", "from": "pay_video1", "title": "视频会员 又续一个月",
+     "values": {"date": "-24d"}},
+    {"ref": "pay_cloud", "type": "payment", "title": "云盘 200G 年费",
+     "values": {"sub": "@sub_cloud", "date": "-20d", "amount": 89, "note": "一年付一次，比月付省一些。"}}
+  ]
+}

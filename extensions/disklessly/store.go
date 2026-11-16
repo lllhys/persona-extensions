@@ -182,9 +182,9 @@ func (s *store) read(f func(st *State)) error {
 }
 
 // update runs f on the current state under an exclusive file lock and saves it when f returns nil.
+// The file lock is taken before the in-process mutex, so renders (read) of this process are not
+// held up while another process (disklessly mcp) holds the file lock.
 func (s *store) update(f func(st *State, now time.Time) error) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.dir != "" {
 		if err := os.MkdirAll(s.dir, 0o700); err != nil {
 			return err
@@ -198,6 +198,8 @@ func (s *store) update(f func(st *State, now time.Time) error) error {
 			return err
 		}
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	st, err := s.load()
 	if err != nil {
 		return err

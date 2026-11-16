@@ -145,3 +145,14 @@ func TestChartPoints(t *testing.T) {
 		t.Fatalf("second point label %q", chart.Series[0].Points[1].Label)
 	}
 }
+
+// A configured name the search does not know is said on the page, with what to write instead and a retry (#493).
+func TestConfiguredNameNotFound(t *testing.T) {
+	f := newFakeSite(t)
+	sample(t, f)
+	f.serve("/v1/search", `{"results":[]}`)
+	a := testApp(t, f, `{"cities": ["不存在的城市"]}`)
+	v := draw(t, a, 3, nil)
+	says(t, v, "## 不存在的城市", "没搜到", "纬度,经度", "重试")
+	saysNot(t, v, "0°C")
+}

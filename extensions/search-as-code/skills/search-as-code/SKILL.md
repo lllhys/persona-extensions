@@ -1,6 +1,6 @@
 ---
 name: search-as-code
-description: 用户的代码化搜索（Search as Code）与本机 Coding Agent 会话深度检索（经本机 search-as-code MCP 服务器）：把复杂的多步检索、跨会话溯源、报错排查或模块决策回溯编译为可执行的搜索流水线代码（|> 算子链），跨 Claude Code / Codex 会话历史（支持排除工具调用噪音的纯对话检索；含 disklessly 已移到云端、标记为「已上云」的会话）与本地代码库执行过滤、正则匹配、跨文件关联、聚合与排序。只读检索（mcp__search-as-code__sac_execute / sac_session_search / sac_recipes_list）直接运行；保存或删除搜索配方（sac_recipe_upsert / sac_recipe_delete）与恢复已上云会话（sac_session_restore）按对话权限先请用户确认。
+description: 用户的代码化搜索（Search as Code）与本机 Coding Agent 会话深度检索（经本机 search-as-code MCP 服务器）：把复杂的多步检索、跨会话溯源、报错排查或模块决策回溯编译为可执行的搜索流水线代码（|> 算子链），跨 Claude Code / Codex 会话历史（支持排除工具调用噪音的纯对话检索；含 disklessly 已移到云端、标记为「已上云」的会话）与本地代码库执行过滤、正则匹配、跨文件关联、聚合与排序。列配方（mcp__search-as-code__sac_recipes_list）直接运行；检索会话（sac_execute / sac_session_search，会读本机所有项目的会话历史）、保存或删除搜索配方（sac_recipe_upsert / sac_recipe_delete）与恢复已上云会话（sac_session_restore）按对话权限先请用户确认。其他电脑上的会话用 sac 命令检索（见 sac-remote）。
 ---
 
 # 代码化搜索（mcp__search-as-code__* 工具）
@@ -29,6 +29,8 @@ description: 用户的代码化搜索（Search as Code）与本机 Coding Agent 
 10. `limit(n=25)`：截取 Top N 条高置信度结构化证据。
 
 ## 使用流程
+
+> 检索会话会读到其他项目的对话内容：`sac_execute` / `sac_session_search` 每次调用都按对话权限询问用户（用户可在本次对话内总是允许）。要查用户**其他电脑**上的会话，改用 `sac` 命令（sac-remote 技能），它按电脑、项目与范围分别审批。
 
 1. **查看可用配方与会话源状态**：调用 `sac_recipes_list` 了解预置配方（`error-triage` 近期报错分诊、`cross-session-context` 跨会话决策溯源、`model-harness-audit` 模型与 Harness 产出审计）以及已索引的会话数量。
 2. **执行复杂检索或流水线**：

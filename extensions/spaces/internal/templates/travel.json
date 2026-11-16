@@ -1,0 +1,90 @@
+{
+  "key": "travel",
+  "name": "旅行计划",
+  "icon": "location",
+  "about": "想去的地方、每天的安排、花了多少、行李带齐没有。",
+  "types": [
+    {
+      "key": "trip",
+      "name": "旅行",
+      "flow": [
+        {"name": "想去", "phase": "todo"},
+        {"name": "计划中", "phase": "doing"},
+        {"name": "进行中", "phase": "doing"},
+        {"name": "已结束", "phase": "done"},
+        {"name": "取消", "phase": "dropped"}
+      ],
+      "props": [
+        {"key": "summary", "name": "简介", "kind": "text"},
+        {"key": "dest", "name": "目的地", "kind": "text"},
+        {"key": "start", "name": "出发", "kind": "date"},
+        {"key": "end", "name": "返回", "kind": "date"},
+        {"key": "budget", "name": "预算", "kind": "number", "unit": "元"},
+        {"key": "stops", "name": "日程数", "kind": "rollup", "via": "plan.trip", "op": "count"},
+        {"key": "spent", "name": "花费", "kind": "rollup", "via": "plan.trip", "op": "sum", "of": "cost", "unit": "元"},
+        {"key": "bags", "name": "行李数", "kind": "rollup", "via": "pack.trip", "op": "count", "unit": "件"},
+        {"key": "packed", "name": "已装", "kind": "rollup", "via": "pack.trip", "op": "sum", "of": "packed", "unit": "件"}
+      ],
+      "card": {"lead": "summary", "pills": ["dest", "start", "spent", "stops"], "progress": {"of": "packed", "over": "bags"}},
+      "views": [
+        {"name": "看板", "kind": "board"},
+        {"name": "收拾行李", "kind": "progress", "where": [{"field": "phase", "op": "eq", "value": "doing"}]},
+        {"name": "表格", "kind": "table", "sort": [{"by": "start"}], "agg": [{"op": "count"}, {"op": "sum", "of": "budget"}]}
+      ]
+    },
+    {
+      "key": "plan",
+      "name": "日程",
+      "props": [
+        {"key": "trip", "name": "旅行", "kind": "relation", "target": "trip", "back": "日程"},
+        {"key": "date", "name": "日期", "kind": "date"},
+        {"key": "place", "name": "地点", "kind": "text"},
+        {"key": "kind", "name": "类别", "kind": "enum", "options": ["交通", "住宿", "景点", "吃饭", "其他"]},
+        {"key": "cost", "name": "花费", "kind": "number", "unit": "元"},
+        {"key": "note", "name": "备注", "kind": "text"}
+      ],
+      "card": {"lead": "note", "pills": ["date", "kind", "place", "cost"]},
+      "views": [
+        {"name": "动态", "kind": "feed", "sort": [{"by": "date", "desc": true}]},
+        {"name": "按旅行", "kind": "list", "sort": [{"by": "date"}], "group": "trip"},
+        {"name": "按天", "kind": "list", "sort": [{"by": "date"}], "group": "date"},
+        {"name": "花费", "kind": "table", "sort": [{"by": "date"}], "agg": [{"op": "count"}, {"op": "sum", "of": "cost"}]}
+      ]
+    },
+    {
+      "key": "pack",
+      "name": "行李",
+      "props": [
+        {"key": "trip", "name": "旅行", "kind": "relation", "target": "trip", "back": "行李"},
+        {"key": "packed", "name": "已装", "kind": "boolean"},
+        {"key": "kind", "name": "类别", "kind": "enum", "options": ["证件", "衣物", "洗漱", "电子", "药品", "其他"]},
+        {"key": "note", "name": "备注", "kind": "text"}
+      ],
+      "card": {"lead": "note", "pills": ["trip", "kind", "packed"]},
+      "views": [
+        {"name": "按旅行", "kind": "list", "group": "trip"},
+        {"name": "还没装", "kind": "list", "where": [{"field": "packed", "op": "ne", "value": true}], "group": "trip"}
+      ]
+    }
+  ],
+  "samples": [
+    {"ref": "trip_town", "type": "trip", "title": "古镇两日", "status": "已结束",
+     "values": {"dest": "江南古镇", "summary": "坐大巴去，住一晚，沿着河走了一整天。", "start": "-40d", "end": "-39d", "budget": 800}},
+    {"ref": "trip_hz", "type": "trip", "title": "周末去杭州", "status": "计划中",
+     "values": {"dest": "杭州", "summary": "两晚三天，西湖边走走，吃一顿好的，不赶景点。", "start": "+10d", "end": "+12d", "budget": 1500}},
+    {"ref": "trip_sea", "type": "trip", "title": "去海边看一次日出", "status": "想去",
+     "values": {"dest": "海边小城", "summary": "挑一个人少的季节，住在能看见海的地方。", "budget": 3000}},
+    {"ref": "plan_bus", "type": "plan", "title": "大巴往返", "values": {"trip": "@trip_town", "date": "-40d", "kind": "交通", "cost": 120, "place": "汽车站"}},
+    {"ref": "plan_train", "type": "plan", "title": "去程高铁", "values": {"trip": "@trip_hz", "date": "+10d", "kind": "交通", "cost": 220, "place": "火车站", "note": "早上出发，中午前到，下午就能出去走。"}},
+    {"ref": "plan_stay", "type": "plan", "title": "湖边民宿两晚", "values": {"trip": "@trip_hz", "date": "+10d", "kind": "住宿", "cost": 680, "place": "西湖附近"}},
+    {"ref": "plan_ride", "type": "plan", "title": "环湖骑行", "values": {"trip": "@trip_hz", "date": "+11d", "kind": "景点", "cost": 50, "place": "西湖", "note": "早上人少，骑一圈大概两个小时。"}},
+    {"ref": "plan_dinner", "type": "plan", "title": "吃一顿本地菜", "values": {"trip": "@trip_hz", "date": "+11d", "kind": "吃饭", "cost": 200, "place": "老街"}},
+    {"ref": "plan_back", "type": "plan", "title": "返程高铁", "values": {"trip": "@trip_hz", "date": "+12d", "kind": "交通", "cost": 220, "place": "火车站"}},
+    {"ref": "pack_power", "type": "pack", "title": "充电宝", "values": {"trip": "@trip_town", "kind": "电子", "packed": true}},
+    {"ref": "pack_id", "type": "pack", "title": "身份证", "values": {"trip": "@trip_hz", "kind": "证件", "packed": true, "note": "坐高铁和住宿都要用。"}},
+    {"ref": "pack_power_hz", "type": "pack", "from": "pack_power", "title": "充电宝和数据线",
+     "values": {"trip": "@trip_hz", "packed": false, "note": "上次只带了充电宝，这次把线也带上。"}},
+    {"ref": "pack_coat", "type": "pack", "title": "薄外套", "values": {"trip": "@trip_hz", "kind": "衣物", "packed": false, "note": "湖边早晚凉。"}},
+    {"ref": "pack_umbrella", "type": "pack", "title": "折叠伞", "values": {"trip": "@trip_hz", "kind": "其他", "packed": true}}
+  ]
+}

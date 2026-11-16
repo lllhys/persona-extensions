@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -85,6 +86,19 @@ type ColdCatalog struct {
 	ArchivedBytes uint64      `json:"archived_bytes,omitempty"`
 	RefreshedAt   time.Time   `json:"refreshed_at,omitzero"`
 	Error         string      `json:"error,omitempty"`
+	// State is the classified outcome of the last refresh (ColdReady, ColdNoCLI, …); empty in
+	// catalogs written before it existed (see stateCode). Cause classifies an SSH failure and
+	// Detail holds the first line the CLI printed when its answer was not understood.
+	State     string    `json:"state,omitempty"`
+	Cause     string    `json:"cause,omitempty"`
+	Detail    string    `json:"detail,omitempty"`
+	CLI       ColdCLI   `json:"cli,omitzero"`
+	Platform  string    `json:"platform,omitempty"`
+	CheckedAt time.Time `json:"checked_at,omitzero"` // the last refresh attempt, successful or not
+	// Brew is the machine's Homebrew (brew's path) as the last refresh found it, "" without one.
+	Brew string `json:"brew,omitempty"`
+	// BrewKnown: the refresh looked for Homebrew (catalogs of older versions did not).
+	BrewKnown bool `json:"brew_known,omitempty"`
 
 	checked map[string]bool // segments of archived/remote rows, which --check-segments stats
 }
@@ -97,12 +111,20 @@ func coldListScript(digest, status bool) string {
 	if digest {
 		flags += " --digest"
 	}
-	s := resolveCLIScript + `
+	s := ""
+	if status {
+		s = "echo \"@@SECTION:COLD_UNAME\"\nuname -sm 2>/dev/null || true\n" + findBrewScript + "\necho \"@@SECTION:COLD_BREW\"\nprintf '%s\\n' \"$BREW\"\n"
+	}
+	s += resolveCLIScript + `
 if [ -z "$DKL" ]; then
   echo "@@COLD_NOCLI"
   exit 0
 fi
-echo "@@SECTION:COLD_LIST"
+`
+	if status {
+		s += cliInfoScript
+	}
+	s += `echo "@@SECTION:COLD_LIST"
 "$DKL" --json sessions list --state all` + flags + ` 2>/dev/null | tr '\n' ' '; echo
 `
 	if status {
@@ -138,8 +160,21 @@ func refreshColdIfStale(ctx context.Context, runner Runner, st *State, m *Machin
 	_, _ = RefreshColdIndex(ctx, runner, st, m, now)
 }
 
-// RefreshColdIndex re-reads machine m's session index and backend state into st.Cold[m.ID].
-// A failed refresh keeps the entries already known and marks the backend unknown.
+// coldRefreshTimeout bounds each script of a refresh.
+const coldRefreshTimeout = 3 * time.Minute
+
+// cliOldMessage says that the CLI on the machine predates the session commands.
+func cliOldMessage(cat *ColdCatalog, m *Machine) string {
+	v := shortVersion(cmp.Or(cat.CLI.Version, m.BinaryVersion))
+	if v == "" {
+		v = "（版本未知）"
+	}
+	return "这台电脑上的 disklessly " + v + " 太旧：本页需要支持 sessions list 和 sessions status 的版本"
+}
+
+// RefreshColdIndex re-reads machine m's session index and backend state into st.Cold[m.ID] and
+// classifies the outcome in its State. A failed refresh keeps the entries already known and
+// marks the backend unknown.
 func RefreshColdIndex(ctx context.Context, runner Runner, st *State, m *Machine, now time.Time) (*ColdCatalog, error) {
 	if runner == nil {
 		runner = DefaultRunner
@@ -149,22 +184,67 @@ func RefreshColdIndex(ctx context.Context, runner Runner, st *State, m *Machine,
 		cat = &ColdCatalog{MachineID: m.ID}
 		st.setCold(m.ID, cat)
 	}
-	fail := func(err error) (*ColdCatalog, error) {
+	cat.CheckedAt = now
+	cat.Cause, cat.Detail = "", ""
+	fail := func(state string, err error) (*ColdCatalog, error) {
 		cat.Backend.Reachable = nil
+		cat.State = state
 		cat.Error = err.Error()
 		return cat, err
 	}
-	out, err := runner(ctx, m, coldListScript(false, true), 3*time.Minute)
-	if err != nil {
-		return fail(err)
-	}
-	if strings.Contains(out, "@@COLD_NOCLI") {
-		return fail(errors.New("目标机器未安装 disklessly CLI，无法读取云端会话索引"))
-	}
+	out, err := runner(ctx, m, coldListScript(false, true), coldRefreshTimeout)
 	sections := splitSections(out)
+	if p := parsePlatformString(firstNonEmpty(sections["COLD_UNAME"])); p != "" {
+		cat.Platform = p
+	}
+	if b, ok := sections["COLD_BREW"]; ok {
+		// Only a path counts: with no Homebrew the section is empty, and the next marker
+		// (@@COLD_NOCLI) lands in it.
+		cat.Brew, cat.BrewKnown = "", true
+		for _, l := range b {
+			if l = strings.TrimSpace(l); strings.HasPrefix(l, "/") {
+				cat.Brew = l
+				break
+			}
+		}
+	}
+	if err != nil {
+		if _, started := sections["COLD_LIST"]; started || m.IsLocal || isSelfHostAlias(m.Host) {
+			// The machine answered but the CLI did not finish (or the local shell failed).
+			cat.Detail = firstLine(sections["COLD_LIST"])
+			return fail(ColdUnreadable, fmt.Errorf("disklessly 没有正常结束：%v", err))
+		}
+		m.Reachable = false
+		m.LastError = err.Error()
+		cat.Cause = sshCause(err.Error())
+		return fail(ColdOffline, err)
+	}
+	m.Reachable = true
+	if strings.Contains(out, "@@COLD_NOCLI") {
+		cat.CLI = ColdCLI{}
+		return fail(ColdNoCLI, errors.New("目标机器未安装 disklessly CLI，无法读取云端会话索引"))
+	}
+	if _, ok := sections["COLD_CLI"]; ok {
+		cat.CLI = parseCLIInfo(sections["COLD_CLI"])
+		if cat.CLI.Version != "" {
+			m.BinaryVersion = cat.CLI.Version
+		}
+	}
 	var list cliList
 	if !parseCLIJSONLine(sections["COLD_LIST"], &list) {
-		return fail(errors.New("disklessly sessions list 没有返回可解析的结果"))
+		switch ce := cliFailure(sections["COLD_LIST"]); {
+		case usageError(ce):
+			cat.Detail = firstLine(sections["COLD_LIST"])
+			return fail(ColdCLIOld, errors.New(cliOldMessage(cat, m)))
+		case noBackendError(ce):
+			cat.Detail = ce.Message
+			return fail(ColdNoBackend, errors.New("disklessly 还没有设置备份后端："+ce.Message))
+		case ce != nil:
+			cat.Detail = firstLine(sections["COLD_LIST"])
+			return fail(ColdUnreadable, rawError("disklessly 读取会话索引时报错", cmpOr(ce.Message, ce.Name)))
+		}
+		cat.Detail = firstLine(sections["COLD_LIST"])
+		return fail(ColdUnreadable, errors.New("disklessly sessions list 没有返回可解析的结果"))
 	}
 	var status CloudStatus
 	statusOK := parseCLIJSONLine(sections["COLD_STATUS"], &status)
@@ -237,9 +317,29 @@ func RefreshColdIndex(ctx context.Context, runner Runner, st *State, m *Machine,
 		cat.Unchecked = status.Segments.Unchecked
 		cat.TimedOut = status.Segments.TimedOut
 		cat.ArchivedBytes = status.ArchivedBytes
-	} else {
-		cat.Backend.Reachable = nil
+		switch {
+		case status.Backend.ID == "" && status.Backend.Type == "":
+			cat.State = ColdNoBackend
+		case !reachable:
+			cat.State = ColdBackendDown
+		default:
+			cat.State = ColdReady
+		}
+		return cat, nil
+	}
+	cat.Backend.Reachable = nil
+	switch ce := cliFailure(sections["COLD_STATUS"]); {
+	case usageError(ce):
+		cat.State = ColdCLIOld
+		cat.Error = cliOldMessage(cat, m)
+		cat.Detail = firstLine(sections["COLD_STATUS"])
+	case noBackendError(ce):
+		cat.State = ColdNoBackend
+		cat.Detail = ce.Message
+	default:
+		cat.State = ColdUnreadable
 		cat.Error = "disklessly sessions status 没有返回可解析的结果，云端状态未知"
+		cat.Detail = firstLine(sections["COLD_STATUS"])
 	}
 	return cat, nil
 }
@@ -481,7 +581,7 @@ func SearchCold(st *State, query, machine string, limit int, now time.Time) []Co
 		if cat == nil {
 			continue
 		}
-		name := cmp.Or(m.Name, m.Host)
+		name := machineLabel(m)
 		for _, e := range cat.Entries {
 			if !e.Local && e.DeviceID != "" && ownDevice[e.DeviceID] {
 				continue
@@ -554,7 +654,7 @@ func parseDeepSearch(raw string) ([]cliSearchHit, error) {
 		Error *cliError `json:"error"`
 	}
 	if json.Unmarshal([]byte(raw), &fail) == nil && fail.Error != nil && fail.Error.Message != "" {
-		return nil, errors.New("全文搜索失败：" + fail.Error.Message)
+		return nil, rawError("disklessly 全文搜索报错", fail.Error.Message)
 	}
 	return nil, errors.New("全文搜索没有返回可解析的结果")
 }
@@ -573,25 +673,15 @@ type cliSearchHit struct {
 	SessionID string `json:"sessionId"`
 }
 
-// DeepSearchCold runs `disklessly sessions search` on each machine (all enabled ones when
-// machine is empty) and merges the hits with the local index by entry id, newest first.
-// Machines that cannot be searched are reported in errs; their local hits remain.
-func DeepSearchCold(ctx context.Context, runner Runner, st *State, query, machine string, limit int, now time.Time) (hits []ColdHit, errs []string) {
-	if runner == nil {
-		runner = DefaultRunner
-	}
-	limit = cmp.Or(limit, 50)
-	local := SearchCold(st, query, machine, 0, now)
-	byKey := map[string]int{}
-	for i, h := range local {
-		byKey[h.MachineID+"/"+h.ID] = i
-	}
-	hits = local
-	words := deepSearchWords(query)
-	if len(words) == 0 {
-		sortHits(hits)
-		return hits[:min(len(hits), limit)], []string{"全文搜索需要至少一个查询词"}
-	}
+// deepRun is one machine's answer to a deep search.
+type deepRun struct {
+	found []cliSearchHit
+	err   error
+}
+
+// deepTargets lists the machines a deep search covers: machine, or every enabled one when empty.
+func deepTargets(st *State, machine string) []*Machine {
+	var ms []*Machine
 	for _, m := range st.Machines {
 		if machine != "" {
 			if mm := st.machine(machine); mm == nil || mm.ID != m.ID {
@@ -600,20 +690,83 @@ func DeepSearchCold(ctx context.Context, runner Runner, st *State, query, machin
 		} else if !m.Enabled {
 			continue
 		}
-		out, err := runner(ctx, m, deepSearchScript(words, limit), 90*time.Second)
-		if err == nil && strings.Contains(out, "@@COLD_NOCLI") {
-			err = errors.New("未安装 disklessly CLI")
+		ms = append(ms, m)
+	}
+	return ms
+}
+
+// deepSearchMachines runs `disklessly sessions search` on the machines in parallel, each within
+// timeout, and returns their answers by machine id.
+func deepSearchMachines(ctx context.Context, runner Runner, ms []*Machine, words []string, limit int, timeout time.Duration) map[string]deepRun {
+	if runner == nil {
+		runner = DefaultRunner
+	}
+	runs := make(map[string]deepRun, len(ms))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, m := range ms {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			cctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			out, err := runner(cctx, m, deepSearchScript(words, limit), timeout)
+			if cctx.Err() != nil && err != nil {
+				err = fmt.Errorf("%d 秒内没有返回，稍后再试或换更具体的词", int(timeout/time.Second))
+			}
+			if err == nil && strings.Contains(out, "@@COLD_NOCLI") {
+				err = errors.New("未安装 disklessly CLI")
+			}
+			var found []cliSearchHit
+			if err == nil {
+				found, err = parseDeepSearch(strings.Join(splitSections(out)["SEARCH"], " "))
+			}
+			mu.Lock()
+			runs[m.ID] = deepRun{found: found, err: err}
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	return runs
+}
+
+// DeepSearchCold runs `disklessly sessions search` on each machine (all enabled ones when
+// machine is empty) and merges the hits with the local index by entry id, newest first.
+// Machines that cannot be searched are reported in errs; their local hits remain.
+func DeepSearchCold(ctx context.Context, runner Runner, st *State, query, machine string, limit int, now time.Time) (hits []ColdHit, errs []string) {
+	limit = cmp.Or(limit, 50)
+	words := deepSearchWords(query)
+	var runs map[string]deepRun
+	if len(words) > 0 {
+		runs = deepSearchMachines(ctx, runner, deepTargets(st, machine), words, limit, 90*time.Second)
+	}
+	return mergeDeepSearch(st, query, machine, limit, now, runs)
+}
+
+// mergeDeepSearch merges deep-search answers (runs, by machine id) with the local index.
+func mergeDeepSearch(st *State, query, machine string, limit int, now time.Time, runs map[string]deepRun) (hits []ColdHit, errs []string) {
+	limit = cmp.Or(limit, 50)
+	local := SearchCold(st, query, machine, 0, now)
+	byKey := map[string]int{}
+	for i, h := range local {
+		byKey[h.MachineID+"/"+h.ID] = i
+	}
+	hits = local
+	if len(deepSearchWords(query)) == 0 {
+		sortHits(hits)
+		return hits[:min(len(hits), limit)], []string{"全文搜索需要至少一个查询词"}
+	}
+	for _, m := range deepTargets(st, machine) {
+		run, ok := runs[m.ID]
+		if !ok {
+			continue
 		}
-		var found []cliSearchHit
-		if err == nil {
-			found, err = parseDeepSearch(strings.Join(splitSections(out)["SEARCH"], " "))
-		}
-		if err != nil {
-			errs = append(errs, cmp.Or(m.Name, m.ID)+"："+err.Error())
+		if run.err != nil {
+			errs = append(errs, machineLabel(m)+"："+run.err.Error())
 			continue
 		}
 		cat := st.cold(m.ID)
-		for _, f := range found {
+		for _, f := range run.found {
 			key := m.ID + "/" + f.ID
 			if i, ok := byKey[key]; ok {
 				hits[i].Preview = clipRunes(oneLine(f.Preview), coldPromptRunes)
@@ -631,7 +784,7 @@ func DeepSearchCold(ctx context.Context, runner Runner, st *State, query, machin
 				}
 			}
 			byKey[key] = len(hits)
-			hits = append(hits, ColdHit{ColdEntry: e, MachineID: m.ID, MachineName: cmp.Or(m.Name, m.Host),
+			hits = append(hits, ColdHit{ColdEntry: e, MachineID: m.ID, MachineName: machineLabel(m),
 				Location: cat.location(e, m, now), Preview: clipRunes(oneLine(f.Preview), coldPromptRunes), Deep: true})
 		}
 	}
@@ -747,9 +900,9 @@ func RestoreCold(ctx context.Context, runner Runner, st *State, m *Machine, entr
 	case rc == cliExitMissing:
 		return nil, "", errors.New("目标机器未安装 disklessly CLI，无法恢复会话")
 	case rc == cliExitBackend:
-		return nil, "", fmt.Errorf("备份后端不可达，无法恢复会话：%s", cmpOr(msg, "backend unreachable"))
+		return nil, "", rawError("备份后端连不上，这个会话暂时恢复不了；确认后端在线后再试", msg)
 	case rc != 0 || !resp.OK:
-		return nil, "", fmt.Errorf("disklessly sessions restore 失败 (exit %d)：%s", rc, cmpOr(msg, "unknown error"))
+		return nil, "", rawError(fmt.Sprintf("disklessly 恢复会话失败（退出码 %d），本地没有改动", rc), msg)
 	}
 	if resp.Path != "" && resp.Path != e.Path {
 		// The CLI restored somewhere the catalog did not know: check that path.

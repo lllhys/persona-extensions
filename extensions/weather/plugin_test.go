@@ -89,15 +89,16 @@ func TestManifestMatchesTheCode(t *testing.T) {
 	}
 
 	// The cities default is Shanghai, the first city, and the units default as the code reads them.
+	// A list of strings, the only list the hub's forms take; the default is the default city, read without a search.
 	var citiesSchema struct {
-		Default []City `json:"default"`
+		Items   struct{ Type string } `json:"items"`
+		Default []cityEntry           `json:"default"`
 	}
 	if err := json.Unmarshal(m.Configuration.Properties["cities"], &citiesSchema); err != nil {
 		t.Fatal(err)
 	}
-	if len(citiesSchema.Default) != 1 || citiesSchema.Default[0].Name != "上海" ||
-		citiesSchema.Default[0].Latitude != 31.22 || citiesSchema.Default[0].Longitude != 121.46 {
-		t.Fatalf("cities default %+v", citiesSchema.Default)
+	if citiesSchema.Items.Type != "string" || len(citiesSchema.Default) != 1 || City(citiesSchema.Default[0]) != defaultCity {
+		t.Fatalf("cities %+v", citiesSchema)
 	}
 	var tu struct{ Default string }
 	_ = json.Unmarshal(m.Configuration.Properties["temperature_unit"], &tu)

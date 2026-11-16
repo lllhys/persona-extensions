@@ -2,6 +2,9 @@ package templates
 
 import (
 	"encoding/json"
+	"io/fs"
+	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -51,7 +54,8 @@ func TestTemplatesInOrder(t *testing.T) {
 	for _, tpl := range All() {
 		keys = append(keys, tpl.Key)
 	}
-	if want := []string{"project", "reading", "inventory", "blank"}; !slices.Equal(keys, want) {
+	want := []string{"project", "reading", "inventory", "travel", "habit", "people", "subscription", "blank"}
+	if !slices.Equal(keys, want) {
 		t.Fatalf("All() keys = %v, want %v", keys, want)
 	}
 	for _, key := range keys {
@@ -164,6 +168,27 @@ func TestRollupValues(t *testing.T) {
 		{"inventory", "储物柜", "items", 4},
 		{"inventory", "储物柜", "worth", 209},
 		{"inventory", "书桌", "worth", 129},
+		{"travel", "周末去杭州", "stops", 5},
+		{"travel", "周末去杭州", "spent", 1370},
+		{"travel", "周末去杭州", "bags", 4},
+		{"travel", "周末去杭州", "packed", 2},
+		{"travel", "古镇两日", "spent", 120},
+		{"travel", "古镇两日", "packed", 1},
+		{"travel", "去海边看一次日出", "stops", 0},
+		{"habit", "晨跑", "checkins", 3},
+		{"habit", "晨跑", "minutes", 85},
+		{"habit", "睡前读书", "checkins", 3},
+		{"habit", "睡前读书", "minutes", 80},
+		{"habit", "冥想十分钟", "checkins", 1},
+		{"people", "阿青", "talks", 2},
+		{"people", "老周", "talks", 2},
+		{"people", "表姐", "talks", 2},
+		{"people", "小何", "talks", 1},
+		{"subscription", "视频会员", "paid", 50},
+		{"subscription", "视频会员", "payments", 2},
+		{"subscription", "健身房月卡", "paid", 398},
+		{"subscription", "云盘 200G", "paid", 89},
+		{"subscription", "音乐会员", "paid", 0},
 	}
 	for _, c := range cases {
 		_, sp, w := applied(t, c.key, true)
@@ -236,6 +261,397 @@ func TestSampleValuesAndProvenance(t *testing.T) {
 	}
 	if got := w.Value(entityTitled(t, sp, "大米"), "expires"); got != "2027-05-29" {
 		t.Errorf("expires +200d = %v, want 2027-05-29", got)
+	}
+}
+
+// derivedFrom returns the entity titled title and checks that it was derived from the entity titled src.
+func derivedFrom(t *testing.T, sp *kernel.Space, title, src string) *kernel.Entity {
+	t.Helper()
+	e, s := entityTitled(t, sp, title), entityTitled(t, sp, src)
+	if e.Origin != s.ID {
+		t.Errorf("%q origin = %q, want %q (%s)", title, e.Origin, s.ID, src)
+	}
+	return e
+}
+
+// ids are the ids of the entities with the titles, in order.
+func ids(t *testing.T, sp *kernel.Space, titles ...string) []string {
+	t.Helper()
+	out := make([]string, 0, len(titles))
+	for _, title := range titles {
+		out = append(out, entityTitled(t, sp, title).ID)
+	}
+	return out
+}
+
+// viewNamed runs the view of the type with the name over the world, failing the test when it is missing or fails.
+func viewNamed(t *testing.T, sp *kernel.Space, w *kernel.World, typ, name string) kernel.Result {
+	t.Helper()
+	for _, ty := range sp.Types {
+		if ty.Key != typ {
+			continue
+		}
+		for _, v := range ty.Views {
+			if v.Name == name {
+				res, err := w.Run(kernel.Query{Type: typ, Lens: v.Lens, Limit: kernel.MaxLimit})
+				if err != nil {
+					t.Fatalf("view %s/%s: %v", typ, name, err)
+				}
+				return res
+			}
+		}
+	}
+	t.Fatalf("no view %s/%s", typ, name)
+	return kernel.Result{}
+}
+
+// aggValues are the values of the aggregates of a result; an undefined one is -1.
+func aggValues(res kernel.Result) []float64 {
+	out := make([]float64, 0, len(res.Aggs))
+	for _, c := range res.Aggs {
+		if c.Value == nil {
+			out = append(out, -1)
+			continue
+		}
+		out = append(out, *c.Value)
+	}
+	return out
+}
+
+// titles are the titles of the entities of a result, in order.
+func titles(res kernel.Result) []string {
+	var out []string
+	for _, g := range res.Groups {
+		for _, e := range g.Items {
+			out = append(out, e.Title)
+		}
+	}
+	return out
+}
+
+// sortedTitles are the titles of a result in sorted order, for a view whose order is not the point.
+func sortedTitles(res kernel.Result) []string {
+	out := titles(res)
+	slices.Sort(out)
+	return out
+}
+
+func TestTravelSamples(t *testing.T) {
+	_, sp, w := applied(t, "travel", true)
+	hz := entityTitled(t, sp, "周末去杭州")
+	if got := w.Value(hz, "start"); got != "2026-11-20" {
+		t.Errorf("start +10d = %v, want 2026-11-20", got)
+	}
+	if got := w.Value(entityTitled(t, sp, "古镇两日"), "end"); got != "2026-10-02" {
+		t.Errorf("end -39d = %v, want 2026-10-02", got)
+	}
+	if r, ok := w.Ratio(hz); !ok || r != 0.5 {
+		t.Errorf("packing progress = %v, %v; want 0.5", r, ok)
+	}
+	cable := derivedFrom(t, sp, "充电宝和数据线", "充电宝")
+	if got, _ := w.Value(cable, "trip").([]string); !slices.Equal(got, []string{hz.ID}) || cable.Values["kind"] != "电子" ||
+		cable.Values["packed"] != false {
+		t.Errorf("derived packing item values %v, want the trip replaced, the kind kept and not packed", cable.Values)
+	}
+	if got := aggValues(viewNamed(t, sp, w, "plan", "花费")); !slices.Equal(got, []float64{6, 1490}) {
+		t.Errorf("itinerary cost table aggregates = %v, want [6 1490]", got)
+	}
+	if got := titles(viewNamed(t, sp, w, "trip", "收拾行李")); !slices.Equal(got, []string{"周末去杭州"}) {
+		t.Errorf("packing progress view = %v, want the trip being planned", got)
+	}
+	if got := sortedTitles(viewNamed(t, sp, w, "pack", "还没装")); !slices.Equal(got, []string{"充电宝和数据线", "薄外套"}) {
+		t.Errorf("not yet packed = %v", got)
+	}
+}
+
+func TestHabitSamples(t *testing.T) {
+	_, sp, w := applied(t, "habit", true)
+	run := entityTitled(t, sp, "晨跑")
+	if r, ok := w.Ratio(run); !ok || r != 0.1 {
+		t.Errorf("habit progress = %v, %v; want 0.1 (3 of 30)", r, ok)
+	}
+	again := derivedFrom(t, sp, "又读了一章", "睡前读完第三章")
+	read := entityTitled(t, sp, "睡前读书")
+	if got, _ := w.Value(again, "habit").([]string); !slices.Equal(got, []string{read.ID}) || again.Values["minutes"] != 30.0 {
+		t.Errorf("derived check-in values %v, want the habit and the minutes of its source", again.Values)
+	}
+	if got := w.Value(again, "date"); got != "2026-11-10" {
+		t.Errorf("date +0d = %v, want 2026-11-10", got)
+	}
+	if got := aggValues(viewNamed(t, sp, w, "checkin", "表格")); !slices.Equal(got, []float64{7, 175}) {
+		t.Errorf("check-in table aggregates = %v, want [7 175]", got)
+	}
+	if got := sortedTitles(viewNamed(t, sp, w, "habit", "进度")); !slices.Equal(got, []string{"晨跑", "睡前读书"}) {
+		t.Errorf("habit progress view = %v, want the habits in progress", got)
+	}
+}
+
+func TestPeopleSamples(t *testing.T) {
+	_, sp, w := applied(t, "people", true)
+	if got := w.Value(entityTitled(t, sp, "阿青"), "follow"); got != "2026-11-13" {
+		t.Errorf("follow +3d = %v, want 2026-11-13", got)
+	}
+	hotpot := entityTitled(t, sp, "三个人吃火锅")
+	if got, _ := w.Value(hotpot, "people").([]string); !slices.Equal(got, ids(t, sp, "阿青", "老周")) {
+		t.Errorf("hotpot people = %v, want 阿青 and 老周", got)
+	}
+	back := derivedFrom(t, sp, "给表姐回电话", "表姐打来电话")
+	if got, _ := w.Value(back, "people").([]string); !slices.Equal(got, ids(t, sp, "表姐")) || back.Values["way"] != "电话" {
+		t.Errorf("derived contact values %v, want the person and the way of its source", back.Values)
+	}
+	if got := titles(viewNamed(t, sp, w, "person", "待联系")); !slices.Equal(got, []string{"阿青", "小何", "老周"}) {
+		t.Errorf("to follow up = %v, want the people with a date, soonest first", got)
+	}
+	if got := aggValues(viewNamed(t, sp, w, "person", "表格")); !slices.Equal(got, []float64{4, 7}) {
+		t.Errorf("people table aggregates = %v, want [4 7]", got)
+	}
+}
+
+func TestSubscriptionSamples(t *testing.T) {
+	_, sp, w := applied(t, "subscription", true)
+	if got := w.Value(entityTitled(t, sp, "视频会员"), "renew"); got != "2026-11-16" {
+		t.Errorf("renew +6d = %v, want 2026-11-16", got)
+	}
+	again := derivedFrom(t, sp, "视频会员 又续一个月", "视频会员 自动续费")
+	if again.Values["amount"] != 25.0 || w.Value(again, "date") != "2026-10-17" {
+		t.Errorf("derived payment values %v, want the amount of its source and the date -24d", again.Values)
+	}
+	if got := aggValues(viewNamed(t, sp, w, "sub", "月付")); !slices.Equal(got, []float64{3, 254}) {
+		t.Errorf("monthly table aggregates = %v, want [3 254] (cancelled left out)", got)
+	}
+	if got := aggValues(viewNamed(t, sp, w, "sub", "年付")); !slices.Equal(got, []float64{1, 89}) {
+		t.Errorf("yearly table aggregates = %v, want [1 89]", got)
+	}
+	if got := titles(viewNamed(t, sp, w, "sub", "快续费了")); !slices.Equal(got, []string{"健身房月卡", "背单词课", "视频会员", "云盘 200G"}) {
+		t.Errorf("renewing soon = %v, want the live subscriptions by renewal date", got)
+	}
+	if got := aggValues(viewNamed(t, sp, w, "payment", "表格")); !slices.Equal(got, []float64{5, 537}) {
+		t.Errorf("payment table aggregates = %v, want [5 537]", got)
+	}
+}
+
+func TestEveryTemplateAppliesBesideOtherSpaces(t *testing.T) {
+	b := &kernel.Base{Format: 1}
+	for round := range 2 {
+		for _, tpl := range All() {
+			sp, err := Apply(b, tpl.Key, "", true, testNow)
+			if err != nil {
+				t.Fatalf("round %d: Apply(%q) beside %d spaces: %v", round, tpl.Key, len(b.Spaces)-1, err)
+			}
+			if len(sp.Entities) != len(tpl.Samples) {
+				t.Errorf("round %d: %s: %d entities, want %d", round, tpl.Key, len(sp.Entities), len(tpl.Samples))
+			}
+		}
+	}
+	if err := b.Check(); err != nil {
+		t.Fatalf("Check of a base with every template twice: %v", err)
+	}
+	if want := 2 * len(All()); len(b.Spaces) != want {
+		t.Fatalf("%d spaces, want %d", len(b.Spaces), want)
+	}
+	// Every relation of a space points into that space, so a second copy of a template never links to the first.
+	for _, sp := range b.Spaces {
+		own := map[string]bool{}
+		for _, e := range sp.Entities {
+			own[e.ID] = true
+		}
+		w := kernel.Open(sp)
+		for _, e := range sp.Entities {
+			for _, l := range w.Out(e) {
+				if !own[l.To] {
+					t.Errorf("%s: %q links outside its space to %q", sp.Name, e.Title, l.To)
+				}
+			}
+		}
+	}
+}
+
+// TestEverySampleIsUseful checks the samples of every template as a whole: every rollup has a non-zero value
+// somewhere, every view runs and shows something, every relation value names an earlier sample of its target type,
+// every date value is relative or a day, and no type holds two samples with the same title.
+func TestEverySampleIsUseful(t *testing.T) {
+	for _, tpl := range All() {
+		if len(tpl.Samples) == 0 {
+			continue
+		}
+		_, sp, w := applied(t, tpl.Key, true)
+		for _, typ := range sp.Types {
+			for _, p := range typ.Props {
+				if p.Kind != kernel.KindRollup {
+					continue
+				}
+				nonzero := false
+				for _, e := range sp.Entities {
+					if f, ok := w.Value(e, p.Key).(float64); ok && e.Type == typ.Key && f != 0 {
+						nonzero = true
+					}
+				}
+				if !nonzero {
+					t.Errorf("%s: rollup %s.%s is zero or unset on every sample", tpl.Key, typ.Key, p.Key)
+				}
+			}
+			if len(typ.Views) == 0 {
+				t.Errorf("%s: type %s declares no view", tpl.Key, typ.Key)
+			}
+			for _, v := range typ.Views {
+				if res := viewNamed(t, sp, w, typ.Key, v.Name); res.Total == 0 {
+					t.Errorf("%s: view %s/%s shows no sample", tpl.Key, typ.Key, v.Name)
+				}
+			}
+		}
+		refType := map[string]string{}
+		seen := map[[2]string]bool{}
+		for _, s := range tpl.Samples {
+			if key := [2]string{s.Type, s.Title}; seen[key] {
+				t.Errorf("%s: two samples of type %s are titled %q", tpl.Key, s.Type, s.Title)
+			} else {
+				seen[key] = true
+			}
+			i := slices.IndexFunc(tpl.Types, func(k kernel.Type) bool { return k.Key == s.Type })
+			if i < 0 {
+				t.Fatalf("%s: sample %q has an unknown type %q", tpl.Key, s.Title, s.Type)
+			}
+			for key, raw := range s.Values {
+				j := slices.IndexFunc(tpl.Types[i].Props, func(p kernel.Prop) bool { return p.Key == key })
+				if j < 0 {
+					t.Errorf("%s: sample %q has an unknown property %q", tpl.Key, s.Title, key)
+					continue
+				}
+				p := tpl.Types[i].Props[j]
+				switch p.Kind {
+				case kernel.KindRelation:
+					vals, ok := raw.([]any)
+					if !ok {
+						vals = []any{raw}
+					}
+					for _, v := range vals {
+						ref, _ := v.(string)
+						name, isRef := strings.CutPrefix(ref, "@")
+						if !isRef || refType[name] != p.Target {
+							t.Errorf("%s: sample %q.%s = %v, want @ref of an earlier %s sample", tpl.Key, s.Title, key, v, p.Target)
+						}
+					}
+				case kernel.KindDate:
+					d, _ := raw.(string)
+					_, rel := relativeDate(d, testNow)
+					if _, err := time.Parse(time.DateOnly, d); !rel && err != nil {
+						t.Errorf("%s: sample %q.%s = %v, want +Nd, -Nd or YYYY-MM-DD", tpl.Key, s.Title, key, raw)
+					}
+				}
+			}
+			refType[s.Ref] = s.Type
+		}
+	}
+}
+
+// TestDatedFeedsReadInSampleOrder: a feed ordered by a date of the record shows the samples newest first by that
+// date, the same order their creation stamps give, so the feed tells the story in the order the bundle does.
+func TestDatedFeedsReadInSampleOrder(t *testing.T) {
+	for _, tpl := range All() {
+		if len(tpl.Samples) == 0 {
+			continue
+		}
+		_, sp, w := applied(t, tpl.Key, true)
+		for _, typ := range sp.Types {
+			for _, v := range typ.Views {
+				if v.Kind != "feed" || len(v.Sort) == 0 {
+					continue
+				}
+				by := v.Sort[0].By
+				if p, ok := sp.Field(typ, by); !ok || p.Kind != kernel.KindDate {
+					continue
+				}
+				prev := ""
+				for _, e := range sp.Entities {
+					if e.Type != typ.Key {
+						continue
+					}
+					d, _ := w.Value(e, by).(string)
+					if d == "" {
+						t.Errorf("%s: %q has no %s, which its feed is ordered by", tpl.Key, e.Title, by)
+					} else if d < prev {
+						t.Errorf("%s: %q is dated %s, before the sample created ahead of it (%s)", tpl.Key, e.Title, d, prev)
+					}
+					prev = max(prev, d)
+				}
+			}
+		}
+	}
+}
+
+var (
+	urlPattern   = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://[^\s"]*`)
+	emailPattern = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+`)
+)
+
+// TestBundlesHoldNoPrivateData scans every embedded bundle: this repository is public, so sample data must be
+// fictional. Links are on example.com only, an "@" only starts a relation reference to a sample of the same bundle,
+// and nothing looks like an email address.
+func TestBundlesHoldNoPrivateData(t *testing.T) {
+	files, err := fs.Glob(bundles, "*.json")
+	if err != nil || len(files) != len(order) {
+		t.Fatalf("embedded bundles %v (%v), want one per template", files, err)
+	}
+	for _, name := range files {
+		data, err := fs.ReadFile(bundles, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		for _, raw := range urlPattern.FindAllString(text, -1) {
+			u, err := url.Parse(raw)
+			if err != nil || (u.Scheme != "https" && u.Scheme != "http") ||
+				(u.Hostname() != "example.com" && !strings.HasSuffix(u.Hostname(), ".example.com")) {
+				t.Errorf("%s: link %q is not on example.com", name, raw)
+			}
+		}
+		if m := emailPattern.FindAllString(text, -1); len(m) > 0 {
+			t.Errorf("%s: email-like text %v", name, m)
+		}
+		var tpl Template
+		if err := json.Unmarshal(data, &tpl); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		refs := map[string]bool{}
+		for _, s := range tpl.Samples {
+			refs[s.Ref] = true
+		}
+		var walk func(v any)
+		walk = func(v any) {
+			switch v := v.(type) {
+			case string:
+				if !strings.Contains(v, "@") {
+					return
+				}
+				if ref, ok := strings.CutPrefix(v, "@"); !ok || !refs[ref] {
+					t.Errorf("%s: %q holds an \"@\" that is not a sample reference", name, v)
+				}
+			case []any:
+				for _, x := range v {
+					walk(x)
+				}
+			case map[string]any:
+				for k, x := range v {
+					walk(k)
+					walk(x)
+				}
+			}
+		}
+		var doc any
+		if err := json.Unmarshal(data, &doc); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		walk(doc)
+	}
+}
+
+func TestBundleScanCatchesPrivateData(t *testing.T) {
+	// The patterns of the scan, on text they must and must not match.
+	if got := urlPattern.FindAllString(`"u": "https://example.com/a", "v": "ftp://intranet.test/x"`, -1); len(got) != 2 {
+		t.Errorf("url pattern found %v", got)
+	}
+	if !emailPattern.MatchString("someone@example.com") || emailPattern.MatchString(`"@trip_hz"`) {
+		t.Error("email pattern does not tell an address from a sample reference")
 	}
 }
 

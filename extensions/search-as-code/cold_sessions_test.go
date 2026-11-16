@@ -458,8 +458,8 @@ func TestFindDisklesslyAppBundle(t *testing.T) {
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	defer func(p string) { disklesslyAppCLI = p }(disklesslyAppCLI)
-	disklesslyAppCLI = bin
+	defer func(p string, sys []string) { disklesslyAppCLI, disklesslySystemCLIs = p, sys }(disklesslyAppCLI, disklesslySystemCLIs)
+	disklesslyAppCLI, disklesslySystemCLIs = bin, nil
 	if got, err := findDisklessly(); err != nil || got != bin {
 		t.Fatalf("app bundle CLI: %q %v", got, err)
 	}

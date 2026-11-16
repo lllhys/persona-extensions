@@ -26,6 +26,8 @@ type page struct {
 	Query   string `json:"q,omitempty"`
 	// SessQuery is the cold-session search of the 会话与台账 tab.
 	SessQuery string `json:"sq,omitempty"`
+	// Open is the part of the page whose 详情 is shown.
+	Open string `json:"x,omitempty"`
 }
 
 const (
@@ -44,6 +46,10 @@ type draw struct {
 	now  time.Time
 	loc  *time.Location
 	deep *deepResult // a deep search's hits for this render only
+	// jobs are the background jobs by machine id, as of this render.
+	jobs map[string]coldJob
+	// open is the part of the page whose 详情 is shown.
+	open string
 }
 
 func (a *app) render(_ context.Context, r *ext.UIRequest) (*wire.View, error) {
@@ -58,7 +64,7 @@ func (a *app) pageView(r *ext.UIRequest, p page, deep *deepResult) (*wire.View, 
 	var v *wire.View
 	err := a.db().read(func(st *State) {
 		d := a.drawer(st, r)
-		d.deep = deep
+		d.deep, d.open = deep, p.Open
 		v = d.view(p)
 	})
 	return v, err
@@ -69,7 +75,7 @@ func (a *app) drawer(st *State, r *ext.UIRequest) draw {
 	if err != nil {
 		loc = time.UTC
 	}
-	return draw{st: st, now: a.now(), loc: loc}
+	return draw{st: st, now: a.now(), loc: loc, jobs: a.jobSnapshot()}
 }
 
 func (d draw) view(p page) *wire.View {
@@ -105,10 +111,7 @@ func (d draw) home(p page) *wire.View {
 	v := &wire.View{Title: "Disklessly 机器磁盘"}
 	choices := make([]wire.Choice, 0, len(statuses)+1)
 	for _, ms := range statuses {
-		label := ms.Machine.Host
-		if ms.Machine.IsLocal {
-			label = "local (本机)"
-		}
+		label := machineLabel(ms.Machine)
 		if ms.TotalBytes > 0 {
 			label = fmt.Sprintf("%s · %.0f%%", label, ms.UsedPercent)
 		}
@@ -160,6 +163,8 @@ func (d draw) home(p page) *wire.View {
 	default:
 		v.Sections = d.fleetTab(p, statuses, selected)
 	}
+	v.RefreshAfter = d.refreshAfter()
+	v.Sections = append(sandboxSection(), v.Sections...)
 	return v
 }
 
@@ -235,6 +240,9 @@ func (d draw) fleetTab(p page, statuses []MachineStatus, selected *Machine) []wi
 		}
 		if ms.LastScannedAt != nil {
 			subParts = append(subParts, "扫描于 "+d.when(*ms.LastScannedAt))
+			if ms.Partial {
+				subParts = append(subParts, "缓存未统计完（探测超时，水位照常）")
+			}
 		} else {
 			subParts = append(subParts, "尚未扫描")
 		}
@@ -266,11 +274,7 @@ func (d draw) fleetTab(p page, statuses []MachineStatus, selected *Machine) []wi
 				Tone:  pTone,
 			})
 		} else if m.LastError != "" {
-			sec.Items = append(sec.Items, wire.Component{
-				Type:  wire.ComponentText,
-				Style: wire.TextStyleSecondary,
-				Text:  "上次探测异常：" + m.LastError,
-			})
+			// The problem is drawn with the job lines below.
 		} else {
 			sec.Items = append(sec.Items, wire.Component{
 				Type:  wire.ComponentText,
@@ -284,6 +288,11 @@ func (d draw) fleetTab(p page, statuses []MachineStatus, selected *Machine) []wi
 				FormatBytes(ms.LastFreedBytes), ms.CleanCount, FormatBytes(ms.TotalFreedBytes))
 		}
 
+		sec.Items = append(sec.Items, d.machineJobItems(m)...)
+		if d.busy(m) {
+			secs = append(secs, sec)
+			continue
+		}
 		sec.Items = append(sec.Items,
 			wire.Component{
 				Type:   wire.ComponentButton,
@@ -340,15 +349,13 @@ func (d draw) fleetTab(p page, statuses []MachineStatus, selected *Machine) []wi
 func (d draw) itemsTab(p page, m *Machine, scan *Scan) []wire.Section {
 	ms := d.st.machineStatus(m)
 	head := d.machineHeaderComponent(ms, scan)
-	top := wire.Section{
-		Items: []wire.Component{
-			head,
-			{
-				Type:   wire.ComponentButton,
-				Title:  "立即重新扫描 " + m.Name,
-				Action: &wire.Action{ID: "scan", Values: map[string]string{"m": m.ID}},
-			},
-		},
+	top := wire.Section{Items: append([]wire.Component{head}, d.machineJobItems(m)...)}
+	if !d.busy(m) {
+		top.Items = append(top.Items, wire.Component{
+			Type:   wire.ComponentButton,
+			Title:  "立即重新扫描 " + m.Name,
+			Action: &wire.Action{ID: "scan", Values: map[string]string{"m": m.ID}},
+		})
 	}
 	if scan == nil {
 		return []wire.Section{
@@ -545,8 +552,11 @@ func (d draw) planTab(p page, m *Machine, scan *Scan) []wire.Section {
 	summarySec := wire.Section{
 		Title:  "安全清理计划预览 (Dry-Run Plan)",
 		Footer: "安全等级说明：safe 为可无损自动重建的编译器/包缓存（一键 safe 清理不含冷会话上云）；review 为较大体积产物（如无头浏览器镜像），重新运行时按需下载。",
-		Items: []wire.Component{
-			head,
+		Items: append([]wire.Component{
+			head}, d.machineJobItems(m)...),
+	}
+	summarySec.Items = append(summarySec.Items,
+		[]wire.Component{
 			{
 				Type: wire.ComponentStatGrid,
 				Stats: []wire.Stat{
@@ -556,8 +566,7 @@ func (d draw) planTab(p page, m *Machine, scan *Scan) []wire.Section {
 					{Label: "Review 待确认项", Value: FormatBytes(scan.ReviewBytes), Tone: toneIf(scan.ReviewBytes > 0, wire.ToneCaution)},
 				},
 			},
-		},
-	}
+		}...)
 
 	if scan.SafeBytes > 0 {
 		summarySec.Items = append(summarySec.Items, wire.Component{
@@ -893,8 +902,12 @@ func (a *app) card(_ context.Context, _ *ext.UIRequest) (*wire.View, error) {
 			if ms.TotalBytes > 0 {
 				sub = fmt.Sprintf("已用 %.0f%%（可用 %s）· 可释放 %s",
 					ms.UsedPercent, FormatBytes(ms.AvailableBytes), FormatBytes(ms.ReclaimableBytes))
+				if ms.Partial {
+					sub = fmt.Sprintf("已用 %.0f%%（可用 %s）· 缓存未统计完",
+						ms.UsedPercent, FormatBytes(ms.AvailableBytes))
+				}
 			} else if ms.Machine.LastError != "" {
-				sub = "离线：" + clip(ms.Machine.LastError, 40)
+				sub = "离线：" + sshProblem(ms.Machine, ms.Machine.LastError).Title
 			}
 			items = append(items, wire.Component{
 				Type:     wire.ComponentRow,
@@ -938,7 +951,6 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 		return nil, &ext.Error{Code: "invalid", Message: "invalid page state"}
 	}
 	res := &wire.ActionResult{}
-	runner := a.run()
 	var deep *deepResult
 
 	switch r.Action {
@@ -954,6 +966,14 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 		p.Mode = modeHome
 	case "search":
 		p.Query = strings.TrimSpace(r.Values["q"])
+	case "details":
+		p.Open = toggle(p.Open, r.Values["k"])
+	case "scan", "scan-all", "clean-safe", "clean-category", "clean-item", "clean-selected":
+		toast, err := a.mainJob(r, &p)
+		if err != nil {
+			return nil, &ext.Error{Code: "invalid", Message: userMessage(err)}
+		}
+		res.Toast = toast
 	case "cold-search":
 		p.SessQuery = clipQuery(r.Values["q"])
 		p.Tab = tabSessions
@@ -962,14 +982,14 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 		p.Tab = tabSessions
 		var err error
 		if deep, err = a.coldDeep(ctx, cmp.Or(r.Values["m"], p.Machine), p.SessQuery); err != nil {
-			return nil, &ext.Error{Code: "invalid", Message: err.Error()}
+			return nil, &ext.Error{Code: "invalid", Message: userMessage(err)}
 		}
-	case "cold-refresh", "cold-offload", "cold-restore", "archive-sessions":
+	case "cold-refresh", "cold-offload", "cold-restore", "archive-sessions", "cold-install", "cold-brew":
 		p.Machine = cmp.Or(r.Values["m"], p.Machine)
 		p.Tab = tabSessions
 		toast, err := a.coldAction(ctx, r.Action, p.Machine, r.Values["id"])
 		if err != nil {
-			return nil, &ext.Error{Code: "invalid", Message: err.Error()}
+			return nil, &ext.Error{Code: "invalid", Message: userMessage(err)}
 		}
 		res.Toast = toast
 	case "select-machine":
@@ -991,10 +1011,10 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 		p.Mode = modeHome
 	default:
 		err := a.db().update(func(st *State, now time.Time) error {
-			return a.handleStateAction(ctx, runner, st, now, r, &p, res)
+			return a.handleStateAction(st, now, r, &p, res)
 		})
 		if err != nil {
-			return nil, &ext.Error{Code: "invalid", Message: err.Error()}
+			return nil, &ext.Error{Code: "invalid", Message: userMessage(err)}
 		}
 	}
 
@@ -1004,8 +1024,6 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 }
 
 func (a *app) handleStateAction(
-	ctx context.Context,
-	runner Runner,
 	st *State,
 	now time.Time,
 	r *ext.UIRequest,
@@ -1014,99 +1032,6 @@ func (a *app) handleStateAction(
 ) error {
 	targetID := cmp.Or(r.Values["m"], p.Machine, "local")
 	switch r.Action {
-	case "scan":
-		m := st.machine(targetID)
-		if m == nil {
-			return fmt.Errorf("找不到机器 %q", targetID)
-		}
-		sc, err := ScanMachine(ctx, runner, st, m, now)
-		if err != nil {
-			return err
-		}
-		p.Machine = m.ID
-		res.Toast = fmt.Sprintf("已扫描 %s：可回收 %s", m.Name, FormatBytes(sc.ReclaimableBytes))
-
-	case "scan-all":
-		var scanned int
-		var totalReclaim uint64
-		for _, m := range st.Machines {
-			if !m.Enabled {
-				continue
-			}
-			if sc, err := ScanMachine(ctx, runner, st, m, now); err == nil && sc != nil {
-				scanned++
-				totalReclaim += sc.ReclaimableBytes
-			}
-		}
-		res.Toast = fmt.Sprintf("已扫描 %d 台机器，总可回收 %s", scanned, FormatBytes(totalReclaim))
-
-	case "clean-safe":
-		m := st.machine(targetID)
-		if m == nil {
-			return fmt.Errorf("找不到机器 %q", targetID)
-		}
-		_, rec, err := ExecuteClean(ctx, runner, st, m, nil, nil, false, false, nil, now)
-		if err != nil {
-			return err
-		}
-		p.Machine = m.ID
-		res.Toast = fmt.Sprintf("已清理 %s：%s", m.Name, rec.Summary)
-
-	case "clean-category":
-		m := st.machine(targetID)
-		if m == nil {
-			return fmt.Errorf("找不到机器 %q", targetID)
-		}
-		cat := strings.TrimSpace(r.Values["cat"])
-		if cat == "" {
-			return fmt.Errorf("未指定清理分类")
-		}
-		_, rec, err := ExecuteClean(ctx, runner, st, m, []string{cat}, nil, true, false, nil, now)
-		if err != nil {
-			return err
-		}
-		p.Machine = m.ID
-		res.Toast = fmt.Sprintf("已清理 %s（%s）：%s", m.Name, CategoryLabels[cat], rec.Summary)
-
-	case "clean-item":
-		m := st.machine(targetID)
-		if m == nil {
-			return fmt.Errorf("找不到机器 %q", targetID)
-		}
-		itemID := strings.TrimSpace(r.Values["item"])
-		if itemID == "" {
-			return fmt.Errorf("未指定清理项 ID")
-		}
-		_, rec, err := ExecuteClean(ctx, runner, st, m, nil, []string{itemID}, true, false, nil, now)
-		if err != nil {
-			return err
-		}
-		p.Machine = m.ID
-		res.Toast = fmt.Sprintf("已完成：%s", rec.Summary)
-
-	case "clean-selected":
-		m := st.machine(targetID)
-		if m == nil {
-			return fmt.Errorf("找不到机器 %q", targetID)
-		}
-		var cats []string
-		for _, cid := range CategoryIDs {
-			if r.Values["cat_"+cid] == "true" {
-				cats = append(cats, cid)
-			}
-		}
-		if len(cats) == 0 {
-			return fmt.Errorf("请至少勾选一个要清理的分类")
-		}
-		includeRev := r.Values["include_review"] == "true"
-		_, rec, err := ExecuteClean(ctx, runner, st, m, cats, nil, includeRev, false, nil, now)
-		if err != nil {
-			return err
-		}
-		p.Machine = m.ID
-		p.Tab = tabSessions
-		res.Toast = fmt.Sprintf("清理完成：%s", rec.Summary)
-
 	case "save-machine":
 		port, _ := strconv.Atoi(strings.TrimSpace(r.Values["port"]))
 		in := MachineInput{

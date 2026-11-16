@@ -6,11 +6,12 @@
   "x-side": "plugin",
   "x-methods": {
     "assistant.conversations": {"from": "program", "params": "AssistantConversationsParams", "result": "AssistantConversationsResult"},
-    "assistant.messages": {"from": "program", "params": "AssistantMessagesParams", "result": "AssistantMessagesResult"}
+    "assistant.messages": {"from": "program", "params": "AssistantMessagesParams", "result": "AssistantMessagesResult"},
+    "assistant.memory": {"from": "program", "params": "AssistantMemoryParams", "result": "AssistantMemoryResult"}
   },
   "$defs": {
     "AssistantErrorCode": {
-      "description": "error.code of the assistant calls besides permission_denied (data {scope: \"assistant.read\"}): invalid_params; not_found (assistant.messages: no such conversation in the assistant's own space); assistant_offline (the manager is away: try again); machine_offline (the assistant's computer is not connected or not set up: try again).",
+      "description": "error.code of the assistant calls besides permission_denied (data {scope: \"assistant.read\"}, or \"assistant.memory.read\" for assistant.memory): invalid_params; not_found (assistant.messages: no such conversation in the assistant's own space); assistant_offline (the manager is away: try again); machine_offline (the assistant's computer is not connected or not set up: try again).",
       "type": "string",
       "enum": ["invalid_params", "not_found", "assistant_offline", "machine_offline"]
     },
@@ -76,6 +77,36 @@
     "AssistantRole": {
       "type": "string",
       "enum": ["user", "assistant"]
+    },
+    "AssistantMemoryParams": {
+      "description": "assistant.memory (assistant.memory.read): the assistant's memory entries of its own space (never the health space's), by name. Read-only.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include_content": {"type": "boolean", "description": "Return each entry's text too: cut at 16 KB each, and left out once a page holds 512 KB of text (truncated says so)."}
+      }
+    },
+    "AssistantMemoryEntry": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string", "description": "The entry's file name."},
+        "description": {"type": "string", "description": "The frontmatter's description; empty without one."},
+        "type": {"type": "string", "description": "The frontmatter's type (or metadata.type); empty without one."},
+        "size": {"type": "integer", "description": "The file's size in bytes."},
+        "created": {"type": "string", "format": "date-time", "x-go-pointer": true, "description": "When the file was made, where the computer's file system keeps it."},
+        "modified": {"type": "string", "format": "date-time"},
+        "content": {"type": "string", "description": "With include_content: the text, perhaps cut."},
+        "truncated": {"type": "boolean", "description": "content was cut or left out for its size."}
+      },
+      "required": ["name", "size", "modified"]
+    },
+    "AssistantMemoryResult": {
+      "description": "An assistant without memory (none written yet, or the feature off) has no entries.",
+      "type": "object",
+      "properties": {
+        "entries": {"type": "array", "items": {"$ref": "#/$defs/AssistantMemoryEntry"}}
+      },
+      "required": ["entries"]
     },
     "AssistantMessagesResult": {
       "description": "next_seq is set while there is more to read (pass it as after_seq), even when this page has no messages.",

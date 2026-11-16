@@ -1,0 +1,1 @@
+{"type":"object","additionalProperties":false,"required":["groups"],"properties":{"groups":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["key","members","text"],"properties":{"key":{"type":"string"},"members":{"type":"array","items":{"type":"string"}},"text":{"type":"string"}}}}}}

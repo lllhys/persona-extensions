@@ -1,0 +1,72 @@
+{
+ "status": "1",
+ "count": "1",
+ "info": "OK",
+ "infocode": "10000",
+ "forecasts": [
+  {
+   "city": "东城区",
+   "adcode": "110101",
+   "province": "北京",
+   "reporttime": "2026-11-15 18:39:39",
+   "casts": [
+    {
+     "date": "2026-11-15",
+     "week": "7",
+     "dayweather": "多云",
+     "nightweather": "小雨",
+     "daytemp": "12",
+     "nighttemp": "4",
+     "daywind": "东北",
+     "nightwind": "东北",
+     "daypower": "1-3",
+     "nightpower": "1-3",
+     "daytemp_float": "12.0",
+     "nighttemp_float": "4.0"
+    },
+    {
+     "date": "2026-11-16",
+     "week": "1",
+     "dayweather": "阴",
+     "nightweather": "多云",
+     "daytemp": "8",
+     "nighttemp": "2",
+     "daywind": "东",
+     "nightwind": "东",
+     "daypower": "1-3",
+     "nightpower": "1-3",
+     "daytemp_float": "8.0",
+     "nighttemp_float": "2.0"
+    },
+    {
+     "date": "2026-11-17",
+     "week": "2",
+     "dayweather": "阴",
+     "nightweather": "多云",
+     "daytemp": "9",
+     "nighttemp": "1",
+     "daywind": "西南",
+     "nightwind": "西南",
+     "daypower": "1-3",
+     "nightpower": "1-3",
+     "daytemp_float": "9.0",
+     "nighttemp_float": "1.0"
+    },
+    {
+     "date": "2026-11-18",
+     "week": "3",
+     "dayweather": "晴",
+     "nightweather": "晴",
+     "daytemp": "7",
+     "nighttemp": "-3",
+     "daywind": "西北",
+     "nightwind": "西北",
+     "daypower": "1-3",
+     "nightpower": "1-3",
+     "daytemp_float": "7.0",
+     "nighttemp_float": "-3.0"
+    }
+   ]
+  }
+ ]
+}

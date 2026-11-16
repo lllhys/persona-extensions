@@ -38,29 +38,40 @@ type page struct {
 }
 
 type draw struct {
-	st  *State
-	now time.Time
-	loc *time.Location
+	st    *State
+	now   time.Time
+	loc   *time.Location
+	fleet *fleet // nil: no other computers
+	ctx   context.Context
 }
 
-func (a *app) render(_ context.Context, r *ext.UIRequest) (*wire.View, error) {
+func (a *app) render(ctx context.Context, r *ext.UIRequest) (*wire.View, error) {
 	var p page
 	if err := r.DecodeState(&p); err != nil {
 		return nil, &ext.Error{Code: "invalid", Message: "invalid page state"}
 	}
 	var v *wire.View
 	err := a.db().read(func(st *State) {
-		v = a.drawer(st, r).view(p)
+		v = a.drawer(ctx, st, r).view(p)
 	})
 	return v, err
 }
 
-func (a *app) drawer(st *State, r *ext.UIRequest) draw {
+func (a *app) drawer(ctx context.Context, st *State, r *ext.UIRequest) draw {
 	loc, err := time.LoadLocation(r.TZ)
 	if err != nil {
 		loc = time.UTC
 	}
-	return draw{st: st, now: a.now(), loc: loc}
+	a.mu.Lock()
+	f := a.fleet
+	a.mu.Unlock()
+	if !f.hasRemote() {
+		f = nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return draw{st: st, now: a.now(), loc: loc, fleet: f, ctx: ctx}
 }
 
 func (d draw) activeExecution(p page) *ExecutionResult {
@@ -170,9 +181,14 @@ func (d draw) resultsSections(p page, res *ExecutionResult, recipes []*Recipe) [
 	stats := []wire.Stat{
 		{Label: "命中结果", Value: strconv.Itoa(res.TotalMatches), Tone: toneIf(res.TotalMatches > 0, wire.TonePositive)},
 		{Label: "扫描会话", Value: strconv.Itoa(res.ScannedSessions) + coldNote(res.ScannedArchived, res.ScannedUnconfirmed, res.ArchivedOmitted)},
+	}
+	if len(res.Machines) > 0 {
+		stats = append(stats, machinesStat(res.Machines))
+	}
+	stats = append(stats, []wire.Stat{
 		{Label: "算子步骤", Value: fmt.Sprintf("%d 步", len(res.StepTraces))},
 		{Label: "执行耗时", Value: fmt.Sprintf("%d ms", res.TotalDurationMs)},
-	}
+	}...)
 	overview := wire.Section{
 		Title: res.Program.Title,
 		Items: []wire.Component{
@@ -264,6 +280,9 @@ func (d draw) resultsSections(p page, res *ExecutionResult, recipes []*Recipe) [
 			icon = "warning"
 		}
 		metaParts := []string{cmp.Or(h.Project, "workspace"), h.Harness}
+		if len(res.Machines) > 0 || h.Machine != "" {
+			metaParts = append([]string{"🖥 " + machineLabel(h.Machine, h.MachineName)}, metaParts...)
+		}
 		if h.Model != "" {
 			metaParts = append(metaParts, h.Model)
 		}
@@ -292,6 +311,9 @@ func (d draw) resultsSections(p page, res *ExecutionResult, recipes []*Recipe) [
 			icon = "cloud"
 			badge = &wire.Badge{Text: h.Location, Tone: wire.ToneCaution}
 		}
+		if h.Cached && !cold {
+			badge = &wire.Badge{Text: "离线缓存", Tone: wire.ToneCaution}
+		}
 		restoring := archived && d.st.restoreRunning(h.EntryID)
 		if restoring {
 			badge = &wire.Badge{Text: "恢复中", Tone: wire.ToneCaution}
@@ -310,7 +332,7 @@ func (d draw) resultsSections(p page, res *ExecutionResult, recipes []*Recipe) [
 			Action:   pushPage(hitPage, h.Title),
 		}
 		if archived && h.EntryID != "" && !restoring {
-			row.Actions = []wire.RowAction{{Title: "恢复", Icon: "refresh", Swipe: true, Action: *restoreAction(h.EntryID, h.OriginalPath, h.Harness, h.SessionID)}}
+			row.Actions = []wire.RowAction{{Title: "恢复", Icon: "refresh", Swipe: true, Action: *restoreAction(h.Machine, h.EntryID, h.OriginalPath, h.Harness, h.SessionID)}}
 		}
 		hitSec.Items = append(hitSec.Items, row)
 		for j, sn := range h.Snippets[:min(len(h.Snippets), 2)] {
@@ -391,10 +413,27 @@ func (d draw) codeAndTraceSections(p page, res *ExecutionResult) []wire.Section 
 		},
 	})
 
+	if len(res.Machines) > 0 {
+		rows := make([][]string, 0, len(res.Machines))
+		for _, m := range res.Machines {
+			rows = append(rows, []string{m.Name, machineStatusLabel(m.Status), strconv.Itoa(m.Sessions), strconv.Itoa(m.Hits), fmt.Sprintf("%d ms", m.DurationMs), m.Note})
+		}
+		secs = append(secs, wire.Section{
+			Title:  "各电脑的检索（fan_out）",
+			Footer: "在线的电脑经 nodes.call 在本机执行同一段流水线，只回传排好序的证据片段；离线的电脑检索 hub 上已同步的纯对话索引。",
+			Items: []wire.Component{{
+				Type:    wire.ComponentTable,
+				Key:     "trace-machines",
+				Columns: []wire.TableColumn{{Title: "电脑"}, {Title: "状态"}, {Title: "会话", Align: "end"}, {Title: "命中", Align: "end"}, {Title: "耗时", Align: "end"}, {Title: "说明"}},
+				Rows:    rows,
+			}},
+		})
+	}
+
 	// 2. Interactive Search-as-Code Pipeline Runner & Recipe Saver
 	secs = append(secs, wire.Section{
 		Title:  "编写或调整 Search-as-Code 流水线",
-		Footer: "支持算子：scan_sessions、scan_files、where、exclude_tools、match_regex、correlate、dedup、group_by、rank、limit，使用 |> 串联。",
+		Footer: "支持算子：scan_sessions、scan_files、where、exclude_tools、match_regex、correlate、dedup、group_by、rank、limit，使用 |> 串联；scan_sessions / where 的 machine= 与搜索框里的 machine:<电脑> 只检索指定电脑，group_by(field=\"machine\") 按电脑聚合。",
 		Items: []wire.Component{
 			{
 				Type:        wire.ComponentField,
@@ -559,6 +598,9 @@ func (d draw) sourcesSections(p page) []wire.Section {
 	})
 
 	secs := []wire.Section{overview}
+	if d.fleet != nil {
+		secs = append(secs, d.machinesSection())
+	}
 	if len(distRows) > 0 {
 		secs = append(secs, wire.Section{
 			Title: "Harness / 模型 / 项目分布",
@@ -619,12 +661,19 @@ func (d draw) hitDetailView(p page) *wire.View {
 			break
 		}
 	}
-	sessions, _ := loadSessions(d.st)
 	var sess *SessionRecord
-	for _, s := range sessions {
-		if "session:"+s.SessionID == p.HitID || s.SessionID == strings.TrimPrefix(p.HitID, "session:") {
-			sess = s
-			break
+	if machine, localID := splitHitID(p.HitID); machine != "" {
+		// Another computer's session: its synced index has the turns (none until the first sync).
+		if d.fleet != nil {
+			sess = d.fleet.cachedSession(machine, strings.TrimPrefix(localID, "session:"))
+		}
+	} else {
+		sessions, _ := loadSessions(d.st)
+		for _, s := range sessions {
+			if "session:"+s.SessionID == p.HitID || s.SessionID == strings.TrimPrefix(p.HitID, "session:") {
+				sess = s
+				break
+			}
 		}
 	}
 	if hit == nil && sess == nil {
@@ -646,6 +695,8 @@ func (d draw) hitDetailView(p page) *wire.View {
 	model := ""
 	branch := ""
 	cwd := ""
+	machineID, machineName := splitHitID(p.HitID)
+	machineName = ""
 	updatedAt := d.now
 	var files []string
 	var correlated []CorrelatedRef
@@ -662,6 +713,7 @@ func (d draw) hitDetailView(p page) *wire.View {
 		files = hit.Files
 		correlated = hit.Correlated
 		snippets = hit.Snippets
+		machineID, machineName = hit.Machine, hit.MachineName
 	}
 	if sess != nil {
 		if title == "" {
@@ -690,6 +742,12 @@ func (d draw) hitDetailView(p page) *wire.View {
 	}
 	if branch != "" {
 		head.Facts = append(head.Facts, wire.Fact{Label: "分支", Value: branch})
+	}
+	if machineID != "" || d.fleet != nil {
+		head.Facts = append(head.Facts, wire.Fact{Label: "电脑", Value: machineLabel(machineID, cmp.Or(machineName, sessMachineName(sess)))})
+	}
+	if hit != nil && hit.Cached {
+		head.Badges = append(head.Badges, wire.Badge{Text: "离线缓存", Tone: wire.ToneCaution})
 	}
 	if sess != nil {
 		head.Facts = append(head.Facts,
@@ -722,7 +780,7 @@ func (d draw) hitDetailView(p page) *wire.View {
 	case sess != nil && sess.Archived:
 		sec := wire.Section{
 			Title:  "此会话已上云",
-			Footer: "本机原文件已由 disklessly 移到云端，这里检索的是本机保存的纯文本索引（仅用户与助手消息）。恢复后原文件回到原路径，可继续会话。",
+			Footer: "原文件已由 disklessly 移到云端，这里检索的是那台电脑保存的纯文本索引（仅用户与助手消息）。恢复在会话所在的电脑上进行，原文件回到原路径，可继续会话。",
 		}
 		if d.st.restoreRunning(sess.EntryID) {
 			sec.Items = []wire.Component{{Type: wire.ComponentText, Key: "restoring", Text: "正在恢复，完成后在首页显示结果。"}}
@@ -731,7 +789,7 @@ func (d draw) hitDetailView(p page) *wire.View {
 				Type:   wire.ComponentButton,
 				Key:    "restore-session",
 				Title:  "恢复",
-				Action: restoreAction(sess.EntryID, sess.FilePath, sess.Harness, sess.SessionID),
+				Action: restoreAction(machineID, sess.EntryID, sess.FilePath, sess.Harness, sess.SessionID),
 			}}
 		}
 		secs = append(secs, sec)
@@ -924,10 +982,27 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 	}
 	res := &wire.ActionResult{}
 
-	if r.Action == "restore-session" {
+	switch r.Action {
+	case "restore-session":
 		return a.runRestore(ctx, r, p)
+	case "sync-machines":
+		a.mu.Lock()
+		f := a.fleet
+		a.mu.Unlock()
+		if f.hasRemote() {
+			f.syncAll(ctx)
+			res.Toast = "已同步在线电脑的会话索引"
+		}
+		res.View, _ = a.render(ctx, &ext.UIRequest{UIParams: wire.UIParams{State: ext.EncodeState(p), TZ: r.TZ}})
+		return res, nil
 	}
 
+	// A search runs after the state is let go (it may wait on other computers), then its result is recorded.
+	var pending *SearchProgram
+	var scan *State
+	run := func(st *State, prog SearchProgram) {
+		pending, scan = &prog, st.scanState()
+	}
 	err := a.db().update(func(st *State, now time.Time) error {
 		switch r.Action {
 		case "scope":
@@ -941,7 +1016,7 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 			if err != nil {
 				return err
 			}
-			st.recordRun(ExecuteProgram(st, prog, now), now)
+			run(st, prog)
 
 		case "clear-restores":
 			st.Restores = slices.DeleteFunc(st.Restores, func(n RestoreNotice) bool { return !n.Running })
@@ -961,7 +1036,7 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 				return err
 			}
 			p.Scope = prog.Scope
-			st.recordRun(ExecuteProgram(st, prog, now), now)
+			run(st, prog)
 
 		case "reset":
 			p.Query = ""
@@ -969,7 +1044,7 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 			p.Scope = cmp.Or(st.DefaultScope, "conversation")
 			p.Tab = "results"
 			prog, _ := CompileProgram(CompileInput{Scope: p.Scope})
-			st.recordRun(ExecuteProgram(st, prog, now), now)
+			run(st, prog)
 
 		case "run-recipe":
 			id := strings.TrimSpace(r.Values["id"])
@@ -984,7 +1059,7 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 			if err != nil {
 				return err
 			}
-			st.recordRun(ExecuteProgram(st, prog, now), now)
+			run(st, prog)
 			res.Toast = "已执行配方「" + rec.Name + "」"
 
 		case "run-code":
@@ -997,9 +1072,8 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 			p.Scope = prog.Scope
 			p.RecipeID = ""
 			p.Tab = "results"
-			execRes := ExecuteProgram(st, prog, now)
-			st.recordRun(execRes, now)
-			res.Toast = fmt.Sprintf("执行完成：%d 步算子，命中 %d 条", len(execRes.StepTraces), execRes.TotalMatches)
+			run(st, prog)
+			res.Toast = "执行完成"
 
 		case "rerun-history":
 			idx, err := strconv.Atoi(r.Values["i"])
@@ -1015,7 +1089,7 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 			p.Scope = h.Scope
 			p.RecipeID = h.RecipeID
 			p.Tab = "results"
-			st.recordRun(ExecuteProgram(st, prog, now), now)
+			run(st, prog)
 			res.Toast = "已重跑历史搜索程序"
 
 		case "pivot-query":
@@ -1029,7 +1103,7 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 			if err != nil {
 				return err
 			}
-			st.recordRun(ExecuteProgram(st, prog, now), now)
+			run(st, prog)
 			res.Pop = true
 			res.Toast = "已关联检索：" + q
 
@@ -1078,6 +1152,16 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 	if err != nil {
 		return nil, &ext.Error{Code: "invalid", Message: err.Error()}
 	}
+	if pending != nil {
+		execRes := a.execute(ctx, scan, *pending, a.now())
+		_ = a.db().update(func(st *State, now time.Time) error {
+			st.recordRun(execRes, now)
+			return nil
+		})
+		if r.Action == "run-code" {
+			res.Toast = fmt.Sprintf("执行完成：%d 步算子，命中 %d 条", len(execRes.StepTraces), execRes.TotalMatches)
+		}
+	}
 	if res.Pop {
 		return res, nil
 	}
@@ -1085,10 +1169,10 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 	return res, err
 }
 
-func (a *app) card(_ context.Context, r *ext.UIRequest) (*wire.View, error) {
+func (a *app) card(ctx context.Context, r *ext.UIRequest) (*wire.View, error) {
 	var items []wire.Component
 	err := a.db().read(func(st *State) {
-		d := a.drawer(st, r)
+		d := a.drawer(ctx, st, r)
 		res := d.activeExecution(page{})
 		for i, rec := range st.allRecipes()[:min(len(st.allRecipes()), 3)] {
 			items = append(items, wire.Component{
@@ -1104,19 +1188,22 @@ func (a *app) card(_ context.Context, r *ext.UIRequest) (*wire.View, error) {
 				Type:  wire.ComponentText,
 				Key:   "card-summary",
 				Style: wire.TextStyleCaption,
-				Text:  fmt.Sprintf("已索引 %d 个本机 Agent 会话%s · 最近流水线命中 %d 条（%d ms）", res.ScannedSessions, archivedNote(res.ScannedArchived), res.TotalMatches, res.TotalDurationMs),
+				Text:  fmt.Sprintf("已索引 %d 个%s Agent 会话%s · 最近流水线命中 %d 条（%d ms）", res.ScannedSessions, machinesNote(res.Machines), archivedNote(res.ScannedArchived), res.TotalMatches, res.TotalDurationMs),
 			})
 		}
 	})
 	return &wire.View{Sections: []wire.Section{{Items: items}}}, err
 }
 
-func restoreAction(entryID, path, harness, sessionID string) *wire.Action {
-	return &wire.Action{
-		ID:      "restore-session",
-		Values:  map[string]string{"entry": entryID},
-		Confirm: restoreConfirm(path, harness, sessionID),
+// restoreAction restores an archived session on the computer that holds it (machine: "" for the hub's).
+func restoreAction(machine, entryID, path, harness, sessionID string) *wire.Action {
+	values := map[string]string{"entry": entryID}
+	confirm := restoreConfirm(path, harness, sessionID)
+	if machine != "" {
+		values["machine"] = machine
+		confirm = "在会话所在的电脑上" + confirm
 	}
+	return &wire.Action{ID: "restore-session", Values: values, Confirm: confirm}
 }
 
 // runRestore starts restoring an archived session through the disklessly CLI in the background and returns at
@@ -1124,6 +1211,10 @@ func restoreAction(entryID, path, harness, sessionID string) *wire.Action {
 // state (which refreshes the page), and a successful restore re-runs the last search so the hit shows as local.
 func (a *app) runRestore(ctx context.Context, r *ext.UIRequest, p page) (*wire.ActionResult, error) {
 	entryID := strings.TrimSpace(r.Values["entry"])
+	machine := strings.TrimSpace(r.Values["machine"])
+	if machine != "" {
+		return a.runRemoteRestore(ctx, r, p, machine, entryID)
+	}
 	res := &wire.ActionResult{}
 	var started bool
 	var dirs []string
@@ -1173,6 +1264,156 @@ func (a *app) runRestore(ctx context.Context, r *ext.UIRequest, p page) (*wire.A
 	}
 	res.View, err = a.render(ctx, &ext.UIRequest{UIParams: wire.UIParams{State: ext.EncodeState(p), TZ: r.TZ}})
 	return res, err
+}
+
+// runRemoteRestore restores an archived session of another computer there, in the background like runRestore.
+func (a *app) runRemoteRestore(ctx context.Context, r *ext.UIRequest, p page, machine, entryID string) (*wire.ActionResult, error) {
+	a.mu.Lock()
+	f := a.fleet
+	a.mu.Unlock()
+	res := &wire.ActionResult{}
+	if f == nil || !validEntryID.MatchString(entryID) {
+		res.Toast = "无法在那台电脑上恢复：它不在要检索的电脑里"
+		return res, nil
+	}
+	// The action carries the computer from when the page was drawn: it must still be a picked one.
+	if _, ok := f.pickedRemote(ctx, machine); !ok {
+		res.Toast = "无法在那台电脑上恢复：它不在要检索的电脑里"
+		return res, nil
+	}
+	title, path := entryID, ""
+	if c := f.loadCache(machine); c != nil {
+		for _, s := range c.Sessions {
+			if s.EntryID == entryID {
+				title, path = s.Title, s.FilePath
+			}
+		}
+	}
+	var started bool
+	err := a.db().update(func(st *State, now time.Time) error {
+		if st.restoreRunning(entryID) {
+			res.Toast = errRestoreBusy.Error()
+			return nil
+		}
+		st.setRestore(RestoreNotice{EntryID: entryID, Machine: machine, Title: title, Path: path, Running: true, StartedAt: now.UTC()})
+		started = true
+		res.Toast = "正在那台电脑上从云端恢复，完成后在本页显示结果"
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if started {
+		db := a.db()
+		a.restores.Add(1)
+		go func() {
+			defer a.restores.Done()
+			out, rerr := f.restore(context.Background(), machine, entryID)
+			_ = db.update(func(st *State, now time.Time) error {
+				n := RestoreNotice{EntryID: entryID, Machine: machine, Title: title, Path: path, StartedAt: now.UTC(), At: now.UTC()}
+				for _, o := range st.Restores {
+					if o.EntryID == entryID {
+						n.StartedAt = o.StartedAt
+					}
+				}
+				if rerr != nil {
+					n.Message = rerr.Error()
+				} else {
+					n.OK, n.Path, n.Resume = true, cmp.Or(out.Path, n.Path), out.Resume
+				}
+				st.setRestore(n)
+				return nil
+			})
+		}()
+	}
+	res.View, err = a.render(ctx, &ext.UIRequest{UIParams: wire.UIParams{State: ext.EncodeState(p), TZ: r.TZ}})
+	return res, err
+}
+
+// machinesSection lists the computers a search reaches, with their sync state; a row searches that computer.
+func (d draw) machinesSection() wire.Section {
+	sec := wire.Section{
+		Title:  "要检索的电脑",
+		Footer: "在扩展设置的「要检索的电脑」里选择。在线的电脑实时检索（在那台电脑上执行流水线，只回传证据片段）；离线时检索 hub 上已同步的纯对话索引（每 15 分钟同步一次）。点按一台电脑只检索它。",
+	}
+	for i, m := range d.fleet.statuses(d.ctx) {
+		row := wire.Component{
+			Type:   wire.ComponentRow,
+			Key:    fmt.Sprintf("machine-%d", i),
+			Icon:   "link",
+			Title:  m.Name,
+			Action: &wire.Action{ID: "pivot-query", Values: map[string]string{"q": "machine:" + m.Key}},
+		}
+		switch {
+		case m.Local:
+			row.Subtitle = "hub 所在的电脑 · 直接读取本机会话"
+			row.Badge = &wire.Badge{Text: "本机", Tone: wire.TonePositive}
+		case m.Online:
+			row.Subtitle = "在线 · 实时检索"
+			row.Badge = &wire.Badge{Text: "在线", Tone: wire.TonePositive}
+		default:
+			row.Subtitle = "离线"
+			row.Badge = &wire.Badge{Text: "离线", Tone: wire.ToneCaution}
+		}
+		if !m.Local {
+			if m.SyncedAt.IsZero() {
+				row.Subtitle += " · 尚未同步索引"
+			} else {
+				row.Subtitle += fmt.Sprintf(" · 已同步 %d 个会话的索引（%s）", m.CachedSessions, d.formatTime(m.SyncedAt))
+			}
+		}
+		row.Value = "machine:" + m.Key
+		sec.Items = append(sec.Items, row)
+	}
+	sec.Items = append(sec.Items, wire.Component{Type: wire.ComponentButton, Key: "sync-machines", Title: "立即同步在线电脑的索引", Action: &wire.Action{ID: "sync-machines"}})
+	return sec
+}
+
+func machinesStat(runs []MachineRun) wire.Stat {
+	online, cached, missing := 0, 0, 0
+	for _, m := range runs {
+		switch m.Status {
+		case machineOnline, machineLocal:
+			online++
+		case machineCached:
+			cached++
+		default:
+			missing++
+		}
+	}
+	v := fmt.Sprintf("%d 台", len(runs))
+	if cached > 0 || missing > 0 {
+		v += fmt.Sprintf("（%d 台离线）", cached+missing)
+	}
+	return wire.Stat{Label: "检索电脑", Value: v, Tone: toneIf(cached+missing > 0, wire.ToneCaution)}
+}
+
+func machineStatusLabel(status string) string {
+	switch status {
+	case machineLocal:
+		return "本机"
+	case machineOnline:
+		return "在线"
+	case machineCached:
+		return "离线 · 缓存索引"
+	default:
+		return "离线 · 无索引"
+	}
+}
+
+// machinesNote is "N 台电脑上的" for a search of several computers, else "本机".
+func machinesNote(runs []MachineRun) string {
+	if len(runs) == 0 {
+		return "本机"
+	}
+	return fmt.Sprintf(" %d 台电脑上的", len(runs))
+}
+
+func sessMachineName(s *SessionRecord) string {
+	if s == nil {
+		return ""
+	}
+	return s.MachineName
 }
 
 // restoreSection shows the page's recent restores.

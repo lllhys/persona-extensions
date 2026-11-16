@@ -27,6 +27,9 @@ import (
 //   - no ask or deny rule of the user's that the hook can read could be about the call (rules.go): those prompts are
 //     the user's own and stay.
 //
+// The one exception to the first rule is the assistant_writes setting (assistant.go): Write and Edit from Persona's
+// assistant conversations, into its listed directories, in any mode but plan.
+//
 // It never fails the call: a hook that cannot read its input or write its log stays silent.
 
 // heartbeatFresh is how old the node program's heartbeat may be (it touches it every heartbeatEvery).
@@ -43,6 +46,7 @@ type hookInput struct {
 	PermissionMode string    `json:"permission_mode"`
 	ToolName       string    `json:"tool_name"`
 	AgentID        string    `json:"agent_id"`
+	TranscriptPath string    `json:"transcript_path"`
 	ToolInput      toolInput `json:"tool_input"`
 }
 
@@ -93,6 +97,8 @@ func (req hookInput) summary() string {
 type hookArgs struct {
 	ConfigDir string // the Claude config directory the entry is in (its settings hold the user's rules)
 	Data      string // the node program's data directory: heartbeat and audit log
+
+	getenv func(string) string // the hook's environment (assistant.go); nil is os.Getenv
 }
 
 // allowOutput is Claude Code's answer for a PermissionRequest that lets the call run.
@@ -161,6 +167,13 @@ func tellNode(input []byte) {
 // refuse says why the hook leaves req to Claude Code ("" lets it allow), and for an allowed Bash command, the
 // deletions and overwrites in it that went through and why (scratch targets, or the setting).
 func refuse(a hookArgs, req hookInput, now time.Time) (string, []string) {
+	if isAssistantWriteTool(req.ToolName) { // only ever with the assistant_writes setting (assistant.go)
+		why, note := refuseAssistantWrite(a, req, readOptions(a.Data), now)
+		if why != "" {
+			return why, nil
+		}
+		return "", []string{note}
+	}
 	why := refuseWhy(a, req, now)
 	if why != "" || req.ToolName != "Bash" {
 		return why, nil
@@ -224,7 +237,9 @@ type auditEntry struct {
 const optionsFile = "options.json"
 
 type options struct {
-	AllowDestructive bool `json:"allow_destructive"`
+	AllowDestructive   bool     `json:"allow_destructive"`
+	AssistantWrites    bool     `json:"assistant_writes,omitempty"`
+	AssistantWriteDirs []string `json:"assistant_write_dirs,omitempty"`
 }
 
 func readOptions(data string) options {

@@ -84,6 +84,9 @@ type releaseParams struct {
 	Attempt int    `json:"attempt"`
 	Repo    string `json:"repo"`
 	BaseSHA string `json:"base_sha"`
+	// CommitMessage, when set, has uncommitted work committed to the attempt's branch with this message, so the
+	// work is on the branch and the worktree can go.
+	CommitMessage string `json:"commit_message,omitempty"`
 }
 
 type releaseResult struct {
@@ -364,8 +367,17 @@ func (n *nodeWorker) release(ctx context.Context, p releaseParams) (releaseResul
 		res.Branch = b
 	}
 	if st, err := git(ctx, path, "status", "--porcelain"); err == nil && st != "" {
-		res.Kept = path
-		return res, nil
+		if res.Branch == "" || strings.TrimSpace(p.CommitMessage) == "" || commitAll(ctx, path, p.CommitMessage) != nil {
+			res.Kept = path
+			return res, nil
+		}
+		if sha, err := git(ctx, path, "rev-parse", "HEAD"); err == nil {
+			res.HeadSHA = sha
+		}
+		if st, err := git(ctx, path, "status", "--porcelain"); err != nil || st != "" {
+			res.Kept = path // something the commit did not take
+			return res, nil
+		}
 	}
 	repo, err := n.allowedRepo(p.Repo)
 	if err != nil {
@@ -384,6 +396,24 @@ func (n *nodeWorker) release(ctx context.Context, p releaseParams) (releaseResul
 		}
 	}
 	return res, nil
+}
+
+// commitAll commits everything in the worktree that is not ignored, as the repository's configured identity or,
+// when it has none, as ATS (git's guess from the account and host name is not used). Hooks and signing are
+// skipped: nobody is there to answer them, and the commit only keeps the attempt's work.
+func commitAll(ctx context.Context, dir, message string) error {
+	if _, err := git(ctx, dir, "add", "-A"); err != nil {
+		return err
+	}
+	args := []string{"-c", "commit.gpgsign=false"}
+	name, _ := git(ctx, dir, "config", "user.name")
+	email, _ := git(ctx, dir, "config", "user.email")
+	if name == "" || email == "" {
+		args = append(args, "-c", "user.name=ATS", "-c", "user.email=ats@localhost")
+	}
+	args = append(args, "commit", "--quiet", "--no-verify", "-m", message)
+	_, err := git(ctx, dir, args...)
+	return err
 }
 
 // tailBuffer keeps the last max bytes written to it.

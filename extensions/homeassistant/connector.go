@@ -9,7 +9,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/nwverse/persona/sdk/go/ext"
@@ -387,32 +386,72 @@ func serviceText(domain, service string) string {
 	return domain + "." + service
 }
 
-// done remembers the answers of actions.do by request id: the hub may ask again for the same one.
-var (
-	doneMu sync.Mutex
-	done   = map[string]string{}
-)
+// actionDoneMost is how many completed successful action results are remembered by request id.
+const actionDoneMost = 256
+
+type actionRun struct {
+	done chan struct{}
+	text string
+	err  error
+}
 
 func (a *app) do(ctx context.Context, requestID string, w write) (any, error) {
 	if requestID == "" || len(requestID) > 256 {
 		return nil, bad("没有 request_id")
 	}
-	doneMu.Lock()
-	if text, ok := done[requestID]; ok {
-		doneMu.Unlock()
+	a.doneMu.Lock()
+	if prev, ok := a.running[requestID]; ok {
+		a.doneMu.Unlock()
+		select {
+		case <-prev.done:
+			if prev.err != nil {
+				return nil, prev.err
+			}
+			return map[string]any{"text": prev.text}, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	if text, ok := a.done[requestID]; ok {
+		for i, cached := range a.doneOrder {
+			if cached == requestID {
+				copy(a.doneOrder[i:], a.doneOrder[i+1:])
+				a.doneOrder[len(a.doneOrder)-1] = requestID
+				break
+			}
+		}
+		a.doneMu.Unlock()
 		return map[string]any{"text": text}, nil
 	}
-	doneMu.Unlock()
+	if a.running == nil {
+		a.running = map[string]*actionRun{}
+	}
+	cur := &actionRun{done: make(chan struct{})}
+	a.running[requestID] = cur
+	a.doneMu.Unlock()
+
 	text, err := w.run(ctx, a)
+
+	a.doneMu.Lock()
+	cur.text, cur.err = text, err
+	delete(a.running, requestID)
+	if err == nil {
+		if a.done == nil {
+			a.done = map[string]string{}
+		}
+		a.done[requestID] = text
+		a.doneOrder = append(a.doneOrder, requestID)
+		if len(a.doneOrder) > actionDoneMost {
+			delete(a.done, a.doneOrder[0])
+			a.doneOrder[0] = ""
+			a.doneOrder = a.doneOrder[1:]
+		}
+	}
+	close(cur.done)
+	a.doneMu.Unlock()
 	if err != nil {
 		return nil, err
 	}
-	doneMu.Lock()
-	if len(done) > 500 {
-		done = map[string]string{}
-	}
-	done[requestID] = text
-	doneMu.Unlock()
 	return map[string]any{"text": text}, nil
 }
 

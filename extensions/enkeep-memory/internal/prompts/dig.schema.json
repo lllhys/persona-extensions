@@ -1,0 +1,1 @@
+{"type":"object","additionalProperties":false,"required":["decisions"],"properties":{"decisions":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["h","dig","reason","from_seq","through_seq"],"properties":{"h":{"type":"integer"},"dig":{"type":"boolean"},"reason":{"type":"string"},"from_seq":{"type":"integer"},"through_seq":{"type":"integer"}}}}}}

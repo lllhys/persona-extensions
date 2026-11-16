@@ -1,0 +1,48 @@
+{
+  "manifest_version": 1,
+  "id": "opengym",
+  "name": "openGym",
+  "version": "0.1.1",
+  "icon": "assets/icon.png",
+  "description": "接你自建的 openGym 服务器（iPhone / Apple Watch 上的健身记录和 AI 教练）：主导航上多一个「健身」，看本周训练次数和训练量、下一次计划练什么、最近 12 周的训练量趋势、最近的训练和每组的重量次数、体重变化；首页卡片给本周和下一次训练。助手能查训练记录、计划和体重；记一次训练、建议一个训练计划、改某天的安排，每次都在手机上确认。用 openGym 设置里生成的 API 令牌（ogt_…）读写，令牌只存在 hub 的加密密钥里。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/docs/extensions/opengym.md",
+  "tags": ["健身", "openGym", "训练", "体重"],
+  "engines": {"extension_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/opengym-linux-amd64",
+      "linux-arm64": "bin/opengym-linux-arm64",
+      "darwin-arm64": "bin/opengym-darwin-arm64",
+      "darwin-amd64": "bin/opengym-darwin-amd64"
+    }
+  },
+  "activation_events": ["on_startup"],
+  "contributes": {
+    "connectors": [
+      {
+        "id": "opengym",
+        "name": "openGym",
+        "capabilities": ["status", "tools", "actions"],
+        "confirm_always": ["opengym_log_workout", "opengym_create_routine", "opengym_schedule_day"]
+      }
+    ],
+    "ui": [
+      {"id": "opengym", "title": "健身", "placement": "nav_page", "icon": "heart"},
+      {"id": "opengym-card", "title": "健身", "placement": "overview_card", "opens": "opengym"}
+    ],
+    "skills": [{"id": "opengym", "dir": "skills/opengym"}]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "server_url": {"type": "string", "title": "openGym 服务器地址", "description": "你自建的 openGym 的网址，hub 这台机器要能访问到，如 https://gym.example.com（有 BASE_PATH 就带上路径）。局域网或本机可以用 http，如 http://192.168.1.20:8080、http://127.0.0.1:8080；公网地址要用 https", "format": "uri"},
+      "refresh_minutes": {"type": "integer", "title": "检查间隔（分钟）", "description": "后台多久看一次服务器上有没有新数据，5 到 1440；只有数据变了才整份读一次", "default": 15, "minimum": 5, "maximum": 1440},
+      "exercise_names": {"type": "boolean", "title": "显示动作的中文名", "description": "从 openGym 公开的动作库（GitHub）下载动作名，最多一周一次；关掉就显示动作编号和你自建动作的名字", "default": true}
+    }
+  },
+  "secrets": [
+    {"name": "api_token", "title": "API 令牌", "description": "在 openGym App 的「设置 › 集成 › API 令牌」里新建，以 ogt_ 开头，只显示一次。只读的话训练、计划、体重给「查看」；要让助手记训练、建计划就给「应用」。不会出现在日志、错误和助手看到的内容里", "required": true}
+  ],
+  "permissions": {"network": ["raw.githubusercontent.com", "host.persona.internal"]}
+}

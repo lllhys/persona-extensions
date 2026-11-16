@@ -35,6 +35,7 @@
         "publisher": {"type": "string"},
         "homepage": {"type": "string",
           "pattern": "^https://([A-Za-z0-9._~!$&'()*+,;=:%@-]*@)?[^\\x00-\\x20\\x7f/?#@\\\\^`{|}]+([/?#][^\\x00-\\x1f\\x7f]*)?$"},
+        "icon": {"type": "string", "const": "assets/icon.png", "description": "Source-only square PNG artwork: 256–4096 pixels, at most 2 MiB. Catalog entry icon carries this path; strip it from packaged and runtime manifests for compatibility."},
         "tags": {
           "description": "What the market shows and searches (docs \"Extension market\"): at most 16, each 1 to 24 characters. Packages and indexes carry the manifest without them (hubs before tags refuse an unknown field); the index entry carries them instead.",
           "type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 24}
@@ -307,7 +308,7 @@
         "network": {"type": "array", "items": {"$ref": "#/$defs/NetworkEntry"}},
         "hub_api": {"type": "boolean", "description": "The old way: the hub's full token. With hub scopes, the scopes win."},
         "hub": {"type": "array", "description": "The scopes of the hub's API it calls: its token opens their routes only.",
-          "items": {"type": "string", "pattern": "^(kb\\.read|kb\\.write|sent\\.read|inbox\\.read|inbox\\.write|agents\\.read|agents\\.control|agents\\.permission_mode|machines\\.read|notify|assistant\\.ask|assistant\\.read|todos\\.read|todos\\.write|leaders\\.read|models|extensions\\.call:[a-z0-9][a-z0-9_-]{0,31})$"}},
+          "items": {"type": "string", "pattern": "^(kb\\.read|kb\\.write|sent\\.read|inbox\\.read|inbox\\.write|agents\\.read|agents\\.control|agents\\.permission_mode|machines\\.read|notify|assistant\\.ask|assistant\\.read|assistant\\.memory\\.read|todos\\.read|todos\\.write|leaders\\.read|models|extensions\\.call:[a-z0-9][a-z0-9_-]{0,31})$"}},
         "launcher_keys": {"type": "boolean"},
         "gh_login": {"type": "boolean", "description": "It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector), held in its memory only."},
         "usage_gateways": {"type": "boolean", "description": "It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts): accounts, status and quota windows, never a key."},
@@ -363,24 +364,33 @@
       }
     },
     "SkillItem": {
-      "description": "A skill (docs \"Declarative contributions\"): a directory of the package with SKILL.md, put in with the assistant's skills.",
+      "description": "A skill (docs \"Declarative contributions\"): a directory of the package with SKILL.md, put in with the assistant's skills. With source data (docs \"Assistant content from the data directory\"): a directory of the extension's data directory whose subdirectories with a SKILL.md are skills its program writes (Markdown files only, 256 KB and 32 skills per extension).",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "id": {"$ref": "#/$defs/ID"},
-        "dir": {"type": "string", "description": "The directory, relative to the package."}
+        "dir": {"type": "string", "description": "The directory, relative to the package (or to the data directory with source data)."},
+        "source": {"$ref": "#/$defs/ContentSource"}
       },
       "required": ["id", "dir"]
     },
-    "PromptKind": {"type": "string", "enum": ["instructions", "quick"]},
+    "ContentSource": {
+      "description": "Where a skill's or a prompt's files are: package (the default) or data, the extension's data directory, which its program writes and upgrades keep.",
+      "type": "string",
+      "enum": ["package", "data"]
+    },
+    "PromptKind": {"type": "string", "enum": ["instructions", "quick", "project_context", "inbox_context"]},
     "PromptItem": {
-      "description": "A prompt: instructions (a .md of the package added to the assistant's CLAUDE.md) or quick (a template the apps offer in the message box).",
+      "description": "A prompt: instructions (a .md of the package, or with source data of the data directory, added to the assistant's CLAUDE.md), quick (a template the apps offer in the message box), project_context (a directory of the data directory whose <project slug>.md files go into a new Agent's project background) or inbox_context (a .md of the data directory added to the Inbox's triage and draft prompts).",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "id": {"$ref": "#/$defs/ID"},
         "kind": {"$ref": "#/$defs/PromptKind"},
-        "file": {"type": "string", "description": "instructions: the .md file."},
+        "source": {"$ref": "#/$defs/ContentSource"},
+        "file": {"type": "string", "description": "instructions: the .md file (with source data: at most 6 KB, adopted at most once a day); inbox_context: the .md file (1 KB used)."},
+        "dir": {"type": "string", "description": "project_context: the directory of <project slug>.md files (1.5 KB of each used)."},
+        "never_quote": {"type": "string", "description": "inbox_context: a text file of sentences, one a line, a draft must not repeat word for word (64 KB used); only checked, never in a prompt."},
         "title": {"type": "string", "maxLength": 40, "description": "quick: what the apps show."},
         "text": {"type": "string", "maxLength": 4000, "description": "quick: what goes into the message box."}
       },

@@ -1,0 +1,29 @@
+{
+  "repository": "https://github.com/cv-cat/LarkAgentX",
+  "commit": "97ad48e69e34bd8c78ee30f795b7c3759dd81659",
+  "archive": "https://codeload.github.com/cv-cat/LarkAgentX/tar.gz/97ad48e69e34bd8c78ee30f795b7c3759dd81659",
+  "files": {
+    "larkx/__init__.py": "c5cf720bbbc8870694ae6d10bf26a872aa5524bd30c03247bb70a5f3f2db501b",
+    "larkx/__main__.py": "cf7390a2508a0fcad4777a4a629fc5212ab655cb45845975995f835676a834e3",
+    "larkx/agent/__init__.py": "0ad6664482a82a6ea0f1bd55228eec3466b3933b659d7b2da866cfbd62417c5c",
+    "larkx/agent/backend.py": "25cd959bb8cfee48c8dc779f8aa2b238b0f3539f700a738d34d45bbf5504dc35",
+    "larkx/agent/dispatcher.py": "84ef2e080d794ee4f7d79b9d71ed91f2d5ad3b41c5eb0a19563c60c9f6d23c30",
+    "larkx/auth.py": "8bdfd3804b1c2e7c3dca29e2bd1a48be7e1b9b3322ceb7564deb3d107186716a",
+    "larkx/cli.py": "33625d1e053abd5df9bf0f03e40dd43fec24445b0ce3517f35ffda60408eb00c",
+    "larkx/client.py": "d81267309c7211d64b55410fcb8bb7f5e1a4836db556f02e44e658dfd7b853b6",
+    "larkx/config.py": "6a2a5abd661cdd33f18fa9fa2e4e38933ce298757eb827cdd8433d44004d0461",
+    "larkx/media.py": "e6def0c0bbb7a8fa363eeb2f7ad3928c35e51e71d12e7a93b4b8d2119b0a9db5",
+    "larkx/proto/__init__.py": "728c212ff2cad359d40cc084655207839dfd09fa2a1ba0bc7231ececebd97d7c",
+    "larkx/proto/builders.py": "a81f5c8066f3648b98004b1aad13f404652067e0c2972e036ab1f3ae06c2c92b",
+    "larkx/proto/cmd_map.json": "f51047047c949f02e6434b73bab98cb7063d57a20e53e3d062c305258fb1ea8d",
+    "larkx/proto/decoders.py": "57fbd2c9a25993d79aa8476995e2eb77ba3f9399eb5d7b6032ffd71c82f744f8",
+    "larkx/proto/gateway.py": "c5a58b4defb3585a7cd146ad81a8d52af8be20ac7842deed30fef6b0822aad82",
+    "larkx/proto/ids.py": "dbb6a57e0d0beecb6016fa8083a5dc9f5ccd1933f66d03313750a48945d22f64",
+    "larkx/proto/lark_all_pb2.py": "a725f6695444c0efbd7fa9aa9b559fa7cb0e8832cab886173d8e3741e0fc1f5a",
+    "larkx/proto/proto.proto": "10d56674051447bb24316cd365e59f6bbae4b8f0e0f7c102337e071e484fcd1c",
+    "larkx/proto/proto_pb2.py": "0f2692f3e62d6a7a8e2dbca3814e891fe9889a4badd067c7dd35cb4b796816d7",
+    "larkx/region.py": "a9072f00d9e5c1614aa4c522cfe92e7068413d86773a6f08e312c241bb6ceb35",
+    "larkx/storage/__init__.py": "e117a44bbc60b4ce4017fbfc2c6f1fb25c690d7d7d14dc98f85f950d32a32cd0",
+    "larkx/storage/models.py": "755624644e3cc0ae0d9eab34dc3357562557e8d7ac880a37122d1a578b12f57a"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "manifest_version": 1,
+  "id": "podcasts",
+  "name": "Podcasts 播客",
+  "version": "0.1.2",
+  "icon": "assets/icon.png",
+  "description": "搜索公开播客，查看节目和近期单集，把想听的节目保存到本地收听清单。通过 Apple 公开目录获取元数据，无需账号；不下载媒体，不控制播放。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/podcasts/README.md",
+  "tags": [
+    "播客",
+    "单集",
+    "收听清单",
+    "Apple Podcasts"
+  ],
+  "engines": {
+    "persona": ">=202611101800",
+    "extension_protocol": 1
+  },
+  "runtime": {
+    "mode": "deno",
+    "source": {
+      "entry": "src/index.ts",
+      "bundle": "build/podcasts.mjs",
+      "sha256": "1ebe5fb37d92e27507b88d14aa5b7cbb4088247e3a6a00ba98329fff0ff7e6a7"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "podcasts",
+        "name": "Podcasts",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "itunes.apple.com"
+        ],
+        "agent_tools": [
+          "podcasts_*"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "discover",
+        "title": "发现播客",
+        "placement": "nav_page",
+        "icon": "music"
+      }
+    ]
+  },
+  "permissions": {
+    "network": [
+      "itunes.apple.com"
+    ],
+    "storage": {
+      "keys": [
+        "subscriptions"
+      ]
+    }
+  }
+}

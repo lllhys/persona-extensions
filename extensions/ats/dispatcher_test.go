@@ -136,7 +136,7 @@ func TestReadonlyTaskRunsInPlanModeAndEndsUnverifiedWithoutAcceptance(t *testing
 	if got.State != StateSucceeded || got.Verdict != VerdictUnverified {
 		t.Fatalf("final: %s %s", got.State, got.Verdict)
 	}
-	if w := r.todos.written(); len(w) != 1 || w[0].Choice != "跑完但没有验收" {
+	if w := r.todos.written(); len(w) != 1 || w[0].Choice != "跑完了，没有验收命令" {
 		t.Fatalf("decisions: %+v", w)
 	}
 	if out := runGit(t, r.repo, "branch", "--list", "ats/*"); out != "" {
@@ -235,7 +235,7 @@ func TestFailedAcceptanceIsRetriedAsANewAttemptThenFails(t *testing.T) {
 	if len(r.hub.created) != 2 || r.hub.created[0].Cwd == r.hub.created[1].Cwd {
 		t.Fatalf("attempts shared a worktree: %+v", r.hub.created)
 	}
-	if w := r.todos.written(); len(w) != 1 || w[0].Choice != "失败：task_failed" {
+	if w := r.todos.written(); len(w) != 1 || w[0].Choice != "失败：没通过验收（试了 2 次）" {
 		t.Fatalf("decisions: %+v", w)
 	}
 }
@@ -334,8 +334,8 @@ func TestSessionErrorsEndTheAttempt(t *testing.T) {
 		reason string
 	}{
 		"start error": {func(s *hubSession) { s.StartError = "no agent installed" }, "infra_error"},
-		"rate limit":  {func(s *hubSession) { s.TurnError, s.TurnErrorKind = "usage limit reached", "rate_limit" }, "rate_limited"},
-		"signed out":  {func(s *hubSession) { s.TurnError, s.TurnErrorKind = "please log in", "auth" }, "auth_expired"},
+		"rate limit":  {func(s *hubSession) { s.TurnError, s.TurnErrorKind = "You've hit your limit", "usage_limit" }, "rate_limited"},
+		"signed out":  {func(s *hubSession) { s.TurnError, s.TurnErrorKind = "Not logged in · Please run /login", "user" }, "auth_expired"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := newRig(t)

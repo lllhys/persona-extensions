@@ -159,7 +159,7 @@ class IconTests(unittest.TestCase):
 
     def test_package_keeps_assets_but_not_runtime_icon(self):
         (self.root / 'scripts').mkdir()
-        for name in ('package.sh', 'manifest.py', 'catalog.py', 'icons.py'):
+        for name in ('package.sh', 'manifest.py', 'catalog.py', 'config_form.py', 'icons.py'):
             shutil.copy2(REPO / 'scripts' / name, self.root / 'scripts' / name)
         r = subprocess.run(['bash', 'scripts/package.sh', 'example'], cwd=self.root, capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)

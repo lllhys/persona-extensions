@@ -3,7 +3,8 @@
 // transcripts (Claude Code, Codex, and custom JSONL directories) and local repositories, recording step-by-step
 // execution traces and reusable search recipes.
 //
-// The hub starts the program with no arguments and speaks the extension protocol on stdin/stdout.
+// The hub starts the program with no arguments and speaks the extension protocol on stdin/stdout; it also fans a
+// search out to `search-as-code node`, the program on each computer picked in the settings (#519, remote.go).
 // `search-as-code mcp` serves the same engine and saved recipes to the assistant as an MCP server on stdio.
 package main
 
@@ -14,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -40,6 +42,7 @@ var about = func() (m struct{ ID, Version string }) {
 const usage = `search-as-code: Executable Search-as-Code pipelines over coding-agent sessions and local repositories.
 
   search-as-code                   the extension (started by the Persona hub; protocol on stdin / stdout)
+  search-as-code node              the program on a computer the hub searches (started by Persona there)
   search-as-code mcp [--data DIR]  the MCP server for the assistant on stdin / stdout (tools: sac_execute,
                                    sac_session_search, sac_recipes_list, sac_recipe_upsert, sac_recipe_delete,
                                    sac_session_restore)
@@ -57,6 +60,8 @@ func main() {
 			fmt.Print(usage)
 		case "manifest":
 			_, _ = os.Stdout.Write(manifest)
+		case "node":
+			ext.Main(nodeProgram())
 		case "mcp":
 			if err := runMCP(os.Args[2:]); err != nil {
 				log.Fatal(err)
@@ -70,10 +75,11 @@ func main() {
 }
 
 type configSpec struct {
-	SessionDirs  string `json:"session_dirs"`
-	RepoDirs     string `json:"repo_dirs"`
-	ColdTextDirs string `json:"cold_text_dirs"`
-	DefaultScope string `json:"default_scope"`
+	Machines     []string `json:"machines"`
+	SessionDirs  string   `json:"session_dirs"`
+	RepoDirs     string   `json:"repo_dirs"`
+	ColdTextDirs string   `json:"cold_text_dirs"`
+	DefaultScope string   `json:"default_scope"`
 }
 
 type app struct {
@@ -83,6 +89,10 @@ type app struct {
 	now   func() time.Time
 	// restores tracks the page's background restores (tests wait on it).
 	restores sync.WaitGroup
+	// fleet: the computers a search fans out to (nil without a hub connection); hubURL and token: the hub's API
+	// for this extension, handed to the assistant's gated command.
+	fleet         *fleet
+	hubURL, token string
 }
 
 func newApp(dir string) *app {
@@ -96,6 +106,12 @@ func program(a *app) ext.Program {
 			pageUI: {Render: a.render, Action: a.action},
 			cardUI: {Render: a.card},
 		},
+		HTTP: a.handler(),
+		Namespaces: map[string]ext.Handler{
+			"assistant": a.assistant,
+			// node.event: the programs on computers send none; accepted so the hub does not log an error.
+			"node": func(context.Context, string, json.RawMessage) (any, error) { return map[string]any{}, nil },
+		},
 	}
 }
 
@@ -107,7 +123,16 @@ func (a *app) init(_ context.Context, in *ext.Init, hub *ext.Hub) (map[string]an
 		rememberDataDir(dir)
 	}
 	var cfg configSpec
-	if err := in.Config(&cfg); err == nil {
+	cfgErr := in.Config(&cfg)
+	a.hubURL, a.token = strings.TrimRight(in.Hub.URL, "/"), in.Hub.Token
+	if hub != nil {
+		if a.fleet == nil {
+			a.fleet = newFleet(rpcNodes{hub: hub}, &hubClient{base: a.hubURL, token: a.token, client: &http.Client{Timeout: 10 * time.Second}}, a.store.dir, cfg.Machines)
+		} else {
+			a.fleet.setSelected(cfg.Machines)
+		}
+	}
+	if err := cfgErr; err == nil {
 		_ = a.store.update(func(st *State, _ time.Time) error {
 			if s := strings.TrimSpace(cfg.SessionDirs); s != "" {
 				st.SessionDirs = splitDirs(s)
@@ -136,7 +161,22 @@ func (a *app) init(_ context.Context, in *ext.Init, hub *ext.Hub) (map[string]an
 	}
 	a.stop = make(chan struct{})
 	go watch(a.store, hub, a.stop)
+	if a.fleet != nil {
+		go a.fleet.syncLoop(a.stop)
+	}
 	return nil, nil
+}
+
+// execute runs prog: on this computer only, or, with other computers picked, on all of them that its machine
+// filter names.
+func (a *app) execute(ctx context.Context, st *State, prog SearchProgram, now time.Time) *ExecutionResult {
+	a.mu.Lock()
+	f := a.fleet
+	a.mu.Unlock()
+	if !f.hasRemote() {
+		return ExecuteProgram(st, prog, now)
+	}
+	return f.search(ctx, st, prog, now, filterTargets(f.targets(ctx), programMachine(prog)))
 }
 
 func (a *app) db() *store {

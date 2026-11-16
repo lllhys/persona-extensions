@@ -68,10 +68,16 @@ type app struct {
 	dataDir  string
 	hub      *hubAPI
 	watch    *watcher
+	// actions.do runs each request id once. In-flight calls stay pinned in running; only completed successful
+	// answers occupy the bounded done LRU.
+	doneMu    sync.Mutex
+	running   map[string]*actionRun
+	done      map[string]string
+	doneOrder []string
 }
 
 func newApp(logf func(string, ...any)) *app {
-	a := &app{logf: logf, ha: newHA("", "", false)}
+	a := &app{logf: logf, ha: newHA("", "", false), done: map[string]string{}}
 	a.watch = newWatcher(a)
 	return a
 }

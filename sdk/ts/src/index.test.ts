@@ -58,8 +58,13 @@ test("the protocol", async () => {
   expect((await call("manifest")).error.code).toBe("unknown_method");
 });
 
-test("manifest goes out without tags", async () => {
-  const { call } = harness({ ...prog(), manifest: { id: "example", version: "1.0.0", tags: ["示例"] } });
+test("manifest goes out without tags or source-only artwork", async () => {
+  const { call } = harness({ ...prog(), manifest: { id: "example", version: "1.0.0", tags: ["示例"], icon: "assets/icon.png" } });
+  expect((await call("manifest")).result).toEqual({ id: "example", version: "1.0.0" });
+});
+
+test("icon-only source metadata is omitted from manifest responses", async () => {
+  const { call } = harness({ ...prog(), manifest: { id: "example", version: "1.0.0", icon: "assets/icon.png" } });
   expect((await call("manifest")).result).toEqual({ id: "example", version: "1.0.0" });
 });
 

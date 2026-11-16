@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "weather",
   "name": "天气",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "icon": "assets/icon.png",
   "description": "天气（Open-Meteo，免费、不用 key）：当前天气、未来 24 小时气温、7 天预报和空气质量；欧洲花粉季可看桤木、桦木、禾草、艾蒿、橄榄、豚草的小时浓度和空气质量趋势。设了多个城市可切换。助手可查当前天气、预报、空气质量和花粉。只读公开数据，不用账号。",
   "publisher": "nwverse",
@@ -54,41 +54,13 @@
       "cities": {
         "type": "array",
         "title": "城市",
-        "description": "要看天气的城市，第一个是默认。每个城市填名字、纬度、经度（在 https://open-meteo.com 搜城市名就能看到）；时区可留空（自动按城市的时区）。默认是上海。",
-        "default": [
-          {
-            "name": "上海",
-            "latitude": 31.22,
-            "longitude": 121.46,
-            "timezone": "Asia/Shanghai"
-          }
-        ],
+        "description": "要看天气的城市，第一个是默认。每项写一个城市名（如 上海、Tokyo），按 Open-Meteo 的地名搜索取第一个结果；重名的在名字后写上「纬度,经度」，如「Springfield 39.80,-89.64」。默认是上海。",
+        "default": ["上海"],
+        "maxItems": 8,
         "items": {
-          "type": "object",
-          "required": ["name", "latitude", "longitude"],
-          "properties": {
-            "name": {
-              "type": "string",
-              "title": "名字",
-              "minLength": 1
-            },
-            "latitude": {
-              "type": "number",
-              "title": "纬度",
-              "minimum": -90,
-              "maximum": 90
-            },
-            "longitude": {
-              "type": "number",
-              "title": "经度",
-              "minimum": -180,
-              "maximum": 180
-            },
-            "timezone": {
-              "type": "string",
-              "title": "时区"
-            }
-          }
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
         }
       },
       "temperature_unit": {

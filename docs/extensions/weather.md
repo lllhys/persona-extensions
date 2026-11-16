@@ -26,7 +26,7 @@ Each request has an 8-second timeout and a 2 MiB answer limit, and answers are c
 
 | Setting | Meaning |
 | --- | --- |
-| `cities` | The cities to show, each with a `name`, `latitude`, `longitude` and optional `timezone`. The first is the default. The default city is 上海 (31.22, 121.46). An unusable city (missing name or coordinates out of range) is skipped and named on the page. |
+| `cities` | The cities to show, one per item, the first being the default: a city's name (`上海`, `Tokyo`), looked up through the geocoding endpoint the first time it is read and cached like any answer, or a name followed by `latitude,longitude` to pin an ambiguous one (`Springfield 39.80,-89.64`). The default is 上海, read at (31.22, 121.46) without a lookup. A name the search does not find is said on the page with a retry; an unusable item (empty, or coordinates out of range) is skipped and named on the page. Up to 0.2.0 each city was an object with `name`, `latitude`, `longitude` and `timezone`; hubs refuse a list of objects in a configuration, so those versions never appeared in a marketplace. A saved object is still read. |
 | `temperature_unit` | `celsius` (the default) or `fahrenheit`. |
 | `wind_unit` | `kmh` (the default) or `ms`. |
 

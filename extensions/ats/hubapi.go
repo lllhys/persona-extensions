@@ -38,6 +38,19 @@ type hubSession struct {
 	UpdatedAt           string `json:"updated_at"`
 }
 
+// hubInteraction is a card a session waits for the user with: an approval, a question.
+type hubInteraction struct {
+	ID        string `json:"id"`
+	MachineID string `json:"machine_id"`
+	SessionID string `json:"session_id"`
+	Kind      string `json:"kind"` // permission | question | …
+	ToolName  string `json:"tool_name"`
+	Summary   string `json:"summary"`
+	Questions []struct {
+		Question string `json:"question"`
+	} `json:"questions"`
+}
+
 type sessionRequest struct {
 	MachineID      string `json:"machine_id"`
 	Cwd            string `json:"cwd"`
@@ -57,6 +70,8 @@ type hubAPI interface {
 	LastReply(ctx context.Context, machineID, sessionID string) (string, error)
 	Interrupt(ctx context.Context, machineID, sessionID string) error
 	AttachTodo(ctx context.Context, todoID, machineID, sessionID string) error
+	// Interactions lists the cards sessions wait for the user with.
+	Interactions(ctx context.Context) ([]hubInteraction, error)
 }
 
 // nodeCaller calls the extension's program on a computer.
@@ -189,6 +204,14 @@ func (c *hubClient) Interrupt(ctx context.Context, machineID, sessionID string) 
 func (c *hubClient) AttachTodo(ctx context.Context, todoID, machineID, sessionID string) error {
 	path := "/api/v1/todos/" + url.PathEscape(todoID) + "/agents/" + url.PathEscape(machineID) + "/" + url.PathEscape(sessionID)
 	return c.do(ctx, http.MethodPut, path, nil, nil)
+}
+
+func (c *hubClient) Interactions(ctx context.Context) ([]hubInteraction, error) {
+	var out struct {
+		Interactions []hubInteraction `json:"interactions"`
+	}
+	err := c.do(ctx, http.MethodGet, "/api/v1/interactions", nil, &out)
+	return out.Interactions, err
 }
 
 // rpcNodes calls the node program through the hub's nodes.call.

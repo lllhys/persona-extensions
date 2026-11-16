@@ -42,7 +42,7 @@ if [ -n "$DISKLESSLY_BIN" ] && [ -x "$DISKLESSLY_BIN" ] && [ ! -d "$DISKLESSLY_B
 elif command -v disklessly >/dev/null 2>&1; then
   DKL=disklessly
 else
-  for c in "$HOME/.disklessly/bin/disklessly" "$HOME/.local/bin/disklessly" /usr/local/bin/disklessly /opt/homebrew/bin/disklessly /Applications/Disklessly.app/Contents/MacOS/disklessly; do
+  for c in "$HOME/.disklessly/bin/disklessly" "$HOME/.local/bin/disklessly" /opt/homebrew/opt/disklessly-cli/bin/disklessly /usr/local/opt/disklessly-cli/bin/disklessly /home/linuxbrew/.linuxbrew/opt/disklessly-cli/bin/disklessly "$HOME/.linuxbrew/opt/disklessly-cli/bin/disklessly" /usr/local/bin/disklessly /opt/homebrew/bin/disklessly /home/linuxbrew/.linuxbrew/bin/disklessly "$HOME/.linuxbrew/bin/disklessly" /Applications/Disklessly.app/Contents/MacOS/disklessly; do
     if [ -x "$c" ] && [ ! -d "$c" ]; then DKL="$c"; break; fi
   done
 fi`
@@ -218,11 +218,11 @@ func (o sessionRunOutcome) err() error {
 	case o.exitCode == cliExitMissing:
 		return errors.New("目标机器未安装 disklessly CLI，冷会话需由 disklessly 上传到备份后端后才能移除，未归档或删除任何会话")
 	case o.exitCode == cliExitBackend:
-		return fmt.Errorf("备份后端不可达，未上传或删除任何会话：%s", cmpOr(msg, "backend unreachable"))
+		return rawError("备份后端连不上，没有上传或删除任何会话；确认后端在线后再试", msg)
 	case o.exitCode != 0:
-		return fmt.Errorf("disklessly sessions --apply 失败 (exit %d)，未确认的会话保持原样：%s", o.exitCode, cmpOr(msg, "unknown error"))
+		return rawError(fmt.Sprintf("disklessly 上传冷会话失败（退出码 %d），没有确认上传的会话都留在本地", o.exitCode), msg)
 	case o.report == nil || !o.report.OK:
-		return fmt.Errorf("disklessly sessions --apply 返回了无法解析的报告：%s", cmpOr(msg, "no JSON report"))
+		return rawError("disklessly 上传后给出的报告看不懂，没有确认上传的会话都留在本地", msg)
 	}
 	return nil
 }

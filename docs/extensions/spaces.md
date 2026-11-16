@@ -2,7 +2,7 @@
 
 [Documentation](../README.md) · [Source](../../extensions/spaces/)
 
-Spaces manages any kind of thing with **types**, **properties** and **relations**. You define the structure: a type has its own properties, an optional lifecycle, a card that summarises each record, and views. The navigation page, the overview card, boards, progress bars, rollups and the assistant's tools are all generated from that structure, so changing the structure changes every screen that uses it. Four templates give a starting point: project and goals, reading and knowledge, inventory, and a blank space.
+Spaces manages any kind of thing with **types**, **properties** and **relations**. You define the structure: a type has its own properties, an optional lifecycle, a card that summarises each record, and views. The navigation page, the overview card, boards, progress bars, rollups and the assistant's tools are all generated from that structure, so changing the structure changes every screen that uses it. Eight templates give a starting point: project and goals, reading and knowledge, inventory, travel, habits, people, subscriptions, and a blank space.
 
 | Extension point | Contribution | Behavior |
 | --- | --- | --- |
@@ -87,7 +87,7 @@ Each type has up to 5 views. The first is the default. A view is a kind plus a l
 | --- | --- |
 | `list` | rows, grouped when the view has a group field |
 | `board` | one column per stage (or per enum option, or a single column when neither exists) |
-| `table` | a table of up to 8 columns and 50 rows a page, with the aggregates as a caption; a row index below it opens the records |
+| `table` | a table of up to 8 columns and 50 rows a page; compact rows below it (title and status) open the records |
 | `progress` | each record with its progress bar, from its card's progress or from its position in the lifecycle |
 | `feed` | records newest first, one section per day in the viewer's time zone |
 
@@ -104,7 +104,13 @@ Templates create a space with its types and, optionally, example records. They a
 | `project` | 项目与目标 | ideas, goals, tasks and notes, with derive, backlink rollups and five view kinds. |
 | `reading` | 阅读与知识 | books, notes, clippings and topics, with rollups in both directions. |
 | `inventory` | 清单与物品 | places, items, wishes and kits, with a wish that becomes an item by derive. |
+| `travel` | 旅行计划 | trips, itinerary items and packing items, with cost and packing rollups on the trip. |
+| `habit` | 习惯打卡 | habits and check-ins, with a count rollup that drives each habit's progress. |
+| `people` | 人脉与往来 | people and interactions, with a list of who to contact next. |
+| `subscription` | 订阅与账单 | subscriptions and payments, with monthly and yearly tables and a list by renewal date. |
 | `blank` | 空白空间 | no types; start with 新建类型. |
+
+The welcome page lists the templates when there is no space yet; afterwards 新建空间 on a space's overview opens the same list. Choosing a template opens a form with the name (a free default such as 「项目与目标 2」 when the name is taken) and, when the template has examples, a switch that leaves them out. With two or more spaces a switcher appears above the tabs.
 
 The example records are invented and use only `example.com` addresses. Dates in examples are relative to the day they are created.
 
@@ -115,12 +121,14 @@ The assistant reaches the spaces through the `spaces` MCP server. The tools are 
 | Tool | Access | What it does |
 | --- | --- | --- |
 | `schema` | read, runs without asking | Lists spaces, templates and the vocabulary; or, for one space, its types with a JSON Schema of the values each type accepts. |
-| `query` | read, runs without asking | Records of a type, or across types with built-in fields only; filters, sorts, groups, aggregates and paging. A record id reads that one record. |
+| `query` | read, runs without asking | Records of a type, or across types with built-in fields only; filters, sorts, groups, aggregates and paging. A record id reads that one record. `brief` answers each record with its title, status and values only. |
 | `space_write` | write | Creates a space, optionally from a template and with its examples, or changes a space's name, icon or description. |
-| `type_write` | write | Adds a type or replaces it as a whole. A replacement migrates existing records and is refused as a whole when one does not fit. |
-| `entity_write` | write | Creates a record or changes it. Properties are merged; `null` clears one; the status moves one step at a time. |
+| `type_write` | write | Adds a type or replaces it as a whole. A replacement migrates existing records and is refused as a whole when one does not fit. With `merge` only the given parts change: properties are merged by key and the rest is kept. |
+| `entity_write` | write | Creates a record or changes it. Properties are merged; `null` clears one; the status moves one step at a time. `entities` writes up to 50 records in one call, all or none. A batch writes to one space: the given one, else the space of the records it changes, where its new records are created too. |
 | `entity_derive` | write | Derives a record of another type. The source is unchanged. |
 | `delete` | write, destructive | Deletes a record, a type with its records, or a space with all its content. It cannot be undone. |
+
+The tools take what the assistant naturally knows: a space by its id or its name, a type by its key or its name, and a related record by its id or its exact title, in values and in `eq`, `ne` and `has` conditions (other operators and empty operands are read by the kernel as they are). A name or title that matches nothing, or more than one thing, is refused. A refusal says what would be accepted: the spaces, the types of the space, the stages of the lifecycle or the options of the property.
 
 The assistant's skill asks it to read `schema` first, to offer a template for a new space, and to agree on the types with the user before it defines them.
 

@@ -146,3 +146,26 @@ func TestToolFailureIsNotZero(t *testing.T) {
 		t.Fatalf("error %v", err)
 	}
 }
+
+// A city configured by name is searched once and keeps the name it was written with (#493).
+func TestConfiguredNameIsLookedUp(t *testing.T) {
+	f := newFakeSite(t)
+	sample(t, f)
+	a := testApp(t, f, `{"cities": ["上海", "Peking"]}`)
+	for range 2 {
+		out, err := callTool(t, a, "weather_now", `{"city": "Peking"}`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(out, "Peking") {
+			t.Fatalf("written name missing in %q", out)
+		}
+	}
+	if n := f.hit("/v1/search"); n != 1 {
+		t.Fatalf("searched %d times, want once", n)
+	}
+	// The default city written by name is not searched.
+	if _, err := callTool(t, a, "weather_now", ""); err != nil || f.hit("/v1/search") != 1 {
+		t.Fatalf("default city: %v, %d searches", err, f.hit("/v1/search"))
+	}
+}

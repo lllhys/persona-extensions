@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -262,6 +263,9 @@ func (a *atsApp) render(ctx context.Context, r *ext.UIRequest) (*wire.View, erro
 	if q == nil {
 		return nil, errors.New("the queue is not ready")
 	}
+	if id := pageTask(r); id != "" {
+		return buildTaskView(q, id, a.now(), r.TZ), nil
+	}
 	return buildQueueView(q, a.config(), a.now(), r.TZ), nil
 }
 
@@ -281,6 +285,13 @@ func (a *atsApp) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResu
 
 	var toast string
 	switch kind {
+	case "open":
+		// An app that does not open pages itself asks for the task's page this way.
+		title := "任务"
+		if t, err := q.GetTask(target); err == nil {
+			title = t.Title
+		}
+		return &wire.ActionResult{Push: taskPush(target, title)}, nil
 	case "retry":
 		if t, err := q.RetryTask(target, now); err != nil {
 			toast = "重试失败：" + err.Error()
@@ -304,16 +315,26 @@ func (a *atsApp) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResu
 	if d != nil {
 		d.poke()
 	}
+	// The action came from a task's own page: draw that page again, not the queue.
+	if id := pageTask(r); id != "" {
+		return &wire.ActionResult{View: buildTaskView(q, id, now, r.TZ), Toast: toast}, nil
+	}
 	return &wire.ActionResult{View: buildQueueView(q, a.config(), now, r.TZ), Toast: toast}, nil
 }
 
-func buildQueueView(q *Queue, cfg ExtConfig, now time.Time, tz string) *wire.View {
-	loc := time.UTC
+func viewLocation(tz string) *time.Location {
 	if tz != "" {
 		if l, err := time.LoadLocation(tz); err == nil {
-			loc = l
+			return l
 		}
 	}
+	return time.UTC
+}
+
+// buildQueueView is the queue page. What the user acts on comes first: tasks that wait for them, then what is
+// queued and running, then what ended; the scheduler's numbers and the computers are below.
+func buildQueueView(q *Queue, cfg ExtConfig, now time.Time, tz string) *wire.View {
+	loc := viewLocation(tz)
 	plan := q.PlanSchedule(now)
 	quota := plan.Quota
 	view := &wire.View{Title: "ATS 队列", RefreshAfter: 30}
@@ -330,6 +351,40 @@ func buildQueueView(q *Queue, cfg ExtConfig, now time.Time, tz string) *wire.Vie
 			{Type: wire.ComponentText, Text: strings.Join(setup, "\n")},
 		}})
 	}
+
+	names := map[string]string{}
+	for _, m := range plan.Machines {
+		if m.Title != "" {
+			names[m.Name] = m.Title
+		}
+	}
+	tasks, _ := q.ListTasks(TaskFilter{Limit: 60})
+	var needs, open, done []wire.Component
+	for _, t := range tasks {
+		switch {
+		case t.IsTerminal():
+			done = append(done, terminalRow(t, loc))
+		case t.State == StateNeedsInput:
+			needs = append(needs, activeRow(t, names, loc))
+		default:
+			open = append(open, activeRow(t, names, loc))
+		}
+	}
+	if len(needs) > 0 {
+		view.Sections = append(view.Sections, wire.Section{Title: "等你处理", Items: needs,
+			Footer: "到任务的 Agent 会话里回答或批准，任务会接着跑。"})
+	}
+	if len(open) == 0 && len(needs) == 0 {
+		open = []wire.Component{{Type: wire.ComponentEmpty, Title: "没有排队或在跑的任务",
+			Text: "跟助手说「把这个待办交给 ATS 做」，确认后任务会出现在这里。"}}
+	}
+	if len(open) > 0 { // with tasks waiting for the user above, an empty placeholder only pushes the rest down
+		view.Sections = append(view.Sections, wire.Section{Title: "排队和在跑", Items: open})
+	}
+	if len(done) == 0 {
+		done = []wire.Component{{Type: wire.ComponentText, Style: wire.TextStyleSecondary, Text: "还没有跑完的任务。"}}
+	}
+	view.Sections = append(view.Sections, wire.Section{Title: "最近结束", Items: done})
 
 	modeTone := wire.TonePositive
 	switch plan.AdmissionMode {
@@ -349,7 +404,7 @@ func buildQueueView(q *Queue, cfg ExtConfig, now time.Time, tz string) *wire.Vie
 		quotaDetail = fmt.Sprintf("%s 重置 · 保留线 %.0f%%", quota.ResetAt.In(loc).Format("15:04"), plan.ReserveHeadroomPct)
 	}
 	active := plan.CountsByState[StateRunning]
-	view.Sections = append(view.Sections, wire.Section{Title: "总览", Items: []wire.Component{
+	overview := []wire.Component{
 		{Type: wire.ComponentStatGrid, Stats: []wire.Stat{
 			{Label: "调度档位", Value: plan.AdmissionLabel, Detail: fmt.Sprintf("可出队 %d · 暂缓 %d", len(plan.AdmittedCandidates), len(plan.DeferredCandidates)), Tone: modeTone},
 			{Label: "剩余额度", Value: fmt.Sprintf("%.0f%%", quota.RemainingPct), Detail: quotaDetail, Tone: quotaTone},
@@ -357,14 +412,20 @@ func buildQueueView(q *Queue, cfg ExtConfig, now time.Time, tz string) *wire.Vie
 				Detail: fmt.Sprintf("P0:%d P1:%d P2:%d P3:%d", plan.QueuedByPriority[PriorityP0], plan.QueuedByPriority[PriorityP1], plan.QueuedByPriority[PriorityP2], plan.QueuedByPriority[PriorityP3])},
 			{Label: "在跑 / 等你 / 完成 / 失败", Value: fmt.Sprintf("%d / %d / %d / %d", active, plan.CountsByState[StateNeedsInput], plan.CountsByState[StateSucceeded], plan.CountsByState[StateFailed])},
 		}},
-		{Type: wire.ComponentTable, Title: "各模型档位的额度", Columns: []wire.TableColumn{
+	}
+	// The table of tiers says something only when a tier is held back: with every tier admitted in full it
+	// repeats the line above three times.
+	tiers := [][]string{
+		tierRow("fast", "easy", quota, TierFast, plan.ReserveHeadroomPct),
+		tierRow("standard", "medium", quota, TierStandard, plan.ReserveHeadroomPct),
+		tierRow("strong", "hard / extreme", quota, TierStrong, plan.ReserveHeadroomPct),
+	}
+	if slices.ContainsFunc(tiers, func(r []string) bool { return r[3] != tierAdmitted }) {
+		overview = append(overview, wire.Component{Type: wire.ComponentTable, Title: "各模型档位的额度", Columns: []wire.TableColumn{
 			{Title: "模型档位"}, {Title: "任务难度"}, {Title: "剩余额度", Align: "end"}, {Title: "准入"},
-		}, Rows: [][]string{
-			tierRow("fast", "easy", quota, TierFast, plan.ReserveHeadroomPct),
-			tierRow("standard", "medium", quota, TierStandard, plan.ReserveHeadroomPct),
-			tierRow("strong", "hard / extreme", quota, TierStrong, plan.ReserveHeadroomPct),
-		}},
-	}})
+		}, Rows: tiers})
+	}
+	view.Sections = append(view.Sections, wire.Section{Title: "总览", Items: overview})
 
 	if len(plan.Machines) > 0 {
 		rows := make([][]string, 0, len(plan.Machines))
@@ -383,37 +444,14 @@ func buildQueueView(q *Queue, cfg ExtConfig, now time.Time, tz string) *wire.Vie
 			{Type: wire.ComponentTable, Columns: []wire.TableColumn{{Title: "电脑"}, {Title: "状态"}, {Title: "在跑 / 可同时跑", Align: "end"}}, Rows: rows},
 		}})
 	}
-
-	names := map[string]string{}
-	for _, m := range plan.Machines {
-		if m.Title != "" {
-			names[m.Name] = m.Title
-		}
-	}
-	tasks, _ := q.ListTasks(TaskFilter{Limit: 60})
-	var open, done []wire.Component
-	for _, t := range tasks {
-		if t.IsTerminal() {
-			done = append(done, terminalRow(t, loc))
-		} else {
-			open = append(open, activeRow(t, names, loc))
-		}
-	}
-	if len(open) == 0 {
-		open = []wire.Component{{Type: wire.ComponentEmpty, Title: "没有排队或在跑的任务",
-			Text: "跟助手说「把这个待办交给 ATS 做」，确认后任务会出现在这里。"}}
-	}
-	view.Sections = append(view.Sections, wire.Section{Title: "排队和在跑", Items: open})
-	if len(done) == 0 {
-		done = []wire.Component{{Type: wire.ComponentText, Style: wire.TextStyleSecondary, Text: "还没有跑完的任务。"}}
-	}
-	view.Sections = append(view.Sections, wire.Section{Title: "最近结束", Items: done})
 	return view
 }
 
+const tierAdmitted = "全部放行"
+
 func tierRow(tier, difficulty string, quota QuotaStatus, key string, reserve float64) []string {
 	rem := tierRemaining(quota, key)
-	status := "全部放行"
+	status := tierAdmitted
 	switch {
 	case quota.Exhausted || rem <= 5:
 		status = "暂停"
@@ -423,17 +461,28 @@ func tierRow(tier, difficulty string, quota QuotaStatus, key string, reserve flo
 	return []string{tier, difficulty, fmt.Sprintf("%.0f%%", rem), status}
 }
 
+// taskMeta is what every row says of its task, in a few words: how urgent, whether it may write, which
+// repository. The to-do's id and the model tier are on the task's page.
 func taskMeta(t *Task) []string {
-	meta := []string{strings.ToUpper(t.Priority), t.Difficulty + " → " + t.ModelTier}
-	if t.PermissionProfile == PermissionDefault {
-		meta = append(meta, "可写")
-	} else {
-		meta = append(meta, "只读")
-	}
-	if todo := t.TodoID(); todo != "" {
-		meta = append(meta, "待办 "+todo)
+	meta := []string{priorityWords(t.Priority), permissionWords(t.PermissionProfile)}
+	if name := repoName(t.Workspace.Repo); name != "" {
+		meta = append(meta, name)
 	}
 	return meta
+}
+
+// openTask is a row's tap: the task's page, on top of the queue. Canceling and retrying are on that page and in
+// the row's menu, so that a tap never changes a task.
+func openTask(t *Task) *wire.Action {
+	return &wire.Action{ID: "open:" + t.ID, Push: taskPush(t.ID, t.Title)}
+}
+
+func cancelAction(t *Task) wire.Action {
+	return wire.Action{ID: "cancel:" + t.ID, Confirm: fmt.Sprintf("取消任务「%s」？", t.Title)}
+}
+
+func retryAction(t *Task) wire.Action {
+	return wire.Action{ID: "retry:" + t.ID, Confirm: fmt.Sprintf("重新排队「%s」？", t.Title)}
 }
 
 func activeRow(t *Task, machines map[string]string, loc *time.Location) wire.Component {
@@ -441,12 +490,20 @@ func activeRow(t *Task, machines map[string]string, loc *time.Location) wire.Com
 	badge := &wire.Badge{Text: "排队中", Tone: wire.ToneCaution}
 	if t.NotBefore != nil && t.State == StateQueued {
 		badge = &wire.Badge{Text: "等待重试", Tone: wire.ToneCaution}
-		meta = append(meta, t.NotBefore.In(loc).Format("15:04")+" 后重试")
+		meta = append(meta, fmt.Sprintf("第 %d 次失败（%s），%s 后重试", max(t.AttemptNo, 1), failureWords(lastErrorClass(t), lastVerdict(t)), t.NotBefore.In(loc).Format("15:04")))
 	}
+	subtitle := ""
 	if e := t.Exec; e != nil && isActiveState(t.State) {
+		name := machines[e.MachineID]
+		if name == "" {
+			name = e.MachineID
+		}
+		meta = append(meta, name, attemptCount(t.AttemptNo))
 		switch {
 		case t.State == StateNeedsInput:
 			badge = &wire.Badge{Text: "等你处理", Tone: wire.ToneDanger}
+			// What it waits for is the line the user reads; the rest is on the task's page.
+			subtitle = cmpOr(strings.TrimSpace(e.Waiting), waitingInSession)
 		case e.Phase == PhaseAccepting:
 			badge = &wire.Badge{Text: "验收中", Tone: wire.TonePositive}
 		case e.Phase == PhaseWorking:
@@ -454,39 +511,29 @@ func activeRow(t *Task, machines map[string]string, loc *time.Location) wire.Com
 		default:
 			badge = &wire.Badge{Text: "准备中", Tone: wire.TonePositive}
 		}
-		name := machines[e.MachineID]
-		if name == "" {
-			name = e.MachineID
-		}
-		meta = append(meta, name, fmt.Sprintf("第 %d 次", t.AttemptNo))
-		if e.Waiting != "" {
-			meta = append(meta, e.Waiting)
-		}
+	}
+	if subtitle == "" {
+		subtitle = strings.Join(meta, " · ")
 	}
 	return wire.Component{
-		Type: wire.ComponentRow, Key: "active-" + t.ID, Title: t.Title, Subtitle: strings.Join(meta, " · "), Badge: badge,
-		Action: &wire.Action{ID: "cancel:" + t.ID, Confirm: fmt.Sprintf("取消任务「%s」？", t.Title)},
+		Type: wire.ComponentRow, Key: "active-" + t.ID, Title: t.Title, Subtitle: subtitle, Badge: badge,
+		Action:  openTask(t),
+		Actions: []wire.RowAction{{Title: "取消任务", Role: wire.ButtonRoleDestructive, Swipe: true, Action: cancelAction(t)}},
 	}
+}
+
+// lastVerdict is the verdict of the task's newest report (the task's own verdict is set only when it ends).
+func lastVerdict(t *Task) string {
+	if r := lastReport(t); r != nil {
+		return r.Verdict
+	}
+	return t.Verdict
 }
 
 func terminalRow(t *Task, loc *time.Location) wire.Component {
 	meta := taskMeta(t)
-	if len(t.Reports) > 0 {
-		last := t.Reports[len(t.Reports)-1]
-		if last.Message != "" {
-			meta = append(meta, firstLinePreview(last.Message, 80))
-		}
-	} else if t.FailureReason != "" {
-		meta = append(meta, t.FailureReason)
-	}
-	if t.DecisionWrittenRef != "" {
-		meta = append(meta, "已写回待办")
-	}
-	if t.FinishedAt != nil {
-		meta = append(meta, t.FinishedAt.In(loc).Format("01-02 15:04"))
-	}
 	var badge *wire.Badge
-	var action *wire.Action
+	var actions []wire.RowAction
 	switch t.State {
 	case StateSucceeded:
 		if t.Verdict == VerdictPass {
@@ -495,11 +542,16 @@ func terminalRow(t *Task, loc *time.Location) wire.Component {
 			badge = &wire.Badge{Text: "跑完未验收", Tone: wire.ToneCaution}
 		}
 	case StateFailed:
-		badge = &wire.Badge{Text: "失败 · 点按重试", Tone: wire.ToneDanger}
-		action = &wire.Action{ID: "retry:" + t.ID, Confirm: fmt.Sprintf("重新排队「%s」？", t.Title)}
+		badge = &wire.Badge{Text: "失败", Tone: wire.ToneDanger}
+		meta = append(meta, fmt.Sprintf("%s，试了 %d 次", failureWords(lastErrorClass(t), t.Verdict), max(t.AttemptNo, 1)))
+		actions = []wire.RowAction{{Title: "重试", Swipe: true, Action: retryAction(t)}}
 	default:
-		badge = &wire.Badge{Text: "已取消 · 点按重试", Tone: wire.ToneCaution}
-		action = &wire.Action{ID: "retry:" + t.ID, Confirm: fmt.Sprintf("重新排队「%s」？", t.Title)}
+		badge = &wire.Badge{Text: outcomeWords(t.State, t.Verdict, ""), Tone: wire.ToneCaution}
+		actions = []wire.RowAction{{Title: "重试", Swipe: true, Action: retryAction(t)}}
 	}
-	return wire.Component{Type: wire.ComponentRow, Key: "term-" + t.ID, Title: t.Title, Subtitle: strings.Join(meta, " · "), Badge: badge, Action: action}
+	if t.FinishedAt != nil {
+		meta = append(meta, t.FinishedAt.In(loc).Format("01-02 15:04"))
+	}
+	return wire.Component{Type: wire.ComponentRow, Key: "term-" + t.ID, Title: t.Title, Subtitle: strings.Join(meta, " · "), Badge: badge,
+		Action: openTask(t), Actions: actions}
 }

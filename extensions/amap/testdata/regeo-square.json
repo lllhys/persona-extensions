@@ -1,0 +1,90 @@
+{
+ "status": "1",
+ "regeocode": {
+  "formatted_address": "北京市东城区东华门街道毛主席纪念堂",
+  "addressComponent": {
+   "city": [],
+   "province": "北京市",
+   "adcode": "110101",
+   "district": "东城区",
+   "towncode": "110101001000",
+   "streetNumber": {
+    "number": "39号",
+    "location": "116.399831,39.902326",
+    "direction": "东",
+    "distance": "210.43",
+    "street": "东交民巷"
+   },
+   "country": "中国",
+   "township": "东华门街道",
+   "businessAreas": [
+    {
+     "location": "116.391136,39.895092",
+     "name": "大栅栏",
+     "id": "110102"
+    }
+   ],
+   "building": {
+    "name": "毛主席纪念堂",
+    "type": "风景名胜;风景名胜;纪念馆"
+   },
+   "neighborhood": {
+    "name": [],
+    "type": []
+   },
+   "citycode": "010"
+  },
+  "aois": [
+   {
+    "area": "56176.673470",
+    "type": "110204",
+    "id": "B000A7I99C",
+    "location": "116.397815,39.902517",
+    "adcode": "110101",
+    "name": "毛主席纪念堂",
+    "distance": "0"
+   },
+   {
+    "area": "240068.104988",
+    "type": "110210|110105",
+    "id": "B000A83C1S",
+    "location": "116.397755,39.903182",
+    "adcode": "110101",
+    "name": "天安门广场",
+    "distance": "0"
+   }
+  ],
+  "pois": [
+   {
+    "name": "毛主席纪念堂",
+    "type": "风景名胜;风景名胜;纪念馆",
+    "distance": "48.2059",
+    "direction": "东南",
+    "location": "116.397815,39.902517"
+   },
+   {
+    "name": "天安门广场",
+    "type": "风景名胜;风景名胜;红色景区|风景名胜;公园广场;城市广场",
+    "distance": "43.9663",
+    "direction": "东北",
+    "location": "116.397755,39.903182"
+   },
+   {
+    "name": "人民英雄纪念碑",
+    "type": "风景名胜;风景名胜;红色景区|风景名胜;风景名胜;纪念馆",
+    "distance": "198.429",
+    "direction": "北",
+    "location": "116.397691,39.904632"
+   },
+   {
+    "name": "正阳门城楼",
+    "type": "风景名胜;风景名胜相关;旅游景点",
+    "distance": "255.522",
+    "direction": "南",
+    "location": "116.397902,39.900583"
+   }
+  ]
+ },
+ "info": "OK",
+ "infocode": "10000"
+}

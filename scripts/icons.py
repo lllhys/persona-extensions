@@ -227,6 +227,8 @@ def validate_registry(root, manifests):
             text(value)
         url(source["repository"])
         url(source["license_url"])
+        if "/raw/" in source["license_url"] and source["revision"] not in source["license_url"].split("/"):
+            raise ValueError("icon license URL must use the source's pinned revision")
     used = set()
     for id, record in icons.items():
         fields(record, "path source_id source_url sha256 format width height trademark_owner usage", ("source_sha256", "source_path", "transformation"))
@@ -251,6 +253,9 @@ def validate_registry(root, manifests):
             raise ValueError("icon registry references unknown source_id")
         used.add(record["source_id"])
         url(record["source_url"])
+        source = sources[record["source_id"]]
+        if source["repository"].startswith("https://github.com/") and source["revision"] not in record["source_url"].split("/"):
+            raise ValueError("icon source URL must use the source's pinned revision")
         text(record["trademark_owner"])
         text(record["usage"])
         if record["path"] != declared[id]:

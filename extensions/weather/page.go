@@ -95,17 +95,24 @@ func (a *app) picker(r *ext.UIRequest, st pageState) wire.Section {
 // page is the weather for one city; what went wrong is drawn, with a way to try again, never as a page of zeros.
 func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState, refresh bool) *wire.View {
 	c := a.selected(st)
-	loc := locFor(c)
 	v := &wire.View{Title: "天气", State: ext.EncodeState(st), RefreshAfter: 600}
 	if p := a.picker(r, st); len(p.Items) > 0 {
 		v.Sections = append(v.Sections, p)
 	}
 	if len(a.badCities) > 0 {
 		v.Sections = append(v.Sections, wire.Section{Items: []wire.Component{
-			text(clip("这些城市没填对，没有读："+badCityNames(a.badCities)+"。要写名字、纬度（-90 到 90）、经度（-180 到 180）", 1900), wire.TextStyleSecondary)}})
+			text(clip("这些城市没填对，没有读："+badCityNames(a.badCities)+"。每项写一个城市名；重名的在后面写上「纬度,经度」，纬度 -90 到 90、经度 -180 到 180", 1900), wire.TextStyleSecondary)}})
 	}
 
 	u, w := a.cfg.tempUnit(), a.cfg.windUnit()
+	located, err := a.locate(ctx, c)
+	if err != nil {
+		v.Sections = append(v.Sections, wire.Section{Title: c.Name, Items: []wire.Component{
+			text(clip(oneLine(err.Error())+"。换个写法，或在名字后写上「纬度,经度」", 1900), wire.TextStyleSecondary), button("重试", "refresh")}})
+		return v
+	}
+	c = located
+	loc := locFor(c)
 	f, rd, err := a.readForecast(ctx, c, freshness(refresh))
 	if err != nil {
 		v.Sections = append(v.Sections, wire.Section{Title: c.Name, Items: []wire.Component{
@@ -142,16 +149,19 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState, refresh 
 // and today's high and low beside it.
 func (a *app) nowSection(c City, f forecast, u temperatureUnit, w windUnit) wire.Section {
 	cur := f.Current
-	desc, icon := wmo(cur.WeatherCode)
-	big := wire.Component{Type: wire.ComponentMetric, Label: "现在", Value: icon + " " + fmtTemp(cur.Temperature, u), Detail: desc}
+	desc, icon := wmoOptional(cur.WeatherCode)
+	big := wire.Component{Type: wire.ComponentMetric, Label: "现在", Value: icon + " " + tempText(cur.Temperature, u), Detail: desc}
 
 	stats := []wire.Stat{
-		{Label: "体感", Value: fmtTemp(cur.Apparent, u)},
-		{Label: "湿度", Value: fmt.Sprintf("%.0f%%", cur.Humidity)},
+		{Label: "体感", Value: tempText(cur.Apparent, u)},
+		{Label: "湿度", Value: percentText(cur.Humidity)},
 	}
-	if cur.WindSpeed > 0 {
-		stats = append(stats, wire.Stat{Label: windDir(cur.WindDirection), Value: fmtWind(cur.WindSpeed, w)})
-	} else {
+	switch {
+	case !cur.WindSpeed.OK:
+		stats = append(stats, wire.Stat{Label: "风", Value: "未知"})
+	case cur.WindSpeed.Value > 0:
+		stats = append(stats, wire.Stat{Label: windDir(cur.WindDirection.Value), Value: fmtWind(cur.WindSpeed.Value, w)})
+	default:
 		stats = append(stats, wire.Stat{Label: "风", Value: "无风"})
 	}
 	if hi, lo, ok := f.todayHighLow(); ok {
@@ -178,14 +188,14 @@ func (a *app) hoursSection(hours []hourPoint, u temperatureUnit) wire.Section {
 func (a *app) forecastSection(ds []day, u temperatureUnit) wire.Section {
 	sec := wire.Section{Title: "7 天预报"}
 	for _, d := range ds {
-		desc, icon := wmo(d.code)
+		desc, icon := wmoOptional(d.code)
 		title := d.weekday()
 		if title == "" {
 			title = d.date.Format("01-02")
 		}
 		row := wire.Component{Type: wire.ComponentRow,
-			Title:    fmt.Sprintf("%s %s %s / %s", title, icon, fmtTemp(d.max, u), fmtTemp(d.min, u)),
-			Subtitle: fmt.Sprintf("%s · 降水概率 %.0f%%", desc, d.precip)}
+			Title:    fmt.Sprintf("%s %s %s / %s", title, icon, tempText(d.max, u), tempText(d.min, u)),
+			Subtitle: fmt.Sprintf("%s · 降水概率 %s", desc, percentText(d.precip))}
 		sec.Items = append(sec.Items, row)
 	}
 	if len(sec.Items) == 0 {

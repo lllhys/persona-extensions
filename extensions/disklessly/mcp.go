@@ -19,8 +19,9 @@ import (
 const mcpProtocol = "2025-06-18"
 
 type mcpServer struct {
-	store  *store
-	runner Runner
+	store    *store
+	runner   Runner
+	streamer StreamRunner
 }
 
 type tool struct {
@@ -83,7 +84,7 @@ var tools = []tool{
 			"machine": str("只看这台机器；不填返回全部机器"),
 			"refresh": map[string]any{"type": "boolean", "description": "若为 true，先在机器上重新读取 disklessly 会话索引并检查备份后端与归档分段"},
 		},
-		description: "查看各机器冷会话云端备份状态：备份后端是否可达、最近检查时间、已索引会话数、按位置（在云端 / 未知 / 云端缺失 / 本地）统计、缺失或未确认的归档分段。",
+		description: "查看各机器冷会话云端备份状态：每台机器的状态 state（ready 正常、no_cli 未安装 CLI、cli_too_old CLI 版本过旧、no_backend 未设置备份后端、backend_unreachable 备份后端连不上、unreachable 连不上这台电脑、unreadable 回答无法识别、unchecked 尚未检查）与原因、备份后端是否可达、最近检查时间、已索引会话数、按位置（在云端 / 未知 / 云端缺失 / 本地）统计、缺失或未确认的归档分段。",
 	},
 	{
 		name:     "disklessly_clean",
@@ -165,6 +166,16 @@ var tools = []tool{
 			"id":      str("会话条目 ID（disklessly_sessions_search 返回的 id）或会话 ID"),
 		},
 		description: "把一个已上云的冷会话从备份后端恢复到原路径，并返回继续对话的命令（claude --resume <id> 或 codex resume <id>）。",
+	},
+	{
+		name:     "disklessly_cli_install",
+		readOnly: false,
+		required: []string{"machine"},
+		props: map[string]any{
+			"machine": str("要安装或升级 disklessly CLI 的机器 ID 或 SSH Host 别名"),
+			"method":  map[string]any{"type": "string", "enum": []string{"brew", "copy"}, "description": "brew：在这台机器上运行 brew tap nwverse/tap && brew install（或 upgrade）nwverse/tap/disklessly-cli；copy：从同系统同架构、装有可用 CLI 的另一台机器复制。不填时有 Homebrew 用 brew，否则 copy"},
+		},
+		description: "给未安装或版本过旧的机器安装 / 升级 disklessly CLI（优先 Homebrew），装好后运行 disklessly version 确认，再重新读取这台机器的会话索引，返回新的状态。会在目标机器上安装软件，需要确认。",
 	},
 }
 
@@ -260,7 +271,7 @@ func (m *mcpServer) handle(ctx context.Context, method string, params json.RawMe
 			return nil, &rpcError{-32602, err.Error()}
 		}
 		if err != nil {
-			return map[string]any{"content": []map[string]any{{"type": "text", "text": err.Error()}}, "isError": true}, nil
+			return map[string]any{"content": []map[string]any{{"type": "text", "text": toolErrorText(err)}}, "isError": true}, nil
 		}
 		text, _ := json.MarshalIndent(out, "", "  ")
 		return map[string]any{"content": []map[string]any{{"type": "text", "text": string(text)}}, "structuredContent": out}, nil
@@ -577,6 +588,69 @@ func (m *mcpServer) call(ctx context.Context, name string, raw json.RawMessage) 
 		})
 		return out, err
 
+	case "disklessly_cli_install":
+		var in struct {
+			Machine string `json:"machine"`
+			Method  string `json:"method"`
+		}
+		if err := args(&in); err != nil {
+			return nil, err
+		}
+		var sc *scratch
+		var offer installOffer
+		var brew, name string
+		if err := m.store.read(func(st *State) {
+			mach := st.machine(in.Machine)
+			if mach == nil || strings.TrimSpace(in.Machine) == "" {
+				return
+			}
+			sc, name, offer = scratchOf(st, mach), machineLabel(mach), installSourceFor(st, mach)
+			if c := st.cold(mach.ID); c != nil {
+				brew = c.Brew
+			}
+		}); err != nil {
+			return nil, err
+		}
+		if sc == nil {
+			return nil, fmt.Errorf("找不到机器 %q", in.Machine)
+		}
+		method := in.Method
+		if method == "" {
+			method = "copy"
+			if brew != "" {
+				method = "brew"
+			}
+		}
+		now := m.store.now().UTC()
+		var note string
+		var werr error
+		switch method {
+		case "brew":
+			if brew == "" {
+				return nil, fmt.Errorf("「%s」上没有找到 Homebrew（先用 disklessly_sessions_status refresh=true 重新检查）；可以改用 method=copy，或在这台电脑上先安装 Homebrew", name)
+			}
+			note, werr = brewInstall(ctx, m.run(), sc, now)
+		case "copy":
+			if offer.src == nil {
+				return nil, fmt.Errorf("「%s」没法复制安装：%s", name, cmpOr(offer.reason, "没有可以复制的 disklessly CLI"))
+			}
+			streamer := m.streamer
+			if streamer == nil {
+				streamer = DefaultStreamRunner
+			}
+			note, werr = copyInstallWork(ctx, m.run(), streamer, offer.src, offer.cli, sc, now)
+		default:
+			return nil, fmt.Errorf("method 只能是 brew 或 copy，收到 %q", method)
+		}
+		err = m.store.update(func(st *State, now time.Time) error {
+			sc.apply(st)
+			if mach := st.machine(sc.orig.ID); mach != nil {
+				out = map[string]any{"machine": mach.ID, "method": method, "note": note, "status": coldStatusOf(st, mach, now)}
+			}
+			return nil
+		})
+		return out, cmp.Or(werr, err)
+
 	case "disklessly_machine_upsert":
 		var in struct {
 			ID           string `json:"id"`
@@ -629,7 +703,10 @@ func (m *mcpServer) call(ctx context.Context, name string, raw json.RawMessage) 
 // coldStatusOf summarizes machine mach's cold index for the assistant (without the entries).
 func coldStatusOf(st *State, mach *Machine, now time.Time) map[string]any {
 	cat := st.cold(mach.ID)
-	res := map[string]any{"machine_id": mach.ID, "machine_name": cmp.Or(mach.Name, mach.Host)}
+	res := map[string]any{"machine_id": mach.ID, "machine_name": machineLabel(mach)}
+	state := cat.stateCode()
+	res["state"] = state
+	res["state_label"] = coldStateLabel(state)
 	if cat == nil {
 		res["checked"] = false
 		res["note"] = "尚未读取云端索引（disklessly_sessions_status refresh=true 或扫描机器）"
@@ -650,8 +727,36 @@ func coldStatusOf(st *State, mach *Machine, now time.Time) map[string]any {
 	res["unchecked_segments"] = cat.Unchecked
 	res["timed_out"] = cat.TimedOut
 	res["archived_bytes"] = cat.ArchivedBytes
-	if cat.Error != "" {
-		res["error"] = cat.Error
+	adv := coldProblem(st, mach, cat, state)
+	if state != ColdReady && adv.Reason != "" {
+		// The same words as the Agent 对话 page: what is wrong, what to do, a command to copy;
+		// detail is the raw text (an SSH line, the CLI's answer) for 详情.
+		res["message"] = adv.Reason
+		res["next"] = adv.Next
+		if adv.Command != "" {
+			res["command"] = adv.Command
+		}
+		switch {
+		case adv.brew:
+			res["fix"] = "disklessly_cli_install method=brew"
+		case adv.copy.src != nil:
+			res["fix"] = "disklessly_cli_install method=copy（从 " + machineLabel(adv.copy.src) + " 复制）"
+		}
+	}
+	if c := cmp.Or(adv.Cause, cat.Cause); c != "" {
+		res["cause"] = c
+	}
+	if d := cmp.Or(adv.Raw, cat.Detail); d != "" {
+		res["detail"] = d
+	}
+	if cat.Brew != "" {
+		res["homebrew"] = cat.Brew
+	}
+	if cat.CLI.Version != "" {
+		res["cli_version"] = cat.CLI.Version
+	}
+	if cat.Platform != "" {
+		res["platform"] = cat.Platform
 	}
 	return res
 }

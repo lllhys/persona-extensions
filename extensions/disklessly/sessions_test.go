@@ -69,7 +69,7 @@ func TestProbeUsesCLIPlanAndBackendReachability(t *testing.T) {
 	if got := sessionItems(st.Scans["local"]); len(got) != 0 {
 		t.Fatalf("session items with unreachable backend: %+v", got)
 	}
-	if !strings.Contains(st.Scans["local"].Sessions.Note, "timeout") {
+	if !strings.Contains(st.Scans["local"].Sessions.Note, "备份后端连不上") {
 		t.Fatalf("note: %q", st.Scans["local"].Sessions.Note)
 	}
 }
@@ -134,7 +134,7 @@ func TestSessionArchiveRefusalIsAnError(t *testing.T) {
 			if err == nil || rec != nil || len(st.History) != 0 {
 				t.Fatalf("err=%v rec=%+v history=%d", err, rec, len(st.History))
 			}
-			if name == "backend" && !strings.Contains(err.Error(), "备份后端不可达") {
+			if name == "backend" && !strings.Contains(err.Error(), "备份后端连不上") {
 				t.Fatalf("err = %v", err)
 			}
 		})
@@ -191,7 +191,7 @@ func TestSessionArchiveScriptKeepsFilesWhenCLIRefuses(t *testing.T) {
 	if o.refsFound < 1 {
 		t.Fatalf("reference count missing:\n%s", out)
 	}
-	if e := o.err(); e == nil || !strings.Contains(e.Error(), "backend unreachable: no repo") {
+	if e := o.err(); e == nil || !strings.Contains(toolErrorText(e), "backend unreachable: no repo") {
 		t.Fatalf("outcome err = %v\n%s", e, out)
 	}
 	if _, err := os.Stat(old); err != nil {
@@ -293,9 +293,10 @@ func TestColdSessionDaysPassedToCLI(t *testing.T) {
 }
 
 func TestResolveCLIScriptLocations(t *testing.T) {
+	root := t.TempDir() // the machine-wide locations, empty: the machine running the test does not count (#592)
 	resolve := func(home string, env ...string) string {
 		t.Helper()
-		cmd := exec.Command("/bin/sh", "-c", resolveCLIScript+"\nprintf '%s' \"$DKL\"")
+		cmd := exec.Command("/bin/sh", "-c", hermetic(resolveCLIScript, root)+"\nprintf '%s' \"$DKL\"")
 		cmd.Env = append([]string{"HOME=" + home, "PATH=/nonexistent"}, env...)
 		out, err := cmd.Output()
 		if err != nil {
@@ -304,8 +305,19 @@ func TestResolveCLIScriptLocations(t *testing.T) {
 		return string(out)
 	}
 	home := t.TempDir()
-	if got := resolve(home); got != "" && !strings.HasPrefix(got, "/usr/local/bin/") && !strings.HasPrefix(got, "/opt/homebrew/") && !strings.HasPrefix(got, "/Applications/") {
+	if got := resolve(home); got != "" {
 		t.Fatalf("empty home resolved %q", got)
+	}
+	// A Homebrew keg found at a fixed prefix (no PATH needed), until the home has its own.
+	keg := filepath.Join(root, "home", "linuxbrew", ".linuxbrew", "opt", "disklessly-cli", "bin", "disklessly")
+	if err := os.MkdirAll(filepath.Dir(keg), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keg, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := resolve(home); got != keg {
+		t.Fatalf("keg: got %q", got)
 	}
 	local := filepath.Join(home, ".local", "bin", "disklessly")
 	if err := os.MkdirAll(filepath.Dir(local), 0o755); err != nil {

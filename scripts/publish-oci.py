@@ -179,12 +179,14 @@ def check_archive(data, expected, strict=False, platform="any"):
     if strict and actual != expected:
         raise ValueError("new-version archive manifest differs from source")
     commands = expected.get("runtime", {}).get("command", {})
+    if not isinstance(commands, (dict, str)):
+        raise ValueError("archive runtime command is not a string or platform map")
     if actual.get("runtime", {}).get("command", {}) != commands:
         raise ValueError("archive runtime platform mapping differs from catalog")
     if actual.get("runtime", {}) != expected.get("runtime", {}):
         raise ValueError("archive source runtime differs from catalog")
     oci.version_tag(expected["version"], platform)
-    if commands and platform != "any" and platform not in commands:
+    if isinstance(commands, dict) and commands and platform != "any" and platform not in commands:
         raise ValueError("archive runtime does not declare package platform")
 
     def required(path, executable=False):
@@ -193,7 +195,10 @@ def check_archive(data, expected, strict=False, platform="any"):
         if executable and files[path][0] & 0o111 == 0:
             raise ValueError("archive platform binary is not executable")
 
-    selected = commands.values() if platform == "any" else ([commands[platform]] if commands else [])
+    if isinstance(commands, str):
+        selected = [commands]
+    else:
+        selected = commands.values() if platform == "any" else ([commands[platform]] if commands else [])
     for path in selected:
         required(path, True)
     # Node programs are shipped to other computers: hub checks all declared node commands.

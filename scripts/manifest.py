@@ -6,7 +6,8 @@
   scripts/manifest.py packaged <id>   the runtime manifest: without source-only "tags" and "replaces"
   scripts/manifest.py ids             every extension in extensions/
   scripts/manifest.py check           every manifest is sound (what CI runs): id, version, tags, no retired files,
-                                      the files it references are in its package, its pack members are here
+                                      the files it references are in its package, its pack members are here, and a
+                                      hub takes its configuration (scripts/config_form.py)
   scripts/manifest.py changed <ref>   the extensions whose version is not what it was at <ref> (new ones too)
   scripts/manifest.py last-released   the commit CI last released for (its newest "market: index after" commit)
   scripts/manifest.py base <ref>…     the first ref HEAD descends from: where a push's release diffs from
@@ -17,6 +18,7 @@ import json, os, posixpath, re, subprocess, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import catalog
+import config_form
 import icons
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -205,15 +207,18 @@ def selected(args):
 
 def referenced(m):
     """The package paths a manifest references, as (what, path, kind): kind "skill" is a directory with SKILL.md,
-    "file" a file. The hub refuses a package without them at install (nwverse/persona server/internal/extension)."""
+    "file" a file. The hub refuses a package without them at install (nwverse/persona server/internal/extension).
+    A skill or instructions with "source": "data" lives in the extension's data directory, which the extension
+    writes at run time, so the package does not carry it."""
     c = m.get("contributes") or {}
     out = []
     if "icon" in m:
         out.append(("icon", m["icon"], "icon"))
     for s in c.get("skills") or []:
-        out.append(("skills %s: dir" % s.get("id"), s.get("dir"), "skill"))
+        if s.get("source") != "data":
+            out.append(("skills %s: dir" % s.get("id"), s.get("dir"), "skill"))
     for p in c.get("prompts") or []:
-        if p.get("kind") == "instructions":
+        if p.get("kind") == "instructions" and p.get("source") != "data":
             out.append(("prompts %s: file" % p.get("id"), p.get("file"), "file"))
     for a in c.get("assistant") or []:
         for sk in a.get("skills") or []:
@@ -324,6 +329,11 @@ def check():
             inventory.append(catalog.source_entry(m, l10n=l10n(id)))
         except ValueError as e:
             bad.append("extensions/%s: %s" % (id, e))
+        # A hub refuses a manifest whose configuration its forms can't draw, and drops it from the catalog (#494).
+        try:
+            config_form.check(m)
+        except config_form.Refused as e:
+            bad.append("extensions/%s: a hub refuses this manifest: %s" % (id, e))
         t = m.get("tags", [])
         if not isinstance(t, list) or len(t) > TAGS_MOST or any(not isinstance(x, str) or not 0 < len(x) <= TAG_LONGEST for x in t):
             bad.append("extensions/%s: tags must be at most %d strings of 1 to %d characters" % (id, TAGS_MOST, TAG_LONGEST))

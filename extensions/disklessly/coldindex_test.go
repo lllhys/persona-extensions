@@ -348,7 +348,7 @@ func TestRestoreCold(t *testing.T) {
 		if err == nil || len(st.History) != 0 || st.Cold[m.ID].Entries[0].State != "archived" {
 			t.Fatalf("%s: err=%v history=%d", name, err, len(st.History))
 		}
-		if name == "backend" && !strings.Contains(err.Error(), "备份后端不可达") {
+		if name == "backend" && (!strings.Contains(err.Error(), "备份后端连不上") || !strings.Contains(toolErrorText(err), "详情")) {
 			t.Fatalf("backend err: %v", err)
 		}
 	}
@@ -425,8 +425,13 @@ func TestSessionsPageUI(t *testing.T) {
 	}
 
 	res := act(v.State, "cold-refresh", map[string]string{"m": ""})
-	if !strings.Contains(res.Toast, "已刷新 1 台机器的云端索引（4 个会话）") {
+	if !strings.Contains(res.Toast, "已开始读取 1 台机器") {
 		t.Fatalf("refresh toast: %s", res.Toast)
+	}
+	a.waitJobs()
+	res = act(res.View.State, "search", map[string]string{"q": ""})
+	if j := a.jobSnapshot()["local"]; j.Note != "已读取 4 个会话" || j.Err != "" {
+		t.Fatalf("refresh outcome: %+v", j)
 	}
 	rows := rowsOf(res.View)
 	if len(rows) != 4 {
@@ -460,12 +465,24 @@ func TestSessionsPageUI(t *testing.T) {
 		t.Fatal("no offload button for a machine")
 	}
 	res = act(res.View.State, "cold-restore", map[string]string{"m": "local", "id": "aaaaaaaaaaa1"})
-	if !strings.Contains(res.Toast, "claude --resume "+uuidClaude) {
+	if !strings.Contains(res.Toast, "已开始恢复") {
 		t.Fatalf("restore toast: %s", res.Toast)
 	}
+	a.waitJobs()
+	if j := a.jobSnapshot()["local"]; !strings.Contains(j.Note, "claude --resume "+uuidClaude) {
+		t.Fatalf("restore outcome: %+v", j)
+	}
+	res = act(res.View.State, "machine", map[string]string{"machine": "local"})
+	if !strings.Contains(texts(res.View), "claude --resume "+uuidClaude) {
+		t.Fatal("restore outcome not on the machine row")
+	}
 	res = act(res.View.State, "cold-offload", map[string]string{"m": "local"})
-	if !strings.Contains(res.Toast, "冷会话已上云") {
+	if !strings.Contains(res.Toast, "已开始上传") {
 		t.Fatalf("offload toast: %s", res.Toast)
+	}
+	a.waitJobs()
+	if j := a.jobSnapshot()["local"]; !strings.Contains(j.Note, "冷会话已上云") {
+		t.Fatalf("offload outcome: %+v", j)
 	}
 
 	// The main page's 会话与台账 tab has the same search and rows.
@@ -804,7 +821,7 @@ func TestColdIndexReviewFixes(t *testing.T) {
 	if got := deepSearchWords("--resume -home-dev-app - x"); strings.Join(got, "|") != "resume|home-dev-app|x" {
 		t.Fatalf("words %v", got)
 	}
-	if _, err := parseDeepSearch(`{"ok":false,"error":{"code":2,"message":"sessions search requires a query","name":"EX_USAGE"}}`); err == nil || !strings.Contains(err.Error(), "requires a query") {
+	if _, err := parseDeepSearch(`{"ok":false,"error":{"code":2,"message":"sessions search requires a query","name":"EX_USAGE"}}`); err == nil || !strings.Contains(toolErrorText(err), "requires a query") || strings.Contains(err.Error(), "requires a query") {
 		t.Fatalf("cli error: %v", err)
 	}
 	scripts = nil

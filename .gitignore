@@ -15,3 +15,5 @@ __pycache__/
 /extensions/*/weather
 # personad extension test / dev build the program where the manifest says (bin/…).
 /extensions/*/bin/
+# A Python extension's launcher is source, not a build output.
+!/extensions/larkx/bin/

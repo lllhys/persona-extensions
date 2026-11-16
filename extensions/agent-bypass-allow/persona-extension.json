@@ -3,9 +3,9 @@
   "id": "agent-bypass-allow",
   "replaces": "claude-bypass-allow",
   "name": "Bypass 自动允许",
-  "version": "0.2.28",
+  "version": "0.2.30",
   "icon": "assets/icon.png",
-  "description": "Claude Code 开着 bypassPermissions（--dangerously-skip-permissions）时，有些调用仍会弹确认框（如读工作目录外的文件、开子 Agent、某些 Bash），无人值守的 Agent 就卡在「在等你」。在你选的电脑上给 Claude Code 装一个 PermissionRequest hook：只在会话是 bypass 模式时，自动允许 Bash、只读工具（Read、Glob、Grep、LS、NotebookRead）和子 Agent。删除、覆盖数据的 Bash 命令，目标都在临时目录或工作目录里（/tmp、会话的工作目录、~/ag-work、~/wt、Claude Code 的 worktree 等）时直接放行，其余的仍然问你；打开「删除和覆盖也自动允许」就都放行。force push、改权限的 Bash 命令，写文件、Workflow 和 MCP 工具，以及你自己配的 ask / deny 规则，始终问你。每次自动允许都记一条（命令截断、去掉密钥）。别的模式照常问你。",
+  "description": "Claude Code 开着 bypassPermissions（--dangerously-skip-permissions）时，有些调用仍会弹确认框（如读工作目录外的文件、开子 Agent、某些 Bash），无人值守的 Agent 就卡在「在等你」。在你选的电脑上给 Claude Code 装一个 PermissionRequest hook：只在会话是 bypass 模式时，自动允许 Bash、只读工具（Read、Glob、Grep、LS、NotebookRead）和子 Agent。删除、覆盖数据的 Bash 命令，目标都在临时目录或工作目录里（/tmp、会话的工作目录、~/ag-work、~/wt、Claude Code 的 worktree 等）时直接放行，其余的仍然问你；打开「删除和覆盖也自动允许」就都放行。force push、改权限的 Bash 命令，写文件、Workflow 和 MCP 工具，以及你自己配的 ask / deny 规则，始终问你。每次自动允许都记一条（命令截断、去掉密钥）。别的模式照常问你。另有一个默认关的开关「Persona 助手对话的文件写入也自动允许」：打开后，Persona 的主对话和主管对话用 Write、Edit 写白名单目录（默认 ~/.jarvis/assistant 和 ~/.persona/assistant）里的文件时也直接放行，不论什么模式（计划模式除外）；其余照常问你。",
   "publisher": "nwverse",
   "homepage": "https://github.com/nwverse/persona-extensions/tree/main/extensions/agent-bypass-allow",
   "tags": ["claude-code", "agents", "permissions"],
@@ -56,6 +56,20 @@
         "items": {"type": "string", "minLength": 1, "maxLength": 512},
         "maxItems": 8,
         "default": ["~/.claude"]
+      },
+      "assistant_writes": {
+        "type": "boolean",
+        "title": "Persona 助手对话的文件写入也自动允许",
+        "description": "打开后，Persona 的主对话和主管对话（不是 bypass 模式）用 Write、Edit 写下面目录里的文件时直接放行，不再弹卡；计划模式除外。只认 Persona 启动的助手对话，普通 Agent 照常问你。目录里的 .claude、.git 和 .mcp.json，目录外的路径，删除（走 Bash）、MultiEdit、NotebookEdit、联网写入，以及你自己配的 ask / deny 规则，照常问你。助手对话用的 Claude Code 配置目录要在上面「Claude Code 配置目录」里。",
+        "default": false
+      },
+      "assistant_write_dirs": {
+        "type": "array",
+        "title": "助手对话可直接写入的目录",
+        "description": "打开上一项后，助手对话写这些目录里（含子目录）的文件不再问你。~ 是那台电脑的家目录；经过链接和 .. 走到目录外的不算。",
+        "items": {"type": "string", "minLength": 1, "maxLength": 512},
+        "maxItems": 8,
+        "default": ["~/.jarvis/assistant", "~/.persona/assistant"]
       }
     }
   }

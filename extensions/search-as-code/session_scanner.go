@@ -83,6 +83,10 @@ type SessionRecord struct {
 	// Unconfirmed: the index has no segment or archive time yet (the upload did not complete), so there is no
 	// confirmed cloud copy to restore.
 	Unconfirmed bool `json:"unconfirmed,omitempty"`
+	// Machine and MachineName: the computer the session is on, set by the hub for another computer's sessions
+	// (empty: the computer this program runs on).
+	Machine     string `json:"machine,omitempty"`
+	MachineName string `json:"machine_name,omitempty"`
 }
 
 // SourceStats summarizes the discovered session and file sources.
@@ -377,15 +381,7 @@ func parseSessionFile(path string, mod time.Time) *SessionRecord {
 		rec.Model = cmp.Or(inferDefaultModel(rec.Harness), "claude-sonnet-5-5")
 	}
 	if rec.Title == "" {
-		for _, tr := range rec.Turns {
-			if tr.Text != "" {
-				rec.Title = firstLineTitle(tr.Text)
-				break
-			}
-		}
-	}
-	if rec.Title == "" {
-		rec.Title = "会话 " + shortID(rec.SessionID)
+		rec.Title = conversationTitle(rec.Turns, rec.SessionID)
 	}
 	rec.Files = fileSet
 	return rec
@@ -741,6 +737,19 @@ func inferProject(cwd, filePath string) string {
 		return dir
 	}
 	return "workspace"
+}
+
+// conversationTitle is a title from the conversation itself: the first user turn, else the first assistant turn,
+// never a tool call or its output (which may hold logs or credentials), else "会话 <id>".
+func conversationTitle(turns []SessionTurn, sessionID string) string {
+	for _, role := range []string{"user", "assistant"} {
+		for _, tr := range turns {
+			if !tr.IsTool && tr.Role == role && strings.TrimSpace(tr.Text) != "" {
+				return firstLineTitle(tr.Text)
+			}
+		}
+	}
+	return "会话 " + shortID(sessionID)
 }
 
 func firstLineTitle(s string) string {

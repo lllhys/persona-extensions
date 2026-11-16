@@ -213,6 +213,10 @@ type Scan struct {
 	SafeBytes        uint64         `json:"safe_bytes"`
 	ReviewBytes      uint64         `json:"review_bytes"`
 	ScannedAt        time.Time      `json:"scanned_at"`
+	// Partial: the probe ran out of time after reading the root volume, so the watermark is current but the items,
+	// sessions and totals cover only what was sized before it stopped; PartialReason is why it stopped.
+	Partial       bool   `json:"partial,omitempty"`
+	PartialReason string `json:"partial_reason,omitempty"`
 }
 
 // CleanItemResult records the outcome of cleaning or archiving a single ScanItem.
@@ -267,6 +271,8 @@ type MachineStatus struct {
 	LastFreedBytes   uint64         `json:"last_freed_bytes"`
 	TotalFreedBytes  uint64         `json:"total_freed_bytes"`
 	CleanCount       int            `json:"clean_count"`
+	// Partial: the last scan read the watermark but ran out of time sizing caches (Scan.Partial).
+	Partial bool `json:"partial,omitempty"`
 }
 
 // EvaluateHealth computes the health level from reachability and root disk usage.
@@ -600,6 +606,7 @@ func (st *State) machineStatus(m *Machine) MachineStatus {
 		ms.SafeBytes = sc.SafeBytes
 		ms.ReviewBytes = sc.ReviewBytes
 		ms.Sessions = sc.Sessions
+		ms.Partial = sc.Partial
 		t := sc.ScannedAt
 		ms.LastScannedAt = &t
 		ms.Level = EvaluateHealth(m.Reachable, ms.TotalBytes, ms.AvailableBytes)

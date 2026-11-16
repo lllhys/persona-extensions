@@ -629,7 +629,7 @@ func TestEditorScreensAtEveryVersion(t *testing.T) {
 		store *store.Store
 	}{
 		{"project", storeWith(t, true, "project")},
-		{"all templates", storeWith(t, true, "project", "reading", "inventory", "blank")},
+		{"all templates", storeWith(t, true, templateKeys()...)},
 		{"without samples", storeWith(t, false, "reading")},
 	}
 	for _, tc := range cases {

@@ -9,6 +9,14 @@
       "license_file": "assets/LICENSE",
       "attribution": "Internet Archive. Official icon asset, with the upstream repository license notice preserved in each package. Trademark rights are separate from copyright licensing."
     },
+    "dify-official-plugins": {
+      "repository": "https://github.com/langgenius/dify-official-plugins",
+      "revision": "60804e30f6fa41fbe890c02c9849b0bdbe28d13a",
+      "license": "Apache-2.0",
+      "license_url": "https://raw.githubusercontent.com/langgenius/dify-official-plugins/60804e30f6fa41fbe890c02c9849b0bdbe28d13a/LICENSE",
+      "license_file": "assets/LICENSE",
+      "attribution": "LangGenius. Icon asset of Dify's official AMap (gaode) tool plugin, with the upstream repository license notice preserved in each package. Trademark rights are separate from copyright licensing."
+    },
     "foodfacts": {
       "repository": "https://github.com/openfoodfacts/openfoodfacts-server",
       "revision": "dcab3892fab92227f21720970992e10024dadb71",
@@ -41,6 +49,14 @@
       "license_file": "assets/LICENSE",
       "attribution": "OurResearch. Official icon asset, with the upstream repository license notice preserved in each package. Trademark rights are separate from copyright licensing."
     },
+    "opengym": {
+      "repository": "https://github.com/DuarteSantos8/openGym",
+      "revision": "2d70e026effc6602f513555166a97443520f0572",
+      "license": "AGPL-3.0",
+      "license_url": "https://raw.githubusercontent.com/DuarteSantos8/openGym/2d70e026effc6602f513555166a97443520f0572/LICENSE",
+      "license_file": "assets/LICENSE",
+      "attribution": "openGym (Duarte Santos). Official app icon asset, with the upstream repository license notice preserved in each package. Trademark rights are separate from copyright licensing."
+    },
     "openlibrary": {
       "repository": "https://github.com/internetarchive/openlibrary",
       "revision": "3535e6478f5e8e7cb037b9e9d001d3105f1deb36",
@@ -64,6 +80,14 @@
       "license_url": "https://raw.githubusercontent.com/nwverse/persona/ba975136899181a7f79b771cfe0d508f088dbaf9/LICENSE",
       "license_file": "assets/LICENSE",
       "attribution": "Copyright (c) 2026 nwverse. Official Persona app icon for Persona-native tools and packs."
+    },
+    "raycast-podcasts": {
+      "repository": "https://github.com/raycast/extensions",
+      "revision": "f8fb22d44a8381675ebbe36fd9ec6ab87ddb4292",
+      "license": "MIT",
+      "license_url": "https://raw.githubusercontent.com/raycast/extensions/f8fb22d44a8381675ebbe36fd9ec6ab87ddb4292/LICENSE",
+      "license_file": "assets/LICENSE",
+      "attribution": "Copyright (c) 2021 Raycast. Exact podcast-directory artwork copied from the MIT-licensed extensions repository; Apple trademarks are separately owned."
     },
     "raycast": {
       "repository": "https://github.com/raycast/extensions",
@@ -117,6 +141,17 @@
       "height": 1024,
       "trademark_owner": "Persona / nwverse",
       "usage": "Official Persona app branding for this Persona-native tool or pack, not the logo of an external data provider."
+    },
+    "amap": {
+      "path": "assets/icon.png",
+      "source_id": "dify-official-plugins",
+      "source_url": "https://raw.githubusercontent.com/langgenius/dify-official-plugins/60804e30f6fa41fbe890c02c9849b0bdbe28d13a/tools/gaode/_assets/icon.svg",
+      "sha256": "cbae7e2014578ac7a1088533525088e37c5db92af424d4c2106a7a5957cb5c44",
+      "format": "png",
+      "width": 480,
+      "height": 480,
+      "trademark_owner": "AutoNavi Software Co., Ltd. (AMap)",
+      "usage": "Exact AMap app icon from Dify's official AMap tool plugin, used solely to identify the corresponding public service. The upstream SVG (SHA-256 91b821a809cd6b880d772a833261847fafbc2dea134d67a50465f31aac24f1bd) only wraps a 480x480 PNG in a data URI; that PNG was decoded and stored byte for byte, without rasterizing, resizing or changing the mark."
     },
     "anytype": {
       "path": "assets/icon.png",
@@ -300,6 +335,17 @@
       "trademark_owner": "Persona / nwverse",
       "usage": "Official Persona app branding for this Persona-native tool or pack, not the logo of an external data provider."
     },
+    "domains": {
+      "path": "assets/icon.png",
+      "source_id": "raycast",
+      "source_url": "https://raw.githubusercontent.com/raycast/extensions/dfa15bf5d53b5c97722f9d4df1b1e0af939a81ab/extensions/whois/assets/extension_icon.png",
+      "sha256": "993f365868b783b2260fcb1d8cfd68ad69f8016906b7ada4e3b7379cc0addca8",
+      "format": "png",
+      "width": 512,
+      "height": 512,
+      "trademark_owner": "Raycast extension contributors (artwork)",
+      "usage": "Exact MIT-licensed domain lookup artwork from the pinned extensions repository, used solely to identify this public RDAP integration. No registry endorsement is implied."
+    },
     "dockerhub": {
       "path": "assets/icon.png",
       "source_id": "raycast",
@@ -310,6 +356,17 @@
       "height": 512,
       "trademark_owner": "Docker, Inc.",
       "usage": "Exact Docker Hub extension icon copied unchanged from the pinned MIT-licensed Raycast extensions repository, used solely to identify Docker Hub. Docker trademarks remain separately owned; no affiliation or endorsement is implied."
+    },
+    "enkeep-memory": {
+      "path": "assets/icon.png",
+      "source_id": "persona",
+      "source_url": "https://raw.githubusercontent.com/nwverse/persona/ba975136899181a7f79b771cfe0d508f088dbaf9/apple/Persona/Resources/Assets.xcassets/AppIcon.appiconset/icon.png",
+      "sha256": "75e0d3f981f537db57000b7f6f1fa203f5dc0cf0305f6a7f1f1ec1b092fd031a",
+      "format": "png",
+      "width": 1024,
+      "height": 1024,
+      "trademark_owner": "Persona / nwverse",
+      "usage": "Official Persona app branding for this Persona-native tool or pack, not the logo of an external data provider."
     },
     "feishu-sidebar": {
       "path": "assets/icon.png",
@@ -322,7 +379,7 @@
       "trademark_owner": "Feishu / Lark",
       "usage": "Exact Raycast extension icon used to identify the corresponding public service."
     },
-    "lark-bridge": {
+    "larkx": {
       "path": "assets/icon.png",
       "source_id": "raycast",
       "source_url": "https://raw.githubusercontent.com/raycast/extensions/dfa15bf5d53b5c97722f9d4df1b1e0af939a81ab/extensions/lark/assets/logo.png",
@@ -710,6 +767,17 @@
       "trademark_owner": "OurResearch",
       "usage": "Official published service icon, used solely to identify this integration. The upstream PNG bytes are unchanged."
     },
+    "opengym": {
+      "path": "assets/icon.png",
+      "source_id": "opengym",
+      "source_url": "https://raw.githubusercontent.com/DuarteSantos8/openGym/2d70e026effc6602f513555166a97443520f0572/website/icon-512.png",
+      "sha256": "ea39aa27c660688cfe9d23035e24e9f7a3c5a0777e71998b74e4ee793edf2905",
+      "format": "png",
+      "width": 512,
+      "height": 512,
+      "trademark_owner": "openGym project",
+      "usage": "Official published app icon, used solely to identify this integration. The upstream PNG bytes are unchanged."
+    },
     "openlibrary": {
       "path": "assets/icon.png",
       "source_id": "openlibrary",
@@ -756,6 +824,17 @@
       "height": 512,
       "trademark_owner": "Paperless-ngx project",
       "usage": "Exact Raycast extension icon used to identify the corresponding public service."
+    },
+    "podcasts": {
+      "path": "assets/icon.png",
+      "source_id": "raycast-podcasts",
+      "source_url": "https://raw.githubusercontent.com/raycast/extensions/f8fb22d44a8381675ebbe36fd9ec6ab87ddb4292/extensions/podcasts/assets/icon.png",
+      "sha256": "c3fb75ef2bf36c9a74d55d1549fb94997239e035c172dcc88456f35c75b63cf3",
+      "format": "png",
+      "width": 512,
+      "height": 512,
+      "trademark_owner": "Apple Inc.; Raycast extension contributors (artwork)",
+      "usage": "Exact MIT-licensed extension artwork from the pinned source, used solely to identify the public podcast directory integration. Apple trademarks remain separately owned; no affiliation or endorsement is implied."
     },
     "pinboard": {
       "path": "assets/icon.png",
@@ -1081,6 +1160,17 @@
       "height": 512,
       "trademark_owner": "Zulip project / Kandra Labs, Inc.",
       "usage": "Official published service icon, used solely to identify this integration. The upstream PNG bytes are unchanged."
+    },
+    "token-usage": {
+      "path": "assets/icon.png",
+      "source_id": "persona",
+      "source_url": "https://raw.githubusercontent.com/nwverse/persona/ba975136899181a7f79b771cfe0d508f088dbaf9/apple/Persona/Resources/Assets.xcassets/AppIcon.appiconset/icon.png",
+      "sha256": "75e0d3f981f537db57000b7f6f1fa203f5dc0cf0305f6a7f1f1ec1b092fd031a",
+      "format": "png",
+      "width": 1024,
+      "height": 1024,
+      "trademark_owner": "Persona / nwverse",
+      "usage": "Official Persona app branding for this Persona-native tool or pack, not the logo of an external data provider."
     }
   }
 }

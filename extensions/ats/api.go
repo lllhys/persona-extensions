@@ -115,10 +115,17 @@ type taskView struct {
 
 func viewTask(t *Task, withPrompt bool) taskView {
 	v := taskView{
-		ID: t.ID, Title: t.Title, State: t.State, Verdict: t.Verdict, FailureReason: t.FailureReason, TodoID: t.TodoID(),
+		ID: t.ID, Title: t.Title, State: t.State, Verdict: t.Verdict, TodoID: t.TodoID(),
 		Priority: t.Priority, Difficulty: t.Difficulty, ModelTier: t.ModelTier, Machine: t.Machine,
 		Permission: t.PermissionProfile, Repo: t.Workspace.Repo, Ref: t.Workspace.BaseSHA,
-		AttemptNo: t.AttemptNo, RetriesLeft: t.RetriesLeft, NotBefore: t.NotBefore, SubmittedAt: t.SubmittedAt, FinishedAt: t.FinishedAt,
+		AttemptNo: t.AttemptNo, RetriesLeft: t.RetriesLeft, SubmittedAt: t.SubmittedAt, FinishedAt: t.FinishedAt,
+	}
+	// How the previous attempt failed says nothing about the one running now.
+	if t.State == StateFailed || t.State == StateQueued {
+		v.FailureReason = t.FailureReason
+	}
+	if t.State == StateQueued {
+		v.NotBefore = t.NotBefore
 	}
 	if t.Acceptance != nil {
 		v.Acceptance = t.Acceptance.Command

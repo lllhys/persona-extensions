@@ -1,0 +1,36 @@
+{
+  "manifest_version": 1,
+  "id": "amap",
+  "name": "高德地图",
+  "version": "0.1.0",
+  "icon": "assets/icon.png",
+  "description": "让助手用高德地图查中国境内的地点和出行：按名字搜地点，看附近有什么（距离、电话、营业时间、评分、人均），地址和坐标互查，算驾车、步行、骑行、电动车和公交路线（距离、时长、过路费、打车约多少钱、坐哪条线），查中国城市的实况天气和未来几天预报。用你自己在高德开放平台申请的「Web服务」Key，加密存在 hub；保存时先试一次。搜索词、地址和坐标（包括助手转交的你当前的位置）会从 hub 发给高德。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/docs/extensions/amap.md",
+  "tags": ["地图", "高德", "路线", "周边", "导航", "天气", "出行"],
+  "engines": {"persona": ">=202611070439", "extension_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/amap-linux-amd64",
+      "linux-arm64": "bin/amap-linux-arm64",
+      "darwin-arm64": "bin/amap-darwin-arm64",
+      "darwin-amd64": "bin/amap-darwin-amd64"
+    }
+  },
+  "contributes": {
+    "connectors": [{
+      "id": "amap", "name": "高德地图", "capabilities": ["status", "tools"],
+      "hosts": ["restapi.amap.com"]
+    }],
+    "skills": [{"id": "amap", "dir": "skills/amap"}]
+  },
+  "settings_check": true,
+  "secrets": [{
+    "name": "api_key",
+    "title": "高德 Web 服务 Key",
+    "description": "在高德开放平台（lbs.amap.com）的 控制台 › 应用管理 › 我的应用 里创建应用，再「添加 Key」，服务平台选「Web服务」，复制那串 32 位的 Key。不要开「数字签名」；开了 IP 白名单的话，要把 hub 这台机器的公网 IP 加进去。保存前会用它查一次地址试一试；只发往 restapi.amap.com，不会出现在日志和助手看到的内容里",
+    "required": true,
+    "hint": "last4"
+  }],
+  "permissions": {"network": ["restapi.amap.com"]}
+}

@@ -16,7 +16,8 @@ func TestParseForecast(t *testing.T) {
 	if f.Timezone != "Asia/Shanghai" {
 		t.Fatalf("timezone %q", f.Timezone)
 	}
-	if f.Current.Temperature <= 0 || f.Current.Humidity <= 0 || f.Current.WeatherCode < 0 || f.Current.WindSpeed <= 0 {
+	if !f.Current.Temperature.OK || f.Current.Temperature.Value <= 0 || !f.Current.Humidity.OK || f.Current.Humidity.Value <= 0 ||
+		!f.Current.WeatherCode.OK || f.Current.WeatherCode.Value < 0 || !f.Current.WindSpeed.OK || f.Current.WindSpeed.Value <= 0 {
 		t.Fatalf("current %+v", f.Current)
 	}
 	if len(f.Hourly.Time) == 0 || len(f.Hourly.Time) != len(f.Hourly.Temp) {

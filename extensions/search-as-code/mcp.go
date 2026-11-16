@@ -13,9 +13,10 @@ import (
 )
 
 // `search-as-code mcp` speaks the Model Context Protocol over stdio (JSON-RPC 2.0, one JSON message per line).
-// Read-only tools (`sac_execute`, `sac_session_search`, `sac_recipes_list`) are allowed by the manifest;
-// write tools (`sac_recipe_upsert`, `sac_recipe_delete`, `sac_session_restore`) follow the conversation's
-// permission policy.
+// Only `sac_recipes_list` is allowed by the manifest. The searches (`sac_execute`, `sac_session_search`) read
+// session history of every project on the computer running the assistant, so they follow the conversation's
+// permission policy like the write tools (`sac_recipe_upsert`, `sac_recipe_delete`, `sac_session_restore`) (#519);
+// other computers are searched through the assistant's gated `sac` command (api.go).
 
 const mcpProtocol = "2025-06-18"
 

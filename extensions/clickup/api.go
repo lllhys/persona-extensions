@@ -146,7 +146,7 @@ func (c *client) tasks(ctx context.Context, teamID string, userID int64, page in
 	if userID <= 0 || page < 0 {
 		return taskPage{}, errors.New("invalid user or page")
 	}
-	q := url.Values{"assignees[]": {strconv.FormatInt(userID, 10)}, "page": {strconv.Itoa(page)}, "order_by": {"updated"}, "reverse": {"true"}}
+	q := url.Values{"assignees[]": {strconv.FormatInt(userID, 10)}, "page": {strconv.Itoa(page)}, "order_by": {"updated"}, "reverse": {"true"}, "subtasks": {"true"}}
 	var out taskPage
 	err := c.do(ctx, http.MethodGet, "/team/"+url.PathEscape(teamID)+"/task", q, nil, &out)
 	return out, err

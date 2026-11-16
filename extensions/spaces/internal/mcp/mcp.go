@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/nwverse/persona-extensions/extensions/spaces/internal/templates"
@@ -53,13 +54,13 @@ var table = []Tool{
 	{Name: "schema", Read: true, Input: schemaInput, Run: runSchema,
 		About: "读取空间结构：类型、属性、生命周期和视图。不填空间时（有多个空间或还没有空间）列出所有空间、模板和可用词汇。"},
 	{Name: "query", Read: true, Input: queryInput, Run: runQuery,
-		About: "查询记录：按类型、文字、条件、排序、分组和汇总读取。带记录编号时只读这一条记录。"},
+		About: "查询记录：按类型、文字、条件、排序、分组和汇总读取。带记录编号时只读这一条记录。brief 为 true 时每条记录只列 id、type、title、status 和 values，适合列清单；关联属性的条件可以写记录标题。"},
 	{Name: "space_write", Input: spaceWriteInput, Run: runSpaceWrite,
 		About: "新建或修改空间。可以从模板新建（可带示例记录），也可以修改名称、图标和简介。"},
 	{Name: "type_write", Input: typeWriteInput, Run: runTypeWrite,
-		About: "新增或整体替换一个类型的结构（生命周期、属性、卡片和视图）。替换时已有记录迁移到新结构，有记录不符合时整体拒绝。"},
+		About: "新增或整体替换一个类型的结构（生命周期、属性、卡片和视图）；merge 为 true 时只改给出的部分：属性按 key 合并（同 key 原位替换，新 key 追加在后），其他字段给出才替换。已有记录迁移到新结构，有记录不符合时整体拒绝。"},
 	{Name: "entity_write", Input: entityWriteInput, Run: runEntityWrite,
-		About: "新建或修改记录。修改时属性合并写入，值为 null 时清除该属性；状态只能按生命周期走一步。"},
+		About: "新建或修改记录。修改时属性合并写入，值为 null 时清除该属性；状态只能按生命周期走一步。关联属性可以写目标记录的编号或标题。用 entities 一次写多条（最多 50 条），全部成功才保存，按顺序执行，后面的记录可以按标题关联前面新建的记录。"},
 	{Name: "entity_derive", Input: deriveInput, Run: runDerive,
 		About: "从一条记录衍生出另一类型的新记录，结构兼容的属性会带过去；源记录不变。"},
 	{Name: "delete", Input: deleteInput, Run: runDelete,
@@ -325,7 +326,7 @@ func str(desc string) map[string]any {
 
 // spaceProp is the space parameter that most tools take.
 func spaceProp() map[string]any {
-	return str("空间 id；只有一个空间时可以不填")
+	return str("空间 id 或名称；只有一个空间时可以不填")
 }
 
 // templateKeys are the keys of the templates, in their order.
@@ -457,7 +458,7 @@ func runSchema(b *kernel.Base, _ time.Time, raw json.RawMessage) (any, error) {
 		}
 		return out, nil
 	}
-	sp, err := b.Space(a.Space)
+	sp, err := spaceOf(b, a.Space)
 	if err != nil {
 		return nil, err
 	}
@@ -470,10 +471,11 @@ func runSchema(b *kernel.Base, _ time.Time, raw json.RawMessage) (any, error) {
 
 // ---- query ----
 
-// queryArgs are the arguments of query: a space, a record id, or the query parts.
+// queryArgs are the arguments of query: a space, a record id, or the query parts, and whether to answer briefly.
 type queryArgs struct {
 	Space string `json:"space"`
 	ID    string `json:"id"`
+	Brief bool   `json:"brief"`
 	kernel.Query
 }
 
@@ -520,11 +522,49 @@ type queryOut struct {
 	Entities []entityOut   `json:"entities"`
 }
 
+// briefOut is one record in the brief form: what a list needs, without moves, links or timestamps.
+type briefOut struct {
+	ID     string         `json:"id"`
+	Type   string         `json:"type"`
+	Title  string         `json:"title"`
+	Status string         `json:"status,omitempty"`
+	Values map[string]any `json:"values,omitempty"`
+}
+
+// briefQueryOut is the answer to a brief query: the same totals, aggregates and groups, with brief records.
+type briefQueryOut struct {
+	Total    int           `json:"total"`
+	Aggs     []kernel.Cell `json:"aggs,omitempty"`
+	Groups   []groupOut    `json:"groups"`
+	Entities []briefOut    `json:"entities"`
+}
+
+// briefOf is the brief form of an answered record.
+func briefOf(e entityOut) briefOut {
+	return briefOut{ID: e.ID, Type: e.Type, Title: e.Title, Status: e.Status, Values: e.Values}
+}
+
+// briefly is the answer to a query in the brief form when asked for, else the answer as it is.
+func briefly(q queryOut, brief bool) any {
+	if !brief {
+		return q
+	}
+	out := briefQueryOut{Total: q.Total, Aggs: q.Aggs, Groups: q.Groups, Entities: make([]briefOut, 0, len(q.Entities))}
+	for _, e := range q.Entities {
+		out.Entities = append(out.Entities, briefOf(e))
+	}
+	return out
+}
+
 func queryInput() map[string]any {
 	s := kernel.QuerySchema()
 	props := s["properties"].(map[string]any)
 	props["space"] = spaceProp()
 	props["id"] = str("只看这一条记录（不需要 type）")
+	props["brief"] = map[string]any{"type": "boolean",
+		"description": "只要每条记录的 id、type、title、status 和 values（不要 moves、out、in 和时间），适合列清单；默认 false"}
+	props["type"].(map[string]any)["description"] = "类型 key 或名称；不填则跨类型，只能用内置字段"
+	props["where"].(map[string]any)["description"] = "筛选条件，全部满足；关联属性的值可以写记录编号或标题"
 	return s
 }
 
@@ -536,8 +576,19 @@ func runQuery(b *kernel.Base, _ time.Time, raw json.RawMessage) (any, error) {
 	if a.ID != "" {
 		return queryOne(b, a)
 	}
-	sp, err := b.Space(a.Space)
+	sp, err := spaceOf(b, a.Space)
 	if err != nil {
+		return nil, err
+	}
+	var t *kernel.Type
+	if a.Type != "" {
+		t, err = typeIn(sp, a.Type)
+		if err != nil {
+			return nil, err
+		}
+		a.Type = t.Key
+	}
+	if a.Where, err = relatedConds(sp, t, a.Where); err != nil {
 		return nil, err
 	}
 	w := kernel.Open(sp)
@@ -556,7 +607,7 @@ func runQuery(b *kernel.Base, _ time.Time, raw json.RawMessage) (any, error) {
 			}
 		}
 	}
-	return out, nil
+	return briefly(out, a.Brief), nil
 }
 
 // queryOne answers a query for one record. The other query parts are not used.
@@ -566,7 +617,7 @@ func queryOne(b *kernel.Base, a queryArgs) (any, error) {
 		return nil, err
 	}
 	if a.Space != "" {
-		want, err := b.Space(a.Space)
+		want, err := spaceOf(b, a.Space)
 		if err != nil {
 			return nil, err
 		}
@@ -574,11 +625,11 @@ func queryOne(b *kernel.Base, a queryArgs) (any, error) {
 			return nil, fmt.Errorf("记录「%s」不在空间「%s」里", a.ID, want.ID)
 		}
 	}
-	return queryOut{
+	return briefly(queryOut{
 		Total:    1,
 		Groups:   []groupOut{{Count: 1}},
 		Entities: []entityOut{entityOf(sp, kernel.Open(sp), e)},
-	}, nil
+	}, a.Brief), nil
 }
 
 // entityOf is one record with its phase, the moves it may make, its values (rollups included) and its links.
@@ -670,15 +721,38 @@ func runSpaceWrite(b *kernel.Base, now time.Time, raw json.RawMessage) (any, err
 
 // ---- type_write ----
 
+// typeWriteArgs are the arguments of type_write: a space, a type, and whether the type is laid over the existing one.
 type typeWriteArgs struct {
 	Space string       `json:"space"`
 	Type  *kernel.Type `json:"type"`
+	Merge bool         `json:"merge"`
+}
+
+// typeMembers are the members of the type argument as they were sent, so that a merge can tell a field that is
+// present (even empty) from one that is missing.
+type typeMembers struct {
+	Type map[string]json.RawMessage `json:"type"`
+}
+
+// mergeFields are the fields of a type, by JSON name, that a merge replaces when the arguments give them. The key names
+// the type and props are merged by key, so neither is here; TestMergeFieldsCoverType keeps the list complete.
+var mergeFields = map[string]func(dst, src *kernel.Type){
+	"name":  func(dst, src *kernel.Type) { dst.Name = src.Name },
+	"icon":  func(dst, src *kernel.Type) { dst.Icon = src.Icon },
+	"flow":  func(dst, src *kernel.Type) { dst.Flow = src.Flow },
+	"card":  func(dst, src *kernel.Type) { dst.Card = src.Card },
+	"views": func(dst, src *kernel.Type) { dst.Views = src.Views },
 }
 
 func typeWriteInput() map[string]any {
+	ts := kernel.TypeSchema()
+	ts["required"] = []string{"key"}
+	ts["description"] = "类型结构。新建或整体替换时需要 key 和 name；merge 为 true 时只需 key 和要改的部分"
 	return object(map[string]any{
 		"space": spaceProp(),
-		"type":  kernel.TypeSchema(),
+		"type":  ts,
+		"merge": map[string]any{"type": "boolean",
+			"description": "true 时把给出的部分合并到同 key 的已有类型上：props 按 key 合并，其他字段给出才替换（给空数组可以清空）；默认 false 为整体替换"},
 	}, "type")
 }
 
@@ -687,46 +761,84 @@ func runTypeWrite(b *kernel.Base, now time.Time, raw json.RawMessage) (any, erro
 	if err := decode(raw, &a); err != nil {
 		return nil, err
 	}
-	sp, err := b.Space(a.Space)
+	sp, err := spaceOf(b, a.Space)
 	if err != nil {
 		return nil, err
 	}
 	if a.Type == nil {
 		return nil, errors.New("需要一个类型的结构")
 	}
-	if err := sp.PutType(*a.Type, now); err != nil {
+	t := *a.Type
+	if old := typeByKey(sp, t.Key); a.Merge && old != nil {
+		var m typeMembers
+		_ = json.Unmarshal(raw, &m) // decode has accepted raw, so it is an object with an object type
+		t = mergeType(old, t, m.Type)
+	}
+	if err := sp.PutType(t, now); err != nil {
 		return nil, err
 	}
-	return typeOf(sp, typeByKey(sp, a.Type.Key)), nil
+	return typeOf(sp, typeByKey(sp, t.Key)), nil
+}
+
+// mergeType lays a type over the existing one: each field in mergeFields that is present replaces the old value, and
+// props are merged by key (a known key is replaced in place, a new key is appended). The old type is not changed.
+func mergeType(old *kernel.Type, in kernel.Type, present map[string]json.RawMessage) kernel.Type {
+	out := *old
+	out.Props = slices.Clone(old.Props)
+	for name, set := range mergeFields {
+		if _, ok := present[name]; ok {
+			set(&out, &in)
+		}
+	}
+	for _, p := range in.Props {
+		if i := slices.IndexFunc(out.Props, func(q kernel.Prop) bool { return q.Key == p.Key }); i >= 0 {
+			out.Props[i] = p
+		} else {
+			out.Props = append(out.Props, p)
+		}
+	}
+	return out
 }
 
 // ---- entity_write ----
 
-// entityWriteArgs are the arguments of entity_write: a space and a kernel entity input.
+// maxBatch is the most records one entity_write call may write.
+const maxBatch = 50
+
+// entityWriteArgs are the arguments of entity_write: a space and either one kernel entity input or a batch of them.
 type entityWriteArgs struct {
 	Space string `json:"space"`
 	kernel.EntityInput
+	Entities []kernel.EntityInput `json:"entities"`
+}
+
+// batchOut is the answer to a batch write: each written record in the brief form, in the order of the batch.
+type batchOut struct {
+	Entities []briefOut `json:"entities"`
+}
+
+// singleFields are the members of entity_write that describe one record; a batch gives them per item instead.
+var singleFields = []string{"id", "type", "title", "status", "values"}
+
+// entityProps are the schema properties of one record to write, for a single write and for a batch item.
+func entityProps() map[string]any {
+	return map[string]any{
+		"id":     str("记录编号：填写则修改这条记录，不填则新建"),
+		"type":   str("类型 key 或名称（只用于新建）；空间只有一个类型时可以不填"),
+		"title":  map[string]any{"type": "string", "maxLength": kernel.MaxTitle, "description": "标题"},
+		"status": str("状态名：生命周期中的一个阶段"),
+		"values": map[string]any{"type": "object", "description": "属性 key → 值，合并写入，null 清除；格式见 schema 的 values_schema；" +
+			"关联属性可以写目标记录的编号或标题"},
+	}
 }
 
 func entityWriteInput() map[string]any {
-	return object(map[string]any{
-		"space":  spaceProp(),
-		"id":     str("记录编号：填写则修改这条记录，不填则新建"),
-		"type":   str("类型标识（只用于新建）"),
-		"title":  map[string]any{"type": "string", "maxLength": kernel.MaxTitle, "description": "标题"},
-		"status": str("状态名：生命周期中的一个阶段"),
-		"values": map[string]any{"type": "object", "description": "属性 key → 值，合并写入，null 清除；格式见 schema 的 values_schema"},
-	})
-}
-
-// spaceFor resolves the space of a record: the one that holds the record when only its id is given, else the named
-// one (or the only one).
-func spaceFor(b *kernel.Base, space, id string) (*kernel.Space, error) {
-	if space == "" && id != "" {
-		sp, _, err := b.Find(id)
-		return sp, err
-	}
-	return b.Space(space)
+	props := entityProps()
+	props["space"] = spaceProp()
+	props["entities"] = map[string]any{"type": "array", "minItems": 1, "maxItems": maxBatch, "items": object(entityProps()),
+		"description": "批量写入，每项的字段和单条写入相同；不能和顶层的 id、type、title、status、values 一起用。" +
+			"按顺序执行，有一条失败则全部不保存；一次只写一个空间：给了 space 就是它，没给时是要修改的记录所在的空间，新建的记录也建在那里；返回每条记录的 id、type、title、status 和 values"}
+	return object(props)
 }
 
 func runEntityWrite(b *kernel.Base, now time.Time, raw json.RawMessage) (any, error) {
@@ -734,15 +846,149 @@ func runEntityWrite(b *kernel.Base, now time.Time, raw json.RawMessage) (any, er
 	if err := decode(raw, &a); err != nil {
 		return nil, err
 	}
-	sp, err := spaceFor(b, a.Space, a.ID)
+	has := members(raw)
+	if !has["entities"] {
+		sp, e, err := writeEntity(b, a.Space, a.EntityInput, now)
+		if err != nil {
+			return nil, err
+		}
+		return entityOf(sp, kernel.Open(sp), e), nil
+	}
+	if slices.ContainsFunc(singleFields, func(k string) bool { return has[k] }) {
+		return nil, errors.New("entities 不能和顶层的 id、type、title、status、values 一起用；每条记录的字段写在 entities 的各项里")
+	}
+	if len(a.Entities) == 0 || len(a.Entities) > maxBatch {
+		return nil, fmt.Errorf("entities 需要 1 到 %d 条记录", maxBatch)
+	}
+	space, err := batchSpace(b, a.Space, a.Entities)
 	if err != nil {
 		return nil, err
 	}
-	e, err := sp.PutEntity(b, a.EntityInput, now)
-	if err != nil {
-		return nil, err
+	ids := make([]string, 0, len(a.Entities))
+	for i, in := range a.Entities {
+		_, e, err := writeEntity(b, space, in, now)
+		if err != nil {
+			return nil, fmt.Errorf("第 %d 条%s：%w", i+1, itemLabel(b, in), err)
+		}
+		ids = append(ids, e.ID)
 	}
-	return entityOf(sp, kernel.Open(sp), e), nil
+	out := batchOut{Entities: make([]briefOut, 0, len(ids))}
+	worlds := map[*kernel.Space]*kernel.World{}
+	for _, id := range ids {
+		sp, e, err := b.Find(id)
+		if err != nil {
+			return nil, err // cannot happen: the record was written just now
+		}
+		if worlds[sp] == nil {
+			worlds[sp] = kernel.Open(sp)
+		}
+		out.Entities = append(out.Entities, briefOf(entityOf(sp, worlds[sp], e)))
+	}
+	return out, nil
+}
+
+// batchSpace is the one space a batch writes to, as writeEntity takes it. With a space given it is that space, and an
+// item that changes a record of another space is refused. Without one it is the space of the records the batch
+// changes, so the items that create land beside them; records of several spaces are refused. A batch that only
+// creates, or whose ids are unknown, answers "" and each item is resolved as a single write is.
+func batchSpace(b *kernel.Base, space string, items []kernel.EntityInput) (string, error) {
+	var given *kernel.Space
+	if space != "" {
+		sp, err := spaceOf(b, space)
+		if err != nil {
+			return "", err
+		}
+		given = sp
+	}
+	var found []*kernel.Space
+	for i, in := range items {
+		if in.ID == "" {
+			continue
+		}
+		sp, _, err := b.Find(in.ID)
+		if err != nil {
+			continue // the item's own write refuses it, with its position
+		}
+		if given != nil && sp != given {
+			return "", fmt.Errorf("第 %d 条%s：记录在空间「%s」，不在「%s」；一次批量只写一个空间", i+1, itemLabel(b, in), sp.Name, given.Name)
+		}
+		if !slices.Contains(found, sp) {
+			found = append(found, sp)
+		}
+	}
+	switch {
+	case given != nil:
+		return given.ID, nil
+	case len(found) == 1:
+		return found[0].ID, nil
+	case len(found) > 1:
+		return "", fmt.Errorf("entities 里要修改的记录分属 %d 个空间（%s）；一次批量只写一个空间，请分开写", len(found), spaceList(found))
+	}
+	return "", nil
+}
+
+// members are the names of the members of a JSON object; none when raw is not an object.
+func members(raw json.RawMessage) map[string]bool {
+	var m map[string]json.RawMessage
+	_ = json.Unmarshal(raw, &m) // anything that is not an object has no members
+	out := make(map[string]bool, len(m))
+	for k := range m {
+		out[k] = true
+	}
+	return out
+}
+
+// itemLabel names a batch item in an error: its title, else the title of the record it changes, else nothing.
+func itemLabel(b *kernel.Base, in kernel.EntityInput) string {
+	if in.Title != nil && strings.TrimSpace(*in.Title) != "" {
+		return "「" + strings.TrimSpace(*in.Title) + "」"
+	}
+	if in.ID != "" {
+		if _, e, err := b.Find(in.ID); err == nil {
+			return "「" + e.Title + "」"
+		}
+		return "（" + in.ID + "）"
+	}
+	return ""
+}
+
+// writeEntity writes one record: the space and the type resolved by id or name, the choices checked and the relation
+// targets given by title resolved to ids, then the kernel's PutEntity.
+func writeEntity(b *kernel.Base, space string, in kernel.EntityInput, now time.Time) (*kernel.Space, *kernel.Entity, error) {
+	sp, err := spaceFor(b, space, in.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	var t *kernel.Type
+	if in.ID == "" {
+		if t, err = newType(sp, in.Type); err != nil {
+			return nil, nil, err
+		}
+		in.Type = t.Key
+	} else {
+		if in.Type != "" {
+			// A type given by its name is its key; anything else is left for the kernel to refuse.
+			if rt, err := typeIn(sp, in.Type); err == nil {
+				in.Type = rt.Key
+			}
+		}
+		if i := slices.IndexFunc(sp.Entities, func(e *kernel.Entity) bool { return e != nil && e.ID == in.ID }); i >= 0 {
+			t = typeByKey(sp, sp.Entities[i].Type)
+		}
+	}
+	if t != nil {
+		if err := checkChoices(t, in); err != nil {
+			return nil, nil, err
+		}
+		if in.Values, err = relatedValues(sp, t, in.Values); err != nil {
+			return nil, nil, err
+		}
+	}
+	e, err := sp.PutEntity(b, in, now)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sp, e, nil
 }
 
 // ---- entity_derive ----
@@ -762,7 +1008,7 @@ type deriveOut struct {
 func deriveInput() map[string]any {
 	return object(map[string]any{
 		"id":    str("源记录的编号"),
-		"type":  str("新记录的类型标识（同一空间）"),
+		"type":  str("新记录的类型 key 或名称（同一空间）"),
 		"title": map[string]any{"type": "string", "maxLength": kernel.MaxTitle, "description": "新记录的标题；不填则沿用源记录的标题"},
 	}, "id", "type")
 }
@@ -776,7 +1022,11 @@ func runDerive(b *kernel.Base, now time.Time, raw json.RawMessage) (any, error) 
 	if err != nil {
 		return nil, err
 	}
-	e, err := sp.Derive(b, a.ID, a.Type, a.Title, now)
+	t, err := typeIn(sp, a.Type)
+	if err != nil {
+		return nil, err
+	}
+	e, err := sp.Derive(b, a.ID, t.Key, a.Title, now)
 	if err != nil {
 		return nil, err
 	}
@@ -818,8 +1068,8 @@ const deleteRule = "只能选一种：只填 entity 删除一条记录；只填 
 func deleteInput() map[string]any {
 	s := object(map[string]any{
 		"entity": str("要删除的记录编号"),
-		"space":  str("空间 id；与 type 一起使用时删除这个类型，单独使用时删除整个空间"),
-		"type":   str("类型标识；与 space 一起使用"),
+		"space":  str("空间 id 或名称；与 type 一起使用时删除这个类型，单独使用时删除整个空间"),
+		"type":   str("类型 key 或名称；与 space 一起使用"),
 	})
 	s["description"] = deleteRule
 	return s
@@ -854,17 +1104,21 @@ func runDelete(b *kernel.Base, _ time.Time, raw json.RawMessage) (any, error) {
 	case a.Type != nil && *a.Type == "":
 		return nil, errors.New("类型标识不能是空字符串")
 	case a.Type != nil:
-		sp, err := b.Space(*a.Space)
+		sp, err := spaceOf(b, *a.Space)
 		if err != nil {
 			return nil, err
 		}
-		n := countOf(sp, *a.Type)
-		if err := sp.DropType(*a.Type); err != nil {
+		t, err := typeIn(sp, *a.Type)
+		if err != nil {
 			return nil, err
 		}
-		return deleteOut{Deleted: "type", ID: sp.ID, Type: *a.Type, Entities: n}, nil
+		n := countOf(sp, t.Key)
+		if err := sp.DropType(t.Key); err != nil {
+			return nil, err
+		}
+		return deleteOut{Deleted: "type", ID: sp.ID, Type: t.Key, Entities: n}, nil
 	default:
-		sp, err := b.Space(*a.Space)
+		sp, err := spaceOf(b, *a.Space)
 		if err != nil {
 			return nil, err
 		}

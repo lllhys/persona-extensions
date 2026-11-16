@@ -1,0 +1,1 @@
+{"type":"object","additionalProperties":false,"required":["items"],"properties":{"items":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["i","text","changes"],"properties":{"i":{"type":"integer"},"text":{"type":"string"},"changes":{"type":"string"}}}}}}

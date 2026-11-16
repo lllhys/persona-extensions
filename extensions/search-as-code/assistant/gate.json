@@ -1,0 +1,24 @@
+{
+  "command": "sac",
+  "script": "sac-remote/scripts/sac.sh",
+  "title": "代码化搜索",
+  "env": ["SAC_BASE", "SAC_TOKEN"],
+  "base_env": "SAC_BASE",
+  "secret": ["SAC_TOKEN"],
+  "rules": [
+    {"method": "GET", "path": "/machines", "action": "allow"},
+    {"method": "GET", "path": "/projects/*", "action": "allow"},
+    {"method": "GET", "path": "/recipes", "action": "allow"},
+    {"method": "GET", "path": "/search/*/*/*", "action": "confirm"},
+    {"method": "POST", "path": "/restore/*/*", "action": "confirm"},
+    {"method": "*", "path": "**", "action": "deny"}
+  ],
+  "actions": [
+    {"pattern": "^GET /search/", "what": "读取 Agent 会话历史（其他电脑或其他项目）"},
+    {"pattern": "^POST /restore/", "what": "把已上云的会话恢复到它所在电脑的原路径"}
+  ],
+  "tool": {
+    "name": "sac",
+    "description": "跨电脑、跨项目检索 Coding Agent 会话历史：GET /machines 列电脑与 key，GET /projects/{machine} 列项目与 key，GET /search/{machine}/{project}/{scope}?q=… 检索（首次读某台电脑 / 某个项目要用户批准），POST /restore/{machine}/{entry_id} 恢复已上云会话（每次都要用户确认）。"
+  }
+}

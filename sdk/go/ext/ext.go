@@ -355,14 +355,15 @@ func Contribution(params json.RawMessage) string {
 	return t.Contribution
 }
 
-// answeredManifest is the manifest as the program answers it to a hub: without "tags", the market's (nwverse/persona
-// #2424), which hubs from before them refuse as an unknown field. A manifest that is not an object goes out as it is.
+// answeredManifest removes source-only tags and icon metadata for strict older hubs.
+// A manifest that is not an object goes out as it is.
 func answeredManifest(m json.RawMessage) json.RawMessage {
 	var fields map[string]json.RawMessage
-	if json.Unmarshal(m, &fields) != nil || fields["tags"] == nil {
+	if json.Unmarshal(m, &fields) != nil || fields["tags"] == nil && fields["icon"] == nil {
 		return m
 	}
 	delete(fields, "tags")
+	delete(fields, "icon")
 	out, err := json.Marshal(fields)
 	if err != nil {
 		return m

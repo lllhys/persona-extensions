@@ -1,0 +1,56 @@
+{
+ "status": "1",
+ "info": "OK",
+ "infocode": "10000",
+ "count": "1",
+ "route": {
+  "origin": "116.403847,39.906834",
+  "destination": "116.397026,39.918058",
+  "paths": [
+   {
+    "distance": "2895",
+    "cost": {
+     "duration": "2316"
+    },
+    "steps": [
+     {
+      "instruction": "向西步行26米左转",
+      "orientation": "西",
+      "road_name": "",
+      "step_distance": "26",
+      "cost": {
+       "duration": "21"
+      }
+     },
+     {
+      "instruction": "向南步行77米右转",
+      "orientation": "南",
+      "road_name": "",
+      "step_distance": "77",
+      "cost": {
+       "duration": "62"
+      }
+     },
+     {
+      "instruction": "向西步行33米右转",
+      "orientation": "西",
+      "road_name": "",
+      "step_distance": "33",
+      "cost": {
+       "duration": "26"
+      }
+     },
+     {
+      "instruction": "向北步行148米左转",
+      "orientation": "北",
+      "road_name": "",
+      "step_distance": "148",
+      "cost": {
+       "duration": "118"
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

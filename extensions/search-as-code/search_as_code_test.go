@@ -50,14 +50,15 @@ func TestManifest(t *testing.T) {
 	if err := json.Unmarshal(manifest, &m); err != nil || len(m.Contributes.MCPServers) != 1 {
 		t.Fatalf("expected 1 mcp server: %v", err)
 	}
-	var readOnly []string
-	for _, tl := range tools {
-		if tl.readOnly {
-			readOnly = append(readOnly, tl.name)
-		}
+	// Searches read other projects' history: only listing recipes runs without asking (#519).
+	allow := m.Contributes.MCPServers[0].Allow
+	if !slices.Equal(allow, []string{"sac_recipes_list"}) {
+		t.Fatalf("allow %v, want only sac_recipes_list", allow)
 	}
-	if allow := m.Contributes.MCPServers[0].Allow; !slices.Equal(allow, readOnly) {
-		t.Fatalf("allow %v, want read-only tools %v", allow, readOnly)
+	for _, name := range []string{"sac_execute", "sac_session_search"} {
+		if slices.Contains(allow, name) || !hasTool(name) {
+			t.Fatalf("%s must exist and not be pre-allowed", name)
+		}
 	}
 	if !strings.Contains(usage, "mcp") {
 		t.Fatal("--help must mention mcp")

@@ -12,7 +12,7 @@ Each extension is rooted at `extensions/<id>/` and has one manifest, `persona-ex
 | `engines` | Host/protocol compatibility requirements. `plugin_protocol` remains a compatibility identifier. |
 | `runtime.command` | Platform-to-binary map; package paths are `bin/<id>-<platform>`. |
 | `contributes` | Connectors, app views, assistant skills and other contributions supported by the host. |
-| `configuration` | JSON Schema for the app's settings form, in the subset supported by Persona. These titles and descriptions are runtime UI text. |
+| `configuration` | JSON Schema for the app's settings form, in the subset supported by Persona: types `string`, `integer`, `number`, `boolean`, `array` (of strings only) and `object` (at the first level only, holding the others), with each type's own keywords. A hub refuses a manifest outside it and drops the extension from its catalog, so `scripts/manifest.py check` refuses it here first ([scripts/config_form.py](../scripts/config_form.py)). These titles and descriptions are runtime UI text. |
 | `permissions` | Requested access, such as network hosts; the hub presents permissions during installation. |
 | `replaces` | Optional single former extension ID, declared only by the author and projected onto the signed market entry. It is never a runtime manifest field; see [Identity changes](#identity-changes). |
 | `icon` | Source-only relative PNG/SVG path under `assets/`, with a square official icon and documented source/license. The signed entry exposes an immutable `icon_url`; see [Icons and download ranking](releases.md#icons-and-download-ranking). |

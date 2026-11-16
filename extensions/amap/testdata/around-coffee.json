@@ -1,0 +1,74 @@
+{
+ "count": "3",
+ "infocode": "10000",
+ "pois": [
+  {
+   "address": "王府井大街与霞公府街交叉口西北80米",
+   "business": {
+    "keytag": "咖啡",
+    "rating": "3.0",
+    "business_area": "王府井",
+    "rectag": "咖啡"
+   },
+   "distance": "674",
+   "pcode": "110000",
+   "adcode": "110101",
+   "pname": "北京市",
+   "cityname": "北京市",
+   "type": "餐饮服务;咖啡厅;咖啡厅",
+   "typecode": "050500",
+   "adname": "东城区",
+   "citycode": "010",
+   "name": "书局coffee(王府井喜悦购物中心店)",
+   "location": "116.410675,39.909875"
+  },
+  {
+   "address": "东长安街与广场东侧路交叉口东南200米",
+   "business": {
+    "opentime_today": "09:00-16:30",
+    "cost": "59.00",
+    "keytag": "咖啡",
+    "rating": "3.9",
+    "rectag": "咖啡",
+    "opentime_week": "周一至周日 09:00-16:30"
+   },
+   "distance": "218",
+   "pcode": "110000",
+   "adcode": "110101",
+   "pname": "北京市",
+   "cityname": "北京市",
+   "type": "餐饮服务;餐饮相关场所;餐饮相关",
+   "typecode": "050000",
+   "adname": "东城区",
+   "citycode": "010",
+   "name": "国家博物馆咖啡厅",
+   "location": "116.401325,39.906525"
+  },
+  {
+   "address": "东长安街33号北京饭店A座1楼(近王府井大街)",
+   "business": {
+    "opentime_today": "06:30-24:00",
+    "cost": "107.00",
+    "keytag": "咖啡",
+    "rating": "3.9",
+    "business_area": "王府井",
+    "tel": "010-10000004",
+    "rectag": "咖啡",
+    "opentime_week": "周一至周日 06:30-24:00"
+   },
+   "distance": "615",
+   "pcode": "110000",
+   "adcode": "110101",
+   "pname": "北京市",
+   "cityname": "北京市",
+   "type": "餐饮服务;咖啡厅;咖啡厅",
+   "typecode": "050500",
+   "adname": "东城区",
+   "citycode": "010",
+   "name": "北京饭店阳光咖啡厅",
+   "location": "116.410454,39.909045"
+  }
+ ],
+ "status": "1",
+ "info": "OK"
+}

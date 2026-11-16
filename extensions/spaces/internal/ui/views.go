@@ -293,8 +293,9 @@ func (c *ctx) enumOf(t *kernel.Type, key string) []string {
 	return k.Enum(&p)
 }
 
-// tableSections is the table: its columns and the page's cells, the aggregates as caption; then the same entities
-// as rows, so that each one stays reachable (a table has no row actions).
+// tableSections is the table: its columns and the page's cells; the view's aggregates are the stats above it, so the
+// table has no caption. Then the same entities as compact rows, title and status only, so that each one stays
+// reachable (a table has no row actions).
 func (c *ctx) tableSections(t *kernel.Type, pg page) []wire.Section {
 	keys := t.Columns()
 	cols := []wire.TableColumn{}
@@ -308,23 +309,20 @@ func (c *ctx) tableSections(t *kernel.Type, pg page) []wire.Section {
 	}
 	set := pg.entities()
 	rows := [][]string{}
+	opens := []wire.Component{}
 	for _, e := range set {
 		cells := []string{}
 		for _, key := range keys {
 			cells = append(cells, dashIfEmpty(cut(c.w.Text(e, key), maxText)))
 		}
 		rows = append(rows, cells)
-	}
-	var parts []string
-	for _, a := range pg.res.Aggs {
-		parts = append(parts, a.Name+" "+textOr(a.Text, "—"))
-	}
-	table := wire.Component{
-		Type: wire.ComponentTable, Columns: cols, Rows: rows, Caption: cut(strings.Join(parts, " · "), maxText),
+		r := c.row(e, false)
+		r.Subtitle, r.Value = "", ""
+		opens = append(opens, r)
 	}
 	return []wire.Section{
-		{Items: []wire.Component{table}},
-		{Title: "打开", Items: c.rows(set, false)},
+		{Items: []wire.Component{{Type: wire.ComponentTable, Columns: cols, Rows: rows}}},
+		{Title: "打开", Items: opens},
 	}
 }
 

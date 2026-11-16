@@ -114,7 +114,7 @@ func (a *app) callTool(ctx context.Context, name string, raw json.RawMessage) (s
 		if err := in.validate(); err != nil {
 			return "", err
 		}
-		item, notes, err := a.readDetail(ctx, in.Project, in.IID)
+		item, notes, next, err := a.readDetail(ctx, in.Project, in.IID)
 		if err != nil {
 			return "", err
 		}
@@ -126,26 +126,29 @@ func (a *app) callTool(ctx context.Context, name string, raw json.RawMessage) (s
 			}
 			fmt.Fprintf(&b, "\nComment by %s (@%s):\n%s\n", item.Author.Name, item.Author.Username, clipText(item.Body, 10000))
 		}
+		if next != "" {
+			fmt.Fprintf(&b, "\nDiscussion is incomplete: next notes page: %s\n", next)
+		}
 		return clipText(b.String(), 90000), nil
 	}
 	return "", fmt.Errorf("no tool %s", name)
 }
 
-func (a *app) readDetail(ctx context.Context, project string, iid int64) (mergeRequest, []note, error) {
+func (a *app) readDetail(ctx context.Context, project string, iid int64) (mergeRequest, []note, string, error) {
 	item, err := a.client.mergeRequest(ctx, project, iid)
 	a.record(err)
 	if err != nil {
-		return mergeRequest{}, nil, err
+		return mergeRequest{}, nil, "", err
 	}
-	notes, err := a.client.notes(ctx, project, iid)
+	notes, next, err := a.client.notes(ctx, project, iid)
 	a.record(err)
 	if err != nil {
-		return mergeRequest{}, nil, err
+		return mergeRequest{}, nil, "", err
 	}
 	if item.ProjectID == 0 {
-		return mergeRequest{}, nil, errors.New("GitLab returned a merge request without a project ID")
+		return mergeRequest{}, nil, "", errors.New("GitLab returned a merge request without a project ID")
 	}
-	return item, notes, nil
+	return item, notes, next, nil
 }
 
 func formatMR(item mergeRequest, detail bool) string {

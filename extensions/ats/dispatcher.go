@@ -193,10 +193,28 @@ func (d *dispatcher) prepare(ctx context.Context, t *Task, att Attempt) bool {
 	e := t.Exec
 	cfg := d.cfg()
 	readonly := t.PermissionProfile != PermissionDefault
+	prev := lastFailedReport(t)
+	// A writable retry goes on from what the earlier attempt committed, when that commit is on this computer.
+	resume := ""
+	if !readonly && prev != nil {
+		resume = resumeCommit(t, e.MachineID)
+	}
 	var ws prepareResult
-	err := d.nodeCall(ctx, e.MachineID, "ats.prepare", prepareParams{
-		TaskID: t.ID, Attempt: att.AttemptNo, Repo: t.Workspace.Repo, Ref: t.Workspace.BaseSHA, Readonly: readonly,
-	}, &ws)
+	call := func(ref string) error {
+		ws = prepareResult{}
+		return d.nodeCall(ctx, e.MachineID, "ats.prepare", prepareParams{
+			TaskID: t.ID, Attempt: att.AttemptNo, Repo: t.Workspace.Repo, Ref: ref, Readonly: readonly,
+		}, &ws)
+	}
+	var err error
+	if resume != "" {
+		if err = call(resume); err != nil && strings.Contains(err.Error(), "ref_not_found") {
+			resume = "" // the earlier attempt's branch was deleted since: start from the base again
+			err = call(t.Workspace.BaseSHA)
+		}
+	} else {
+		err = call(t.Workspace.BaseSHA)
+	}
 	if err != nil {
 		// What the task asks for is wrong (not what the computer is doing right now): another attempt would
 		// fail the same way.
@@ -211,7 +229,7 @@ func (d *dispatcher) prepare(ctx context.Context, t *Task, att Attempt) bool {
 	}
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	sid, err := d.api.CreateSession(cctx, sessionRequest{
-		MachineID: e.MachineID, Cwd: ws.Path, AgentType: "claude", Prompt: buildPrompt(t, ws, readonly),
+		MachineID: e.MachineID, Cwd: ws.Path, AgentType: "claude", Prompt: buildPrompt(t, ws, readonly, prev, resume != ""),
 		PermissionMode: mode, Model: cfg.model(cmpOr(att.ModelTier, t.ModelTier)), TabName: "ATS · " + firstLinePreview(t.Title, 40), Async: true,
 	})
 	cancel()
@@ -233,8 +251,116 @@ func (d *dispatcher) prepare(ctx context.Context, t *Task, att Attempt) bool {
 	return true
 }
 
-// buildPrompt is what the agent is told: the task, and the rules of running unattended.
-func buildPrompt(t *Task, ws prepareResult, readonly bool) string {
+// lastFailedReport is the report of the task's latest attempt when that attempt failed: what a new attempt is
+// told about.
+func lastFailedReport(t *Task) *EvidenceReport {
+	if len(t.Reports) == 0 {
+		return nil
+	}
+	rep := t.Reports[len(t.Reports)-1]
+	if strings.EqualFold(strings.TrimSpace(rep.Outcome), StateSucceeded) {
+		return nil
+	}
+	return &rep
+}
+
+// resumeCommit is the commit the task's earlier attempts left on machine: the latest report that has one, of an
+// attempt that ran there (a commit made on another computer is not in this one's repository).
+func resumeCommit(t *Task, machine string) string {
+	for i := len(t.Reports) - 1; i >= 0; i-- {
+		rep := t.Reports[i]
+		sha := ""
+		for _, a := range rep.Artifacts {
+			if a.Kind == "commit" && strings.TrimSpace(a.Path) != "" {
+				sha = strings.TrimSpace(a.Path)
+			}
+		}
+		if sha == "" {
+			continue
+		}
+		for _, att := range t.Attempts {
+			if att.AttemptNo == rep.AttemptNo && att.Machine == machine {
+				return sha
+			}
+		}
+		return ""
+	}
+	return ""
+}
+
+// errorClassInWords says an error class to the agent of the next attempt.
+func errorClassInWords(class string) string {
+	switch class {
+	case "task_failed":
+		return "the work did not pass (the acceptance command failed, or the agent's turn ended in an error)"
+	case "timeout":
+		return "it ran out of time"
+	case "infra_error":
+		return "the computer or the agent session failed, not necessarily the work"
+	case "rate_limited":
+		return "the model service's rate or usage limit was reached"
+	case "lost":
+		return "the agent session disappeared"
+	case "config_error":
+		return "the configured model was not available"
+	case "auth_expired":
+		return "the agent was not signed in"
+	case "":
+		return "it failed"
+	}
+	return "it failed (" + class + ")"
+}
+
+const (
+	promptFailureRunes = 1500
+	summaryRunes       = 1200
+)
+
+// summaryMarker is the line the agent is asked to put before its closing summary.
+const summaryMarker = "Summary:"
+
+// agentSummary is what is kept of the agent's last reply: the part after its last summary marker when it wrote
+// one, else the reply's beginning (a reply states its conclusion first more often than last).
+func agentSummary(reply string) string {
+	reply = strings.TrimSpace(reply)
+	lines := strings.Split(reply, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimLeft(strings.TrimSpace(lines[i]), "#*_ ")
+		rest, ok := strings.CutPrefix(line, summaryMarker)
+		if !ok {
+			continue
+		}
+		rest = strings.TrimLeft(rest, "*_ ")
+		if sum := strings.TrimSpace(strings.Join(append([]string{rest}, lines[i+1:]...), "\n")); sum != "" {
+			return headRunes(sum, summaryRunes)
+		}
+		break
+	}
+	return headRunes(reply, summaryRunes)
+}
+
+// headRunes is the beginning of s, at most max runes of it, line breaks kept.
+func headRunes(s string, max int) string {
+	r := []rune(strings.TrimSpace(s))
+	if len(r) <= max {
+		return string(r)
+	}
+	return strings.TrimSpace(string(r[:max])) + "…"
+}
+
+// tailRunes is the end of s, at most max runes of it, line breaks kept.
+func tailRunes(s string, max int) string {
+	s = strings.TrimSpace(s)
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return "…" + strings.TrimSpace(string(r[len(r)-max:]))
+}
+
+// buildPrompt is what the agent is told: the task, the rules of running unattended and, for a retry, how the
+// earlier attempt ended (prev) and whether the worktree goes on from its commit (resumed).
+func buildPrompt(t *Task, ws prepareResult, readonly bool, prev *EvidenceReport, resumed bool) string {
 	var b strings.Builder
 	b.WriteString(strings.TrimSpace(t.Prompt))
 	b.WriteString("\n\n---\n")
@@ -242,14 +368,39 @@ func buildPrompt(t *Task, ws prepareResult, readonly bool) string {
 	if readonly {
 		b.WriteString("- This task is read-only: do not change, create or delete files, and do not run commands that do. Investigate and report.\n")
 	} else {
-		fmt.Fprintf(&b, "- Work only inside this worktree. Commit your work on the current branch (%s). Do not push, and do not touch other branches or worktrees.\n", ws.Branch)
+		fmt.Fprintf(&b, "- Work only inside this worktree. Commit your work on the current branch (%s) if you can; changes left uncommitted are committed to it for you when you finish. Do not push, and do not touch other branches or worktrees.\n", ws.Branch)
 	}
+	b.WriteString("- Nobody is watching: avoid commands that need approval when a file edit does the job.\n")
 	if t.Acceptance != nil && strings.TrimSpace(t.Acceptance.Command) != "" {
 		fmt.Fprintf(&b, "- When you finish, this command is run in the worktree and must exit 0 for the task to pass: %s\n", strings.TrimSpace(t.Acceptance.Command))
 	}
 	fmt.Fprintf(&b, "- If you cannot go on without the user, end your reply with one line: %s <what you need>\n", blockedMarker)
-	b.WriteString("- End with a short summary of what you did and found.\n")
+	fmt.Fprintf(&b, "- End your reply with a line \"%s\" followed by at most five lines: what you did, what you found, and anything left open. That part is what the user reads first.\n", summaryMarker)
+	if prev != nil {
+		attempt := prev.AttemptNo + 1
+		if n := len(t.Attempts); n > 0 {
+			attempt = t.Attempts[n-1].AttemptNo
+		}
+		fmt.Fprintf(&b, "\n---\nThis is attempt %d of this task. Attempt %d did not succeed: %s.\n", attempt, prev.AttemptNo, errorClassInWords(prev.ErrorClass))
+		if msg := tailRunes(prev.Message, promptFailureRunes); msg != "" {
+			fmt.Fprintf(&b, "How it ended (the end of the output):\n%s\n", indentBlock(msg))
+		}
+		if sum := strings.TrimSpace(prev.Summary); sum != "" {
+			fmt.Fprintf(&b, "What that attempt's agent said at its end:\n%s\n", indentBlock(sum))
+		}
+		switch {
+		case resumed:
+			fmt.Fprintf(&b, "Your worktree starts from that work (commit %s): look at what is there and continue from it; do not start over.\n", ws.BaseSHA)
+		case readonly:
+		default:
+			b.WriteString("Your worktree starts again from the base commit: none of that attempt's changes are in it.\n")
+		}
+	}
 	return b.String()
+}
+
+func indentBlock(s string) string {
+	return "    " + strings.ReplaceAll(s, "\n", "\n    ")
 }
 
 // watch reads the session's state: waiting for the user, still working, or done with its turn.
@@ -276,10 +427,23 @@ func (d *dispatcher) watch(ctx context.Context, t *Task, att Attempt) bool {
 	case s.Starting:
 		return false
 	case s.TurnError != "":
-		d.finish(ctx, t, att, outcome{state: StateFailed, errClass: turnErrorClass(s.TurnErrorKind, s.TurnError), message: "Agent 这一轮出错：" + s.TurnError})
+		class := turnErrorClass(s.TurnErrorKind, s.TurnError)
+		text := strings.TrimRight(strings.TrimSpace(s.TurnError), "。.")
+		msg := "Agent 这一轮出错：" + s.TurnError
+		switch class {
+		case "config_error":
+			msg = "模型不可用：" + text + "。到扩展设置里检查「模型」一栏后再重试。"
+		case "auth_expired":
+			msg = "Agent 的登录失效了：" + text + "。在那台电脑上重新登录后再重试。"
+		}
+		d.finish(ctx, t, att, outcome{state: StateFailed, errClass: class, message: msg})
 		return true
 	case s.State == "needs_you" || s.PendingInteractions > 0:
-		return d.setWaiting(t, waitingInSession, "")
+		why, known := d.waitingFor(ctx, e)
+		if !known && e.Waiting != "" && e.JudgedUpdate == "" {
+			return false // the hub did not say what the session asks: keep what was known
+		}
+		return d.setWaiting(t, why, "")
 	case s.State == "working" || s.BackgroundWorking:
 		if timeout := d.cfg().taskTimeout(); now.Sub(e.PhaseSince) > timeout {
 			ictx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -333,15 +497,78 @@ func blockedReason(reply string) (string, bool) {
 	return "", false
 }
 
+// turnErrorClass sorts a failed turn by what another attempt could do about it. kind is the hub's own reading
+// of the error (transient | user | usage_limit, often empty); the text decides the rest. Whole phrases only:
+// "limit" or "auth" alone are in too many unrelated messages.
 func turnErrorClass(kind, text string) string {
-	s := strings.ToLower(kind + " " + text)
+	s := strings.ToLower(text)
+	has := func(words ...string) bool {
+		for _, w := range words {
+			if strings.Contains(s, w) {
+				return true
+			}
+		}
+		return false
+	}
 	switch {
-	case strings.Contains(s, "rate") || strings.Contains(s, "limit") || strings.Contains(s, "quota") || strings.Contains(s, "overload"):
+	case kind == "usage_limit":
 		return "rate_limited"
-	case strings.Contains(s, "auth") || strings.Contains(s, "login") || strings.Contains(s, "credential"):
+	case has("selected model", "invalid model", "model_not_found", "unknown model") ||
+		has("model") && has("not exist", "not found", "have access", "no access", "not available", "not supported"):
+		return "config_error" // the configured model is not there: every attempt fails the same way
+	case has("401", "authentication", "not logged in", "login", "log in", "credential", "api key", "unauthorized"):
 		return "auth_expired"
+	case has("rate limit", "rate_limit", "ratelimit", "429", "quota", "overloaded", "usage limit", "too many requests"):
+		return "rate_limited"
 	}
 	return "task_failed"
+}
+
+// waitingFor says what the session waits for the user with, from the hub's pending cards; known is false when
+// the hub could not be asked.
+func (d *dispatcher) waitingFor(ctx context.Context, e *Execution) (why string, known bool) {
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	ixs, err := d.api.Interactions(cctx)
+	if err != nil {
+		return waitingInSession, false
+	}
+	for _, ix := range ixs {
+		if ix.SessionID != e.SessionID || (ix.MachineID != "" && ix.MachineID != e.MachineID) {
+			continue
+		}
+		if text := waitingText(ix); text != "" {
+			return text, true
+		}
+	}
+	return waitingInSession, true
+}
+
+// waitingText is one line for a pending card: what to approve, or what is asked.
+func waitingText(ix hubInteraction) string {
+	what := firstLinePreview(ix.Summary, 120)
+	switch ix.Kind {
+	case "permission":
+		tool := strings.TrimSpace(ix.ToolName)
+		switch {
+		case what == "" && tool == "":
+			return ""
+		case what == "":
+			return "Agent 等你批准使用 " + tool
+		case tool == "" || tool == "Bash":
+			return "Agent 等你批准运行：" + what
+		}
+		return "Agent 等你批准 " + tool + "：" + what
+	case "question":
+		if len(ix.Questions) > 0 && strings.TrimSpace(ix.Questions[0].Question) != "" {
+			what = firstLinePreview(ix.Questions[0].Question, 120)
+		}
+		if what == "" {
+			return ""
+		}
+		return "Agent 在问你：" + what
+	}
+	return ""
 }
 
 func (d *dispatcher) setWaiting(t *Task, why, judged string) bool {
@@ -358,7 +585,7 @@ func (d *dispatcher) setWaiting(t *Task, why, judged string) bool {
 // computer's program runs it.
 func (d *dispatcher) startAcceptance(ctx context.Context, t *Task, att Attempt, reply string) bool {
 	if t.Acceptance == nil || strings.TrimSpace(t.Acceptance.Command) == "" {
-		d.finish(ctx, t, att, outcome{state: StateSucceeded, verdict: VerdictUnverified, message: reply})
+		d.finish(ctx, t, att, outcome{state: StateSucceeded, verdict: VerdictUnverified, message: reply, summary: agentSummary(reply)})
 		return true
 	}
 	key, _ := attemptKey(t.ID, att.AttemptNo)
@@ -373,7 +600,7 @@ func (d *dispatcher) startAcceptance(ctx context.Context, t *Task, att Attempt, 
 		return true
 	}
 	_, err = d.q.UpdateExec(t.ID, t.FenceToken, d.now(), func(e *Execution) {
-		e.Phase, e.Waiting, e.LastReply = PhaseAccepting, "", firstLinePreview(reply, 400)
+		e.Phase, e.Waiting, e.LastReply = PhaseAccepting, "", agentSummary(reply)
 	})
 	return err == nil
 }
@@ -396,7 +623,7 @@ func (d *dispatcher) collect(ctx context.Context, t *Task, att Attempt) bool {
 		}
 	}
 	code := res.ExitCode
-	out := outcome{exitCode: &code}
+	out := outcome{exitCode: &code, summary: e.LastReply}
 	tail := strings.TrimSpace(res.OutputTail)
 	switch {
 	case res.TimedOut:
@@ -428,6 +655,7 @@ type outcome struct {
 	errClass  string
 	exitCode  *int
 	message   string
+	summary   string // the end of the agent's last reply
 	artifacts []Artifact
 }
 
@@ -449,6 +677,7 @@ func classIf(cond bool, a, b string) string {
 // between another attempt and a final state) and writes a final outcome to the to-do.
 func (d *dispatcher) finish(ctx context.Context, t *Task, att Attempt, out outcome) {
 	arts := d.cleanup(ctx, t, att.AttemptNo, false)
+	out.artifacts = mergeCommit(out.artifacts, arts, t.Exec)
 	if t.Exec != nil && t.Exec.SessionID != "" {
 		arts = append(arts, Artifact{Kind: "session", Path: t.Exec.MachineID + "/" + t.Exec.SessionID})
 	}
@@ -456,7 +685,8 @@ func (d *dispatcher) finish(ctx context.Context, t *Task, att Attempt, out outco
 		out.verdict = VerdictUnverified
 	}
 	var retryable *bool
-	if out.errClass == "rejected" {
+	switch out.errClass {
+	case "rejected", "config_error", "auth_expired": // another attempt would fail the same way
 		no := false
 		retryable = &no
 	}
@@ -465,7 +695,7 @@ func (d *dispatcher) finish(ctx context.Context, t *Task, att Attempt, out outco
 	done, err := d.q.CompleteAttempt(CompleteAttemptInput{
 		TaskID: t.ID, AttemptNo: att.AttemptNo, FenceToken: att.FenceToken, WorkerID: att.WorkerID,
 		Outcome: out.state, Verdict: out.verdict, ErrorClass: out.errClass, ExitCode: out.exitCode,
-		Message: out.message, Artifacts: append(out.artifacts, arts...), Retryable: retryable, Now: now,
+		Message: out.message, Summary: out.summary, Artifacts: append(out.artifacts, arts...), Retryable: retryable, Now: now,
 	})
 	if err != nil || !done.IsTerminal() || d.writer == nil || !d.writer.HasTodosWriteScope() {
 		return
@@ -475,8 +705,45 @@ func (d *dispatcher) finish(ctx context.Context, t *Task, att Attempt, out outco
 	cancel()
 }
 
-// cleanup releases what an attempt holds on its computer: the worktree (kept when it has uncommitted work) and,
-// when the attempt is being canceled, the agent's turn. It returns what stays behind as evidence.
+// mergeCommit leaves one commit in an attempt's evidence: the head the release found (it has the work ATS
+// committed itself) rather than the one the acceptance command ran on, and none when the branch never left the
+// commit the attempt started from.
+func mergeCommit(own, released []Artifact, e *Execution) []Artifact {
+	base := ""
+	if e != nil {
+		base = e.BaseSHA
+	}
+	hasReleased := false
+	for _, a := range released {
+		if a.Kind == "commit" {
+			hasReleased = true
+		}
+	}
+	var out []Artifact
+	for _, a := range own {
+		if a.Kind == "commit" && (hasReleased || (base != "" && a.Path == base)) {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+// releaseCommitMessage is the message of the commit ATS makes of work an attempt left uncommitted.
+func releaseCommitMessage(t *Task, attempt int) string {
+	prefix := "ATS " + t.ID + ": "
+	room := 72 - len([]rune(prefix))
+	title := firstLinePreview(t.Title, 200)
+	if r := []rune(title); len(r) > room {
+		title = string(r[:max(room-1, 0)]) + "…"
+	}
+	return fmt.Sprintf("%s%s\n\nUncommitted work of attempt %d, committed by ATS.", prefix, title, attempt)
+}
+
+// cleanup releases what an attempt holds on its computer: the worktree (kept when it has uncommitted work that
+// could not be committed) and, when the attempt is being canceled, the agent's turn. An attempt of a writable
+// task that ends by itself has its uncommitted work committed to its branch. It returns what stays behind as
+// evidence.
 func (d *dispatcher) cleanup(ctx context.Context, t *Task, attempt int, interrupt bool) []Artifact {
 	e := t.Exec
 	if e == nil || e.MachineID == "" {
@@ -490,13 +757,20 @@ func (d *dispatcher) cleanup(ctx context.Context, t *Task, attempt int, interrup
 	if e.Worktree == "" {
 		return nil
 	}
+	msg := ""
+	if !interrupt && t.PermissionProfile == PermissionDefault {
+		msg = releaseCommitMessage(t, attempt)
+	}
 	var rel releaseResult
 	if err := d.nodeCall(ctx, e.MachineID, "ats.release", releaseParams{
-		TaskID: t.ID, Attempt: attempt, Repo: t.Workspace.Repo, BaseSHA: e.BaseSHA,
+		TaskID: t.ID, Attempt: attempt, Repo: t.Workspace.Repo, BaseSHA: e.BaseSHA, CommitMessage: msg,
 	}, &rel); err != nil {
 		return []Artifact{{Kind: "worktree", Path: e.Worktree}}
 	}
 	var arts []Artifact
+	if rel.HeadSHA != "" && rel.HeadSHA != e.BaseSHA {
+		arts = append(arts, Artifact{Kind: "commit", Path: rel.HeadSHA})
+	}
 	if rel.Branch != "" {
 		arts = append(arts, Artifact{Kind: "branch", Path: rel.Branch})
 	}

@@ -102,6 +102,29 @@ class PublisherTests(CatalogFixture, unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "binary"):
             publisher.check_archive(archive(m), m)
 
+    def test_string_runtime_launcher_is_verified_on_every_package_platform(self):
+        m = dict(self.entry["manifest"], runtime={"command": "bin/demo"})
+        data = archive(m, [("bin/demo", b"#!/bin/sh\n", 0o755)])
+        for platform in ("any", "linux-amd64", "darwin-arm64"):
+            with self.subTest(platform=platform):
+                self.assertEqual(publisher.check_archive(data, m, strict=True, platform=platform), [])
+
+    def test_string_runtime_launcher_must_be_a_safe_executable_regular_file(self):
+        m = dict(self.entry["manifest"], runtime={"command": "bin/demo"})
+        for files in ([], [("bin/demo", b"launcher", 0o644)]):
+            with self.subTest(files=files), self.assertRaisesRegex(ValueError, "binary"):
+                publisher.check_archive(archive(m, files), m)
+        for command in ("", "../outside", "/absolute"):
+            invalid = dict(m, runtime={"command": command})
+            with self.subTest(command=command), self.assertRaisesRegex(ValueError, "binary"):
+                publisher.check_archive(archive(invalid), invalid)
+
+    def test_invalid_runtime_command_shapes_fail_closed(self):
+        for command in (None, ["bin/demo"], 123):
+            m = dict(self.entry["manifest"], runtime={"command": command})
+            with self.subTest(command=command), self.assertRaisesRegex(ValueError, "runtime command"):
+                publisher.check_archive(archive(m), m)
+
     def test_saved_plan_anonymous_gate_outputs_digest_pinned_payload(self):
         calls = []
         def factory(path):

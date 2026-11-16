@@ -26,6 +26,9 @@ type Manifest struct {
 	Description     string `json:"description,omitempty"`
 	Publisher       string `json:"publisher,omitempty"`
 	Homepage        string `json:"homepage,omitempty"`
+	// Source-only square PNG artwork: 256–4096 pixels, at most 2 MiB. Catalog entry icon carries this path; strip it
+	// from packaged and runtime manifests for compatibility.
+	Icon string `json:"icon,omitempty"`
 	// What the market shows and searches (docs "Extension market"): at most 16, each 1 to 24 characters. Packages and
 	// indexes carry the manifest without them (hubs before tags refuse an unknown field); the index entry carries them
 	// instead.
@@ -338,29 +341,53 @@ func (v Contributes) MarshalJSON() ([]byte, error) {
 }
 
 // SkillItem: A skill (docs "Declarative contributions"): a directory of the package with SKILL.md, put in with the
-// assistant's skills.
+// assistant's skills. With source data (docs "Assistant content from the data directory"): a directory of the
+// extension's data directory whose subdirectories with a SKILL.md are skills its program writes (Markdown files only,
+// 256 KB and 32 skills per extension).
 type SkillItem struct {
 	ID string `json:"id"`
-	// The directory, relative to the package.
-	Dir string `json:"dir"`
+	// The directory, relative to the package (or to the data directory with source data).
+	Dir    string `json:"dir"`
+	Source string `json:"source,omitempty"`
 }
+
+// ContentSource: where a skill's or a prompt's files are: package (the default) or data, the extension's data
+// directory, which its program writes and upgrades keep.
+const (
+	ContentSourcePackage = "package"
+	ContentSourceData    = "data"
+)
+
+// ContentSources are the values of ContentSource, in order.
+var ContentSources = []string{"package", "data"}
 
 // Values of PromptKind.
 const (
-	PromptKindInstructions = "instructions"
-	PromptKindQuick        = "quick"
+	PromptKindInstructions   = "instructions"
+	PromptKindQuick          = "quick"
+	PromptKindProjectContext = "project_context"
+	PromptKindInboxContext   = "inbox_context"
 )
 
 // PromptKinds are the values of PromptKind, in order.
-var PromptKinds = []string{"instructions", "quick"}
+var PromptKinds = []string{"instructions", "quick", "project_context", "inbox_context"}
 
-// PromptItem: A prompt: instructions (a .md of the package added to the assistant's CLAUDE.md) or quick (a template
-// the apps offer in the message box).
+// PromptItem: A prompt: instructions (a .md of the package, or with source data of the data directory, added to the
+// assistant's CLAUDE.md), quick (a template the apps offer in the message box), project_context (a directory of the
+// data directory whose <project slug>.md files go into a new Agent's project background) or inbox_context (a .md of
+// the data directory added to the Inbox's triage and draft prompts).
 type PromptItem struct {
-	ID   string `json:"id"`
-	Kind string `json:"kind"`
-	// instructions: the .md file.
+	ID     string `json:"id"`
+	Kind   string `json:"kind"`
+	Source string `json:"source,omitempty"`
+	// instructions: the .md file (with source data: at most 6 KB, adopted at most once a day); inbox_context: the .md
+	// file (1 KB used).
 	File string `json:"file,omitempty"`
+	// project_context: the directory of <project slug>.md files (1.5 KB of each used).
+	Dir string `json:"dir,omitempty"`
+	// inbox_context: a text file of sentences, one a line, a draft must not repeat word for word (64 KB used); only
+	// checked, never in a prompt.
+	NeverQuote string `json:"never_quote,omitempty"`
 	// quick: what the apps show.
 	Title string `json:"title,omitempty"`
 	// quick: what goes into the message box.
@@ -3060,7 +3087,9 @@ const (
 var ConnectorSubscriptionKinds = []string{"sub_mail", "sub_message", "sub_notice", "sub_deadline", "sub_event", "sub_update", "sub_digest"}
 
 // ConnectorSubscriptionFields: paths relative to one item. Only $, .field and [index] are supported; no expressions
-// or recursive descent.
+// or recursive descent. sender_id, chat and chat_name name who and where for mutes and policies (the Inbox row's
+// sender and chat tags), seen its read state, and reply_to where a reply goes; none of them is part of an item's
+// content.
 type ConnectorSubscriptionFields struct {
 	ID      string `json:"id,omitempty"`
 	Thread  string `json:"thread,omitempty"`
@@ -3070,19 +3099,37 @@ type ConnectorSubscriptionFields struct {
 	Body    string `json:"body,omitempty"`
 	Link    string `json:"link,omitempty"`
 	DueDate string `json:"due_date,omitempty"`
+	// The sender's stable id; without it the sender tag is the lowercased display name.
+	SenderID string `json:"sender_id,omitempty"`
+	// The conversation's stable id: the row gets a chat tag.
+	Chat string `json:"chat,omitempty"`
+	// The conversation's name, the chat tag's name.
+	ChatName string `json:"chat_name,omitempty"`
+	// Whether the item was already seen in the source: true, a non-zero number, or true, 1, yes, read or seen in any
+	// case. The Inbox row is read when its newest item is; seen only ever turns on.
+	Seen string `json:"seen,omitempty"`
+	// Where a reply goes and who sees it, in a line for people. With it, an item with an id can be replied to through
+	// the connector's inbox reply, with its thread (else its id) and its id as last.
+	ReplyTo string `json:"reply_to,omitempty"`
 }
 
 // ConnectorSubscriptionRecipe: A pull recipe, not a schedule. args is an object (default {}); strings may contain
-// {{since}} or {{since_date}}. items_path defaults to $; fields are relative to one item. Text results require
-// snapshot mode. Runtime argument/schema and mapped-value validation belongs to the subscription runner.
+// {{since}} or {{since_date}}. cursor_arg and next_cursor_path opt into cursor pagination; page_arg and optional
+// next_page_path opt into page pagination (without next_page_path, a full requested page continues). items_path
+// defaults to $; fields are relative to one item. Text results require snapshot mode. Runtime argument/schema and
+// mapped-value validation belongs to the subscription runner.
 type ConnectorSubscriptionRecipe struct {
-	Mode      string                       `json:"mode"`
-	Tool      string                       `json:"tool"`
-	Args      json.RawMessage              `json:"args,omitempty"`
-	ItemsPath string                       `json:"items_path,omitempty"`
-	Fields    *ConnectorSubscriptionFields `json:"fields,omitempty"`
-	Kind      string                       `json:"kind"`
-	GroupBy   string                       `json:"group_by"`
+	Mode           string                       `json:"mode"`
+	Tool           string                       `json:"tool"`
+	Args           json.RawMessage              `json:"args,omitempty"`
+	CursorArg      string                       `json:"cursor_arg,omitempty"`
+	NextCursorPath string                       `json:"next_cursor_path,omitempty"`
+	PageArg        string                       `json:"page_arg,omitempty"`
+	NextPagePath   string                       `json:"next_page_path,omitempty"`
+	ItemsPath      string                       `json:"items_path,omitempty"`
+	Fields         *ConnectorSubscriptionFields `json:"fields,omitempty"`
+	Kind           string                       `json:"kind"`
+	GroupBy        string                       `json:"group_by"`
 }
 
 // ConnectorErrorCode: error.code a program answers or gets besides the base ErrorCode: rate_limited (tools.call /
@@ -4466,6 +4513,52 @@ type KBDetail struct {
 	Recap json.RawMessage `json:"recap,omitempty"`
 	// A topic's knowledge points (docs/assistant/knowledge.md "Topics").
 	Points []KBTopicPoint `json:"points,omitempty"`
+	// A person's profiles by writer ("user", "ext:<id>"), as written; summary shows them too
+	// (docs/assistant/knowledge.md "Person profiles").
+	Profiles map[string]KBProfileRecord `json:"profiles,omitempty"`
+}
+
+type KBProfileRecord struct {
+	Profile KBPersonProfile `json:"profile"`
+	At      time.Time       `json:"at"`
+}
+
+// KBPersonProfile: one writer's profile of a person, its four parts kept apart. Every item says where it comes from;
+// at most 30 items a part, and 8000 bytes as summary.md shows it.
+type KBPersonProfile struct {
+	// Their role, what they are in charge of, how they relate to the user.
+	Facts []KBProfileItem `json:"facts,omitempty"`
+	// The user's own words about them, quoted.
+	Views []KBProfileItem `json:"views,omitempty"`
+	// Inferred, never stated: each needs its basis. Shown as only a hint.
+	Inferences []KBProfileItem `json:"inferences,omitempty"`
+	// Promises and to-dos between the user and them, either way.
+	Commitments []KBProfileCommitment `json:"commitments,omitempty"`
+}
+
+type KBProfileItem struct {
+	Text string `json:"text"`
+	// Inferences only (required there): what it rests on.
+	Basis string `json:"basis,omitempty"`
+	// Where it comes from: a knowledge-base path (chats/<id>/messages/<day>.md, recordings/<id>), a URL, or "user" for
+	// the user's own word.
+	Sources []string `json:"sources"`
+}
+
+type KBProfileCommitment struct {
+	Text string `json:"text"`
+	// user: the user owes it to them; them: they owe it to the user.
+	Owes string `json:"owes"`
+	// YYYY-MM-DD, when there is one.
+	Due     string   `json:"due,omitempty"`
+	Done    bool     `json:"done,omitempty"`
+	Sources []string `json:"sources"`
+}
+
+// KBIgnoredField: A field an update carried that its kind does not use: not applied, and why.
+type KBIgnoredField struct {
+	Field  string `json:"field"`
+	Reason string `json:"reason"`
 }
 
 // KBTopicPoint: one knowledge point of a topic, under up to two levels of subtopics (path).
@@ -4509,6 +4602,10 @@ type KBRecordingSegment struct {
 	// An all-day recording's line number: the segment's 1-based position in its uploads (docs/assistant/day-recap.md);
 	// absent on other recordings.
 	N int `json:"n,omitempty"`
+	// The line is Persona's own answer as the meeting's microphone heard it (docs/assistant/meeting-minutes.md
+	// "Persona's echo"): kept in the transcript but not what the meeting said, so leave it out of anything read as the
+	// meeting's words; absent (false) on every other line.
+	Echo bool `json:"echo,omitempty"`
 }
 
 // KBDayParams: kb.day: a chat's messages of one day in the knowledge base's time zone.
@@ -4601,6 +4698,10 @@ type KBUpdateParams struct {
 	Projects []string `json:"projects,omitempty"`
 	// Refused (conflict) when the user or another extension holds anything on the project folded away; no before.
 	MergeInto string `json:"merge_into,omitempty"`
+	// People only: this extension's own profile of the person, replacing the one it wrote before (one with no items
+	// removes it). Nobody else's profile, nor pinned or note, is touched; before.profile is the one replaced. A profile
+	// breaking a rule is invalid_params and nothing is written.
+	Profile *KBPersonProfile `json:"profile,omitempty"`
 	// Kept as the provenance of the fields this write holds.
 	Evidence []KBEvidence `json:"evidence,omitempty"`
 	// Fields this extension holds, handed back to the built-in pipeline; unlocking pinned clears it.
@@ -4609,8 +4710,12 @@ type KBUpdateParams struct {
 
 type KBUpdateResult struct {
 	ID string `json:"id"`
-	// The previous value of each field written (null when unset; summary is the old text), for the extension's own undo.
+	// The previous value of each field written (null when unset; summary is the old text, profile this extension's own
+	// profile before), for the extension's own undo.
 	Before map[string]json.RawMessage `json:"before,omitempty"`
+	// Fields the update carried that its kind does not use (a person's summary and log, for one): not applied, each with
+	// why.
+	Ignored []KBIgnoredField `json:"ignored,omitempty"`
 }
 
 // KBOwnerParams: kb.owner takes nothing.
@@ -4830,10 +4935,10 @@ type ModelRefusal struct {
 	Usage      ModelUsage `json:"usage"`
 }
 
-// AssistantErrorCode: error.code of the assistant calls besides permission_denied (data {scope: "assistant.read"}):
-// invalid_params; not_found (assistant.messages: no such conversation in the assistant's own space);
-// assistant_offline (the manager is away: try again); machine_offline (the assistant's computer is not connected or
-// not set up: try again).
+// AssistantErrorCode: error.code of the assistant calls besides permission_denied (data {scope: "assistant.read"}, or
+// "assistant.memory.read" for assistant.memory): invalid_params; not_found (assistant.messages: no such conversation
+// in the assistant's own space); assistant_offline (the manager is away: try again); machine_offline (the assistant's
+// computer is not connected or not set up: try again).
 const (
 	AssistantErrorCodeInvalidParams    = "invalid_params"
 	AssistantErrorCodeNotFound         = "not_found"
@@ -4910,11 +5015,118 @@ const (
 // AssistantRoles are the values of AssistantRole, in order.
 var AssistantRoles = []string{"user", "assistant"}
 
+// AssistantMemoryParams: assistant.memory (assistant.memory.read): the assistant's memory entries of its own space
+// (never the health space's), by name. Read-only.
+type AssistantMemoryParams struct {
+	// Return each entry's text too: cut at 16 KB each, and left out once a page holds 512 KB of text (truncated says
+	// so).
+	IncludeContent bool `json:"include_content,omitempty"`
+}
+
+type AssistantMemoryEntry struct {
+	// The entry's file name.
+	Name string `json:"name"`
+	// The frontmatter's description; empty without one.
+	Description string `json:"description,omitempty"`
+	// The frontmatter's type (or metadata.type); empty without one.
+	Type string `json:"type,omitempty"`
+	// The file's size in bytes.
+	Size int `json:"size"`
+	// When the file was made, where the computer's file system keeps it.
+	Created  time.Time `json:"created,omitzero"`
+	Modified time.Time `json:"modified"`
+	// With include_content: the text, perhaps cut.
+	Content string `json:"content,omitempty"`
+	// content was cut or left out for its size.
+	Truncated bool `json:"truncated,omitempty"`
+}
+
+// AssistantMemoryResult: an assistant without memory (none written yet, or the feature off) has no entries.
+type AssistantMemoryResult struct {
+	Entries []AssistantMemoryEntry `json:"entries"`
+}
+
 // AssistantMessagesResult: next_seq is set while there is more to read (pass it as after_seq), even when this page
 // has no messages.
 type AssistantMessagesResult struct {
 	Messages []AssistantMessage `json:"messages"`
 	NextSeq  *int               `json:"next_seq,omitempty"`
+}
+
+// AssistantDataStatusParams: assistant.data_status takes no parameters.
+type AssistantDataStatusParams struct {
+}
+
+// AssistantDataState: what the assistant reads of the contribution: adopted (the content as it is now; skills: sent;
+// project and Inbox context: used whenever their prompt is built), pending (instructions: an older version, the new
+// one waits for next_adopt_at), kept (instructions: an older version, the new one cannot be used, see reason), none
+// (nothing: none written yet, none usable, or the extension or contribution is switched off).
+const (
+	AssistantDataStateAdopted = "adopted"
+	AssistantDataStatePending = "pending"
+	AssistantDataStateKept    = "kept"
+	AssistantDataStateNone    = "none"
+)
+
+// AssistantDataStates are the values of AssistantDataState, in order.
+var AssistantDataStates = []string{"adopted", "pending", "kept", "none"}
+
+// AssistantDataReason: why what the assistant reads is not the content as it is now: too_large (over its limit),
+// invalid (not UTF-8 text), not_regular (not a plain file inside the data directory: a directory, or a link out of
+// it), unreadable, rate_limited (a new version of instructions waits for its turn), disabled (the extension is
+// switched off or cannot run), switched_off (this contribution is switched off).
+const (
+	AssistantDataReasonTooLarge    = "too_large"
+	AssistantDataReasonInvalid     = "invalid"
+	AssistantDataReasonNotRegular  = "not_regular"
+	AssistantDataReasonUnreadable  = "unreadable"
+	AssistantDataReasonRateLimited = "rate_limited"
+	AssistantDataReasonDisabled    = "disabled"
+	AssistantDataReasonSwitchedOff = "switched_off"
+)
+
+// AssistantDataReasons are the values of AssistantDataReason, in order.
+var AssistantDataReasons = []string{"too_large", "invalid", "not_regular", "unreadable", "rate_limited", "disabled", "switched_off"}
+
+// AssistantDataItem: one data contribution of the extension.
+type AssistantDataItem struct {
+	// Its id, as the manifest has it.
+	Contribution string `json:"contribution"`
+	// instructions, skills, project_context or inbox_context.
+	Kind string `json:"kind"`
+	// Its file or directory, relative to the data directory.
+	Path string `json:"path"`
+	// The most it may weigh, in bytes.
+	Limit int `json:"limit"`
+	// What it weighs now (all files, for skills).
+	Bytes  int    `json:"bytes"`
+	State  string `json:"state"`
+	Reason string `json:"reason,omitempty"`
+	// The rest of a file's problem, for logs.
+	Detail string `json:"detail,omitempty"`
+	// The digest of the content as it is now (instructions: the cleaned text, the first 16 hex digits of its sha256;
+	// skills: of every skill's name and digest).
+	Hash string `json:"hash,omitempty"`
+	// instructions: the digest of the text the assistant reads (for a contribution or extension switched off: read
+	// last); empty when that is no text.
+	AdoptedHash string `json:"adopted_hash,omitempty"`
+	// instructions: when that text was adopted (RFC 3339).
+	AdoptedAt string `json:"adopted_at,omitempty"`
+	// instructions, state pending: the new version is adopted by then at the latest (RFC 3339); sooner when the hub's
+	// own instructions change or the user applies it.
+	NextAdoptAt string `json:"next_adopt_at,omitempty"`
+	// skills: the skills sent.
+	Skills []string `json:"skills,omitempty"`
+	// project_context: the projects (slugs) with a file in use.
+	Files []string `json:"files,omitempty"`
+	// project_context, inbox_context: some content is used cut at its limit (detail says which).
+	Truncated bool `json:"truncated,omitempty"`
+	// inbox_context: how many sentences drafts are checked against.
+	NeverQuote int `json:"never_quote,omitempty"`
+}
+
+type AssistantDataStatusResult struct {
+	Items []AssistantDataItem `json:"items"`
 }
 
 type StorageEmptyParams struct {
@@ -6093,6 +6305,11 @@ var newDef = map[string]func() any{
 	"KBGetParams":                   func() any { return new(KBGetParams) },
 	"KBGetResult":                   func() any { return new(KBGetResult) },
 	"KBDetail":                      func() any { return new(KBDetail) },
+	"KBProfileRecord":               func() any { return new(KBProfileRecord) },
+	"KBPersonProfile":               func() any { return new(KBPersonProfile) },
+	"KBProfileItem":                 func() any { return new(KBProfileItem) },
+	"KBProfileCommitment":           func() any { return new(KBProfileCommitment) },
+	"KBIgnoredField":                func() any { return new(KBIgnoredField) },
 	"KBTopicPoint":                  func() any { return new(KBTopicPoint) },
 	"KBTopicSource":                 func() any { return new(KBTopicSource) },
 	"KBMomentRef":                   func() any { return new(KBMomentRef) },
@@ -6127,7 +6344,13 @@ var newDef = map[string]func() any{
 	"AssistantConversationsResult":  func() any { return new(AssistantConversationsResult) },
 	"AssistantMessagesParams":       func() any { return new(AssistantMessagesParams) },
 	"AssistantMessage":              func() any { return new(AssistantMessage) },
+	"AssistantMemoryParams":         func() any { return new(AssistantMemoryParams) },
+	"AssistantMemoryEntry":          func() any { return new(AssistantMemoryEntry) },
+	"AssistantMemoryResult":         func() any { return new(AssistantMemoryResult) },
 	"AssistantMessagesResult":       func() any { return new(AssistantMessagesResult) },
+	"AssistantDataStatusParams":     func() any { return new(AssistantDataStatusParams) },
+	"AssistantDataItem":             func() any { return new(AssistantDataItem) },
+	"AssistantDataStatusResult":     func() any { return new(AssistantDataStatusResult) },
 	"StorageEmptyParams":            func() any { return new(StorageEmptyParams) },
 	"StorageRequestResult":          func() any { return new(StorageRequestResult) },
 	"StorageKeyParams":              func() any { return new(StorageKeyParams) },
@@ -6248,6 +6471,8 @@ var Calls = map[string]Call{
 	"model.complete":                 {Name: "model.complete", From: "program", Params: "ModelCompleteParams", Result: "ModelCompleteResult"},
 	"assistant.conversations":        {Name: "assistant.conversations", From: "program", Params: "AssistantConversationsParams", Result: "AssistantConversationsResult"},
 	"assistant.messages":             {Name: "assistant.messages", From: "program", Params: "AssistantMessagesParams", Result: "AssistantMessagesResult"},
+	"assistant.memory":               {Name: "assistant.memory", From: "program", Params: "AssistantMemoryParams", Result: "AssistantMemoryResult"},
+	"assistant.data_status":          {Name: "assistant.data_status", From: "program", Params: "AssistantDataStatusParams", Result: "AssistantDataStatusResult"},
 	"storage.request":                {Name: "storage.request", From: "program", Params: "StorageEmptyParams", Result: "StorageRequestResult"},
 	"storage.get":                    {Name: "storage.get", From: "program", Params: "StorageKeyParams", Result: "StorageEntry"},
 	"storage.list":                   {Name: "storage.list", From: "program", Params: "StorageListParams", Result: "StorageListResult"},

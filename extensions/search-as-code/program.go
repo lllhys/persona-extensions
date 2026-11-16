@@ -81,6 +81,11 @@ type SearchHit struct {
 	Location     string `json:"location,omitempty"`
 	EntryID      string `json:"entry_id,omitempty"`
 	OriginalPath string `json:"original_path,omitempty"`
+	// Machine and MachineName name the computer that holds the session (the hub's own computer when Machine is
+	// empty); Cached marks a hit found in the hub's synced copy of an offline computer's index.
+	Machine     string `json:"machine,omitempty"`
+	MachineName string `json:"machine_name,omitempty"`
+	Cached      bool   `json:"cached,omitempty"`
 }
 
 // GroupSummary holds aggregated counts produced by `group_by`.
@@ -107,6 +112,8 @@ type ExecutionResult struct {
 	ScannedFiles       int       `json:"scanned_files"`
 	TotalDurationMs    int64     `json:"total_duration_ms"`
 	RanAt              time.Time `json:"ran_at"`
+	// Machines is how each computer of a cross-computer search answered (empty for a search of one computer).
+	Machines []MachineRun `json:"machines,omitempty"`
 }
 
 // CompileInput specifies either a raw Search-as-Code program, a recipe + query override, or a natural language query.
@@ -121,6 +128,10 @@ type CompileInput struct {
 	Since        string
 	ExcludeTools *bool
 	Limit        int
+	// Machine narrows the search to computers whose id or name matches; ProjectKey to projects whose route key
+	// (routeKey) is exactly this.
+	Machine    string
+	ProjectKey string
 }
 
 var knownOps = []string{
@@ -346,6 +357,12 @@ func applyOverrides(steps []StepSpec, in CompileInput, scope string) []StepSpec 
 			if in.Since != "" {
 				args["since"] = in.Since
 			}
+			if in.Machine != "" {
+				args["machine"] = in.Machine
+			}
+			if in.ProjectKey != "" {
+				args["project_key"] = in.ProjectKey
+			}
 		}
 		if s.Op == "limit" && in.Limit > 0 {
 			args["n"] = strconv.Itoa(min(in.Limit, maxLimitCap))
@@ -361,6 +378,7 @@ func compileNaturalLanguage(in CompileInput, scope string) (SearchProgram, error
 	harness := strings.TrimSpace(in.Harness)
 	model := strings.TrimSpace(in.Model)
 	since := strings.TrimSpace(in.Since)
+	machine := strings.TrimSpace(in.Machine)
 	regexPat := ""
 	groupField := "project"
 	correlateBy := "file"
@@ -395,6 +413,9 @@ func compileNaturalLanguage(in CompileInput, scope string) (SearchProgram, error
 				continue
 			case "since", "after":
 				since = v
+				continue
+			case "machine", "host", "computer":
+				machine = v
 				continue
 			case "regex", "re":
 				regexPat = v
@@ -444,6 +465,12 @@ func compileNaturalLanguage(in CompileInput, scope string) (SearchProgram, error
 	}
 	if since != "" {
 		scanArgs["since"] = since
+	}
+	if machine != "" {
+		scanArgs["machine"] = machine
+	}
+	if in.ProjectKey != "" {
+		scanArgs["project_key"] = in.ProjectKey
 	}
 
 	steps := []StepSpec{{Op: "scan_sessions", Args: scanArgs}}
@@ -523,7 +550,7 @@ func formatStepCall(s StepSpec) string {
 				return 0
 			case "scope", "glob":
 				return 1
-			case "project", "by", "field", "n":
+			case "project", "machine", "by", "field", "n":
 				return 2
 			default:
 				return 3
@@ -548,8 +575,14 @@ func formatStepCall(s StepSpec) string {
 
 // ExecuteProgram runs a compiled SearchProgram against the local session transcripts and repository files.
 func ExecuteProgram(st *State, prog SearchProgram, now time.Time) *ExecutionResult {
-	startAll := time.Now()
 	sessions, stats := loadSessions(st)
+	return executeSessions(st, sessions, stats, prog, now)
+}
+
+// executeSessions runs prog over the given sessions (this computer's, or a synced index of another one) and the
+// repository directories of st.
+func executeSessions(st *State, sessions []*SessionRecord, stats SourceStats, prog SearchProgram, now time.Time) *ExecutionResult {
+	startAll := time.Now()
 	var repoDirs []string
 	if st != nil {
 		repoDirs = st.RepoDirs
@@ -559,6 +592,20 @@ func ExecuteProgram(st *State, prog SearchProgram, now time.Time) *ExecutionResu
 	var traces []StepTrace
 	var groups []GroupSummary
 	scannedFiles := 0
+
+	// A route pins its scan_sessions steps to one project (pinProgram); then every other operator (correlate's
+	// candidates, where, exclude_tools) sees only that project's sessions too, so nothing of another project
+	// reaches the result.
+	if key := pinnedProjectKey(prog); key != "" {
+		keep := projectsForKey(sessions, key)
+		var in []*SessionRecord
+		for _, s := range sessions {
+			if keep[s.Project] {
+				in = append(in, s)
+			}
+		}
+		sessions = in
+	}
 
 	for idx, step := range prog.Steps {
 		stepStart := time.Now()
@@ -666,18 +713,42 @@ func ExecuteProgram(st *State, prog SearchProgram, now time.Time) *ExecutionResu
 	}
 }
 
+// pinnedProjectKey is the project_key a route pinned the program's scan_sessions steps to ("" when none).
+func pinnedProjectKey(prog SearchProgram) string {
+	for _, s := range prog.Steps {
+		if s.Op == "scan_sessions" {
+			if k := strings.TrimSpace(s.Args["project_key"]); k != "" {
+				return k
+			}
+		}
+	}
+	return ""
+}
+
 func evalScanSessions(sessions []*SessionRecord, args map[string]string, now time.Time) []*SearchHit {
 	query := strings.TrimSpace(args["query"])
 	scope := cmp.Or(strings.TrimSpace(args["scope"]), "conversation")
 	project := strings.ToLower(strings.TrimSpace(args["project"]))
 	harness := strings.ToLower(strings.TrimSpace(args["harness"]))
 	model := strings.ToLower(strings.TrimSpace(args["model"]))
+	machine := strings.TrimSpace(args["machine"])
+	pinned := strings.TrimSpace(args["project_key"])
+	var pinnedProjects map[string]bool
+	if pinned != "" {
+		pinnedProjects = projectsForKey(sessions, pinned)
+	}
 	sinceTime := parseSince(args["since"], now)
 	terms := splitQueryTerms(query)
 
 	var hits []*SearchHit
 	for _, s := range sessions {
 		if project != "" && !strings.Contains(strings.ToLower(s.Project), project) && !strings.Contains(strings.ToLower(s.CWD), project) {
+			continue
+		}
+		if pinned != "" && !pinnedProjects[s.Project] {
+			continue
+		}
+		if machine != "" && !machineMatches(machine, s.Machine, s.MachineName) {
 			continue
 		}
 		if harness != "" && !strings.Contains(strings.ToLower(s.Harness), harness) {
@@ -781,6 +852,8 @@ func evalScanSessions(sessions []*SessionRecord, args map[string]string, now tim
 			Location:     sessionLocation(s),
 			EntryID:      s.EntryID,
 			OriginalPath: archivedPath(s),
+			Machine:      s.Machine,
+			MachineName:  s.MachineName,
 		})
 	}
 	return hits
@@ -828,11 +901,15 @@ func evalWhere(hits []*SearchHit, sessions []*SessionRecord, args map[string]str
 	model := strings.ToLower(strings.TrimSpace(args["model"]))
 	role := strings.ToLower(strings.TrimSpace(args["role"]))
 	hasErr := strings.ToLower(strings.TrimSpace(args["has_error"]))
+	machine := strings.TrimSpace(args["machine"])
 	sinceTime := parseSince(args["since"], now)
 
 	var out []*SearchHit
 	for _, h := range hits {
 		if project != "" && !strings.Contains(strings.ToLower(h.Project), project) {
+			continue
+		}
+		if machine != "" && !machineMatches(machine, h.Machine, h.MachineName) {
 			continue
 		}
 		if harness != "" && !strings.Contains(strings.ToLower(h.Harness), harness) {
@@ -1086,6 +1163,8 @@ func evalGroupBy(hits []*SearchHit, field string) []GroupSummary {
 			key = cmp.Or(h.Model, "unknown")
 		case "error_kind":
 			key = cmp.Or(h.ErrorKind, "no_error")
+		case "machine":
+			key = machineLabel(h.Machine, h.MachineName)
 		case "role":
 			if len(h.Snippets) > 0 {
 				key = h.Snippets[0].Role

@@ -220,6 +220,15 @@ class LooksFileTests(unittest.TestCase):
         self.assertIn("looks demo: avatar 128 'looks/demo/avatar/128.png' is not a file", bad[0])
         self.assertIn("looks demo: dot working 'looks/demo/dot/working.png' is not a file", bad[1])
 
+    def test_data_directory_contributions_are_not_in_the_package(self):
+        m = self.make_ext({}, {}, [])
+        m['contributes'] = {'skills': [{'id': 'learned', 'source': 'data', 'dir': 'assistant/skills'}],
+                            'prompts': [{'id': 'i', 'kind': 'instructions', 'source': 'data',
+                                         'file': 'assistant/instructions.md'}]}
+        self.assertEqual(manifest.check_files('looks-demo', m), [])
+        m['contributes']['skills'][0].pop('source')
+        self.assertEqual(len(manifest.check_files('looks-demo', m)), 1)
+
     def test_a_file_outside_looks_would_be_left_out(self):
         m = self.make_ext({'64': 'images/64.png'}, {}, ['images/64.png'])
         bad = manifest.check_files('looks-demo', m)

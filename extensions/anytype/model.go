@@ -7,7 +7,7 @@ type space struct {
 
 type objectType struct {
 	ID      string `json:"id"`
-	TypeKey string `json:"type_key"`
+	TypeKey string `json:"key"`
 	Name    string `json:"name"`
 	Layout  string `json:"layout"`
 }

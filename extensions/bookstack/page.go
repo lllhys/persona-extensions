@@ -115,6 +115,29 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 	return &wire.ActionResult{View: v}, err
 }
 
+const maxViewRecords = 250
+
+// collectBatches accumulates a whole UI view through the current batch, capped so extra actions fit the view limit.
+func collectBatches[T any](start, current, step int, fetch func(int) (listPage[T], error)) ([]T, bool, error) {
+	var out []T
+	last := 0
+	for pos := start; pos <= current && len(out) < maxViewRecords; pos += step {
+		page, err := fetch(pos)
+		if err != nil {
+			return nil, false, err
+		}
+		last = len(page.Data)
+		out = append(out, page.Data...)
+		if last < 50 {
+			break
+		}
+	}
+	if len(out) > maxViewRecords {
+		out = out[:maxViewRecords]
+	}
+	return out, last == 50 && len(out) < maxViewRecords, nil
+}
+
 func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState) (*wire.View, error) {
 	t := textsFor(r.Locale)
 	if a.client.base == "" || a.client.tokenID == "" || a.client.tokenSecret == "" {
@@ -146,13 +169,15 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState) (*wire.V
 		if err := validID(st.BookID); err != nil {
 			return nil, err
 		}
-		page, err := a.client.pages(ctx, st.BookID, st.Offset)
+		items, more, err := collectBatches(st.Offset%50, st.Offset, 50, func(offset int) (listPage[page], error) {
+			return a.client.pages(ctx, st.BookID, offset)
+		})
 		a.record(err)
 		if err != nil {
 			return nil, err
 		}
-		section := wire.Section{Title: fmt.Sprintf(t.pages, len(page.Data))}
-		for _, item := range page.Data {
+		section := wire.Section{Title: fmt.Sprintf(t.pages, len(items))}
+		for _, item := range items {
 			if item.ID <= 0 || item.Name == "" {
 				continue
 			}
@@ -161,7 +186,7 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState) (*wire.V
 		if len(section.Items) == 0 {
 			section.Items = append(section.Items, wire.Component{Type: wire.ComponentEmpty, Title: t.noPages})
 		}
-		if len(page.Data) == 50 {
+		if more {
 			section.More = &wire.More{Title: t.more, Action: wire.Action{ID: "more"}}
 		}
 		v := &wire.View{Title: clipText(st.BookName, 1800), State: ext.EncodeState(st), Sections: []wire.Section{section, {Title: t.pages, Items: []wire.Component{
@@ -173,13 +198,15 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState) (*wire.V
 	if st.Mode != "" {
 		return nil, errors.New("invalid knowledge view")
 	}
-	page, err := a.client.books(ctx, st.Offset)
+	items, more, err := collectBatches(st.Offset%50, st.Offset, 50, func(offset int) (listPage[book], error) {
+		return a.client.books(ctx, offset)
+	})
 	a.record(err)
 	if err != nil {
 		return nil, err
 	}
 	section := wire.Section{Title: t.books}
-	for _, item := range page.Data {
+	for _, item := range items {
 		if item.ID <= 0 || item.Name == "" {
 			continue
 		}
@@ -188,7 +215,7 @@ func (a *app) page(ctx context.Context, r *ext.UIRequest, st pageState) (*wire.V
 	if len(section.Items) == 0 {
 		section.Items = append(section.Items, wire.Component{Type: wire.ComponentEmpty, Title: t.noBooks})
 	}
-	if len(page.Data) == 50 {
+	if more {
 		section.More = &wire.More{Title: t.more, Action: wire.Action{ID: "more"}}
 	}
 	v := &wire.View{Title: t.knowledge, State: ext.EncodeState(st), Search: &wire.Search{Placeholder: t.search, Value: st.Search, Action: wire.Action{ID: "search"}}, Sections: []wire.Section{section}}
@@ -200,13 +227,15 @@ func (a *app) searchView(ctx context.Context, r *ext.UIRequest, st pageState) (*
 	if st.SearchPage < 1 {
 		st.SearchPage = 1
 	}
-	page, err := a.client.search(ctx, st.Search, st.SearchPage)
+	items, more, err := collectBatches(1, st.SearchPage, 1, func(pageNumber int) (listPage[searchResult], error) {
+		return a.client.search(ctx, st.Search, pageNumber)
+	})
 	a.record(err)
 	if err != nil {
 		return nil, err
 	}
-	section := wire.Section{Title: fmt.Sprintf(t.pages, len(page.Data))}
-	for _, item := range page.Data {
+	section := wire.Section{Title: fmt.Sprintf(t.pages, len(items))}
+	for _, item := range items {
 		if item.ID <= 0 || item.Name == "" {
 			continue
 		}
@@ -221,7 +250,7 @@ func (a *app) searchView(ctx context.Context, r *ext.UIRequest, st pageState) (*
 	if len(section.Items) == 0 {
 		section.Items = append(section.Items, wire.Component{Type: wire.ComponentEmpty, Title: t.noPages})
 	}
-	if len(page.Data) == 50 {
+	if more {
 		section.More = &wire.More{Title: t.more, Action: wire.Action{ID: "more-search"}}
 	}
 	return &wire.View{Title: t.search, State: ext.EncodeState(st), Search: &wire.Search{Placeholder: t.search, Value: st.Search, Action: wire.Action{ID: "search"}}, Sections: []wire.Section{section, {Items: []wire.Component{{Type: wire.ComponentButton, Title: t.back, Action: &wire.Action{ID: "books"}}}}}}, nil

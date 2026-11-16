@@ -79,9 +79,25 @@ func (c *client) login(ctx context.Context) (string, error) {
 }
 
 func (c *client) do(ctx context.Context, method, path string, query, form url.Values, out any) error {
-	auth, err := c.login(ctx)
+	data, err := c.doBytes(ctx, method, path, query, form)
 	if err != nil {
 		return err
+	}
+	if out != nil {
+		if err := json.Unmarshal(data, out); err != nil {
+			return errors.New("FreshRSS returned invalid JSON")
+		}
+	} else if strings.TrimSpace(string(data)) != "OK" && !json.Valid(data) {
+		return errors.New("FreshRSS returned an unsuccessful operation")
+	}
+	return nil
+}
+
+// doBytes performs an authenticated request and returns a successful response body without assuming its format.
+func (c *client) doBytes(ctx context.Context, method, path string, query, form url.Values) ([]byte, error) {
+	auth, err := c.login(ctx)
+	if err != nil {
+		return nil, err
 	}
 	var body io.Reader
 	if form != nil {
@@ -89,7 +105,7 @@ func (c *client) do(ctx context.Context, method, path string, query, form url.Va
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.base+path, body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Authorization", "GoogleLogin auth="+auth)
 	req.Header.Set("Accept", "application/json")
@@ -101,34 +117,27 @@ func (c *client) do(ctx context.Context, method, path string, query, form url.Va
 	}
 	res, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("%w: %v", errUnavailable, err)
+		return nil, fmt.Errorf("%w: %v", errUnavailable, err)
 	}
 	defer res.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(res.Body, 4<<20+1))
 	if err != nil {
-		return errUnavailable
+		return nil, errUnavailable
 	}
 	if len(data) > 4<<20 {
-		return errors.New("FreshRSS returned an oversized response")
+		return nil, errors.New("FreshRSS returned an oversized response")
 	}
 	switch res.StatusCode {
 	case http.StatusOK:
-		if out != nil {
-			if err := json.Unmarshal(data, out); err != nil {
-				return errors.New("FreshRSS returned invalid JSON")
-			}
-		} else if strings.TrimSpace(string(data)) != "OK" && !json.Valid(data) {
-			return errors.New("FreshRSS returned an unsuccessful operation")
-		}
-		return nil
+		return data, nil
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return errToken
+		return nil, errToken
 	case http.StatusNotFound:
-		return errNotFound
+		return nil, errNotFound
 	case http.StatusTooManyRequests:
-		return errRateLimited
+		return nil, errRateLimited
 	default:
-		return fmt.Errorf("FreshRSS returned HTTP %d", res.StatusCode)
+		return nil, fmt.Errorf("FreshRSS returned HTTP %d", res.StatusCode)
 	}
 }
 
@@ -165,12 +174,13 @@ func (c *client) subscriptions(ctx context.Context) ([]subscription, error) {
 }
 
 func (c *client) actionToken(ctx context.Context) (string, error) {
-	var raw json.RawMessage
-	if err := c.do(ctx, http.MethodGet, "/reader/api/0/token", nil, nil, &raw); err != nil {
+	data, err := c.doBytes(ctx, http.MethodGet, "/reader/api/0/token", nil, nil)
+	if err != nil {
 		return "", err
 	}
-	var token string
-	if err := json.Unmarshal(raw, &token); err != nil || len(token) < 20 || len(token) > 128 || strings.ContainsAny(token, "\r\n") {
+	// FreshRSS returns the token as plain text followed by one newline, not as a JSON string.
+	token := strings.TrimSuffix(strings.TrimSuffix(string(data), "\n"), "\r")
+	if len(token) < 20 || len(token) > 128 || strings.ContainsAny(token, "\r\n") {
 		return "", errors.New("FreshRSS returned an invalid action token")
 	}
 	return token, nil

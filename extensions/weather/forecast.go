@@ -18,30 +18,87 @@ type forecast struct {
 }
 
 type current struct {
-	Time          string  `json:"time"`
-	Temperature   float64 `json:"temperature_2m"`
-	Apparent      float64 `json:"apparent_temperature"`
-	Humidity      float64 `json:"relative_humidity_2m"`
-	WeatherCode   int     `json:"weather_code"`
-	WindSpeed     float64 `json:"wind_speed_10m"`
-	WindDirection float64 `json:"wind_direction_10m"`
+	Time          string        `json:"time"`
+	Temperature   nullableFloat `json:"temperature_2m"`
+	Apparent      nullableFloat `json:"apparent_temperature"`
+	Humidity      nullableFloat `json:"relative_humidity_2m"`
+	WeatherCode   nullableInt   `json:"weather_code"`
+	WindSpeed     nullableFloat `json:"wind_speed_10m"`
+	WindDirection nullableFloat `json:"wind_direction_10m"`
+}
+
+type nullableFloat struct {
+	Value float64
+	OK    bool
+}
+
+func (n *nullableFloat) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		n.Value, n.OK = 0, false
+		return nil
+	}
+	var v float64
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	n.Value, n.OK = v, true
+	return nil
+}
+
+type nullableInt struct {
+	Value int
+	OK    bool
+}
+
+func (n *nullableInt) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		n.Value, n.OK = 0, false
+		return nil
+	}
+	var v int
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	n.Value, n.OK = v, true
+	return nil
+}
+
+func tempText(v nullableFloat, u temperatureUnit) string {
+	if !v.OK {
+		return "未知"
+	}
+	return fmtTemp(v.Value, u)
+}
+
+func percentText(v nullableFloat) string {
+	if !v.OK {
+		return "未知"
+	}
+	return fmt.Sprintf("%.0f%%", v.Value)
+}
+
+func wmoOptional(v nullableInt) (string, string) {
+	if !v.OK {
+		return "未知", "❓"
+	}
+	return wmo(v.Value)
 }
 
 type hourly struct {
-	Time   []string  `json:"time"`
-	Temp   []float64 `json:"temperature_2m"`
-	Code   []int     `json:"weather_code"`
-	Precip []float64 `json:"precipitation_probability"`
+	Time   []string        `json:"time"`
+	Temp   []nullableFloat `json:"temperature_2m"`
+	Code   []nullableInt   `json:"weather_code"`
+	Precip []nullableFloat `json:"precipitation_probability"`
 }
 
 type daily struct {
-	Time    []string  `json:"time"`
-	Code    []int     `json:"weather_code"`
-	Max     []float64 `json:"temperature_2m_max"`
-	Min     []float64 `json:"temperature_2m_min"`
-	Precip  []float64 `json:"precipitation_probability_max"`
-	Sunrise []string  `json:"sunrise"`
-	Sunset  []string  `json:"sunset"`
+	Time    []string        `json:"time"`
+	Code    []nullableInt   `json:"weather_code"`
+	Max     []nullableFloat `json:"temperature_2m_max"`
+	Min     []nullableFloat `json:"temperature_2m_min"`
+	Precip  []nullableFloat `json:"precipitation_probability_max"`
+	Sunrise []string        `json:"sunrise"`
+	Sunset  []string        `json:"sunset"`
 }
 
 // hourTime is the hourly time format Open-Meteo sends (city-local, no seconds).
@@ -79,14 +136,14 @@ func (f forecast) next24() []hourPoint {
 	from := f.nowHour()
 	out := make([]hourPoint, 0, 24)
 	for i, s := range f.Hourly.Time {
-		if i >= len(f.Hourly.Temp) {
-			break
+		if i >= len(f.Hourly.Temp) || !f.Hourly.Temp[i].OK {
+			continue
 		}
 		t, err := time.Parse(hourTime, s)
 		if err != nil || t.Before(from) {
 			continue
 		}
-		out = append(out, hourPoint{at: t, temp: f.Hourly.Temp[i]})
+		out = append(out, hourPoint{at: t, temp: f.Hourly.Temp[i].Value})
 		if len(out) == 24 {
 			break
 		}
@@ -97,10 +154,10 @@ func (f forecast) next24() []hourPoint {
 // day is one row of the 7-day forecast.
 type day struct {
 	date   time.Time
-	code   int
-	max    float64
-	min    float64
-	precip float64
+	code   nullableInt
+	max    nullableFloat
+	min    nullableFloat
+	precip nullableFloat
 }
 
 // days is the daily forecast, at most n days, from today on.
@@ -133,10 +190,10 @@ func (f forecast) days(n int) []day {
 
 // todayHighLow is today's high and low (daily[0]), for the current weather and the now tool.
 func (f forecast) todayHighLow() (high, low float64, ok bool) {
-	if len(f.Daily.Max) == 0 || len(f.Daily.Min) == 0 {
+	if len(f.Daily.Max) == 0 || len(f.Daily.Min) == 0 || !f.Daily.Max[0].OK || !f.Daily.Min[0].OK {
 		return 0, 0, false
 	}
-	return f.Daily.Max[0], f.Daily.Min[0], true
+	return f.Daily.Max[0].Value, f.Daily.Min[0].Value, true
 }
 
 // weekdays are the Chinese names, Sunday first (time.Weekday is Sunday=0).

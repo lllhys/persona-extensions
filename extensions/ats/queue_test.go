@@ -353,7 +353,7 @@ func TestOutcomeIsWrittenToTheTodoOnce(t *testing.T) {
 	if len(written) != 1 || written[0].Choice != "通过验收" || written[0].Ref != "ats:"+pass.ID+":succeeded:pass" {
 		t.Fatalf("decisions: %+v", written)
 	}
-	for _, want := range []string{"go test ./...", "ats/example-1", "0123456789ab, "} {
+	for _, want := range []string{"go test ./...", "ats/example-1", "提交 0123456"} {
 		if !strings.Contains(written[0].Reason, want) {
 			t.Errorf("the reason does not have %q: %s", want, written[0].Reason)
 		}

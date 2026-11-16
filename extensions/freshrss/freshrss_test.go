@@ -69,7 +69,8 @@ func newFakeFreshRSS(t *testing.T) *fakeFreshRSS {
 		case "/reader/api/0/subscription/list":
 			_ = json.NewEncoder(w).Encode(map[string]any{"subscriptions": []subscription{{ID: "feed/7", Title: "Example Feed"}}})
 		case "/reader/api/0/token":
-			_ = json.NewEncoder(w).Encode("synthetic-action-token-value")
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("synthetic-action-token-value\n"))
 		case "/reader/api/0/edit-tag":
 			if f.failWrite {
 				http.Error(w, "synthetic interrupted write", http.StatusServiceUnavailable)
@@ -146,6 +147,14 @@ func TestUnreadArticlesSanitizationAndSubscriptions(t *testing.T) {
 	}
 	if strings.Contains(paths, testPassword) {
 		t.Fatal("password appeared in a URL")
+	}
+}
+
+func TestActionTokenPlainText(t *testing.T) {
+	a := newFakeFreshRSS(t).app()
+	token, err := a.client.actionToken(t.Context())
+	if err != nil || token != "synthetic-action-token-value" {
+		t.Fatalf("token=%q, err=%v", token, err)
 	}
 }
 

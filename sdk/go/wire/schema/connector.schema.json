@@ -243,9 +243,34 @@
         "due_date": {
           "type": "string",
           "pattern": "^\\$(?:\\.[A-Za-z_][A-Za-z0-9_-]*|\\[[0-9]+\\])*$"
+        },
+        "sender_id": {
+          "type": "string",
+          "pattern": "^\\$(?:\\.[A-Za-z_][A-Za-z0-9_-]*|\\[[0-9]+\\])*$",
+          "description": "The sender's stable id; without it the sender tag is the lowercased display name."
+        },
+        "chat": {
+          "type": "string",
+          "pattern": "^\\$(?:\\.[A-Za-z_][A-Za-z0-9_-]*|\\[[0-9]+\\])*$",
+          "description": "The conversation's stable id: the row gets a chat tag."
+        },
+        "chat_name": {
+          "type": "string",
+          "pattern": "^\\$(?:\\.[A-Za-z_][A-Za-z0-9_-]*|\\[[0-9]+\\])*$",
+          "description": "The conversation's name, the chat tag's name."
+        },
+        "seen": {
+          "type": "string",
+          "pattern": "^\\$(?:\\.[A-Za-z_][A-Za-z0-9_-]*|\\[[0-9]+\\])*$",
+          "description": "Whether the item was already seen in the source: true, a non-zero number, or true, 1, yes, read or seen in any case. The Inbox row is read when its newest item is; seen only ever turns on."
+        },
+        "reply_to": {
+          "type": "string",
+          "pattern": "^\\$(?:\\.[A-Za-z_][A-Za-z0-9_-]*|\\[[0-9]+\\])*$",
+          "description": "Where a reply goes and who sees it, in a line for people. With it, an item with an id can be replied to through the connector's inbox reply, with its thread (else its id) and its id as last."
         }
       },
-      "description": "Paths relative to one item. Only $, .field and [index] are supported; no expressions or recursive descent."
+      "description": "Paths relative to one item. Only $, .field and [index] are supported; no expressions or recursive descent. sender_id, chat and chat_name name who and where for mutes and policies (the Inbox row's sender and chat tags), seen its read state, and reply_to where a reply goes; none of them is part of an item's content."
     },
     "ConnectorSubscriptionRecipe": {
       "type": "object",
@@ -257,6 +282,22 @@
           "type": "string"
         },
         "args": {},
+        "cursor_arg": {
+          "type": "string",
+          "minLength": 1
+        },
+        "next_cursor_path": {
+          "type": "string",
+          "pattern": "^\\$(?:\\.[A-Za-z_][A-Za-z0-9_-]*|\\[[0-9]+\\])*$"
+        },
+        "page_arg": {
+          "type": "string",
+          "minLength": 1
+        },
+        "next_page_path": {
+          "type": "string",
+          "pattern": "^\\$(?:\\.[A-Za-z_][A-Za-z0-9_-]*|\\[[0-9]+\\])*$"
+        },
         "items_path": {
           "type": "string",
           "pattern": "^\\$(?:\\.[A-Za-z_][A-Za-z0-9_-]*|\\[[0-9]+\\])*$"
@@ -277,7 +318,7 @@
         "kind",
         "group_by"
       ],
-      "description": "A pull recipe, not a schedule. args is an object (default {}); strings may contain {{since}} or {{since_date}}. items_path defaults to $; fields are relative to one item. Text results require snapshot mode. Runtime argument/schema and mapped-value validation belongs to the subscription runner."
+      "description": "A pull recipe, not a schedule. args is an object (default {}); strings may contain {{since}} or {{since_date}}. cursor_arg and next_cursor_path opt into cursor pagination; page_arg and optional next_page_path opt into page pagination (without next_page_path, a full requested page continues). items_path defaults to $; fields are relative to one item. Text results require snapshot mode. Runtime argument/schema and mapped-value validation belongs to the subscription runner."
     },
     "ConnectorErrorCode": {
       "description": "error.code a program answers or gets besides the base ErrorCode: rate_limited (tools.call / actions.do, and the hub's answer to too many sent.record; data {retry_after} in seconds, fractional allowed), why credentials.gh_token has no token, and what recall answers: not_recallable (nothing was sent: the program cannot take that message back) and recall_unknown (the request may have taken effect). not_signed_in, offline and rate_limited also say that recall could not act now. not_read_only refuses a catalog.call outside the current read-only catalog.",

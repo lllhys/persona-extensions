@@ -24,7 +24,7 @@ Disklessly 插件把本机和 SSH 远程机器的磁盘水位监控、可重建�
 2. `disklessly_scan {machine?, cached?}`：对指定机器（如 `local`、`armbox`、`devvm`、`mini-2`）执行只读扫描，获取根分区 `df` 水位、6 大分类明细、Agent 冷热会话统计以及 Dry-Run 清理计划。
 3. `disklessly_history {machine?, limit?}`：查看各机器历史清理台账（每次清理前后 `df` 实测可用空间对比，如 `5.4 GiB → 18.0 GiB (+12.6 GiB)`）。
 4. `disklessly_sessions_search {query, machine?, limit?, deep?}`：用户想找回以前的 Agent 对话时，按标题、首条消息、项目、工作目录、关键词搜索已上云的会话；本地索引找不到时再用 `deep: true` 在机器上全文搜索摘要。结果里的位置：`在云端`（最近 24 小时检查过、可恢复）、`云端缺失`、`本地`、`未知`（后端不可达或未检查，不代表丢失）。
-5. `disklessly_sessions_status {machine?, refresh?}`：查看各机器备份后端是否可达、已索引会话数和各位置统计；需要最新状态时传 `refresh: true`。
+5. `disklessly_sessions_status {machine?, refresh?}`：查看各机器备份后端是否可达、已索引会话数和各位置统计；需要最新状态时传 `refresh: true`。每台机器的 `state` 说明它的情况（`ready`、`no_cli`、`cli_too_old`、`no_backend`、`backend_unreachable`、`unreachable`、`unreadable`、`unchecked`），向用户转述时用返回的 `message`（哪台、什么原因）和 `next`（下一步），有 `command` 时把命令原样给用户；`detail` 是原始输出，用户要看细节时再给。CLI 缺失或过旧时优先用 Homebrew：`fix` 指向 `disklessly_cli_install`（`method=brew` 运行 `brew tap nwverse/tap && brew install nwverse/tap/disklessly-cli`，已由 Homebrew 安装时升级），用户确认后再调用；机器上没有 Homebrew 时才用 `method=copy` 从同系统同架构的机器复制，两者都不行就把 `command` 给用户手动运行。
 
 只读工具直接运行；需要真正释放空间或修改机器列表时，先向用户展示扫描出的 Dry-Run 计划明细和预计释放体积，再用写入工具：
 

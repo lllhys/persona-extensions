@@ -34,6 +34,9 @@ type RestoreResult struct {
 // disklesslyAppCLI is the CLI inside the macOS app bundle, where the disklessly extension also looks.
 var disklesslyAppCLI = "/Applications/Disklessly.app/Contents/MacOS/disklessly"
 
+// disklesslySystemCLIs are the system-wide install locations looked at after the home directory's.
+var disklesslySystemCLIs = []string{"/usr/local/bin/disklessly", "/opt/homebrew/bin/disklessly"}
+
 // restoreKillGrace is how long a restore waits for the CLI's pipes to close after it was killed.
 var restoreKillGrace = 5 * time.Second
 
@@ -50,13 +53,8 @@ func findDisklessly() (string, error) {
 		return p, nil
 	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		for _, p := range []string{
-			filepath.Join(home, ".disklessly", "bin", "disklessly"),
-			filepath.Join(home, ".local", "bin", "disklessly"),
-			"/usr/local/bin/disklessly",
-			"/opt/homebrew/bin/disklessly",
-			disklesslyAppCLI,
-		} {
+		cands := []string{filepath.Join(home, ".disklessly", "bin", "disklessly"), filepath.Join(home, ".local", "bin", "disklessly")}
+		for _, p := range append(append(cands, disklesslySystemCLIs...), disklesslyAppCLI) {
 			if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
 				return p, nil
 			}

@@ -1,0 +1,66 @@
+{
+  "manifest_version": 1,
+  "id": "domains",
+  "name": "Domains 域名",
+  "version": "0.1.1",
+  "icon": "assets/icon.png",
+  "description": "查询单个 .com 或 .net 域名的公开 RDAP 注册信息，查看注册、到期和变更日期，保留本地最近查询。无需账号；不做批量扫描、DNS 探测或联系人收集。",
+  "publisher": "nwverse",
+  "homepage": "https://github.com/nwverse/persona-extensions/blob/main/extensions/domains/README.md",
+  "tags": [
+    "域名",
+    "RDAP",
+    "注册信息",
+    "到期日期"
+  ],
+  "engines": {
+    "persona": ">=202611101800",
+    "extension_protocol": 1
+  },
+  "runtime": {
+    "mode": "deno",
+    "source": {
+      "entry": "src/index.ts",
+      "bundle": "build/domains.mjs",
+      "sha256": "2cd2bf790f89ab76106821a7b084e17a1093a302096268d594db5efdbf1291d3"
+    }
+  },
+  "contributes": {
+    "connectors": [
+      {
+        "id": "domains",
+        "name": "Domains",
+        "capabilities": [
+          "status",
+          "tools"
+        ],
+        "hosts": [
+          "data.iana.org",
+          "rdap.verisign.com"
+        ],
+        "agent_tools": [
+          "domains_*"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "lookup",
+        "title": "域名查询",
+        "placement": "nav_page",
+        "icon": "search"
+      }
+    ]
+  },
+  "permissions": {
+    "network": [
+      "data.iana.org",
+      "rdap.verisign.com"
+    ],
+    "storage": {
+      "keys": [
+        "history"
+      ]
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+ "count": "2",
+ "infocode": "10000",
+ "pois": [
+  {
+   "address": "永外大街车站路12号",
+   "business": {
+    "opentime_today": "05:30-24:00",
+    "keytag": "高铁站",
+    "business_area": "右安门",
+    "tel": "010-10000001",
+    "rectag": "高铁站",
+    "opentime_week": "周一至周日 05:30-24:00"
+   },
+   "distance": "",
+   "pcode": "110000",
+   "adcode": "110106",
+   "pname": "北京市",
+   "cityname": "北京市",
+   "type": "交通设施服务;火车站;火车站",
+   "typecode": "150200",
+   "adname": "丰台区",
+   "citycode": "010",
+   "name": "北京南站",
+   "location": "116.378517,39.865246"
+  },
+  {
+   "address": "14号线;4号线/大兴线",
+   "business": {
+    "keytag": "地铁站",
+    "tel": "010-10000002;010-10000003",
+    "rectag": "地铁站"
+   },
+   "distance": "",
+   "pcode": "110000",
+   "adcode": "110106",
+   "pname": "北京市",
+   "cityname": "北京市",
+   "type": "交通设施服务;地铁站;地铁站",
+   "typecode": "150500",
+   "adname": "丰台区",
+   "citycode": "010",
+   "name": "北京南站(地铁站)",
+   "location": "116.379008,39.865012"
+  }
+ ],
+ "status": "1",
+ "info": "OK"
+}

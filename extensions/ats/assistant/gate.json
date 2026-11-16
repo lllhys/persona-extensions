@@ -13,7 +13,7 @@
     {"method": "*", "path": "**", "action": "deny"}
   ],
   "actions": [
-    {"pattern": "^POST /tasks", "what": "给待办派一个 ATS 任务"}
+    {"pattern": "^POST /tasks", "what": "派一个 ATS 任务：Agent 会在你的电脑上无人值守地执行"}
   ],
   "tool": {
     "name": "ats_api",

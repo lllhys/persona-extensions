@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"reflect"
 	"slices"
@@ -300,8 +301,9 @@ func TestScriptedSession(t *testing.T) {
 	// The schema of the space lists its types with their value schemas.
 	sch := asMap(t, s.done("schema", fmt.Sprintf(`{"space":%q}`, space)))
 	types := asList(t, sch["types"])
-	if len(types) != 6 {
-		t.Errorf("types = %d, want 6", len(types))
+	project, _ := templates.Get("project")
+	if want := len(project.Types) + 2; len(types) != want {
+		t.Errorf("types = %d, want %d", len(types), want)
 	}
 	if vs := asMap(t, asMap(t, types[len(types)-2])["values_schema"]); vs["type"] != "object" {
 		t.Errorf("values_schema = %v", vs)
@@ -328,7 +330,7 @@ func TestScriptedSession(t *testing.T) {
 
 	// With no space left, the schema tool lists the templates and the vocabulary.
 	empty := asMap(t, s.done("schema", `{}`))
-	if len(asList(t, empty["spaces"])) != 0 || len(asList(t, empty["templates"])) != 4 {
+	if len(asList(t, empty["spaces"])) != 0 || len(asList(t, empty["templates"])) != len(templates.All()) {
 		t.Errorf("empty overview = %v", empty)
 	}
 	if _, ok := asMap(t, empty["vocabulary"])["templates"]; !ok {
@@ -703,17 +705,34 @@ func TestQuerySchemaUsesKernelGenerators(t *testing.T) {
 			t.Errorf("query schema without %q", k)
 		}
 	}
+	// The kernel's properties are taken as they are; only the descriptions of type and where say more.
 	kernelProps := asMap(t, get(t, norm(t, kernel.QuerySchema()), "properties"))
 	for k, v := range kernelProps {
-		if !reflect.DeepEqual(props[k], v) {
+		got := asMap(t, props[k])
+		if k == "type" || k == "where" {
+			got, v = withoutDescription(got), withoutDescription(asMap(t, v))
+		}
+		if !reflect.DeepEqual(got, v) {
 			t.Errorf("query schema property %q differs from the kernel", k)
 		}
 	}
-	if got, want := norm(t, typeWriteInput()), norm(t, map[string]any{"type": "object", "additionalProperties": false,
-		"required":   []string{"type"},
-		"properties": map[string]any{"space": spaceProp(), "type": kernel.TypeSchema()}}); !reflect.DeepEqual(got, want) {
-		t.Errorf("type_write schema differs from the kernel generator")
+	// The type of type_write is the kernel's, except that only key is required (a merge needs no name).
+	ts := kernel.TypeSchema()
+	ts["required"] = []string{"key"}
+	tw := asMap(t, norm(t, typeWriteInput()))
+	if got, want := withoutDescription(asMap(t, get(t, tw, "properties", "type"))), withoutDescription(asMap(t, norm(t, ts))); !reflect.DeepEqual(got, want) {
+		t.Errorf("type_write type schema differs from the kernel generator")
 	}
+	if !reflect.DeepEqual(tw["required"], []any{"type"}) || get(t, tw, "properties", "merge", "type") != "boolean" {
+		t.Errorf("type_write schema = %v", tw)
+	}
+}
+
+// withoutDescription is a copy of a decoded schema without its own description.
+func withoutDescription(m map[string]any) map[string]any {
+	out := maps.Clone(m)
+	delete(out, "description")
+	return out
 }
 
 // checkSchema checks a decoded JSON Schema of a tool input: every object refuses unknown properties, lists only known
