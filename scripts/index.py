@@ -74,6 +74,10 @@ def tree_inventory(ref):
             value = catalog.loads(raw)
             if not isinstance(value, dict):
                 raise ValueError("extensions/%s/l10n/%s.json: not a JSON object" % (extension_id, language))
+            try:
+                catalog.validate_translation(value)
+            except ValueError as e:
+                raise ValueError("extensions/%s/l10n/%s.json: %s" % (extension_id, language, e))
             l10n[language] = value
         inventory.append(catalog.source_entry(manifest, l10n=l10n))
     catalog.validate_entry_identities(inventory)

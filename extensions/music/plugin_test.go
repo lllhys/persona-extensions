@@ -311,7 +311,7 @@ func TestCreatePlaylistPartialWriteIsReported(t *testing.T) {
 		t.Fatalf("partial create: %+v %v", res, err)
 	}
 	again, err := call(t, a, "actions.do", body)
-	if err != nil || !strings.Contains(again["text"].(string), "not added") {
+	if err == nil || !strings.Contains(err.Error(), "not added") || !strings.Contains(err.Error(), "m2") {
 		t.Fatalf("retry: %+v %v", again, err)
 	}
 	if fn.count("create_playlist") != 1 {

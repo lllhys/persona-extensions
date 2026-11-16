@@ -291,8 +291,8 @@ func TestDuplicateEndpointIDsResolveBySource(t *testing.T) {
 	}
 }
 
-// A write that happened but whose follow-up failed stays a receipt: the same request_id answers it and never creates
-// a second playlist.
+// A write that happened but whose follow-up failed stays a receipt: the same request_id answers the same failure and
+// never creates a second playlist, and a replay never turns that failure into success.
 func TestWriteStoreKeepsAWrittenFollowUpFailure(t *testing.T) {
 	s := newWriteStore("")
 	runs := 0
@@ -303,15 +303,18 @@ func TestWriteStoreKeepsAWrittenFollowUpFailure(t *testing.T) {
 	if err == nil || text != "" {
 		t.Fatalf("commit %q %v", text, err)
 	}
-	if got := s.entries["id"]; got.Status != "done" || !strings.Contains(got.Text, "Created the playlist") {
+	if got := s.entries["id"]; got.Status != "done" || !got.Failed || !strings.Contains(got.Text, "Created the playlist") {
 		t.Fatalf("receipt %+v", got)
 	}
-	text, err = s.commit("id", "k", func() (string, error) {
-		runs++
-		return "second create", nil
-	})
-	if err != nil || !strings.Contains(text, "Created the playlist") {
-		t.Fatalf("retry %q %v", text, err)
+	for i := 0; i < 2; i++ {
+		text, err = s.commit("id", "k", func() (string, error) {
+			runs++
+			return "second create", nil
+		})
+		var written *writtenError
+		if text != "" || !errors.As(err, &written) || !strings.Contains(err.Error(), "Created the playlist") {
+			t.Fatalf("replay %d: %q %v", i, text, err)
+		}
 	}
 	if runs != 1 {
 		t.Fatalf("the write ran %d times", runs)

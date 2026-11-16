@@ -86,6 +86,36 @@ class L10nTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             manifest.l10n('demo')
 
+    def test_a_translation_the_hub_would_drop_is_an_error(self):
+        # The hub drops a translation that does not match its Translation shape or limits
+        # (persona server/internal/extension/l10n.go); the repository must refuse it instead of shipping text the
+        # market will never show.
+        for bad in ('{"configuration": {"macs": true}}',
+                    '{"name": "%s"}' % ("n" * 41),
+                    '{"name": "   "}',
+                    '{"name": 7}',
+                    '{"description": "%s"}' % ("d" * 2001),
+                    '{"configuration": {"macs": {"title": 1}}}',
+                    '{"configuration": {"macs": {"choices": {"a": 1}}}}',
+                    '{"configuration": {"macs": {"properties": {"x": []}}}}',
+                    '{"secrets": {"token": []}}',
+                    '{"secrets": {"token": {"title": ["x"]}}}'):
+            self.write('zh-Hans.json', bad)
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                manifest.l10n('demo')
+
+    def test_a_translation_the_hub_accepts_passes(self):
+        self.write('zh-Hans.json', json.dumps({
+            "name": "演示",
+            "description": "d" * 2000,
+            "configuration": {"macs": {"title": "Mac", "description": "d", "confirm": "c",
+                                       "choices": {"a": "A"}, "properties": {"inner": {"title": "I"}}}},
+            "secrets": {"token": {"title": "Token", "description": "d"}},
+            "unknown": {"ignored": True},
+        }, ensure_ascii=False))
+        ts = manifest.l10n('demo')
+        self.assertEqual(ts['zh-Hans']['configuration']['macs']['choices']['a'], 'A')
+
     def test_the_catalog_entry_and_its_inventory_carry_them(self):
         self.write('zh-Hans.json', '{"name": "演示"}')
         entry = manifest.catalog.source_entry({'id': 'demo'}, l10n=manifest.l10n('demo'))

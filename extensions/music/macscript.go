@@ -298,8 +298,10 @@ on run argv
         set found to first track of lib whose persistent ID is pid
       end try
       if found is missing value then
+        -- The id came from the caller and may itself contain a separator: escape it like any other value so the
+        -- answer stays one record and the caller can still say not_found.
         if missingIDs is not "" then set missingIDs to missingIDs & ","
-        set missingIDs to missingIDs & pid
+        set missingIDs to missingIDs & (my sanitize(pid))
       else
         set end of foundTracks to found
       end if

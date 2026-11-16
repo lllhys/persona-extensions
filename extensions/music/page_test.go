@@ -324,6 +324,17 @@ func TestMacImageRef(t *testing.T) {
 	}
 }
 
+// A connector the user switched off must not answer, not even for a picture an old page still references.
+func TestDisabledSourceServesNoArtwork(t *testing.T) {
+	a := appWith(t, newMacProvider("m1", macFixture()))
+	a.enabled = map[string]bool{}
+	if _, err := a.image(context.Background(), &ext.ImageRequest{
+		UIImageParams: wire.UIImageParams{Ref: "applemusic:mac:track:m1", Width: 320},
+	}); err == nil {
+		t.Fatal("a disabled source served artwork")
+	}
+}
+
 func TestIPhoneEmptyPageExplainsTheSync(t *testing.T) {
 	a := appWith(t, newIPhoneProvider(openSnapshotStore(t.TempDir())))
 	v := draw(t, a, nil)

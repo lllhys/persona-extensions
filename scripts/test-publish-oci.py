@@ -265,6 +265,24 @@ class PublisherTests(CatalogFixture, unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "same-version"):
             publisher.desired_entries(self.body, "versions")
 
+    def test_l10n_change_requires_a_version_bump(self):
+        # Translations ship inside the package, so a catalog-only update would advertise text the installed package
+        # does not have; only a new version rebuilds the archive.
+        self.body["extensions"] = [copy.deepcopy(self.candidate)]
+        self.body["extensions"][0]["l10n"] = {"ja": {"name": "デモ"}}
+        new = {"ja": {"name": "デモ改"}}
+        with mock.patch.object(publisher.manifests, "l10n", return_value=new):
+            with self.assertRaisesRegex(ValueError, "l10n changed without a version bump"):
+                publisher.desired_entries(self.body, "versions")
+            bumped = copy.deepcopy(self.candidate)
+            bumped["manifest"]["version"] = "3.0.0"
+            with mock.patch.object(publisher.manifests, "packaged", return_value=bumped["manifest"]):
+                entries = publisher.desired_entries(self.body, "versions")
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["manifest"]["version"], "3.0.0")
+        self.assertEqual(entries[0]["packages"], [])
+        self.assertEqual(entries[0]["l10n"], new)
+
     def test_new_versions_cannot_publish_before_bootstrap_catalog(self):
         self.entry["packages"][0]["url"] = "release:demo-v1.2.3/demo-1.2.3.tar.gz"
         with self.assertRaisesRegex(ValueError, "bootstrap"):

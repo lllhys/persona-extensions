@@ -336,7 +336,8 @@ func (a *app) image(ctx context.Context, r *ext.ImageRequest) (*wire.UIImage, er
 		return nil, ext.Unsupported("unknown image ref")
 	}
 	src, ok := a.sources[parts[0]]
-	if !ok {
+	// A connector the user switched off must not answer, not even for a picture an old page still references.
+	if !ok || !a.sourceActive(parts[0]) {
 		return nil, ext.Unsupported("unknown image ref")
 	}
 	p, ok := src.providers[parts[1]]

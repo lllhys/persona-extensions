@@ -305,7 +305,7 @@ func (n *macNode) playlists(ctx context.Context) ([]macPlaylist, error) {
 
 func (n *macNode) playlist(ctx context.Context, id string, offset, limit int) (macDetail, error) {
 	id = strings.TrimSpace(id)
-	if id == "" || len(id) > 200 {
+	if id == "" || len(id) > 200 || !argvSafe(id) {
 		return macDetail{}, &ext.Error{Code: "invalid", Message: "invalid playlist id"}
 	}
 	offset = clamp(offset, 0, 0, maxPlaylistOffset)
@@ -384,7 +384,7 @@ func (n *macNode) control(ctx context.Context, action, id string, position float
 	switch action {
 	case "play_track", "play_playlist":
 		id = strings.TrimSpace(id)
-		if id == "" || len(id) > 200 {
+		if id == "" || len(id) > 200 || !argvSafe(id) {
 			return "", &ext.Error{Code: "invalid", Message: action + " needs an id"}
 		}
 		args = append(args, id)
@@ -403,17 +403,22 @@ func (n *macNode) control(ctx context.Context, action, id string, position float
 
 func (n *macNode) createPlaylist(ctx context.Context, name, description string, ids []string) (macCreate, error) {
 	name = cleanText(name, 100)
-	if name == "" {
+	if name == "" || !argvSafe(name) {
 		return macCreate{}, &ext.Error{Code: "invalid", Message: "playlist name must be 1 to 100 characters"}
 	}
 	description = cleanText(description, 1000)
+	if !argvSafe(description) {
+		return macCreate{}, &ext.Error{Code: "invalid", Message: "the playlist description contains characters this Mac cannot pass to Music"}
+	}
 	if len(ids) == 0 || len(ids) > 100 {
 		return macCreate{}, &ext.Error{Code: "invalid", Message: "a playlist needs 1 to 100 tracks"}
 	}
 	args := []string{name, description}
 	for _, id := range ids {
 		id = strings.TrimSpace(id)
-		if id == "" || len(id) > 200 {
+		// Text exec cannot pass as an argument fails before AppleScript starts; refusing it here keeps the write
+		// receipt definite (nothing was written) instead of pending.
+		if id == "" || len(id) > 200 || !argvSafe(id) {
 			return macCreate{}, &ext.Error{Code: "invalid", Message: "invalid track id"}
 		}
 		args = append(args, id)
@@ -423,22 +428,33 @@ func (n *macNode) createPlaylist(ctx context.Context, name, description string, 
 		return macCreate{}, macError(ctx, err)
 	}
 	rows := records(out)
-	if len(rows) != 1 || len(rows[0]) < 1 {
+	if len(rows) == 0 || len(rows[0]) == 0 {
 		return macCreate{}, &ext.Error{Code: "macos_music", Message: "Music created the playlist but returned no details."}
 	}
-	f := rows[0]
-	if f[0] == "missing" {
-		// The script checked every track before creating anything: nothing was written, so a retry is safe.
+	if rows[0][0] == "missing" {
+		// The script checks every track before creating anything: nothing was written, so a retry is safe. The ids
+		// come from the caller and the script escapes them; if one still arrives split by a separator, read every
+		// remaining field so an unknown id stays not_found instead of a malformed answer.
 		var missing []string
-		if len(f) > 1 && f[1] != "" {
-			missing = strings.Split(f[1], ",")
+		for r, row := range rows {
+			for c, id := range row {
+				if r == 0 && c == 0 {
+					continue // the "missing" marker
+				}
+				for _, part := range strings.Split(id, ",") {
+					if cleaned := cleanText(part, 200); cleaned != "" {
+						missing = append(missing, cleaned)
+					}
+				}
+			}
 		}
 		return macCreate{}, &ext.Error{Code: "not_found",
 			Message: clip("These tracks are not in the Music library: "+strings.Join(missing, ", "), 300)}
 	}
-	if f[0] != "ok" || len(f) < 6 {
+	if len(rows) != 1 || len(rows[0]) < 6 || rows[0][0] != "ok" {
 		return macCreate{}, &ext.Error{Code: "macos_music", Message: "Music created the playlist but returned no details."}
 	}
+	f := rows[0]
 	var failed []string
 	if f[5] != "" {
 		failed = strings.Split(f[5], ",")
@@ -455,7 +471,7 @@ type macArtwork struct {
 func (n *macNode) artwork(ctx context.Context, kind, id string, width int) (macArtwork, error) {
 	kind = strings.TrimSpace(kind)
 	id = strings.TrimSpace(id)
-	if (kind != "track" && kind != "playlist") || id == "" || len(id) > 200 {
+	if (kind != "track" && kind != "playlist") || id == "" || len(id) > 200 || !argvSafe(id) {
 		return macArtwork{}, &ext.Error{Code: "invalid", Message: "invalid artwork reference"}
 	}
 	dir, err := os.MkdirTemp("", "persona-music-artwork-*")
@@ -528,4 +544,10 @@ func cleanText(s string, max int) string {
 		s = string([]rune(s)[:max])
 	}
 	return s
+}
+
+// argvSafe is false for text exec cannot pass as an argument: a NUL byte ends the C string, so osascript would never
+// start and the call would look like a write with an unknown outcome.
+func argvSafe(s string) bool {
+	return !strings.ContainsRune(s, 0)
 }

@@ -19,6 +19,9 @@ type writeReceipt struct {
 	Status    string    `json:"status"`
 	StartedAt time.Time `json:"started_at"`
 	Text      string    `json:"text,omitempty"`
+	// Failed marks a written outcome that was reported as an error (a created playlist whose follow-up failed). A
+	// replay answers that same failure instead of turning it into success.
+	Failed bool `json:"failed,omitempty"`
 }
 
 type writeStore struct {
@@ -65,6 +68,12 @@ func (s *writeStore) commit(id, key string, fn func() (string, error)) (string, 
 			return "", errors.New("request_id was already used for different music parameters")
 		}
 		if old.Status == "done" {
+			if old.Failed {
+				// The first attempt wrote but reported a failure (a created playlist that would not play, or one
+				// missing tracks). A replay answers that same failure; it never becomes success and never writes
+				// again.
+				return "", &writtenError{text: old.Text, err: errors.New(old.Text)}
+			}
 			return old.Text, nil
 		}
 		return "", errors.New("the previous music change has an unknown outcome; inspect it before retrying")
@@ -84,9 +93,10 @@ func (s *writeStore) commit(id, key string, fn func() (string, error)) (string, 
 	if err != nil {
 		var written *writtenError
 		if errors.As(err, &written) {
-			// The write happened; only a follow-up step (playing the new playlist) failed. Keep the receipt as done
-			// with that outcome, so the same request_id answers it instead of creating a second playlist.
-			s.entries[id] = writeReceipt{Key: key, Status: "done", StartedAt: time.Now().UTC(), Text: written.text}
+			// The write happened; only a follow-up step (playing the new playlist, adding a refused track) failed.
+			// Keep the receipt as done with that outcome, so the same request_id answers the same failure instead of
+			// creating a second playlist.
+			s.entries[id] = writeReceipt{Key: key, Status: "done", StartedAt: time.Now().UTC(), Text: written.text, Failed: true}
 			if werr := s.write(); werr != nil {
 				return "", fmt.Errorf("the music change may have completed; inspect it before retrying: %w", werr)
 			}
@@ -107,8 +117,9 @@ func (s *writeStore) commit(id, key string, fn func() (string, error)) (string, 
 	return text, nil
 }
 
-// writtenError is a write that completed but whose follow-up step failed (a created playlist that would not start).
-// Its text is what the request_id answers on a retry; it is never treated as "wrote nothing".
+// writtenError is a write that completed but whose follow-up step failed (a created playlist that would not start, or
+// one missing requested tracks). Its text is what the same request_id answers on a retry, as the same error; it is
+// never treated as "wrote nothing".
 type writtenError struct {
 	text string
 	err  error

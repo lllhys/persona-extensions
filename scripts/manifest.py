@@ -90,6 +90,10 @@ def l10n(id):
             raise ValueError("l10n/%s: %s" % (name, e))
         if not isinstance(value, dict):
             raise ValueError("l10n/%s: not a JSON object" % name)
+        try:
+            catalog.validate_translation(value)
+        except ValueError as e:
+            raise ValueError("l10n/%s: %s" % (name, e))
         out[name[:-len(".json")]] = value
     return out
 

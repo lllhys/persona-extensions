@@ -282,6 +282,51 @@ func TestMacNodeCreatePlaylistReportsRefusedTracks(t *testing.T) {
 	}
 }
 
+// A requested id can itself contain a record separator. The script escapes it in the missing-track answer (this is
+// what sanitize() emits), so the answer stays one record: the caller still learns not_found, not a parse failure.
+func TestMissingTrackWithASeparatorIsStillNotFound(t *testing.T) {
+	n := testMacNode(func(string, []string) (string, error) {
+		return "missing" + fieldSep + `bad\u001eid` + "," + "t2", nil
+	})
+	_, err := n.createPlaylist(context.Background(), "List", "", []string{"bad\x1eid", "t2"})
+	var e *ext.Error
+	if !errors.As(err, &e) || e.Code != "not_found" || !strings.Contains(e.Message, "bad id") {
+		t.Fatalf("escaped: %v", err)
+	}
+	// Even an answer that let the separator through (a script bug) still reads as not_found rather than a malformed
+	// answer: an unknown id must never look like a Music failure after a write.
+	n = testMacNode(func(string, []string) (string, error) {
+		return "missing" + fieldSep + "bad" + recordSep + "id", nil
+	})
+	_, err = n.createPlaylist(context.Background(), "List", "", []string{"bad\x1eid"})
+	if !errors.As(err, &e) || e.Code != "not_found" || !strings.Contains(e.Message, "bad") || !strings.Contains(e.Message, "id") {
+		t.Fatalf("raw separator: %v", err)
+	}
+}
+
+// Text exec cannot pass (a NUL byte) is refused before anything runs: the failure is definite, so no write receipt is
+// left pending for a call that never touched Music.
+func TestNULArgumentIsRefusedBeforeAnythingRuns(t *testing.T) {
+	ran := false
+	n := testMacNode(func(string, []string) (string, error) {
+		ran = true
+		return "", nil
+	})
+	_, err := n.createPlaylist(context.Background(), "List\x00", "", []string{"t1"})
+	var e *ext.Error
+	if !errors.As(err, &e) || e.Code != "invalid" || writeOutcomeUnknown(err) || ran {
+		t.Fatalf("name: %+v %v", e, err)
+	}
+	_, err = n.createPlaylist(context.Background(), "List", "Description\x00", []string{"t1"})
+	if !errors.As(err, &e) || e.Code != "invalid" || writeOutcomeUnknown(err) || ran {
+		t.Fatalf("description: %+v %v", e, err)
+	}
+	_, err = n.createPlaylist(context.Background(), "List", "", []string{"t\x001"})
+	if !errors.As(err, &e) || e.Code != "invalid" || writeOutcomeUnknown(err) || ran {
+		t.Fatalf("track id: %+v %v", e, err)
+	}
+}
+
 func TestMacNodeStatusAndStats(t *testing.T) {
 	n := testMacNode(func(script string, _ []string) (string, error) {
 		switch {
