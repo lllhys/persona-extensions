@@ -144,6 +144,11 @@ func TestMacProvider(t *testing.T) {
 	if _, err := p.Lyrics(ctx, "m1"); err != nil || fn.count("lyrics") != 1 {
 		t.Fatalf("lyrics calls %v %v", fn.calls, err)
 	}
+	// The Mac is asked for that track, not simply whatever is playing, or the cache entry would hold another song's
+	// words under this track's id.
+	if sent, _ := fn.params["lyrics"].(map[string]any); sent["id"] != "m1" {
+		t.Fatalf("lyrics sent %v", fn.params["lyrics"])
+	}
 	created, err := p.CreatePlaylist(ctx, createPlaylistRequest{Name: "New list", TrackIDs: []string{"m1"}})
 	if err != nil || created.ID != "p.new" {
 		t.Fatalf("create %+v %v", created, err)
@@ -171,6 +176,25 @@ func TestMacProviderOffline(t *testing.T) {
 	}
 }
 
+// A control action can change what is playing, so words cached before it must not answer the page's next poll.
+func TestControlDropsCachedLyrics(t *testing.T) {
+	fn := macFixture()
+	p := newMacProvider("m1", fn)
+	ctx := context.Background()
+	if _, err := p.Lyrics(ctx, "m1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Control(ctx, "next"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Lyrics(ctx, "m1"); err != nil {
+		t.Fatal(err)
+	}
+	if fn.count("lyrics") != 2 {
+		t.Fatalf("lyrics calls %v", fn.calls)
+	}
+}
+
 type fakeRunner func(script string, args []string) (string, error)
 
 func (f fakeRunner) Run(_ context.Context, script string, args ...string) (string, error) {
@@ -179,6 +203,48 @@ func (f fakeRunner) Run(_ context.Context, script string, args ...string) (strin
 
 func testMacNode(fn fakeRunner) *macNode {
 	return &macNode{run: fn, host: "macbook", now: func() time.Time { return time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC) }, cache: map[string]macCache{}}
+}
+
+// The node passes the track id to the script, which resolves that track by persistent ID; the current track is used
+// only when it is the requested one.
+func TestMacNodeLyricsResolvesTheRequestedTrack(t *testing.T) {
+	var gotArgs []string
+	n := testMacNode(func(script string, args []string) (string, error) {
+		if !strings.Contains(script, "persistent ID") {
+			t.Fatalf("lyrics script does not resolve the track by id")
+		}
+		gotArgs = args
+		return "  words for m2\n", nil
+	})
+	got, err := n.lyrics(context.Background(), "m2")
+	if err != nil || got != "words for m2" {
+		t.Fatalf("lyrics %q %v", got, err)
+	}
+	if len(gotArgs) != 1 || gotArgs[0] != "m2" {
+		t.Fatalf("lyrics args %q", gotArgs)
+	}
+}
+
+// The lyrics method takes the track id from its arguments; a call without parameters keeps the old "what is playing".
+func TestMacNodeLyricsHandlerTakesTheID(t *testing.T) {
+	var gotArgs []string
+	n := testMacNode(func(_ string, args []string) (string, error) {
+		gotArgs = args
+		return "words", nil
+	})
+	out, err := n.handle(context.Background(), "lyrics", json.RawMessage(`{"id":"m9"}`))
+	if err != nil || out != "words" {
+		t.Fatalf("lyrics %v %v", out, err)
+	}
+	if len(gotArgs) != 1 || gotArgs[0] != "m9" {
+		t.Fatalf("lyrics args %q", gotArgs)
+	}
+	if _, err := n.handle(context.Background(), "lyrics", nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(gotArgs) != 1 || gotArgs[0] != "" {
+		t.Fatalf("lyrics without an id sent %q", gotArgs)
+	}
 }
 
 func TestMacNodeRecent(t *testing.T) {
@@ -443,9 +509,14 @@ func TestIPhoneProvider(t *testing.T) {
 	}
 }
 
-func TestRecordsDropMissingValue(t *testing.T) {
-	rows := records("a" + fieldSep + "missing value" + fieldSep + "b" + recordSep + "c" + fieldSep + "d")
-	if len(rows) != 2 || rows[0][1] != "" || rows[1][1] != "d" {
+// A title's own padding and the words "missing value" are real text: records() hands every field back exactly as the
+// script wrote it, and drops only the newline osascript ends the output with.
+func TestRecordsKeepFieldText(t *testing.T) {
+	rows := records(" padded " + fieldSep + "missing value" + recordSep + `a\b` + fieldSep + "line\n")
+	if len(rows) != 2 || len(rows[0]) != 2 || len(rows[1]) != 2 {
+		t.Fatalf("records %#v", rows)
+	}
+	if rows[0][0] != " padded " || rows[0][1] != "missing value" || rows[1][0] != `a\b` || rows[1][1] != "line" {
 		t.Fatalf("records %#v", rows)
 	}
 }

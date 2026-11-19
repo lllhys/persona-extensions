@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -59,25 +60,35 @@ func TestScriptVariablesAvoidMusicTerms(t *testing.T) {
 	}
 }
 
-// TestSanitizeRoundTripsSeparators runs the same handler the scripts call on text containing both separators and a
-// backslash, then parses it with records(): the value must come back whole and the record must keep its fields.
+// TestSanitizeRoundTripsSeparators runs the same handler the scripts call on text containing the separators, a
+// backslash, or text that merely looks like an escape, then parses it with records(): the value must come back whole
+// and the record must keep its fields.
 func TestSanitizeRoundTripsSeparators(t *testing.T) {
-	field := "A\x1e title \x1f with \\ backslash"
 	script := sanitizeScript + `
 on run argv
   return my sanitize(item 1 of argv)
 end run
 `
-	out, err := exec.Command("/usr/bin/osascript", "-e", script, "--", field).Output()
-	if err != nil {
-		t.Fatalf("sanitize: %v", err)
-	}
-	rows := records(string(out) + fieldSep + "second")
-	if len(rows) != 1 || len(rows[0]) != 2 {
-		t.Fatalf("records %#v", rows)
-	}
-	if rows[0][0] != field || rows[0][1] != "second" {
-		t.Fatalf("round trip %q, want %q", rows[0][0], field)
+	for _, field := range []string{
+		"A\x1e title \x1f with \\ backslash",
+		`a\b`,
+		`ends with \`,
+		`literal \u001e and \u001f text`,
+		"backslash then a real separator \\\x1f",
+		"午夜霓虹 🎵",
+	} {
+		out, err := exec.Command("/usr/bin/osascript", "-e", script, "--", field).Output()
+		if err != nil {
+			t.Fatalf("sanitize %q: %v", field, err)
+		}
+		// osaRunner drops the newline osascript ends the output with; this test parses the raw text, so do the same.
+		rows := records(strings.TrimRight(string(out), "\r\n") + fieldSep + "second")
+		if len(rows) != 1 || len(rows[0]) != 2 {
+			t.Fatalf("records %#v for %q", rows, field)
+		}
+		if rows[0][0] != field || rows[0][1] != "second" {
+			t.Fatalf("round trip %q, want %q", rows[0][0], field)
+		}
 	}
 }
 

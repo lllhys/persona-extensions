@@ -70,7 +70,7 @@ Each source shows:
 
 The iPhone page adds **Last synced …** and the sync instruction. When no endpoint is configured, the page is a connect card pointing to Settings; when the Apple Music connector itself is switched off, it says that instead.
 
-Lyrics come from the Mac's Music library (`lyrics of current track`) and are cached for ten minutes per track. Apple Music's cloud-only lyrics are not guaranteed; a track without lyrics says so.
+Lyrics come from the Mac's Music library and are cached for ten minutes per track. The page asks for the track it is showing and the Mac resolves that track by its persistent ID instead of reading whatever is playing, so a cached answer always belongs to the track it is stored under. Apple Music's cloud-only lyrics are not guaranteed; a track without lyrics says so.
 
 The extension page cannot pin a floating mini-player to the bottom of the screen: the page schema has no such component, and only the app itself could draw one. The player page is what an extension can offer.
 

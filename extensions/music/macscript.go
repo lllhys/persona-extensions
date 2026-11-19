@@ -110,7 +110,7 @@ tell application "Music"
   try
     set dur to duration of t as integer
   end try
-  return stateText & US & (persistent ID of t) & US & (my sanitize(name of t)) & US & (my sanitize(artist of t)) & US & (my sanitize(album of t)) & US & (pos as text) & US & (dur as text)
+  return stateText & US & (my sanitize(persistent ID of t)) & US & (my sanitize(name of t)) & US & (my sanitize(artist of t)) & US & (my sanitize(album of t)) & US & (pos as text) & US & (dur as text)
 end tell
 `
 
@@ -146,7 +146,7 @@ on run argv
       try
         set rt to rating of t
       end try
-      set out to out & (persistent ID of t) & US & (my sanitize(name of t)) & US & (my sanitize(artist of t)) & US & (my sanitize(album of t)) & US & (duration of t as integer) & US & (pc as text) & US & pd & US & (rt as text) & RS
+      set out to out & (my sanitize(persistent ID of t)) & US & (my sanitize(name of t)) & US & (my sanitize(artist of t)) & US & (my sanitize(album of t)) & US & (duration of t as integer) & US & (pc as text) & US & (my sanitize(pd)) & US & (rt as text) & RS
       set n to n + 1
       if n ≥ 2000 then exit repeat
     end repeat
@@ -168,7 +168,7 @@ on run argv
           set descr to description of pl
         end try
         set cls to class of pl as text
-        set out to out & (persistent ID of pl) & US & (my sanitize(name of pl)) & US & ((count of tracks of pl) as text) & US & ((duration of pl as integer) as text) & US & (my sanitize(descr)) & US & cls & RS
+        set out to out & (my sanitize(persistent ID of pl)) & US & (my sanitize(name of pl)) & US & ((count of tracks of pl) as text) & US & ((duration of pl as integer) as text) & US & (my sanitize(descr)) & US & (my sanitize(cls)) & RS
       end try
     end repeat
     return out
@@ -195,13 +195,13 @@ on run argv
     end try
     set trackList to tracks of pl
     set totalTracks to count of trackList
-    set out to "P" & US & (persistent ID of pl) & US & (my sanitize(name of pl)) & US & (totalTracks as text) & US & ((duration of pl as integer) as text) & US & (my sanitize(descr)) & RS
+    set out to "P" & US & (my sanitize(persistent ID of pl)) & US & (my sanitize(name of pl)) & US & (totalTracks as text) & US & ((duration of pl as integer) as text) & US & (my sanitize(descr)) & RS
     set lastIndex to startAt + lim
     if lastIndex > totalTracks then set lastIndex to totalTracks
     if startAt < totalTracks then
       repeat with i from (startAt + 1) to lastIndex
         set t to item i of trackList
-        set out to out & "T" & US & (persistent ID of t) & US & (my sanitize(name of t)) & US & (my sanitize(artist of t)) & US & (my sanitize(album of t)) & US & (duration of t as integer) & US & (played count of t) & US & (rating of t) & RS
+        set out to out & "T" & US & (my sanitize(persistent ID of t)) & US & (my sanitize(name of t)) & US & (my sanitize(artist of t)) & US & (my sanitize(album of t)) & US & (duration of t as integer) & US & (played count of t) & US & (rating of t) & RS
       end repeat
     end if
     return out
@@ -220,7 +220,7 @@ on run argv
     set n to 0
     set hits to (every track of library playlist 1 whose name contains q or artist contains q or album contains q)
     repeat with t in hits
-      set out to out & (persistent ID of t) & US & (my sanitize(name of t)) & US & (my sanitize(artist of t)) & US & (my sanitize(album of t)) & US & (duration of t as integer) & US & (played count of t) & US & (rating of t) & RS
+      set out to out & (my sanitize(persistent ID of t)) & US & (my sanitize(name of t)) & US & (my sanitize(artist of t)) & US & (my sanitize(album of t)) & US & (duration of t as integer) & US & (played count of t) & US & (rating of t) & RS
       set n to n + 1
       if n ≥ lim then exit repeat
     end repeat
@@ -317,10 +317,10 @@ on run argv
         set added to added + 1
       on error
         if failedIDs is not "" then set failedIDs to failedIDs & ","
-        set failedIDs to failedIDs & (persistent ID of found)
+        set failedIDs to failedIDs & (my sanitize(persistent ID of found))
       end try
     end repeat
-    return "ok" & US & (persistent ID of pl) & US & (my sanitize(name of pl)) & US & ((count of tracks of pl) as text) & US & (added as text) & US & failedIDs
+    return "ok" & US & (my sanitize(persistent ID of pl)) & US & (my sanitize(name of pl)) & US & ((count of tracks of pl) as text) & US & (added as text) & US & failedIDs
   end tell
 end run
 `
@@ -360,25 +360,42 @@ on run argv
 end run
 `
 
+// lyricsScript answers the words of the track the caller names, not simply whatever is playing: the provider caches
+// the answer under that id, so reading the current track would store another song's words under this one. The current
+// track is used when it is the requested one (that also covers a stream that is not in the library); no argument keeps
+// the old "what is playing" behavior.
 const lyricsScript = `
-tell application "Music"
-  set t to missing value
+on run argv
+  set wantID to ""
   try
-    set t to current track
+    set wantID to item 1 of argv as text
   end try
-  if t is missing value then return ""
-  set lyricText to ""
-  try
-    set lyricText to lyrics of t
-  end try
-  if lyricText is missing value then return ""
-  return lyricText
-end tell
+  tell application "Music"
+    set t to missing value
+    try
+      set t to current track
+      if wantID is not "" and (persistent ID of t) is not wantID then set t to missing value
+    end try
+    if t is missing value and wantID is not "" then
+      try
+        set t to first track of library playlist 1 whose persistent ID is wantID
+      end try
+    end if
+    if t is missing value then return ""
+    set lyricText to ""
+    try
+      set lyricText to lyrics of t
+    end try
+    if lyricText is missing value then return ""
+    return lyricText
+  end tell
+end run
 `
 
 // records splits a script's output into records and fields. sanitize() in the scripts escaped the separators (and the
 // backslash that introduces an escape) inside a value, so a title containing them cannot shift fields; unescapeField
-// reverses that.
+// reverses that. Fields keep their exact text — a title may legitimately start with a space or read "missing value" —
+// and only the newline osascript ends the output with is dropped (osaRunner already trims it, a fake may not).
 func records(out string) [][]string {
 	out = strings.Trim(out, "\r\n")
 	if out == "" {
@@ -392,11 +409,7 @@ func records(out string) [][]string {
 		}
 		fields := strings.Split(r, fieldSep)
 		for i := range fields {
-			v := strings.TrimSpace(unescapeField(fields[i]))
-			if v == "missing value" {
-				v = ""
-			}
-			fields[i] = v
+			fields[i] = unescapeField(fields[i])
 		}
 		rows = append(rows, fields)
 	}

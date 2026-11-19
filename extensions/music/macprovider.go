@@ -268,11 +268,13 @@ func (p *macProvider) NowPlaying(ctx context.Context) (nowPlaying, error) {
 		PositionMS: out.PositionMS, DurationMS: out.DurationMS}, nil
 }
 
-// Lyrics reads the current track's words; keyed by track, so a change reads the new one and a repeat is free.
+// Lyrics reads the words of the track with this id; keyed by track, so a change reads the new one and a repeat is
+// free. The id goes to the Mac too: the Mac resolves that track instead of reading whatever is playing, so the answer
+// stored under this key is really this track's.
 func (p *macProvider) Lyrics(ctx context.Context, id string) (string, error) {
 	v, err := p.cached("lyrics:"+id, 10*time.Minute, func() (any, error) {
 		var out string
-		if err := p.call(ctx, "lyrics", map[string]any{}, &out); err != nil {
+		if err := p.call(ctx, "lyrics", map[string]any{"id": id}, &out); err != nil {
 			return nil, err
 		}
 		return out, nil
@@ -297,8 +299,14 @@ func (p *macProvider) Control(ctx context.Context, action string) error {
 	if err := p.call(ctx, "control", in, &state); err != nil {
 		return err
 	}
+	// Playback changed: the playing-track read is stale, and the cached words go with it, so the page's next poll
+	// asks the Mac again rather than reusing what it had before the user pressed something.
 	p.mu.Lock()
-	delete(p.cache, "now")
+	for key := range p.cache {
+		if key == "now" || strings.HasPrefix(key, "lyrics:") {
+			delete(p.cache, key)
+		}
+	}
 	p.mu.Unlock()
 	return nil
 }

@@ -175,7 +175,15 @@ func (n *macNode) handle(ctx context.Context, method string, raw json.RawMessage
 	case "stats":
 		return n.stats(ctx)
 	case "lyrics":
-		return n.lyrics(ctx)
+		var in struct {
+			ID string `json:"id"`
+		}
+		if len(raw) > 0 {
+			if err := json.Unmarshal(raw, &in); err != nil {
+				return nil, &ext.Error{Code: "invalid", Message: "invalid arguments"}
+			}
+		}
+		return n.lyrics(ctx, in.ID)
 	case "control":
 		var in struct {
 			Action   string  `json:"action"`
@@ -243,9 +251,10 @@ func (n *macNode) nowPlaying(ctx context.Context) (macNow, error) {
 	return macNow{State: f[0], ID: f[1], Title: f[2], Artist: f[3], Album: f[4], PositionMS: atoi(f[5]) * 1000, DurationMS: atoi(f[6]) * 1000}, nil
 }
 
-// lyrics reads the words of the track Music is playing; a track without them answers empty.
-func (n *macNode) lyrics(ctx context.Context) (string, error) {
-	out, err := n.run.Run(ctx, lyricsScript)
+// lyrics reads the words of the track the caller names; an empty id means whatever Music is playing. A track without
+// words, or an id the library no longer has, answers empty.
+func (n *macNode) lyrics(ctx context.Context, id string) (string, error) {
+	out, err := n.run.Run(ctx, lyricsScript, id)
 	if err != nil {
 		return "", macError(ctx, err)
 	}
