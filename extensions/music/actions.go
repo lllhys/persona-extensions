@@ -19,7 +19,7 @@ func actionToolsFor(src *source, p provider) []tool {
 			"track_ids":   map[string]any{"type": "array", "minItems": 1, "maxItems": 100, "items": map[string]any{"type": "string", "minLength": 1, "maxLength": 200}, "description": "Track IDs from " + toolName(src, p, "search")},
 		}
 		description := "Create a playlist in the user's " + p.Name() + " library after explicit confirmation. Give the name, an optional description and 1 to 100 track IDs from " + toolName(src, p, "search") + "."
-		if _, canPlay := p.(playbackController); canPlay {
+		if canControl(p, "play_playlist") {
 			props["play"] = map[string]any{"type": "boolean", "description": "Start playing the new playlist after creating it"}
 			description += " With play: true it also starts playing the new playlist. The card shows the destination, the track count and whether it will play."
 		} else {
@@ -90,7 +90,7 @@ func describeAction(p provider, name string, raw json.RawMessage) (map[string]an
 		}
 		summary = fmt.Sprintf("Create a playlist in %s: %q (%d tracks).", p.Name(), req.Name, len(req.TrackIDs))
 		if play {
-			if _, canPlay := p.(playbackController); canPlay {
+			if canControl(p, "play_playlist") {
 				summary += "\nIt will start playing the new playlist."
 			}
 		}
@@ -120,8 +120,8 @@ func (a *app) doAction(ctx context.Context, src *source, p provider, requestID, 
 		if err != nil {
 			return nil, err
 		}
-		if _, canPlay := p.(playbackController); !canPlay {
-			play = false // a provider without playback must not get a play:true it cannot honor
+		if !canControl(p, "play_playlist") {
+			play = false // a provider that cannot start a playlist must not get a play:true it cannot honor
 		}
 		key = keyFor(action, src.id, p.ID(), map[string]any{"args": req, "play": play})
 		run = func() (string, error) {
@@ -142,10 +142,9 @@ func (a *app) doAction(ctx context.Context, src *source, p provider, requestID, 
 			}
 			out := fmt.Sprintf("Created a playlist in %s: %q (%d tracks).", p.Name(), pl.Title, pl.TrackCount)
 			if play {
-				cp, ok := p.(playbackController)
-				if !ok {
+				if !canControl(p, "play_playlist") {
 					play = false
-				} else if err := cp.Control(ctx, "play_playlist:"+pl.ID); err != nil {
+				} else if err := p.(playbackController).Control(ctx, "play_playlist:"+pl.ID); err != nil {
 					// The write itself happened: keep the receipt so a retry cannot create the playlist twice, and say
 					// exactly what did and did not happen.
 					text := fmt.Sprintf("Created the playlist %q (%d tracks) in %s, but playing it failed: %s", pl.Title, pl.TrackCount, p.Name(), oneLine(err.Error()))

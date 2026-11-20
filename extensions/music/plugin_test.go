@@ -299,6 +299,35 @@ func TestCreatePlaylistWithPlay(t *testing.T) {
 	}
 }
 
+// An endpoint that controls playback but does not declare play_playlist gets no play option and no playback after the
+// write: the capability contract holds on the write path too.
+func TestCreatePlaylistPlayNeedsDeclaredPlayPlaylist(t *testing.T) {
+	fn := macFixture()
+	a := appWith(t, restrictedMac{macProvider: newMacProvider("m1", fn), actions: []string{"playpause"}})
+	actions, err := call(t, a, "actions.list", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range actions["tools"].([]any) {
+		tool := x.(map[string]any)
+		if tool["name"] != "applemusic_mac_create_playlist" {
+			continue
+		}
+		props := tool["input_schema"].(map[string]any)["properties"].(map[string]any)
+		if _, ok := props["play"]; ok {
+			t.Fatal("an endpoint without play_playlist advertises play")
+		}
+	}
+	res, err := call(t, a, "actions.do",
+		`{"name":"applemusic_mac_create_playlist","args":{"name":"Focus","track_ids":["m1"],"play":true},"request_id":"req-noplay"}`)
+	if err != nil || strings.Contains(res["text"].(string), "Playing it now.") {
+		t.Fatalf("create without play: %v %v", res, err)
+	}
+	if fn.count("control") != 0 {
+		t.Fatalf("play_playlist reached an endpoint that does not declare it")
+	}
+}
+
 // A playlist created with some tracks missing is reported as a partial write: the error names what was not added, and
 // the receipt stays done, so the same request_id answers it instead of creating the playlist again.
 func TestCreatePlaylistPartialWriteIsReported(t *testing.T) {

@@ -55,6 +55,7 @@ interfaces it can:
 | `playlistProvider` | one playlist and a window of its tracks (offset, limit) | yes | — |
 | `nowPlayingProvider` | what is playing | yes | snapshot |
 | `playbackController` | play, pause, next, previous | yes | — (phone tools) |
+| `controlActionsProvider` | which control actions the endpoint really has | all eight | — |
 | `statsProvider` | library size | tracks, playlists, duration | snapshot counts |
 | `playlistCreator` | create a playlist (gated) | yes | — |
 | `snapshotSyncer` | store a phone snapshot | — | yes |
@@ -130,14 +131,14 @@ The switch atop the page chooses **sources**, not devices: **All sources** and o
 
 The page shows:
 
-- Now playing, with artwork, state, position and duration; the row's menu has play/pause, previous and next on the Mac, and tapping it pushes the player page. There is no progress bar, and the row shows the track length rather than the position: the hub redraws a page no faster than every 30 seconds, so a live reading would only jump.
+- Now playing, with artwork, state, position and duration; the row's menu has play/pause, previous and next on the Mac, and tapping it pushes the player page. A row and the player page list only the control actions the endpoint declares (`controlActionsProvider`), and a control the endpoint does not declare is refused instead of sent. There is no progress bar, and the row shows the track length rather than the position: the hub redraws a page no faster than every 30 seconds, so a live reading would only jump.
 - The player page: large artwork, title, artist, position, the Mac's controls, and the lyrics; the iPhone page says the snapshot has no lyrics or controls.
 - Recently played, as a carousel with artwork, interleaved across the endpoints and deduplicated within one source.
 - Playlists, with artwork, round-robin across the endpoints (so a later service is never hidden behind the first
   endpoint's list); a row opens the playlist's tracks, 50 per page with covers, and Previous tracks / Next tracks
   page through the rest. Each window stays under the page's 50-picture limit.
 - Library stats (per endpoint when there are two).
-- A search box when an endpoint can search; the search runs on the selected source.
+- A search box when an endpoint of the shown source can search; the search runs on that source.
 - Refresh; `refresh_after` is 60 seconds.
 
 There is no "source status" table. A failed endpoint contributes an error line and its guide (in the request's

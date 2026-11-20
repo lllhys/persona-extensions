@@ -185,6 +185,9 @@ func (a *app) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult,
 			return nil, errors.New("this endpoint cannot control playback")
 		}
 		do := strings.TrimSpace(r.Values["do"])
+		if !canControl(e.p, do) {
+			return nil, errors.New("this endpoint does not have that control")
+		}
 		if do == "play_track" || do == "play_playlist" {
 			id := strings.TrimSpace(r.Values["id"])
 			if id == "" || len(id) > 200 {
@@ -365,12 +368,12 @@ func (a *app) searchEndpoint(ctx context.Context, st pageState) *endpoint {
 	return fallback
 }
 
-func (a *app) anySearchProvider() bool {
-	for _, s := range a.activeSources() {
-		for _, p := range s.list() {
-			if _, ok := p.(searchProvider); ok {
-				return true
-			}
+// canSearch reports whether the page's shown source can search. The search action stays inside the tab it was typed
+// on, so the box appears only where pressing it can run.
+func canSearch(endpoints []endpoint) bool {
+	for _, e := range endpoints {
+		if _, ok := e.p.(searchProvider); ok {
+			return true
 		}
 	}
 	return false
@@ -456,7 +459,7 @@ func (a *app) listPage(ctx context.Context, r *ext.UIRequest, st pageState, src 
 	views := a.sourceData(ctx, src.endpoints, r.Locale)
 	multiSource := multipleSources(views)
 	v := &wire.View{Title: t.title, State: ext.EncodeState(st), RefreshAfter: 60}
-	if a.anySearchProvider() {
+	if canSearch(src.endpoints) {
 		v.Search = &wire.Search{Placeholder: t.search, Action: wire.Action{ID: "search"}}
 	}
 
@@ -499,6 +502,27 @@ func (a *app) listPage(ctx context.Context, r *ext.UIRequest, st pageState, src 
 	return v
 }
 
+// transportActions are the buttons a row offers for an endpoint: only the actions its ControlActions declares, so a
+// provider with a subset never shows a button that only fails when pressed.
+func transportActions(e endpoint, state string, t texts) []wire.RowAction {
+	if _, ok := e.p.(playbackController); !ok {
+		return nil
+	}
+	out := make([]wire.RowAction, 0, 3)
+	for _, step := range []struct{ do, title string }{
+		{"playpause", playPauseTitle(state, t)},
+		{"previous", t.previous},
+		{"next", t.next},
+	} {
+		if canControl(e.p, step.do) {
+			out = append(out, wire.RowAction{Title: step.title, Action: wire.Action{
+				ID: "control", Values: map[string]string{"do": step.do, "source": e.src.id, "provider": e.p.ID()},
+			}})
+		}
+	}
+	return out
+}
+
 func (a *app) nowSection(views []endpointView, st pageState, t texts, multiSource bool) wire.Section {
 	section := wire.Section{Title: t.nowPlaying}
 	now := pickNow(views)
@@ -529,12 +553,8 @@ func (a *app) nowSection(views []endpointView, st pageState, t texts, multiSourc
 		}
 		row.Badge = &wire.Badge{Text: clip(badge, 8)}
 	}
-	if _, ok := now.e.p.(playbackController); ok {
-		row.Actions = []wire.RowAction{
-			{Title: playPauseTitle(now.now.State, t), Action: wire.Action{ID: "control", Values: map[string]string{"do": "playpause", "source": now.e.src.id, "provider": now.e.p.ID()}}},
-			{Title: t.previous, Action: wire.Action{ID: "control", Values: map[string]string{"do": "previous", "source": now.e.src.id, "provider": now.e.p.ID()}}},
-			{Title: t.next, Action: wire.Action{ID: "control", Values: map[string]string{"do": "next", "source": now.e.src.id, "provider": now.e.p.ID()}}},
-		}
+	if actions := transportActions(now.e, now.now.State, t); len(actions) > 0 {
+		row.Actions = actions
 	} else if link := validOpenGently(now.now.URL, now.e.p.OpenHosts()); link != "" {
 		row.Actions = []wire.RowAction{{Title: t.open, Action: wire.Action{ID: "open", Values: map[string]string{"url": link, "source": now.e.src.id, "provider": now.e.p.ID()}}}}
 	}
@@ -901,26 +921,20 @@ func (a *app) playerPage(ctx context.Context, r *ext.UIRequest, st pageState, t 
 	if meta := nowMeta(now); meta != "" {
 		items = append(items, textLine(meta, wire.TextStyleSecondary))
 	}
-	if _, ok := e.p.(playbackController); ok {
-		controls := wire.Component{
-			Type: wire.ComponentRow, Key: "player-controls",
-			Title: stateWord(now.State, t), Subtitle: nowValue(now, t),
-			Action: &wire.Action{ID: "control", Values: map[string]string{"do": "playpause", "source": e.src.id, "provider": e.p.ID()}},
-			Actions: []wire.RowAction{
-				{Title: t.previous, Action: wire.Action{ID: "control", Values: map[string]string{"do": "previous", "source": e.src.id, "provider": e.p.ID()}}},
-				{Title: t.next, Action: wire.Action{ID: "control", Values: map[string]string{"do": "next", "source": e.src.id, "provider": e.p.ID()}}},
-			},
+	controls := wire.Component{Type: wire.ComponentRow, Key: "player-controls",
+		Title: stateWord(now.State, t), Subtitle: nowValue(now, t)}
+	for _, action := range transportActions(*e, now.State, t) {
+		if action.Action.Values["do"] == "playpause" {
+			primary := action.Action
+			controls.Action = &primary
+			continue
 		}
+		controls.Actions = append(controls.Actions, action)
+	}
+	if controls.Action != nil || len(controls.Actions) > 0 {
 		items = append(items, controls)
 	} else {
-		note := ""
-		if np, ok := e.p.(playbackNoteProvider); ok {
-			note = np.PlaybackNote(r.Locale)
-		}
-		if strings.TrimSpace(note) == "" {
-			note = fmt.Sprintf(t.playbackElsewhere, e.p.Name())
-		}
-		items = append(items, textLine(note, wire.TextStyleSecondary))
+		items = append(items, textLine(playbackNote(e.p, r.Locale, t), wire.TextStyleSecondary))
 	}
 	items = append(items, backButton(t))
 	v.Sections = append(v.Sections, wire.Section{Items: items})
@@ -1044,7 +1058,7 @@ func (a *app) trackAction(e endpoint, it item) *wire.Action {
 	if e.p == nil {
 		return nil
 	}
-	if _, ok := e.p.(playbackController); ok && it.ID != "" {
+	if it.ID != "" && canControl(e.p, "play_track") {
 		return &wire.Action{ID: "control", Values: map[string]string{"do": "play_track", "id": it.ID, "source": e.src.id, "provider": e.p.ID()}}
 	}
 	if link := validOpenGently(it.URL, e.p.OpenHosts()); link != "" {
@@ -1152,6 +1166,16 @@ func playPauseTitle(state string, t texts) string {
 		return t.pause
 	}
 	return t.play
+}
+
+// playbackNote says where playback happens on an endpoint the page cannot control, or that it offers no controls.
+func playbackNote(p provider, locale string, t texts) string {
+	if np, ok := p.(playbackNoteProvider); ok {
+		if note := strings.TrimSpace(np.PlaybackNote(locale)); note != "" {
+			return note
+		}
+	}
+	return fmt.Sprintf(t.playbackElsewhere, p.Name())
 }
 
 func emptyView(title, emptyTitle, detail string) *wire.View {

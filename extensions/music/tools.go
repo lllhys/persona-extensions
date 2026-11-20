@@ -114,6 +114,20 @@ func controlActions(p provider) []string {
 	return []string{"play", "pause", "playpause", "next", "previous", "stop", "play_track", "play_playlist"}
 }
 
+// canControl reports whether an endpoint really has a control action: it must control playback, and a provider that
+// declares its actions has only the ones it lists.
+func canControl(p provider, action string) bool {
+	if _, ok := p.(playbackController); !ok {
+		return false
+	}
+	for _, a := range controlActions(p) {
+		if a == action {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *app) callTool(ctx context.Context, p provider, name string, raw json.RawMessage) (string, error) {
 	action, ok := strings.CutPrefix(name, p.ID()+"_")
 	if !ok {
@@ -218,6 +232,9 @@ func (a *app) callTool(ctx context.Context, p provider, name string, raw json.Ra
 		}
 		if err := decode(raw, &in); err != nil {
 			return "", err
+		}
+		if !canControl(p, in.Action) {
+			return "", fmt.Errorf("%s has no %q control", p.Name(), in.Action)
 		}
 		control := in.Action
 		if in.Action == "play_track" || in.Action == "play_playlist" {

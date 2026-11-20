@@ -310,6 +310,111 @@ func TestMacSearchAndControl(t *testing.T) {
 	checked(t, res.View)
 }
 
+// restrictedMac is an endpoint that declares only some of its control actions, the way a service with a subset would.
+type restrictedMac struct {
+	*macProvider
+	actions []string
+}
+
+func (r restrictedMac) ControlActions() []string { return r.actions }
+
+func rowByKey(t *testing.T, v *wire.View, key string) wire.Component {
+	t.Helper()
+	for _, s := range v.Sections {
+		for _, c := range s.Items {
+			if c.Key == key {
+				return c
+			}
+		}
+	}
+	t.Fatalf("no %q row in\n%s", key, viewText(v))
+	return wire.Component{}
+}
+
+func rowActions(c wire.Component) []string {
+	out := make([]string, 0, len(c.Actions))
+	for _, a := range c.Actions {
+		out = append(out, a.Action.Values["do"])
+	}
+	return out
+}
+
+// The page offers only the controls an endpoint declares, in the now-playing row and on the player page.
+func TestPageControlsFollowControlActions(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		actions []string
+		want    []string
+	}{
+		{"every action", []string{"play", "pause", "playpause", "next", "previous", "stop", "play_track", "play_playlist"}, []string{"playpause", "previous", "next"}},
+		{"playpause only", []string{"playpause"}, []string{"playpause"}},
+		{"next only", []string{"next"}, []string{"next"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := appWith(t, restrictedMac{macProvider: newMacProvider("m1", macFixture()), actions: tc.actions})
+			v := draw(t, a, nil)
+			if got := rowActions(rowByKey(t, v, "now-playing")); !slices.Equal(got, tc.want) {
+				t.Fatalf("now-playing actions %v, want %v", got, tc.want)
+			}
+			pv := tap(t, a, v, "player", map[string]string{"source": appleMusicID, "provider": macID})
+			controls := rowByKey(t, pv, "player-controls")
+			got := rowActions(controls)
+			if controls.Action != nil {
+				got = append([]string{controls.Action.Values["do"]}, got...)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("player controls %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// A declared control still runs; an undeclared one is refused before it reaches the endpoint, from the page and from
+// the control tool.
+func TestControlHandlersRefuseUndeclaredActions(t *testing.T) {
+	fn := macFixture()
+	a := appWith(t, restrictedMac{macProvider: newMacProvider("m1", fn), actions: []string{"playpause"}})
+	run := func(do string) error {
+		t.Helper()
+		r := req(6, nil)
+		r.State, r.Action, r.Values = ext.EncodeState(pageState{Source: appleMusicID}), "control",
+			map[string]string{"do": do, "id": "m1", "source": appleMusicID, "provider": macID}
+		_, err := a.action(context.Background(), r)
+		return err
+	}
+	if err := run("playpause"); err != nil {
+		t.Fatalf("playpause: %v", err)
+	}
+	if err := run("next"); err == nil {
+		t.Fatal("the page ran an undeclared action")
+	}
+	if err := run("play_track"); err == nil {
+		t.Fatal("the page ran play_track, which this endpoint does not declare")
+	}
+	if _, err := a.connector(context.Background(), "tools.call",
+		json.RawMessage(`{"contribution":"applemusic","name":"applemusic_mac_control","args":{"action":"next"}}`)); err == nil {
+		t.Fatal("the control tool ran an undeclared action")
+	}
+	if fn.count("control") != 1 {
+		t.Fatalf("control reached the endpoint %d times", fn.count("control"))
+	}
+}
+
+// A track offers play only when the endpoint declares play_track.
+func TestTrackActionNeedsDeclaredPlayTrack(t *testing.T) {
+	a := appWith(t, restrictedMac{macProvider: newMacProvider("m1", macFixture()), actions: []string{"playpause"}})
+	e := sourceEndpoints(a.sources[appleMusicID])[0]
+	if act := a.trackAction(e, item{ID: "m1", Kind: "song"}); act != nil {
+		t.Fatalf("a play_track action on an endpoint without it: %+v", act)
+	}
+	b := appWith(t, newMacProvider("m1", macFixture()))
+	e = sourceEndpoints(b.sources[appleMusicID])[0]
+	act := b.trackAction(e, item{ID: "m1", Kind: "song"})
+	if act == nil || act.Values["do"] != "play_track" || act.Values["id"] != "m1" {
+		t.Fatalf("track action %+v", act)
+	}
+}
+
 func TestMacImageRef(t *testing.T) {
 	a := appWith(t, newMacProvider("m1", macFixture()))
 	img, err := a.image(context.Background(), &ext.ImageRequest{UIImageParams: wire.UIImageParams{Ref: "applemusic:mac:track:m1", Width: 320}})

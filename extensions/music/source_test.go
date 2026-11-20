@@ -33,6 +33,19 @@ func (f *fakeCloud) Playlists(context.Context, int) ([]playlist, error) {
 	return []playlist{{item: item{Provider: f.id, ID: "cp1", Kind: "playlist", Title: "Cloud List"}, TrackCount: 1}}, nil
 }
 
+// fakeNoSearch is a service with recent plays but no search: its tab must not offer a search box.
+type fakeNoSearch struct{ id, name string }
+
+func (f *fakeNoSearch) ID() string   { return f.id }
+func (f *fakeNoSearch) Name() string { return f.name }
+func (f *fakeNoSearch) Status(context.Context, string) providerStatus {
+	return providerStatus{State: "ok", Account: f.name}
+}
+func (f *fakeNoSearch) OpenHosts() []string { return nil }
+func (f *fakeNoSearch) Recent(context.Context, int) ([]item, error) {
+	return []item{{Provider: f.id, ID: "q1", Kind: "song", Title: "Quiet Song"}}, nil
+}
+
 // appWithSources is an Apple Music source (a fake Mac) and a second cloud source.
 func appWithSources(t *testing.T) (*app, *fakeCloud) {
 	t.Helper()
@@ -144,6 +157,36 @@ func TestSecondSourcePageTabAndSearch(t *testing.T) {
 	v = tap(t, a, v, "source", map[string]string{"source": appleMusicID})
 	says(t, v, "Midnight City", "Mac Focus")
 	saysNot(t, v, "Cloud Recent")
+}
+
+// The search box belongs to the source on screen: the search action stays inside the tab it was typed on, so a tab
+// whose endpoints cannot search must not offer a box that can only fail.
+func TestSearchBoxFollowsTheShownSource(t *testing.T) {
+	a, _ := appWithSources(t)
+	quiet := newSource("quiet", "Quiet", "Quiet", "Quiet")
+	if err := quiet.add(&fakeNoSearch{id: "web", name: "Quiet"}); err != nil {
+		t.Fatal(err)
+	}
+	a.addSource(quiet)
+
+	v := draw(t, a, nil)
+	if v.Search == nil {
+		t.Fatal("All sources lost its search box")
+	}
+	v = tap(t, a, v, "source", map[string]string{"source": "quiet"})
+	says(t, v, "Quiet Song")
+	if v.Search != nil {
+		t.Fatalf("the quiet tab offers a search box: %+v", v.Search)
+	}
+	r := req(6, nil)
+	r.State, r.Action, r.Values = v.State, "search", map[string]string{"q": "song"}
+	if res, err := a.action(context.Background(), r); err == nil || res != nil {
+		t.Fatalf("searching the quiet tab returned %+v, %v", res, err)
+	}
+	v = tap(t, a, v, "source", map[string]string{"source": appleMusicID})
+	if v.Search == nil {
+		t.Fatal("the Apple Music tab lost its search box")
+	}
 }
 
 // Turning Apple Music off leaves the other connector's endpoints and tools alone.
